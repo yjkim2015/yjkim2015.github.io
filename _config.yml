@@ -12,8 +12,8 @@ url: "https://yjkim2015.github.io"
 sass:
   sass_dir: _sass
 plainwhite:
-  name: Adam Denisov
-  tagline: Developer. Designer
+  name: yjkim
+  tagline: Developer
   date_format: "%b %-d, %Y"
   sitemap: true # set to true to generate sitemap.xml content
   search: true # set to true to enable searchbar
@@ -21,9 +21,9 @@ plainwhite:
 
   # generate social links in footer
   social_links:
-    twitter: thelehhman
-    github:  thelehhman
-    linkedIn: in/thelehhman
+
+    github:  "https://github.com.yjkim2015"
+    #linkedIn: in/thelehhman
     rss: rss
     # dribbble: jekyll
     # flickr:   jekyll
