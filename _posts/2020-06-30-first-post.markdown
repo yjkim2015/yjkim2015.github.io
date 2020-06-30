@@ -10,7 +10,7 @@ SpringBoot & JPA & Thymeleaf CRUD 게시판 만들기
 
 프로젝트 구조이다. 여기서  restController는 쓰지 않으니 만들 필요가 없다.
 
-![image-20200630132227255](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630132227255.png)
+![image-20200630132227255](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630132227255.png)
 
 
 
@@ -18,9 +18,7 @@ SpringBoot & JPA & Thymeleaf CRUD 게시판 만들기
 
 pom.xml에 관련된 설정을 추가해주자. (jpa, thymeleaf, mysql)
 
-![image-20200630132442423](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630132442423.png)
-
-
+![image-20200630132442423](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630132442423.png)
 
 그 다음으로 게시판을 만들기 위해 필요한 객체와 데이터베이스 테이블을 생성 후 환경설정한다. 
 
@@ -42,13 +40,13 @@ Ex) JPA, Hibernate 등
 
 먼저 게시판을 만들기 위한 객체의 내용은  다음과 같다. 
 
-![image-20200630133051642](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630133051642.png)
+![image-20200630133051642](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630133051642.png)
 
 
 
 데이터베이스의 테이블 내용은 다음과 같다.
 
-![image-20200630133149976](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630133149976.png)
+![image-20200630133149976](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630133149976.png)
 
 
 
@@ -56,9 +54,7 @@ Ex) JPA, Hibernate 등
 
 application.properties 파일을 각자의 환경에 맞게 끔 변경한다.
 
-![image-20200630133334643](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630133334643.png)
-
-
+![image-20200630133334643](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630133334643.png)
 
 여기까지 되었다면 본격적으로 간단한 CRUD 게시판을 만들어보자.
 
@@ -82,9 +78,7 @@ HttpMethod에는 GET,POST등 여러 메소드가 있지만, 이렇게 어떤 페
 
 다음과 같이 추가한다.
 
-![image-20200630134129091](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630134129091.png)
-
-
+![image-20200630134129091](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630134129091.png)
 
 위에 /insertBoard를 보면 return  "insertBoard"로 되있는데 이 의미는 insertBoard.html을 보여주겠다는 의미이다. 
 
@@ -96,11 +90,13 @@ src/main/resources 아래에 templates아래에 insertBoard.html을 생성하고
 
 다음과 같이 게시글 입력 폼을 만들어 준다.
 
-![image-20200630134438848](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630134438848.png)
+![image-20200630134438848](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630134438848.png)
 
 이제 프로젝트를 실행 후 브라우저를 열어 주소창에 localhost:8080/insertBoard를 입력하면
 
-![image-20200630134556977](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630134556977.png)
+![image-20200630134556977](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630134556977.png)
+
+
 
 정말 볼품없는 폼이 나올것이다.... (하지만 이 글은 정말 기초적인 단계이므로 UserInterface에는 신경 쓰지말자..)
 
@@ -122,7 +118,7 @@ src/main/resources 아래에 templates아래에 insertBoard.html을 생성하고
 
 다시 MainController 안에 다음과 같이 작성한다.
 
-![image-20200630135151478](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630135151478.png)
+![image-20200630135151478](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630135151478.png)
 
 이렇게 작성하면 insert.html에서 작성한 데이터를 전송 시 컨트롤러에서 데이터를 받을 것이다.
 
@@ -136,7 +132,7 @@ src/main/resources 아래에 templates아래에 insertBoard.html을 생성하고
 
 다음과 같이 jpa를 통한 디비 작업을 위해 BoardRepository를 생성한다.
 
-![image-20200630135559106](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630135559106.png)
+![image-20200630135559106](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630135559106.png)
 
 
 
@@ -148,15 +144,13 @@ JpaRepository를 상속받는다.
 
 우리는 데이터를 넣기위해 별도의 로직을 만들지 않고 jpa에서 제공하는 save기능을 사용할 것이다.
 
-![image-20200630135848886](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630135848886.png)
-
-
+![image-20200630135848886](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630135848886.png)
 
 boardRepo를 생성했다면 이제 서비스 로직을 위한 BoardService을 생성한다.
 
 다음과 같이 작성한다.
 
-![image-20200630140148539](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630140148539.png)
+![image-20200630140148539](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630140148539.png)
 
 
 
@@ -168,25 +162,25 @@ boardRepository를 주입받고 insertBoard 메소드 내에서 repo내의 save�
 
 다시 컨트롤러로 돌아가 다음과 같이 수정한다.
 
-![image-20200630140346344](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630140346344.png)
+![image-20200630140308292](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630140308292.png)
 
 
 
 
+
+![image-20200630140346344](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630140346344.png)
 
 모든 작성이 끝났다면 다시 웹 어플리케이션을 실행 한 후 글을 작성하여 등록을 해보자.
-
-![image-20200630140433127](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630140433127.png)
 
 
 
 등록 버튼을 누른 후 실제 데이터가 저장되었는지 디비를 열어 확인해보자!!
 
+![image-20200630140433127](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630140433127.png)
 
 
-![image-20200630140500804](C:\Users\forte\AppData\Roaming\Typora\typora-user-images\image-20200630140500804.png)
 
-
+![image-20200630140500804](C:\Users\forte\Documents\yjkim2015.github.io\assets\image-20200630140500804.png)
 
 데이터가 잘들어갔다. 이렇게 jpa의 save 기능을 사용해보았다.
 
