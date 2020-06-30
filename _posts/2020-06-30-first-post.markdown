@@ -10,7 +10,7 @@ SpringBoot & JPA & Thymeleaf CRUD 게시판 만들기
 
 프로젝트 구조이다. 여기서  restController는 쓰지 않으니 만들 필요가 없다.
 
-![image-20200630132227255]("https://yjkim2015.github.io/assets/image-20200630132227255.png")
+![image-20200630132227255](https://user-images.githubusercontent.com/38029486/86098331-eaa7bc00-baf0-11ea-8a3b-13d18b54e650.png)
 
 
 
