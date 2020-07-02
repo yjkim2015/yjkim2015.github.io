@@ -1,3 +1,3 @@
 img Test!!
 
-![image-20200702100606548](C:%5CUsers%5Cforte%5CAppData%5CRoaming%5CTypora%5Ctypora-user-images%5Cimage-20200702100606548.png)
+![image-20200702100952466](../assets/images/2020-07-02-second-post/image-20200702100952466.png)
