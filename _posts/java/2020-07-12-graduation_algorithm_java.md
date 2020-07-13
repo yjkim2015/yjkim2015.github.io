@@ -9,12 +9,6 @@ toc_label: 목차
 
 ---
 
-![image-20200712221459440](../../assets/images/2020-07-12-graduation_algorithm_java/image-20200712221459440.png)
-
-
-
-![image-20200712221524512](../../assets/images/2020-07-12-graduation_algorithm_java/image-20200712221524512.png)
-
 
 
 
@@ -30,3 +24,8 @@ toc_label: 목차
 
 
 ![image-20200712221630502](../../assets/images/2020-07-12-graduation_algorithm_java/image-20200712221630502.png)
+
+
+
+진짜 어렵네요..
+
