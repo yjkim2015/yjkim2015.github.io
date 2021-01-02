@@ -21,7 +21,7 @@ title_separator          : "-"
 subtitle                 : # site tagline that appears below site title in masthead
 name                     : "yjkim"
 description              : "Developer"
-url                      : "https://yjkim2015.github.io"
+url                      : "https://github.com/yjkim2015"
 baseurl                  : ""
 repository               : # GitHub username/repo-name e.g. "mmistakes/minimal-mistakes"
 teaser                   : # path of fallback teaser image, e.g. "/assets/images/500x300.png"
@@ -94,7 +94,7 @@ analytics:
 # Site Author
 author:
   name             : "yjkim"
-  avatar           : # path of avatar image, e.g. "/assets/images/bio-photo.jpg"
+  avatar           : "/assets/images/yoonjekim.jpg"
   bio              : "Web Developer"
   location         : "Republic of Korea"
   email            : "forteas2003@hanmail.net"
@@ -279,7 +279,7 @@ defaults:
       comments: true
       share: true
       related: true
-  
+
   # _pages
   - scope:
       path: "_pages"
