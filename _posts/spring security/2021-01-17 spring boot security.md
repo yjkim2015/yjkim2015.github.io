@@ -2,7 +2,7 @@
 
 title: Spring boot Security - 1
 categories:
-- Spring Security
+- SPRING SECURITY
 toc: true
 toc_sticky: true
 toc_label: 목차
