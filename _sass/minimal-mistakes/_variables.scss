@@ -14,7 +14,7 @@ $indent-var: 1.3em !default;
 
 /* system typefaces */
 $serif: Georgia, Times, serif !default;
-$sans-serif: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI",
+$sans-serif: -apple-system, BlinkMacSystemFont,'Nanum Gothic', "Roboto", "Segoe UI",
   "Helvetica Neue", "Lucida Grande", Arial, sans-serif !default;
 $monospace: Monaco, Consolas, "Lucida Console", monospace !default;
 
@@ -31,7 +31,7 @@ $garamond: Garamond, serif !default;
 
 $font-family-main: 'Nanum Gothic', sans-serif;
 $font-family-headings : 'Nanum Gothic', sans-serif;
-$font-size : 1em;
+$font-size : 14px;
 
 $global-font-family: $sans-serif !default;
 $header-font-family: $sans-serif !default;
