@@ -1,7 +1,7 @@
 ---
 title: 졸업학기 알고리즘 - 자바
 categories:
-- JAVA
+- Java
 toc: true
 toc_sticky: true
 toc_label: 목차

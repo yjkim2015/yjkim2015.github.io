@@ -1,7 +1,7 @@
 ---
 title: Spring boot Security - RememberMeAuthenticationFilter
 categories:
-- SECURITY
+- Spring Boot Security
 toc: true
 toc_sticky: true
 toc_label: 목차

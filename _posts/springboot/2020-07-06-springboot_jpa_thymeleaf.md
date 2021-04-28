@@ -2,7 +2,7 @@
 
 title: SpringBoot & JPA & Thymeleaf 게시판 - 1
 categories:
-- SPRINGBOOT
+- Spring Boot
 toc: true
 toc_sticky: true
 toc_label: 목차
