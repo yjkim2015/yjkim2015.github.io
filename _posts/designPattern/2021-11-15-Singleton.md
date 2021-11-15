@@ -17,7 +17,7 @@ toc_label: 목차
 
 <hr>
 
-~~Why Singleton ?~~  솔직히 간지나게 영어 좀 써보려다가 잘모르겠어서 한글로 바꿨다.. <span style="color:red;">왜 싱글톤이 필요하지?</span>
+~~Why Singleton need?~~  솔직히 간지나게 영어 좀 써보려다가 잘모르겠어서 한글로 바꿨다.. <span style="color:red;">왜 싱글톤이 필요하지?</span>
 
 *개발을 하다보면 어떤 클래스에 대해 단 하나의 인스턴스만을 갖도록 하는 것이 좋은 경우가 있다.*
 
@@ -47,33 +47,31 @@ toc_label: 목차
 
 ##### 싱글톤 구현방법 6가지를 자세히 알아보자.
 
+#### Eager Initiailization(Early Loading)
+
+~~해석하자면... 조기 초기화.. 조기 로딩...~~싱글톤 패턴을 구현하는 가장 간단한 방법이다.
+
+![image-20211115152235526](../../assets/images/2021-11-15-Singleton/image-20211115152235526.png)
+
+Eager Singleton클래스가 로드될 때 Eager Singleton인스턴스가 생성된다. 
+
+Eager Singleton는 클라이언트에서 사용하지 않더라도 인스턴스가 항상 생성된다는 것이 단점이 있는데, 
+
+*재미있는 점은.. **도대체 Eager Singleton는 언제 로드되지?** 이다.* 
+
+<br>
+
+결국 위 코드를 보면 static 제어자인 getInstance를 호출하지 않으면 EagerSingleton 클래스는 로드 되지않는다. 
+
+***static 초기화가 필요한 경우에는 클래스가 로드되고, 로드된 클래스는 계속해서 메모리에 남아있을 수 있다.***
+
+<span style="color:red;">하지만</span>, 만약 EagerSingleton 클래스에 다른 static Method가 존재하고, 이 다른 메소드가 getInstance()가 호출되기 전에 어딘가에서 호출이 된다면, getInstance() 를 호출하지 않아도 EagerSingleton 클래스의 인스턴스는 생성된다.
+
+***다른 static method에 의해 EagerSingleton 클래스가 로드 되기 때문이다.***
 
 
-* #### **Eager Initiailization(Early Loading)**
 
-  ~~해석하자면... 조기 초기화.. 조기 로딩...~~싱글톤 패턴을 구현하는 가장 간단한 방법이다.
-
-  ![image-20211115152235526](../../assets/images/2021-11-15-Singleton/image-20211115152235526.png)
-
-​		Eager Singleton클래스가 로드될 때 Eager Singleton인스턴스가 생성된다. 
-
-​		클라이언트에서 사용하지 않더라도 인스턴스가 항상 생성된다는 것이 단점이 있는데,  재미있는 점은.. 
-
-​		**도대체 Eager Singleton는 언제 로드되지?** 이다. 결국 위 코드를 보면 static 제어자인 getInstance를 호출하지 않으면 
-
-​		EagerSingleton 클래스는 로드 되지않는다. **static 초기화가 필요한 경우에는 클래스가 로드되고, 로드된 클래스는 계속 		해서 메모리에 남아있을 수 있다.**
-
-​		<span style="color:red;">하지만</span>, 만약 EagerSingleton 클래스에 다른 static Method가 존재한다고, 이 다른 메소드가 getInstance()가 호출 
-
-​		되기 전에 어딘가에서 호출이 된다면, getInstance() 를 호출하지 않아도 EagerSingleton 클래스의 인스턴스는 생성된다.
-
-​		다른 static method에 의해 EagerSingleton 클래스가 로드 되기 때문이다.
-
-
-
-* #### Static Block Initialization(Early Loading)
-
-​		
+#### Static Block Initialization(Early Loading)	
 
 ![image-20211115120003867](../../assets/images/2021-11-15-Singleton/image-20211115120003867.png)
 
