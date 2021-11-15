@@ -15,7 +15,7 @@ toc_label: 목차
 
 싱글톤 패턴은 <span style="color:red">어떤 클래스의 인스턴스가 오직 하나임</span>을 보장하며, 이 인스턴스에 접근 할 수 있는 전역적인 접촉점을 제공하는 패턴이다.
 
-
+<hr>
 
 ~~Why Singleton ?~~  솔직히 간지나게 영어 좀 써보려다가 잘모르겠어서 한글로 바꿨다.. <span style="color:red;">왜 싱글톤이 필요하지?</span>
 
@@ -25,13 +25,15 @@ toc_label: 목차
 
 
 
-**접근방법?**
+<hr>
+
+#### 접근방법?
 
 *싱글톤에 대한 접근 방법은 생성자를 private하게 만들어 클래스 외부에서는 인스턴스를 생성하지 못하게 막고, 내부에서 단 하나의 인스턴스를 생성하여 외부에는 그 인스턴스에 대한 접근 방법을 제공한다.*
 
 
 
-**싱글톤 패턴을 구현하는 방법은 6가지가 있다.** 
+#### 싱글톤 패턴을 구현하는 방법은 6가지가 있다.
 
 그러나 각각의 패턴이 공통적으로 갖는 특징이 있는데, 이는 다음과 같다.
 
@@ -41,15 +43,17 @@ toc_label: 목차
 
 
 
-**싱글톤 구현방법 6가지를 자세히 알아보자.**
+<hr>
+
+##### 싱글톤 구현방법 6가지를 자세히 알아보자.
 
 
 
-* **Eager Initiailization(Early Loading)**
+* #### **Eager Initiailization(Early Loading)**
 
   ~~해석하자면... 조기 초기화.. 조기 로딩...~~싱글톤 패턴을 구현하는 가장 간단한 방법이다.
 
-  ​		![image-20211115122311684](../../assets/images/2021-11-15-Singleton/image-20211115122311684.png)
+  ![image-20211115152235526](../../assets/images/2021-11-15-Singleton/image-20211115152235526.png)
 
 ​		Eager Singleton클래스가 로드될 때 Eager Singleton인스턴스가 생성된다. 
 
@@ -67,7 +71,7 @@ toc_label: 목차
 
 
 
-* **Static Block Initialization(Early Loading)**
+* #### Static Block Initialization(Early Loading)
 
 ​		
 
