@@ -16,7 +16,6 @@ toc_label: 목차
 싱글톤 패턴은 <span style="color:red">어떤 클래스의 인스턴스가 오직 하나임</span>을 보장하며, 이 인스턴스에 접근 할 수 있는 전역적인 접촉점을 제공하는 패턴이다.
 
 <hr>
-
 ~~Why Singleton need?~~  솔직히 간지나게 영어 좀 써보려다가 잘모르겠어서 한글로 바꿨다.. <span style="color:red;">왜 싱글톤이 필요하지?</span>
 
 *개발을 하다보면 어떤 클래스에 대해 단 하나의 인스턴스만을 갖도록 하는 것이 좋은 경우가 있다.*
@@ -69,7 +68,7 @@ Eager Singleton는 클라이언트에서 사용하지 않더라도 인스턴스�
 
 ***다른 static method에 의해 EagerSingleton 클래스가 로드 되기 때문이다.***
 
-
+<hr>
 
 #### Static Block Initialization(Early Loading)	
 
