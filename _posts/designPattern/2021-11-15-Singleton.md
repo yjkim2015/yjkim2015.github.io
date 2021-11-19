@@ -69,6 +69,7 @@ Eager Singleton는 클라이언트에서 사용하지 않더라도 인스턴스�
 ***다른 static method에 의해 EagerSingleton 클래스가 로드 되기 때문이다.***
 
 <hr>
+
 #### Static Block Initialization(Early Loading)	
 
 Static Block Initialization은 Eager Initialization과 유사하다. 다만, 인스턴스가 static block 내에서 만들어지고, static block 안에서 예외처리를 할 수 있다는 점이 다르다.
