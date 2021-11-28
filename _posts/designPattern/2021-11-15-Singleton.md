@@ -11,9 +11,9 @@ toc_label: 목차
 
 ## 싱글톤(Singleton) 패턴이란?
 
-싱글톤 패턴은 객체 지향 디자인 패턴에서 가장 유명한 패턴 중 하나이다.
+**싱글톤 패턴은 객체 지향 디자인 패턴에서 가장 유명한 패턴 중 하나이다.**
 
-싱글톤 패턴은 <span style="color:red">어떤 클래스의 인스턴스가 오직 하나임</span>을 보장하며, 이 인스턴스에 접근 할 수 있는 전역적인 접촉점을 제공하는 패턴이다.
+**싱글톤 패턴은 <span style="color:red">어떤 클래스의 인스턴스가 오직 하나임</span>을 보장하며, 이 인스턴스에 접근 할 수 있는 전역적인 접촉점을 제공하는 패턴이다**.
 
 <hr>
 ~~Why Singleton need?~~  솔직히 간지나게 영어 좀 써보려다가 잘모르겠어서 한글로 바꿨다.. <span style="color:red;">왜 싱글톤이 필요하지?</span>
@@ -72,9 +72,80 @@ Eager Singleton는 클라이언트에서 사용하지 않더라도 인스턴스�
 
 #### Static Block Initialization(Early Loading)	
 
+Static Block Initialization은 Eager Initialization과 유사하다. 다만, 인스턴스가 static block 내에서 만들어지고, static block 안에서 예외처리를 할 수 있다는 점이 다르다.
+
 ![image-20211115120003867](../../assets/images/2021-11-15-Singleton/image-20211115120003867.png)
 
 
 
-​	    
+<hr>
 
+#### Lazy Initialization
+
+Lazy Initialization은 Eager Initialization의 단점을 보완한 방법이다. 
+
+생성자는 private으로 클래스 내부에서만 호출할 수 있고, 객체 생성은 getInstance() 메소드를 통해서만 가능하다.
+
+![image-20211118100805608](../../assets/images/2021-11-15-Singleton/image-20211118100805608.png)
+
+instance가 null일 경우에만 인스턴스를 생성하므로 싱글톤패턴에 부합하며, getInstance()의 호출 이외에는 인스턴스를 생성하지 않기 때문에 Eager Initialization의 단점을 보완하였다.
+
+하지만 Lazy Initialization은 멀티스레드 환경에서 Thread Safe하지 않다. 멀티 쓰레드 환경에서 여러 개의 쓰레드가 동시에 instance의 null check를 한다면 여러개의 스레트가 모두 instance가 null이라고 판단하고, 그 결과 여러개의 인스턴스가 생성되므로 싱글톤이 아니다.
+
+<br>**그럼 어떻게 쓰레드 세이프 하게 ?**
+
+쓰레드 세이프하게 만들려면 getInstance Method 앞에 synchronized 키워드만 붙여주면 된다. 하지만 synchronized 를 메소드에 사용하게 되면, 해당 메소드를 호출할 때 마다 다른 쓰레드에서 접근할 수 없게 되기 때문이다.  이렇게 하면 속도적인 측면에서 성능이 저하된다. 이를 위해 나온 방법이 **Double Checked Locking Pattern**이다.
+
+<hr>
+
+#### Double Check Locking
+
+이 방법은 Critical Section에만 synchronized 키워드를 사용하는 것이다.
+
+<span style="color:red;">Critical Section[임계 구역]</span>이란 병렬 컴퓨팅에서 둘 이상의 쓰레드가 동시에 접근해서는 안되는 공유 자원을 접근하는 코드의 일부를 말한다.
+
+![image-20211118112256906](../../assets/images/2021-11-15-Singleton/image-20211118112256906.png)
+
+instance의 null 체크를 synchronized 블록 안,밖에서 한번 하도록 되어있는데, 밖에서 하는 체크는 이미 인스턴스가 생성된 경우 빠르게 인스턴스를 리턴하기 위함이고, 안에서 하는 체크는 인스턴스가 생성되지 않은 경우에 단 한개의 인스턴스만 생성되도록 보장하기 위함이다.
+
+<hr>
+
+#### Bill Pugh Solution
+
+Bill Pugh Singleton은 <span style="color:red;">현재 가장 널리쓰이는 싱글톤</span> 구현 방법으로써 Buill Pugh가 고안한,
+
+Inner static helper class를 사용하는 방식이다.
+
+![image-20211118120613213](../../assets/images/2021-11-15-Singleton/image-20211118120613213.png)
+
+
+
+Private inner static class를 두어 싱글톤 인스턴스를 갖게 한다.
+
+SingletoneHelper 클래스는 BillPughSingleton 클래스가 Load 될 때에도 Load 되지 않다가 getInstance()가 호출됐을 때 비로소 JVM 메모리에 로드되고, 인스턴스를 생성한다.
+
+또한, synchronized를 사용하지 않기 떄문에 성능 저하의 문제 또한 없다.
+
+<hr>
+
+#### Enum Singleton
+
+위 싱글톤 방식들은 사실 Java의 Reflection을 통해서 파괴 될 수 있기 때문에 안전하지는 않다.
+
+![image-20211119104738484](../../assets/images/2021-11-15-Singleton/image-20211119104738484.png)
+
+Enum을 사용한 싱글톤 패턴은 Lazy Loading[메모리 문제]이 아니라는 점과 유연성이 떨어진다는 단점이 있지만,다음과 같이 강력한 장점이 있다.
+
+1. 구현이 쉽다
+
+2. 쓰레드 세이프하게 구현 되어있다.
+
+3. 직렬화/역직렬화 에 대한 처리가 필요없다.
+
+   * 기존의 싱글톤 패턴을 구현한 클래스들은 직렬화를 구현하는 경우, 싱글톤 패턴이 파괴된다.	직렬화 한 객체의 해시코드와 역직렬화[새롭게 인스턴스 생성] 한 객체의 해시코드가 다르기 떄문이다.
+
+     이를 해결하기 위해서는 Serialziable 클래스에 readResolve() 메소드를 추가하면 된다. 
+
+     하지만, Enum Singleton의 경우 직,역직렬화 모두 인스턴스의 해시 코드가 같다.
+
+     이 부분은 다음에 더 자세한 포스팅을 이어 하겠다.
