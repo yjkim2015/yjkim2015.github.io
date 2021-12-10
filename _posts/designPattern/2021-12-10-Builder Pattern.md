@@ -1,11 +1,13 @@
 ---
-title: 빌더(Builder Factory) 패턴
+title: 빌더(Builder) 패턴
 categories:
 - DesignPattern
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
+
+
 
 ## 빌더 (Builder) 패턴이란?
 
