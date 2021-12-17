@@ -158,64 +158,62 @@ step1에서  우리는 시그니처에 따라 내용이 다른 인스턴스를 �
 
 
 
-
-
 <hr>
 
 **다음은 정적 팩토리 메서드에 흔히 사용되는 명명 방식들이다.**
 
-* from : 매개 변수를 하나 받아서 해당 타입의 인스턴스를 반환하는 형변환 메서드
+* **from : 매개 변수를 하나 받아서 해당 타입의 인스턴스를 반환하는 형변환 메서드**
 
   ```
   예) Date d = Date.from(instant);
   ```
 
-* of : 여러 매개변수를 받아 적합한 타입의 인스턴스를 반환하는 집계 메서드
+* **of : 여러 매개변수를 받아 적합한 타입의 인스턴스를 반환하는 집계 메서드**
 
   ```
   예) Set<Rank> faceCards = EnumSet.of(JACK, QUEEN, KING);
   ```
 
-* valueOf : from과 of의 더 자세한 버전
+* **valueOf : from과 of의 더 자세한 버전**
 
   ```
   예) BigInteger prime = BigInteger.valueOf(Integer.MAX_VALUE);
   ```
 
-* instance || getInstance : 매개변수로 명시한 인스턴스를 반환하지만, 같은 인스턴스임을 보장하지는 않는다.
+* **instance || getInstance : 매개변수로 명시한 인스턴스를 반환하지만, 같은 인스턴스임을 보장하지는 않는다.**
 
   ```
   예) StackWalker luke = StackWalker.getInstance(options);
   ```
 
-* create 혹은 newInstance : instance 혹은 getInstance와 같지만, 매번 새로운 인스턴스를 생성해 반환함을 보장한다.
+* **create 혹은 newInstance : instance 혹은 getInstance와 같지만, 매번 새로운 인스턴스를 생성해 반환함을 보장한다.**
 
   ```
   예) Object newArray = Array.newInstance(classObject, arrayLen);
   ```
 
-  getType : getInstance와 같으나, 생성할 클래스가 아닌 다른 클래스에 팩토리 메소드를 정의할 때 사용한다.
+  **getType : getInstance와 같으나, 생성할 클래스가 아닌 다른 클래스에 팩토리 메소드를 정의할 때 사용한다.**
 
 * ```
   예) FileStore fs = Files.getFileStore(path);
   ```
 
-* newType : newInstance와 같으나, 생성할 클래스가 아닌 다른 클래스에 팩토리 메소드를 정의할 때 사용한다. 
+* **newType : newInstance와 같으나, 생성할 클래스가 아닌 다른 클래스에 팩토리 메소드를 정의할 때 사용한다.** 
 
   ```
   예) BufferedReader br = Files.newBufferedReader(path);
   ```
 
-  type : getType과 newType의 간결한 버전
+  **type : getType과 newType의 간결한 버전**
 
 * ```
   예) List<Complaint> litany = Collections.list(legacyLitany);
   ```
 
-
-
 <hr>
-> ***정리하자면, 정적 팩토리 메소드와 public 생성자는 각자의 쓰임새가 있으니 상대적인 장단점을 이해하고 사용하는 것이 좋다. 그렇다고 하더라도 정적 팩토리 메소드를 사용하는게 유리한 경우가 더 많으므로 무작정 public 생성자를 제공하던 습관이 있다면 고쳐야한다.***
+
+> 정리하자면, 정적 팩토리 메소드와 public 생성자는 각자의 쓰임새가 있으니 상대적인 장단점을 이해하고 사용하는 것이 좋다. 그렇다고 하더라도 정적 팩토리 메소드를 사용하는게 유리한 경우가 더 많으므로 무작정 public 생성자를 제공하던 습관이 있다면 고쳐야한다.
+
 
 
 
