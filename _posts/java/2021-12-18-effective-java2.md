@@ -75,7 +75,7 @@ Car car =  new Car.CarBuilder("Red","K7","KIA").setPrice(1000).setSpeed(100).bui
 
 **빌더 패턴은 계층적으로 설계된 클래스와 함께 쓰기 좋다**
 
-
+<hr>
 
 **이렇게 좋아만 보이는 빌더패턴에도 다음과 같은 <span style="color:red;">단점</span>은 존재한다.**
 
