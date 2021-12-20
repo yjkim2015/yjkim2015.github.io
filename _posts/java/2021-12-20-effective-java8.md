@@ -7,12 +7,6 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-
-
-ㄴ어이다.
-
-
-
 자바는 아래와 같이 두 가지 객체 소멸자를 제공한다.
 
 * **finalizer**
