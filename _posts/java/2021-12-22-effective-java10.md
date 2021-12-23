@@ -1,5 +1,5 @@
 ---
-title: [Effective-10] equals는 일반 규약을 지켜 재정의하라
+title: equals는 일반 규약을 지켜 재정의하라
 categories:
 - Java
 toc: true
@@ -7,39 +7,43 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+![post-thumbnail](../../assets/images/2021-12-22-effective-java10/책 표지.jpg)
+
+<hr>
+
 **<code>equals</code> 메소드는 기본적으로 최상위 객체인 <code>Object</code>에서 제공하는 메소드로서 재정의를 염두에 두고 설계된 것이다. 때문에 재정의 시 지켜야 하는 일반 규약이 명확이 정의가 되어있다.**
 
 이러한 규약을 지키지 않고 재정의를 했다간 끔찍한 결과를 초래할 수 있다.
 
 
 
-**그렇다면 먼저 <code>equals</code> 재정의 규약을 살펴보기 전에 어느 상황에서는 재정의 하면 안되는지 부터 알아보자.**
+**<span style="color:red;">그렇다면 먼저 <code>equals</code> 재정의 규약을 살펴보기 전에 어느 상황에서는 재정의 하면 안되는지 부터 알아보자.</span>**
 
+<hr>
 
-
-## Step 1 : 각 인스턴스가 본질적으로 고유하다.
+### 🔗 각 인스턴스가 본질적으로 고유하다.
 
 값을 표현하는게 아니라 동작하는 개체를 표현하는 클래스가 여기 해당한다. <code>Thread</code>가 좋은 예로, Object의 equals 메서드는 이러한 클래스에 딱 맞게 구현되었다.
 
+<hr>
 
-
-## Step 2 : 인스턴스의 '논리적 동치성(logical equality)'를 검사할 일이 없다.
+### 🔗 인스턴스의 '논리적 동치성(logical equality)'를 검사할 일이 없다.
 
 - 논리적 동치: 두 명제 p, q에 대해 쌍방 조건이 항진 명제인 경우, 즉 p<=>q
 - 항진 명제: 논리식 혹은 합성명제에 있어 각 명제의 참·거짓의 모든 조합에 대하여 항상 참인 것
 - **즉, 쉽게 말하면 인스턴스들 끼리 equals() 메서드를 사용해서, 논리적으로 같은지 검사할 필요가 없는 경우에는 <code>Object</code>의 기본 <code>equals</code> 로만으로도 해결한다.**
 
+<hr>
 
-
-## Step 3 : 상위 클래스에서 재정의한 equals가 하위 클래스에도 딱 들어맞는다.
+### 🔗 상위 클래스에서 재정의한 equals가 하위 클래스에도 딱 들어맞는다.
 
 - HashSet, TreeSet, EnumSet 등 대부분의 Set 구현체 - <code>AbstractSet</code> 에서 정의된 equals 사용
 - ArrayList, Vector 등 대부분의 List 구현체 - <code>AbstractList</code> 에서 정의된 equals 사용
 - HashMap, TreeMap, EnumMap 등 대부분의 Map 구현체 - <code>AbstractMap</code> 에서 정의된 equals 사용
 
+<hr>
 
-
-## Step 4 : 클래스가 private이거나 package-private이고 equals 메소드를 호출할 일이 없다.
+### 🔗 클래스가 private이거나 package-private이고 equals 메소드를 호출할 일이 없다.
 
 이 경우에는 equals가 실수로라도 호출되는 걸 막고 싶다면 아래와 같이  하는것이 좋다고 한다.
 
@@ -50,11 +54,14 @@ toc_label: 목차
 **여기까지 <code>equals</code>를 재정의하면 안되는 상황들에 대해 알아보았다.**
 
 <hr>
-**그렇다면 이제 도대체 언제 <code>equals</code>를 정의해야하는지에 대해 알아보자.**
 
-#### equals를 재정의해야 할 때는 객체 식별성(object identity : 두 객체가 물리적으로 같은가)이 아니라 논리적 동치성을 확인해야하는데, 상위 클래스의 equals가 논리적 동치성을 비교하도록 재정의 되지 않았을 때이다.
 
-<br>
+
+**<span style="color:red;">그렇다면 이제 도대체 언제 <code>equals</code>를 정의해야하는지에 대해 알아보자.</span>**
+
+***equals를 재정의해야 할 때는 객체 식별성(object identity : 두 객체가 물리적으로 같은가)이 아니라 논리적 동치성을 확인해야하는데, 상위 클래스의 equals가 논리적 동치성을 비교하도록 재정의 되지 않았을 때이다.***
+
+**<br>**
 
 **주로 값 클래스들이 해당한다 [값 클래스란 <code>Integer</code>와 <code>String</code>처럼 값을 표현하는 클래스]**
 
@@ -69,13 +76,13 @@ toc_label: 목차
 
 지금까지 <code>equals</code>를 언제 재정의하는지도 알아보았다. 
 
-중요한게 남아있다. <code>equals</code> 메소드를 재정의할 때는 따라야하는 규약이 있다고 한다.
+<span style="color:red;">중요한게 남아있다. <code>equals</code> 메소드를 재정의할 때는 따라야하는 규약이 있다고 한다.</span>
 
 아래에서 살펴보자.
 
 
 
-## Step 5 : equals 메소드를 재정의 할 때 따라야하는 일반 규약
+### 🔗 equals 메소드를 재정의 할 때 따라야하는 일반 규약
 
 다음은 Object 명세에 적힌 규약이다.
 
@@ -97,17 +104,19 @@ toc_label: 목차
 
 
 
-#### <code>반사성</code>
+### 💎 반사성
 
 **단순히 말하면 객체는 자기 자신과 같아야 한다는 말**이라는데 ? 뭔 당연한 소릴 하는걸까? 라고 생각할 것 같다.
 
 이 요건은 일부러 여기는 경우가 아니라면 만족시키지 못하기가 더 어렵다고 한다.
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">class</span>&nbsp;Car&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">static</span>&nbsp;<span style="color:#ff3399">void</span>&nbsp;main(<span style="color:#0099cc">String</span>[]&nbsp;args)&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Set<span style="color:#0086b3"></span><span style="color:#ff3399">&lt;</span>Car<span style="color:#0086b3"></span><span style="color:#ff3399">&gt;</span>&nbsp;carSet&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;<span style="color:#ff3399">new</span>&nbsp;Set<span style="color:#0086b3"></span><span style="color:#ff3399">&lt;</span><span style="color:#0086b3"></span><span style="color:#ff3399">&gt;</span>();</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Car&nbsp;car&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;<span style="color:#ff3399">new</span>&nbsp;Car();</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;carSet.<span style="color:#0099cc">add</span>(car);</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#999999">//반사성을&nbsp;어기면&nbsp;해당&nbsp;값이&nbsp;false가&nbsp;나온다고&nbsp;한다.</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#0099cc">System</span>.<span style="color:#0099cc">out</span>.<span style="color:#0099cc">println</span>(carSet.contains(car));</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div
+<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">class</span>&nbsp;Car&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">static</span>&nbsp;<span style="color:#ff3399">void</span>&nbsp;main(<span style="color:#0099cc">String</span>[]&nbsp;args)&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Set<span style="color:#0086b3"></span><span style="color:#ff3399">&lt;</span>Car<span style="color:#0086b3"></span><span style="color:#ff3399">&gt;</span>&nbsp;carSet&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;<span style="color:#ff3399">new</span>&nbsp;Set<span style="color:#0086b3"></span><span style="color:#ff3399">&lt;</span><span style="color:#0086b3"></span><span style="color:#ff3399">&gt;</span>();</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Car&nbsp;car&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;<span style="color:#ff3399">new</span>&nbsp;Car();</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;carSet.<span style="color:#0099cc">add</span>(car);</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#999999">//반사성을&nbsp;어기면&nbsp;해당&nbsp;값이&nbsp;false가&nbsp;나온다고&nbsp;한다.</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#0099cc">System</span>.<span style="color:#0099cc">out</span>.<span style="color:#0099cc">println</span>(carSet.contains(car));</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
 
 
 
-#### <code>대칭성</code>
+<hr>
+
+### 💎 대칭성
 
 두 객체는 서로에 대한 동치 여부에 똑같이 답해야 한다.
 
