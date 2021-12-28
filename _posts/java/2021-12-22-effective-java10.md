@@ -50,7 +50,11 @@ toc_label: 목차
 **여기까지 <code>equals</code>를 재정의하면 안되는 상황들에 대해 알아보았다.**
 
 <hr>
+
 **<span style="color:red;">그렇다면 이제 도대체 언제 <code>equals</code>를 정의해야하는지에 대해 알아보자.</span>**
+
+
+
 
 > ##### equals를 재정의해야 할 때는
 >
@@ -70,7 +74,6 @@ toc_label: 목차
 
 <hr>
 <span style="color:red;">하지만</span>, 값 클래스라 해도, <code>싱글턴 클래스[인스턴스 통제 클래스]</code> 처럼 같은 인스턴스가 둘 이상 만들어지지 않음을 보장하는 녀석에게는 <code>equals</code>를 재정의 할 이유가 없다.
-
 <br>
 
 지금까지 <code>equals</code>를 언제 재정의하는지도 알아보았다. 
