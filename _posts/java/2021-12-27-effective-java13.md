@@ -202,7 +202,8 @@ HashTable 예에서라면, buckets 필드를 새로운 버킷 배열로 초기�
   * Object의 clone 메소드는 동기화를 신경 쓰지 않았다. 그러니 super.clone 호출 외에 다른 할 일이 없더라도 clone을 재정의하고 동기화해줘야 한다.
 
 <hr>
-#### 💎Cloneable/clone 요약
+
+##### 💎Cloneable/clone 요약
 
 **Cloneable을 구현하는 모든 클래스는 clone을 재정의해야 한다.**
 
