@@ -97,7 +97,7 @@ toc_label: 목차
 
 많은 **Map** 구현체는 각각의 키-값 쌍을 표현하는 엔트리(**Entry**) 객체들을 가지고 있지만 엔트리의 메소드들(**getKey, getValue, setValue**)은 맵을 직접 사용하지는 않는다.
 
-![image-20220104144936913](C:\Users\yoonoa\AppData\Roaming\Typora\typora-user-images\image-20220104144936913.png)
+![image-20220104192351093](C:\Users\yoonoa\Documents\yjkim2015.github.io\assets\images\2022-01-04-effective-java24\image-20220104192351093.png)
 
 따라서 엔트리를 비정적 멤버 클래스로 표현하는 것은 낭비이고,
 private 정적 멤버 클래스가 가장 알맞다. 
