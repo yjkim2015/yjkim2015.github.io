@@ -48,7 +48,6 @@ System.out.println(phoneMap.get(new PhoneNumber(707,867,5309)).equals("제니"))
 여기에는 2개의 PhoneNumber 인스턴스가 사용이 되었는데, 하나는 HashMap에 "제니"를 넣을 때 사용됐고, 또 하나는 이를 꺼내려할 때 사용되었다.
 
 <hr>
-
 **PhoneNumber 클래스는 hashCode를 재정의 하지 않았기 때문에 논리적 동치인 두 객체가 서로 다른 해시 코드를 반환하여 두 번째 규약을 지키지 못한다.** 
 
 그 결과로 get 메서드는 엉뚱한 해시 버킷에 가서 객체를 찾으려 한 것이다. 
