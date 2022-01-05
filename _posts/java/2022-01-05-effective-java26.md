@@ -225,7 +225,7 @@ warning: [unchecked] unchecked call to add(E) as a member of the raw type List
 
 
 
-#### **🔗 비한정적 와일드카드 타입을 사용해! **
+#### 🔗 비한정적 와일드카드 타입을 사용해! 
 
 
 
