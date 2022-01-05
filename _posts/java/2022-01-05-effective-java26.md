@@ -104,7 +104,6 @@ private final Collection<Stamp> stamps = ...;
 
 * 위처럼 제네릭 타입을 명시해주면 stamps에는 **Stamp의 인스턴스만 넣어야 함을 컴파일러가 인지**하게 된다.
   
-
 * 아무런 경고 없이 컴파일된다면 의도대로 동작할 것임을 보장한다.
 
 
@@ -167,20 +166,19 @@ error: incompatible types: Coin cannot be converted to Stamp
 
 #### **💎 임의 객체를 허용하는 매개변수화 타입은 괜찮아!!**
 
-* List 같은 로 타입은 사용해서는 안 되나, List<Object>처럼 **임의 객체를 허용하는 매개변수화 타입**은 괜찮다.
+* List 같은 로 타입은 사용해서는 안 되나, `List<Object>`처럼 **임의 객체를 허용하는 매개변수화 타입**은 괜찮다.
 
   * List는 **제네릭 타입에서 완전히 발을 뺀 것**이다.
-    
-  * List<Object>는 **<span style="color:red;">모든 타입을 허용</span>한다는 의사를 컴파일러에 명확히 전달** 한 것이다.
+  * `List<Object>`는 **<span style="color:red;">모든 타입을 허용</span>한다는 의사를 컴파일러에 명확히 전달** 한 것이다.
 
   
 
-* 매개변수로 **List**를 받는 **메소드에 List<String>**을 넘길 수 있지만, **List<Object>**를 받는 메소드에는 넘길 수 없다. <span style="color:red;">이는 제네릭의 하위 타입 규칙 때문이다.</span>
-  * List<String>은 로 타입인 List의 하위 타입이다.
+* 매개변수로 **List**를 받는 **메소드에 `List<String>`**을 넘길 수 있지만, **`List<Object>`**를 받는 메소드에는 넘길 수 없다. <span style="color:red;">이는 제네릭의 하위 타입 규칙 때문이다.</span>
+  * `List<String>`은 로 타입인 List의 하위 타입이다.
     
-  * List<Object>는 List의 하위 타입이 아니다.
+  * `List<Object>`는 List의 하위 타입이 아니다.
     
-  * List<Object>같은 매개변수화 타입을 사용할 때와 달리 List 같은 로 타입을 사용하면 타입 안정성을 잃게 된다.
+  * `List<Object>`같은 매개변수화 타입을 사용할 때와 달리 List 같은 로 타입을 사용하면 타입 안정성을 잃게 된다.
 
 <br>
 
@@ -215,7 +213,7 @@ warning: [unchecked] unchecked call to add(E) as a member of the raw type List
 
 
 
-* 로 타입인 List를 매개변수화 타입인 List<Object>로 바꾼 다음 다시 컴파일하면, 아래와 같은 오류를 출력하며 컴파일 조차 되지 않는다.
+* 로 타입인 List를 매개변수화 타입인 `List<Object>`로 바꾼 다음 다시 컴파일하면, 아래와 같은 오류를 출력하며 컴파일 조차 되지 않는다.
 
   ```
   error : incompatible types: List<String> cannot be converted to List<Object>
@@ -259,7 +257,7 @@ static int numElementsInCommon(Set s1, Set s2) {
 
 * 제네릭 타입을 쓰고 싶지만 실제 타입 매개변수가 무엇인지 신경쓰고 싶지 않다면 **<span style="color:red;">물음표(?)</span>**를 사용하자.
 
-  * ex) Set<E> -> Set<?>
+  * ex) `Set<E>` -> `Set<?>`
 
   
 
@@ -275,7 +273,7 @@ static int numElementsInCommon(Set s1, Set s2) {
 static int numElementsInCommon(Set<?> s1, Set<?> s2) {...}
 ```
 
-* **비한정적 와일드카드 타입인 Set<?>와 로 타입의 Set의 차이는 안전하냐 안전하지 않냐의 차이다.**
+* **비한정적 와일드카드 타입인 `Set<?>`와 로 타입의 Set의 차이는 안전하냐 안전하지 않냐의 차이다.**
 
 
 
@@ -283,7 +281,7 @@ static int numElementsInCommon(Set<?> s1, Set<?> s2) {...}
 
 
 
-* **비한정적 와일드 카드를 사용한 Collection<?>에는 <span style="color:red;">null외에 어떤 원소도 넣을 수 없다.</span>**
+* **비한정적 와일드 카드를 사용한 `Collection<?>`에는 <span style="color:red;">null외에 어떤 원소도 넣을 수 없다.</span>**
 
   * Object class에서 제공하는 메소드일 때 사용
 
@@ -305,7 +303,7 @@ static int numElementsInCommon(Set<?> s1, Set<?> s2) {...}
 
 * **class 리터럴에는 로 타입을 써야 한다.**
   * 자바 명세는 class 리터럴에 매개변수화 타입을 사용하지 못하게 했다. (배열과 기본 타입허용)
-  * ex) List.class, String[].class, int.class 허용  List<String>.class, List<?>.class 비허용
+  * ex) List.class, String[].class, int.class 허용  `List<String>.class`, `List<?>.class` 비허용
 
 
 
@@ -335,7 +333,7 @@ if (o instanceof Set) { // 로 타입
 }
 ```
 
-* o의 타입이 Set임을 확인한 다음 와일드 카드 타입인 Set<?>로 형변환해야 한다.  (로 타입인 Set이 아니다)
+* o의 타입이 Set임을 확인한 다음 와일드 카드 타입인 `Set<?>`로 형변환해야 한다.  (로 타입인 Set이 아니다)
 
 
 
@@ -351,13 +349,13 @@ if (o instanceof Set) { // 로 타입
 >
 > 로 타입은 제네릭이 도입되기 이전 코드와의 호환성을 위해 제공될 뿐이다.
 >
-> 빠르게 훑어보자면, Set<Object>는 어떤 타입의 객체도 저장할  수 있는 **매개변수화 타입**이고,
+> 빠르게 훑어보자면, `Set<Object>`는 어떤 타입의 객체도 저장할  수 있는 **매개변수화 타입**이고,
 >
-> Set<?>는 모종의 타입 객체만 저장할 수 있는 **와일드카드 타입**이다.
+> `Set<?>`는 모종의 타입 객체만 저장할 수 있는 **와일드카드 타입**이다.
 >
 > **그리고 이들의 로 타입인 Set은 제네릭 타입 시스템에 속하지 않는다.**
 >
-> **Set<Object>와 Set<?>는 안전하지만, 로 타입인 Set은 안전하지 않다.**
+> **`Set<Object>`와 `Set<?>`는 안전하지만, 로 타입인 Set은 안전하지 않다.**
 
 
 
