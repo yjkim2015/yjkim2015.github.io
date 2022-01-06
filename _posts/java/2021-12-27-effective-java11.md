@@ -1,5 +1,5 @@
 ---
-title: equals를 재정의하려거든 hashCode도 재정의하라.
+title: equals를 재정의하려거든 hashCode도 재정의하라. - Effective Java[11]
 categories:
 - Java
 toc: true

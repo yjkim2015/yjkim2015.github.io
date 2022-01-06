@@ -1,5 +1,5 @@
 ---
-title: finalizer와 cleaner 사용을 피하라
+title: finalizer와 cleaner 사용을 피하라 - Effective Java[8]
 categories:
 - Java
 toc: true

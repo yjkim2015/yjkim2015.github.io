@@ -1,5 +1,5 @@
 ---
-title: 인터페이스는 구현하는 쪽을 생각해 설계해라
+title: 인터페이스는 구현하는 쪽을 생각해 설계해라 - Effective Java[21]
 categories:
 - Java
 toc: true

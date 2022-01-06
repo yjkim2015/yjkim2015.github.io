@@ -1,5 +1,5 @@
 ---
-title: 배열보다는 리스트를 사용하라
+title: 배열보다는 리스트를 사용하라 - Effective Java[28]
 categories:
 - Java
 toc: true

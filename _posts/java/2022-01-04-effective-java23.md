@@ -1,5 +1,5 @@
 ---
-title: 태그 달린 클래스보다는 클래스 계층구조를 활용하라
+title: 태그 달린 클래스보다는 클래스 계층구조를 활용하라 - Effective Java[23]
 categories:
 - Java
 toc: true

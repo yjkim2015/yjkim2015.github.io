@@ -1,5 +1,5 @@
 ---
-title: 변경 가능성을 최소화하라
+title: 변경 가능성을 최소화하라 - Effective Java[17]
 categories:
 - Java
 toc: true

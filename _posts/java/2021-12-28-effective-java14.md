@@ -1,5 +1,5 @@
 ---
-title: Comparable을 구현할지 고려하라.
+title: Comparable을 구현할지 고려하라. - Effective Java[14]
 categories:
 - Java
 toc: true

@@ -1,5 +1,5 @@
 ---
-title: 비검사 경고를 제거하라
+title: 비검사 경고를 제거하라 - Effective Java[27]
 categories:
 - Java
 toc: true

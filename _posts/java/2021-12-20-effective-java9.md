@@ -1,5 +1,5 @@
 ---
-title: try-finally보다는 try-with-resources를 사용하라
+title: try-finally보다는 try-with-resources를 사용하라 - Effective Java[9]
 categories:
 - Java
 toc: true

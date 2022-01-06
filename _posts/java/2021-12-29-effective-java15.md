@@ -1,5 +1,5 @@
 ---
-title: 클래스와 멤버의 접근 권한을 최소화하라
+title: 클래스와 멤버의 접근 권한을 최소화하라 - Effective Java[15]
 categories:
 - Java
 toc: true

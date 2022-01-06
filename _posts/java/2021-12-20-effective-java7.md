@@ -1,5 +1,5 @@
 ---
-title: 다 쓴 객체 참조를 해제하라
+title: 다 쓴 객체 참조를 해제하라 - Effective Java[7]
 categories:
 - Java
 toc: true

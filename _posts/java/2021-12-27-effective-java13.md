@@ -1,5 +1,5 @@
 ---
-title: clone 재정의는 주의해서 진행해라
+title: clone 재정의는 주의해서 진행해라 - Effective Java[13]
 categories:
 - Java
 toc: true

@@ -1,5 +1,5 @@
 ---
-title: 상속을 고려해 설계하고 문서화하라. 그러지 않았다면 상속을 금지하라
+title: 상속을 고려해 설계하고 문서화하라. 그러지 않았다면 상속을 금지하라 - Effective Java[19]
 categories:
 - Java
 toc: true

@@ -1,5 +1,5 @@
 ---
-title: 자원을 직접 명시하지말고 의존 객체 주입을 사용하라.
+title: 자원을 직접 명시하지말고 의존 객체 주입을 사용하라. - Effective Java[5]
 categories:
 - Java
 toc: true

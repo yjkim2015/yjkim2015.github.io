@@ -1,5 +1,5 @@
 ---
-title: 톱 레벨 클래스는 한 파일에 하나만 담으라
+title: 톱 레벨 클래스는 한 파일에 하나만 담으라 - Effective Java[25]
 categories:
 - Java
 toc: true

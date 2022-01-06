@@ -1,5 +1,5 @@
 ---
-title: 멤버 클래스는 되도록 static으로 만들라
+title: 멤버 클래스는 되도록 static으로 만들라 - Effective Java[24]
 categories:
 - Java
 toc: true

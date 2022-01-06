@@ -1,5 +1,5 @@
 ---
-title: 생성자에 매개변수가 많다면 빌더를 고려하라
+title: 생성자에 매개변수가 많다면 빌더를 고려하라 - Effective Java[2]
 categories:
 - Java
 toc: true

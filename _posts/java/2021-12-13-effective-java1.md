@@ -1,5 +1,5 @@
 ---
-title: 생성자 대신 정적 팩토리 메소드를 고려하라
+title: 생성자 대신 정적 팩토리 메소드를 고려하라 - Effective Java[1]
 categories:
 - Java
 toc: true

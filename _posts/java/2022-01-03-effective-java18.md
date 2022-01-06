@@ -1,5 +1,5 @@
 ---
-title: 상속보다는 컴포지션을 사용하라.
+title: 상속보다는 컴포지션을 사용하라. - Effective Java[18]
 categories:
 - Java
 toc: true

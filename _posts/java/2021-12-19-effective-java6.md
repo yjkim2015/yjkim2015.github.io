@@ -1,5 +1,5 @@
 ---
-title: 불필요한 객체 생성을 피해라
+title: 불필요한 객체 생성을 피해라 - Effective Java[6]
 categories:
 - Java
 toc: true

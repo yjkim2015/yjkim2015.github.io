@@ -1,5 +1,5 @@
 ---
-title: toString을 항상 재정의하라
+title: toString을 항상 재정의하라 - Effective Java[12]
 categories:
 - Java
 toc: true
