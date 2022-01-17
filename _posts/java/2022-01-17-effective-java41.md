@@ -15,7 +15,7 @@ toc_label: 목차
   * ex) **Serializable** 인터페이스는 자신을 구현한 클래스의 인스턴스는 Objec tOutputStream을 통해 쓸(write) 수 있다고, 즉, 직렬화(serialization) 할 수 있다고 알려준다.
 
 
-![image-20220117164155235](C:\Users\yoonoa\Documents\yjkim2015.github.io\assets\images\2022-01-17-effective-java41\image-20220117164155235.png)
+![image-20220117170251509](../../assets/images/2022-01-17-effective-java41/image-20220117170251509.png)
 
 <hr>
 
