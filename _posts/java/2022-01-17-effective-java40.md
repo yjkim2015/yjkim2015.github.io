@@ -1,5 +1,5 @@
 ---
-title: @Override 애너테이션을 일관되게 사용하라 - Effective Java[40]
+title: Override 애너테이션을 일관되게 사용하라 - Effective Java[40]
 categories:
 - Java
 toc: true
