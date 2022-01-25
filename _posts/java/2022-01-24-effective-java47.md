@@ -155,7 +155,7 @@ public static <E> Stream<E> streamOf(Iterable<E> iterable) {
 
 * **Collection** 인터페이스는 **Iterable**의 하위 타입이고 **stream** 메서드도 제공하니 반복과 스트림을 동시에 지원한다.
 
-![image-20220124103612222](C:\Users\yoonoa\Documents\yjkim2015.github.io\assets\images\2022-01-24-effective-java47\image-20220124103612222.png)
+![image-20220124103612222](../../assets/images/2022-01-24-effective-java47/image-20220124103612222.png)
 
 
 
@@ -179,9 +179,7 @@ public static <E> Stream<E> streamOf(Iterable<E> iterable) {
 
 * 주어진 집합의 멱집합(한 집합의 모든 부분집합을 원소로 하는 집합)을 반환하는 상황이다.
 
-  * {a, b, c}의 멱집합은 {{}, {a}, {b}, {c}, {a,b}, {a,c}, {b, c}, {a, b, c}}다.
-
-    
+  
 
   * 원소 개수가 n개면 멱집합의 원소 개수는 2^n개가 된다.
 
