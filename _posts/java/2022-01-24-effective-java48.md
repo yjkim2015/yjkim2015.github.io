@@ -263,7 +263,7 @@ static long pi(long n) {
 
 
 
-* **무작위 수들로 이뤄진 스트림을 병렬화**하려거든 **ThreadLocalRandom** 보다는 <span style="color:red;">SplittableRandom 인스턴스</span>를 이용**하자.
+* **무작위 수들로 이뤄진 스트림을 병렬화**하려거든 **ThreadLocalRandom** 보다는 <span style="color:red;">SplittableRandom 인스턴스</span>를 이용하자.
 
   * **SplittableRandom**은 정확히 이럴 때 쓰고자 설계된 것이라 **병렬화하면 성능이 선형으로 증가한다.**
 

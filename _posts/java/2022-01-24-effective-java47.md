@@ -106,7 +106,7 @@ public static <E> Iterable<E> iterableOf(Stream<E> stream) {
 <br>
 
 ```java
-for (ProcessHandle p : iterablef(ProcessHandle.allProcesses())) {
+for (ProcessHandle p : iterablof(ProcessHandle.allProcesses())) {
     // 프로세스를 처리한다.
 }
 ```
@@ -122,6 +122,8 @@ public static <E> Stream<E> streamOf(Iterable<E> iterable) {
     return StreamSupport.stream(iterable.spliterator(), false);
 }
 ```
+
+
 
 
 
