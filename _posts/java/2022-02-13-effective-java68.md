@@ -303,13 +303,13 @@ if (car.speed() > 2 * SPEED_LIMIT) {
 
 
 * **boolean 타입의 필드 이름은** <span style="color:red;">보통 boolean 접근자 메서드에서 앞 단어를 뺀 형태다.</span>
-  * ex) initialized, composite
+  * ex) **initialized**, **composite**
 
 
 
 * 다른 타입의 필드라면 명사나 명사구를 사용한다.
 
-  * ex) height, digits, bodyStyle
+  * ex) **height**, **digits**, **bodyStyle**
 
   
 
