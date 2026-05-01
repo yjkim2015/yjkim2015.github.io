@@ -559,20 +559,22 @@ code.highlighter-rouge {
 /* ============================================
    Pagination
    ============================================ */
-.pagination,
-.paginator,
-nav.pagination {
+nav.pagination,
+.pagination {
   margin-top: 2em !important;
   text-align: center !important;
   display: flex !important;
   justify-content: center !important;
   width: 100% !important;
-}
 
-.pagination .page_number,
-.pagination a,
-.paginator a {
-  display: inline-block;
+  ul {
+    display: flex !important;
+    justify-content: center !important;
+    list-style: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    gap: 0.3em;
+  }
 }
 
 /* ============================================

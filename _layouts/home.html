@@ -12,9 +12,11 @@ layout: default
       {% assign posts = site.posts %}
     {% endif %}
 
-    {% for post in posts %}
-      {% include archive-single.html %}
-    {% endfor %}
+    <div class="posts-grid">
+      {% for post in posts %}
+        {% include archive-single.html type="card" %}
+      {% endfor %}
+    </div>
 
     {% include paginator.html %}
   </div>
