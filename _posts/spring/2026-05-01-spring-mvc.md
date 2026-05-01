@@ -11,111 +11,56 @@ toc_label: 목차
 
 Spring MVC의 핵심은 **DispatcherServlet**이다. 모든 HTTP 요청을 받아 적절한 핸들러에 위임하는 **Front Controller** 패턴을 구현한다.
 
-```
-[Front Controller 패턴]
-
-클라이언트
-    |
-    | HTTP 요청
-    v
-+------------------+
-| DispatcherServlet|  ← 모든 요청의 단일 진입점
-+------------------+
-    |
-    | 위임
-    v
-+------------------+    +------------------+    +------------------+
-| OrderController  |    | UserController   |    | ProductController|
-+------------------+    +------------------+    +------------------+
-```
+<div class="mermaid">
+graph TD
+    Client[클라이언트] -->|HTTP 요청| DS["DispatcherServlet<br/>모든 요청의 단일 진입점"]
+    DS -->|위임| OC[OrderController]
+    DS -->|위임| UC[UserController]
+    DS -->|위임| PC[ProductController]
+</div>
 
 ### DispatcherServlet 초기화
 
-```
-Spring Boot 시작
-    |
-    v
-ServletWebServerApplicationContext 생성
-    |
-    v
-DispatcherServlet 등록 (자동)
-    |
-    v
-DispatcherServlet.init()
-    |
-    v
-WebApplicationContext 연결
-    |
-    v
-전략 컴포넌트 초기화:
-  - HandlerMapping 목록
-  - HandlerAdapter 목록
-  - ViewResolver 목록
-  - HandlerExceptionResolver 목록
-  - ...
-```
+<div class="mermaid">
+graph TD
+    A([Spring Boot 시작]) --> B[ServletWebServerApplicationContext 생성]
+    B --> C[DispatcherServlet 등록 자동]
+    C --> D[DispatcherServlet.init()]
+    D --> E[WebApplicationContext 연결]
+    E --> F["전략 컴포넌트 초기화<br/>HandlerMapping 목록<br/>HandlerAdapter 목록<br/>ViewResolver 목록<br/>HandlerExceptionResolver 목록"]
+</div>
 
 ---
 
 ## 2. 요청 처리 흐름
 
-```
-HTTP 요청 (GET /orders/1)
-        |
-        v
-[DispatcherServlet]
-        |
-        | 1. getHandler()
-        v
-[HandlerMapping]
-  - RequestMappingHandlerMapping: @RequestMapping 기반
-  - BeanNameUrlHandlerMapping: Bean 이름 기반
-        |
-        | HandlerExecutionChain 반환
-        | (Handler + Interceptor 목록)
-        v
-[DispatcherServlet]
-        |
-        | 2. getHandlerAdapter()
-        v
-[HandlerAdapter]
-  - RequestMappingHandlerAdapter: @Controller 처리
-  - HttpRequestHandlerAdapter: HttpRequestHandler 처리
-        |
-        | 3. Interceptor.preHandle()
-        v
-[Interceptor Chain]
-        |
-        | 4. handle() - 실제 컨트롤러 실행
-        v
-[Controller Method]
-  - ArgumentResolver로 파라미터 바인딩
-  - 비즈니스 로직 실행
-  - ReturnValueHandler로 반환값 처리
-        |
-        | ModelAndView 반환
-        v
-[DispatcherServlet]
-        |
-        | 5. Interceptor.postHandle()
-        v
-[Interceptor Chain]
-        |
-        | 6. processDispatchResult()
-        v
-[ViewResolver]
-  - 뷰 이름 → View 객체 변환
-  - @ResponseBody면 MessageConverter 사용
-        |
-        | 7. View.render()
-        v
-[View]
-  - 템플릿 렌더링 (Thymeleaf, JSP 등)
-        |
-        | 8. Interceptor.afterCompletion()
-        v
-HTTP 응답
-```
+<div class="mermaid">
+sequenceDiagram
+    participant C as 클라이언트
+    participant DS as DispatcherServlet
+    participant HM as HandlerMapping
+    participant HA as HandlerAdapter
+    participant IC as Interceptor Chain
+    participant CM as Controller Method
+    participant VR as ViewResolver
+    participant V as View
+
+    C->>DS: HTTP 요청 GET /orders/1
+    DS->>HM: 1. getHandler()
+    HM-->>DS: HandlerExecutionChain 반환 (Handler + Interceptor 목록)
+    DS->>HA: 2. getHandlerAdapter()
+    DS->>IC: 3. Interceptor.preHandle()
+    DS->>CM: 4. handle() - 실제 컨트롤러 실행
+    Note over CM: ArgumentResolver로 파라미터 바인딩<br/>비즈니스 로직 실행<br/>ReturnValueHandler로 반환값 처리
+    CM-->>DS: ModelAndView 반환
+    DS->>IC: 5. Interceptor.postHandle()
+    DS->>VR: 6. processDispatchResult()
+    Note over VR: 뷰 이름 → View 객체 변환<br/>@ResponseBody면 MessageConverter 사용
+    VR->>V: 7. View.render()
+    Note over V: 템플릿 렌더링 (Thymeleaf, JSP 등)
+    DS->>IC: 8. Interceptor.afterCompletion()
+    DS-->>C: HTTP 응답
+</div>
 
 ### HandlerMapping
 
@@ -225,18 +170,11 @@ public class OrderApiController {
 
 ### @ResponseBody 동작
 
-```
-컨트롤러 반환값 (OrderResponse 객체)
-        |
-        v
-[HttpMessageConverter]
-  - MappingJackson2HttpMessageConverter: Java 객체 → JSON
-  - StringHttpMessageConverter: String → text/plain
-  - ByteArrayHttpMessageConverter: byte[] → application/octet-stream
-        |
-        v
-HTTP Response Body (JSON 문자열)
-```
+<div class="mermaid">
+graph TD
+    A["컨트롤러 반환값 (OrderResponse 객체)"] --> B["HttpMessageConverter<br/>MappingJackson2HttpMessageConverter: Java 객체 → JSON<br/>StringHttpMessageConverter: String → text/plain<br/>ByteArrayHttpMessageConverter: byte[] → application/octet-stream"]
+    B --> C["HTTP Response Body (JSON 문자열)"]
+</div>
 
 Accept 헤더와 Content-Type을 보고 적절한 MessageConverter를 선택한다.
 
@@ -346,24 +284,18 @@ public CompletableFuture<OrderDto> async() { ... }  // AsyncTaskMethodReturnValu
 
 Servlet 스펙의 구성요소. **Spring 컨텍스트 외부**에서 동작.
 
-```
-HTTP 요청
-    |
-    v
-[Filter Chain]          ← Servlet 컨테이너 레벨
-  - CharacterEncodingFilter
-  - CorsFilter
-  - SecurityFilterChain (Spring Security)
-    |
-    v
-[DispatcherServlet]
-    |
-    v
-[Interceptor Chain]     ← Spring MVC 레벨
-    |
-    v
-[Controller]
-```
+<div class="mermaid">
+graph TD
+    A[HTTP 요청] --> B
+    subgraph "Servlet 컨테이너 레벨"
+        B["Filter Chain<br/>CharacterEncodingFilter<br/>CorsFilter<br/>SecurityFilterChain"]
+    end
+    B --> C[DispatcherServlet]
+    subgraph "Spring MVC 레벨"
+        C --> D[Interceptor Chain]
+        D --> E[Controller]
+    end
+</div>
 
 ```java
 @Component
@@ -516,29 +448,16 @@ public class GlobalExceptionHandler {
 
 ### HandlerExceptionResolver 처리 순서
 
-```
-예외 발생
-    |
-    v
-[ExceptionHandlerExceptionResolver]
-  - @ExceptionHandler 탐색 (컨트롤러 → @ControllerAdvice 순)
-  - 처리 성공 시 종료
-    |
-    v (처리 못한 경우)
-[ResponseStatusExceptionResolver]
-  - @ResponseStatus 어노테이션 탐색
-  - ResponseStatusException 처리
-    |
-    v (처리 못한 경우)
-[DefaultHandlerExceptionResolver]
-  - Spring MVC 표준 예외 처리
-  - TypeMismatchException → 400
-  - NoSuchRequestHandlingMethodException → 404
-  - HttpRequestMethodNotSupportedException → 405
-    |
-    v (처리 못한 경우)
-Servlet Container로 예외 전달
-```
+<div class="mermaid">
+graph TD
+    A[예외 발생] --> B["ExceptionHandlerExceptionResolver<br/>@ExceptionHandler 탐색<br/>컨트롤러 → @ControllerAdvice 순"]
+    B -->|처리 성공| Z[종료]
+    B -->|처리 못한 경우| C["ResponseStatusExceptionResolver<br/>@ResponseStatus 어노테이션 탐색<br/>ResponseStatusException 처리"]
+    C -->|처리 성공| Z
+    C -->|처리 못한 경우| D["DefaultHandlerExceptionResolver<br/>Spring MVC 표준 예외 처리<br/>TypeMismatchException → 400<br/>NoSuchRequestHandlingMethodException → 404<br/>HttpRequestMethodNotSupportedException → 405"]
+    D -->|처리 성공| Z
+    D -->|처리 못한 경우| E[Servlet Container로 예외 전달]
+</div>
 
 ---
 

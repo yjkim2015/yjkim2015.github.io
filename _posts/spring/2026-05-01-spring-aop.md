@@ -238,17 +238,11 @@ public class AopConfig { }
 
 Spring AOP의 핵심은 **프록시 패턴**이다. 실제 객체 대신 프록시 객체를 주입해서 부가 기능을 추가한다.
 
-```
-클라이언트
-    |
-    | getBean("orderService")
-    v
-[Proxy Object]          ← Spring이 자동 생성
-    |
-    | joinPoint.proceed()
-    v
-[Real OrderService]     ← 실제 Bean
-```
+<div class="mermaid">
+graph TD
+    A[클라이언트] -->|"getBean('orderService')"| B["Proxy Object<br/>Spring이 자동 생성"]
+    B -->|"joinPoint.proceed()"| C["Real OrderService<br/>실제 Bean"]
+</div>
 
 ### JDK Dynamic Proxy
 
@@ -324,24 +318,14 @@ spring.aop.proxy-target-class=true  # 기본값: CGLIB 사용
 # false로 변경 시 인터페이스 있으면 JDK Dynamic Proxy 사용
 ```
 
-```
-[Spring Boot 프록시 결정 흐름]
-
-AOP 적용 대상인가?
-        |
-        v
-인터페이스가 있는가?
-        |
-   YES  |  NO
-        |    └──→ CGLIB 프록시 생성
-        v
-spring.aop.proxy-target-class=true? (기본값)
-        |
-   YES  |  NO
-        |    └──→ JDK Dynamic Proxy 생성
-        v
-CGLIB 프록시 생성
-```
+<div class="mermaid">
+graph TD
+    A[AOP 적용 대상인가?] --> B{인터페이스가 있는가?}
+    B -->|NO| E[CGLIB 프록시 생성]
+    B -->|YES| C{"spring.aop.proxy-target-class=true?<br/>기본값"}
+    C -->|YES| E
+    C -->|NO| D[JDK Dynamic Proxy 생성]
+</div>
 
 ---
 
@@ -349,29 +333,23 @@ CGLIB 프록시 생성
 
 `@Transactional`은 Spring AOP의 대표적인 활용 사례다.
 
-```
-[트랜잭션 AOP 흐름]
+<div class="mermaid">
+sequenceDiagram
+    participant C as 클라이언트
+    participant P as TransactionInterceptor (Proxy)
+    participant S as 실제 OrderService
 
-클라이언트
-    |
-    | orderService.createOrder(dto)
-    v
-[TransactionInterceptor (Proxy)]
-    |
-    | 1. TransactionManager.getTransaction()  ← 트랜잭션 시작
-    |
-    | 2. joinPoint.proceed()
-    v
-[실제 OrderService.createOrder()]
-    |
-    | 3-a. 정상 → TransactionManager.commit()
-    | 3-b. 예외 → TransactionManager.rollback()
-    v
-[TransactionInterceptor]
-    |
-    v
-클라이언트
-```
+    C->>P: orderService.createOrder(dto)
+    P->>P: 1. TransactionManager.getTransaction() - 트랜잭션 시작
+    P->>S: 2. joinPoint.proceed()
+    S-->>P: 반환
+    alt 정상
+        P->>P: 3-a. TransactionManager.commit()
+    else 예외
+        P->>P: 3-b. TransactionManager.rollback()
+    end
+    P-->>C: 응답
+</div>
 
 ```java
 @Service
@@ -414,16 +392,15 @@ public class OrderService {
 }
 ```
 
-```
-[내부 호출 문제]
+<div class="mermaid">
+graph LR
+    C[클라이언트] --> P[Proxy]
+    P --> R["실제 OrderService.createOrder()"]
+    R -->|"this.sendNotification() - 프록시 우회!"| N["실제 OrderService.sendNotification()<br/>AOP 적용 안 됨"]
 
-클라이언트 → [Proxy] → [실제 OrderService.createOrder()]
-                              |
-                              | this.sendNotification()  ← 프록시 우회!
-                              v
-                        [실제 OrderService.sendNotification()]
-                        (AOP 적용 안 됨)
-```
+    style N fill:#ffe0e0
+    style R fill:#fff8e0
+</div>
 
 **해결책 1: 빈 분리**
 
@@ -535,17 +512,23 @@ public class LoggingAspect {
 }
 ```
 
-```
-실행 흐름 (@Order 기준):
+<div class="mermaid">
+sequenceDiagram
+    participant C as 클라이언트
+    participant SA as SecurityAspect (Order 1)
+    participant TA as TransactionAspect (Order 2)
+    participant LA as LoggingAspect (Order 3)
+    participant M as 실제 메서드
 
-→ SecurityAspect.before()
-  → TransactionAspect.before()
-    → LoggingAspect.before()
-      → 실제 메서드 실행
-    ← LoggingAspect.after()
-  ← TransactionAspect.after()
-← SecurityAspect.after()
-```
+    C->>SA: 호출
+    SA->>TA: before()
+    TA->>LA: before()
+    LA->>M: 실행
+    M-->>LA: 반환
+    LA-->>TA: after()
+    TA-->>SA: after()
+    SA-->>C: 반환
+</div>
 
 ---
 

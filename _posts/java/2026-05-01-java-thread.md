@@ -19,17 +19,23 @@ Java 스레드와 동시성 프로그래밍의 핵심 개념부터 실무 패턴
 
 **스레드(Thread)**는 프로세스 내에서 실행되는 흐름의 단위입니다. 같은 프로세스의 스레드들은 Heap과 Code, Data 영역을 공유하며, 각자 독립적인 Stack과 PC(Program Counter)를 가집니다.
 
-```
-프로세스 A                        프로세스 B
-┌─────────────────────────┐      ┌─────────────────────────┐
-│  Code  │  Data  │  Heap │      │  Code  │  Data  │  Heap │
-│────────────────────────│      │────────────────────────│
-│ Thread1 Stack           │      │ Thread1 Stack           │
-│ Thread2 Stack           │      │                         │
-│ Thread3 Stack           │      │                         │
-└─────────────────────────┘      └─────────────────────────┘
-   (메모리 공유)                      (메모리 격리)
-```
+<div class="mermaid">
+graph LR
+  subgraph PA["프로세스 A (메모리 공유)"]
+    A1[Code]
+    A2[Data]
+    A3[Heap]
+    A4[Thread1 Stack]
+    A5[Thread2 Stack]
+    A6[Thread3 Stack]
+  end
+  subgraph PB["프로세스 B (메모리 격리)"]
+    B1[Code]
+    B2[Data]
+    B3[Heap]
+    B4[Thread1 Stack]
+  end
+</div>
 
 | 구분 | 프로세스 | 스레드 |
 |------|---------|--------|
@@ -47,42 +53,45 @@ Java 스레드와 동시성 프로그래밍의 핵심 개념부터 실무 패턴
 
 **매핑 모델 3가지:**
 
-```
-1:1 매핑 (Java Platform Thread 방식)
-유저 스레드  ────  커널 스레드
-     T1    ────     KT1
-     T2    ────     KT2
-     T3    ────     KT3
-
-N:1 매핑 (단일 커널 스레드 위에 N개 유저 스레드)
-     T1 ─┐
-     T2 ─┼──── KT1   ← 한 T가 블로킹되면 전체 정지
-     T3 ─┘
-
-M:N 매핑 (Java 21 Virtual Thread 방식)
-     VT1 ─┐         ┌─ KT1
-     VT2 ─┤  M:N    ├─ KT2
-     VT3 ─┤  매핑   └─ KT3
-     VT4 ─┘
-```
+<div class="mermaid">
+graph LR
+  subgraph M1["1:1 매핑 (Java Platform Thread)"]
+    T1 --> KT1
+    T2 --> KT2
+    T3 --> KT3
+  end
+  subgraph M2["N:1 매핑 (한 T가 블로킹되면 전체 정지)"]
+    U1[T1] --> KU1[KT1]
+    U2[T2] --> KU1
+    U3[T3] --> KU1
+  end
+  subgraph M3["M:N 매핑 (Java 21 Virtual Thread)"]
+    VT1 --> KV1[KT1]
+    VT2 --> KV1
+    VT3 --> KV2[KT2]
+    VT4 --> KV3[KT3]
+  end
+</div>
 
 ### JVM 스레드 모델 (1:1 매핑)
 
 Java의 전통적인 Platform Thread는 OS 커널 스레드와 **1:1로 매핑**됩니다. `new Thread()`로 Java 스레드를 생성하면 OS 커널 스레드가 하나 만들어집니다.
 
-```
-JVM
-┌────────────────────────────────────────┐
-│  Java Thread 1  ───────── 커널 스레드 1 │
-│  Java Thread 2  ───────── 커널 스레드 2 │
-│  Java Thread 3  ───────── 커널 스레드 3 │
-└────────────────────────────────────────┘
-           ↕ JNI
-┌────────────────────────────────────────┐
-│         OS 스케줄러                    │
-│     CPU 코어 1  │  CPU 코어 2          │
-└────────────────────────────────────────┘
-```
+<div class="mermaid">
+graph TD
+  subgraph JVM["JVM"]
+    JT1[Java Thread 1] --> KT1[커널 스레드 1]
+    JT2[Java Thread 2] --> KT2[커널 스레드 2]
+    JT3[Java Thread 3] --> KT3[커널 스레드 3]
+  end
+  KT1 -->|JNI| OS
+  KT2 -->|JNI| OS
+  KT3 -->|JNI| OS
+  subgraph OS["OS 스케줄러"]
+    CPU1[CPU 코어 1]
+    CPU2[CPU 코어 2]
+  end
+</div>
 
 이 모델의 한계는 커널 스레드 생성 비용(약 1MB 스택 메모리)과 컨텍스트 스위칭 오버헤드입니다. 수만 개의 스레드를 동시에 만들기 어렵습니다.
 
@@ -90,35 +99,19 @@ JVM
 
 Java 스레드는 `java.lang.Thread.State` 열거형으로 6가지 상태를 가집니다.
 
-```
-                    start()
-NEW ──────────────────────────────► RUNNABLE
- │                                      │
- │                              ┌───────┴───────┐
- │                              │               │
- │                           Running         Ready
- │                              │               │
- │                    synchronized 블록 진입 실패
- │                              │
- │                              ▼
- │                          BLOCKED ─────────────► RUNNABLE
- │                              │                  (락 획득)
- │
- │              Object.wait() / Thread.join() / LockSupport.park()
- │                              │
- │                              ▼
- │                          WAITING ─────────────► RUNNABLE
- │                              │                  (notify/unpark)
- │
- │              Thread.sleep(n) / Object.wait(n) / join(n)
- │                              │
- │                              ▼
- │                       TIMED_WAITING ──────────► RUNNABLE
- │                                                 (시간 경과/notify)
- │
- │                       run() 완료 / 예외 발생
- └──────────────────────────────────────────────► TERMINATED
-```
+<div class="mermaid">
+stateDiagram-v2
+  [*] --> NEW : new Thread()
+  NEW --> RUNNABLE : start()
+  RUNNABLE --> BLOCKED : synchronized 블록 진입 실패
+  BLOCKED --> RUNNABLE : 락 획득
+  RUNNABLE --> WAITING : wait() / join() / park()
+  WAITING --> RUNNABLE : notify() / unpark()
+  RUNNABLE --> TIMED_WAITING : sleep(n) / wait(n) / join(n)
+  TIMED_WAITING --> RUNNABLE : 시간 경과 / notify()
+  RUNNABLE --> TERMINATED : run() 완료 / 예외 발생
+  NEW --> TERMINATED : 예외 발생
+</div>
 
 | 상태 | 설명 |
 |------|------|
@@ -361,29 +354,29 @@ public class FineGrainedCounter {
 
 Java의 모든 객체는 내부적으로 **모니터(Monitor)**를 가집니다. 모니터는 뮤텍스 락 + 대기 큐로 구성됩니다.
 
-```
-객체 모니터 구조
-┌──────────────────────────────────────┐
-│              Object Header           │
-│  ┌─────────────────────────────────┐ │
-│  │  Mark Word: 락 상태 정보 저장    │ │
-│  │  (unlock / biased / thin / fat) │ │
-│  └─────────────────────────────────┘ │
-├──────────────────────────────────────┤
-│           Monitor (C++ ObjectMonitor)│
-│  owner   : 현재 락 보유 스레드       │
-│  count   : 재진입 횟수               │
-│  EntrySet: 락 대기 중인 스레드들     │
-│  WaitSet : wait()로 대기 중인 스레드 │
-└──────────────────────────────────────┘
+<div class="mermaid">
+graph TD
+  subgraph Header["Object Header"]
+    MW["Mark Word: 락 상태 정보\n(unlock / biased / thin / fat)"]
+  end
+  subgraph Monitor["Monitor (C++ ObjectMonitor)"]
+    OW[owner: 현재 락 보유 스레드]
+    CT[count: 재진입 횟수]
+    ES[EntrySet: 락 대기 스레드들]
+    WS[WaitSet: wait() 대기 스레드]
+  end
+  Header --> Monitor
 
-synchronized 블록 진입 시 흐름:
-Thread A ─► monitorenter ─► owner == null? ─► YES: owner = A, count=1
-                                            └► NO: EntrySet에 추가, BLOCKED
+  A([Thread A]) --> ME[monitorenter]
+  ME --> CHK{owner == null?}
+  CHK -->|YES| OWN["owner=A, count=1"]
+  CHK -->|NO| ES2["EntrySet 추가 → BLOCKED"]
 
-synchronized 블록 탈출:
-Thread A ─► monitorexit ─► count-- ─► count==0? ─► YES: owner=null, EntrySet 재경쟁
-```
+  A2([Thread A]) --> MX[monitorexit]
+  MX --> DEC["count--"]
+  DEC --> CHK2{count == 0?}
+  CHK2 -->|YES| REL["owner=null, EntrySet 재경쟁"]
+</div>
 
 **재진입(Reentrant):** 같은 스레드가 이미 보유한 락을 다시 요청하면 count만 증가합니다.
 
@@ -442,16 +435,18 @@ public class ProducerConsumer {
 
 멀티코어 환경에서 각 코어는 **CPU 캐시**를 가집니다. 한 스레드가 변수를 수정해도 다른 코어의 캐시에 즉시 반영되지 않을 수 있습니다.
 
-```
-CPU 코어 1 캐시     CPU 코어 2 캐시
-┌──────────────┐   ┌──────────────┐
-│  flag = true │   │  flag = false│  ← 코어 2는 업데이트를 못 봄!
-└──────────────┘   └──────────────┘
-        ↕                  ↕
-┌────────────────────────────────────┐
-│          메인 메모리: flag = true  │
-└────────────────────────────────────┘
-```
+<div class="mermaid">
+graph TD
+  subgraph Core1["CPU 코어 1 캐시"]
+    F1["flag = true"]
+  end
+  subgraph Core2["CPU 코어 2 캐시"]
+    F2["flag = false ← 코어 2는 업데이트를 못 봄!"]
+  end
+  MM["메인 메모리: flag = true"]
+  Core1 <--> MM
+  Core2 <--> MM
+</div>
 
 ```java
 // 문제: stop 플래그 변경이 다른 스레드에 보이지 않을 수 있음
@@ -878,33 +873,16 @@ new ThreadPoolExecutor(
 
 **동작 흐름:**
 
-```
-작업 제출 (submit/execute)
-          │
-          ▼
-현재 스레드 수 < corePoolSize?
-     │ YES                  │ NO
-     ▼                      ▼
-새 스레드 생성          workQueue 가득참?
-                          │ NO       │ YES
-                          ▼          ▼
-                    workQueue에  현재 스레드 수 < maxPoolSize?
-                    작업 추가      │ YES           │ NO
-                                   ▼               ▼
-                             새 스레드 생성   RejectedExecutionHandler 실행
-                             (초과 스레드)
-
-스레드 상태:
-┌─────────────────────────────────────────────────┐
-│  Core Thread 1 │ Core Thread 2 │ Core Thread 3  │
-│  (항상 유지)    │ (항상 유지)   │ (항상 유지)    │
-├─────────────────────────────────────────────────┤
-│  Extra Thread 4 │ Extra Thread 5                │
-│  (keepAliveTime │후 종료)                       │
-└─────────────────────────────────────────────────┘
-          ↑
-    workQueue (LinkedBlockingQueue, etc.)
-```
+<div class="mermaid">
+graph TD
+  SUB([작업 제출 submit/execute]) --> CHK1{현재 스레드 수 &lt; corePoolSize?}
+  CHK1 -->|YES| NEW1[새 스레드 생성]
+  CHK1 -->|NO| CHK2{workQueue 가득 참?}
+  CHK2 -->|NO| ENQUEUE[workQueue에 작업 추가]
+  CHK2 -->|YES| CHK3{현재 스레드 수 &lt; maxPoolSize?}
+  CHK3 -->|YES| NEW2[새 스레드 생성 - 초과 스레드]
+  CHK3 -->|NO| REJ[RejectedExecutionHandler 실행]
+</div>
 
 **RejectedExecutionHandler 전략:**
 - `AbortPolicy` (기본): `RejectedExecutionException` 던짐
@@ -954,20 +932,22 @@ ExecutorService bad3 = Executors.newSingleThreadExecutor();
 
 분할 정복(Divide & Conquer) 방식의 병렬 처리에 최적화된 스레드 풀입니다.
 
-```
-Work-Stealing 동작 원리:
-
-Worker 1       Worker 2       Worker 3
-┌──────────┐  ┌──────────┐  ┌──────────┐
-│ Task 1   │  │ Task 4   │  │          │  ← 큐 비어있음
-│ Task 2   │  │ Task 5   │  │          │
-│ Task 3   │  │          │  │          │
-└──────────┘  └──────────┘  └──────────┘
-    ↑                               │
-    └───────────────────────────────┘
-         Worker 3이 Worker 1의 큐 뒤에서 "훔쳐서" 실행
-         (큐 앞: LIFO로 자신이 처리, 큐 뒤: FIFO로 다른 워커가 훔침)
-```
+<div class="mermaid">
+graph LR
+  subgraph W1["Worker 1"]
+    T1[Task 1]
+    T2[Task 2]
+    T3[Task 3]
+  end
+  subgraph W2["Worker 2"]
+    T4[Task 4]
+    T5[Task 5]
+  end
+  subgraph W3["Worker 3 (큐 비어있음)"]
+    EMPTY[" "]
+  end
+  W3 -->|"Work-Stealing: Worker1 큐 뒤에서 훔침"| T3
+</div>
 
 ```java
 import java.util.concurrent.*;
@@ -1159,20 +1139,26 @@ boolean success = stampedRef.compareAndSet(
 
 ### LongAdder vs AtomicLong (고경합 환경)
 
-```
-AtomicLong: 단일 셀
-┌───────┐
-│ count │ ← 모든 스레드가 경쟁
-└───────┘
-고경합 시 CAS 실패 반복 → 스핀 오버헤드 증가
-
-LongAdder: 셀 배열 (Cell Striping)
-┌───┐ ┌───┐ ┌───┐ ┌───┐
-│ 3 │ │ 7 │ │ 2 │ │ 5 │ ← 스레드별 다른 셀 사용
-└───┘ └───┘ └───┘ └───┘
-합계 = 3+7+2+5 = 17 (sum() 호출 시 합산)
-경합 감소 → 처리량 대폭 향상
-```
+<div class="mermaid">
+graph LR
+  subgraph AL["AtomicLong: 단일 셀 (모든 스레드 경쟁)"]
+    CELL["count"]
+    TA[Thread A] --> CELL
+    TB[Thread B] --> CELL
+    TC[Thread C] --> CELL
+  end
+  subgraph LA["LongAdder: Cell Striping (스레드별 다른 셀)"]
+    C1["3"]
+    C2["7"]
+    C3["2"]
+    C4["5"]
+    T1[Thread1] --> C1
+    T2[Thread2] --> C2
+    T3[Thread3] --> C3
+    T4[Thread4] --> C4
+    C1 & C2 & C3 & C4 -->|"sum() = 17"| SUM["합계"]
+  end
+</div>
 
 ```java
 LongAdder adder = new LongAdder();
@@ -1264,14 +1250,11 @@ list.add("c"); // iterator에 영향 없음 (다른 배열 참조)
 
 생산자-소비자 패턴의 핵심입니다.
 
-```
-             BlockingQueue
-생산자  ──►  ┌──────────────┐  ──►  소비자
-             │  작업 대기열  │
-             └──────────────┘
-              (큐 꽉 참→put 블로킹)
-              (큐 비어있음→take 블로킹)
-```
+<div class="mermaid">
+graph LR
+  P([생산자]) -->|"put() - 큐 꽉 참 시 블로킹"| BQ["BlockingQueue\n작업 대기열"]
+  BQ -->|"take() - 큐 비어있으면 블로킹"| C([소비자])
+</div>
 
 | 구현 클래스 | 특징 |
 |------------|------|
@@ -1482,30 +1465,19 @@ Virtual Thread (Java 21+):
 
 ### 동작 원리 (캐리어 스레드 + 마운트/언마운트)
 
-```
-Virtual Thread 스케줄링:
+<div class="mermaid">
+sequenceDiagram
+  participant VT1 as VT1 (Virtual Thread)
+  participant CT as Carrier Thread
+  participant VT2 as VT2 (Virtual Thread)
 
-VT1: [실행중] → I/O 대기 시작
-     │
-     ▼ 언마운트 (Unmount): VT1은 힙에 상태 저장, Carrier Thread 해방
-     │
-Carrier Thread: VT2 마운트 (Mount) → VT2 실행
-     │
-VT1의 I/O 완료:
-     │
-     ▼ VT1이 다시 스케줄링 대기열에 추가
-     │
-Carrier Thread: VT2 언마운트 → VT1 마운트 → VT1 재개
-
-결과: Carrier Thread(OS Thread) 소수로 수많은 VT 처리 가능
-
-ForkJoinPool (M개 Carrier) ← 기본 Carrier Thread Pool
-┌──────────────────────────────────────────┐
-│  Carrier1  │  Carrier2  │  Carrier3     │
-│  (VT 실행) │  (VT 실행) │  (VT 실행)   │
-└──────────────────────────────────────────┘
-              수백만 개 Virtual Thread
-```
+  VT1->>CT: 마운트 & 실행
+  VT1->>CT: I/O 대기 시작 → 언마운트 (힙에 상태 저장)
+  CT->>VT2: VT2 마운트 & 실행
+  Note over VT1: I/O 완료 → 스케줄링 대기열 재등록
+  CT->>VT2: VT2 언마운트
+  CT->>VT1: VT1 마운트 & 재개
+</div>
 
 ### 사용법과 마이그레이션 가이드
 
@@ -1602,23 +1574,13 @@ public String betterMethod() {
 
 데드락은 다음 4가지 조건이 **모두** 충족될 때 발생합니다.
 
-```
-1. 상호 배제 (Mutual Exclusion)
-   자원을 한 번에 하나의 스레드만 사용 가능
-
-2. 점유 대기 (Hold and Wait)
-   자원을 점유한 채 다른 자원을 기다림
-
-3. 비선점 (No Preemption)
-   다른 스레드의 자원을 강제로 빼앗을 수 없음
-
-4. 순환 대기 (Circular Wait)
-   스레드들이 원형으로 서로의 자원을 기다림
-
-Thread A ──────── 락 1 보유 ──────── 락 2 대기 ─────►
-                                                     │
-◄───── 락 1 대기 ──────── 락 2 보유 ─────  Thread B
-```
+<div class="mermaid">
+graph LR
+  A([Thread A]) -->|"보유"| L1[락 1]
+  A -->|"대기"| L2[락 2]
+  B([Thread B]) -->|"보유"| L2
+  B -->|"대기"| L1
+</div>
 
 **데드락 발생 예제:**
 
@@ -1806,29 +1768,22 @@ t.setPriority(Thread.MAX_PRIORITY); // 10 (비추천: 이식성 없음)
 
 각 `Thread` 객체는 내부에 `ThreadLocal.ThreadLocalMap`을 가집니다. `ThreadLocal`은 해당 맵의 키 역할을 합니다.
 
-```
-Thread A
-┌────────────────────────────────────────────┐
-│  ThreadLocalMap threadLocals               │
-│  ┌─────────────────────────────────────┐  │
-│  │  KEY (WeakRef)  │  VALUE            │  │
-│  │  threadLocalA   │  "사용자A"        │  │
-│  │  threadLocalB   │  connectionA      │  │
-│  └─────────────────────────────────────┘  │
-└────────────────────────────────────────────┘
-
-Thread B
-┌────────────────────────────────────────────┐
-│  ThreadLocalMap threadLocals               │
-│  ┌─────────────────────────────────────┐  │
-│  │  KEY (WeakRef)  │  VALUE            │  │
-│  │  threadLocalA   │  "사용자B"        │  │
-│  │  threadLocalB   │  connectionB      │  │
-│  └─────────────────────────────────────┘  │
-└────────────────────────────────────────────┘
-
-동일한 ThreadLocal 객체지만 각 스레드에서 독립적인 값 유지
-```
+<div class="mermaid">
+graph TD
+  subgraph TA["Thread A"]
+    subgraph MA["ThreadLocalMap"]
+      KA1["threadLocalA (WeakRef)"] --> VA1["값: 사용자A"]
+      KA2["threadLocalB (WeakRef)"] --> VA2["값: connectionA"]
+    end
+  end
+  subgraph TB["Thread B"]
+    subgraph MB["ThreadLocalMap"]
+      KB1["threadLocalA (WeakRef)"] --> VB1["값: 사용자B"]
+      KB2["threadLocalB (WeakRef)"] --> VB2["값: connectionB"]
+    end
+  end
+  NOTE["동일한 ThreadLocal 객체지만 각 스레드에서 독립적인 값 유지"]
+</div>
 
 ```java
 // ThreadLocal 사용

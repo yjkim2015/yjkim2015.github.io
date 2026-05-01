@@ -1,10 +1,14 @@
 ---
-title: "Spring IoC와 DI 완전 정리"
+title: "Spring IoC와 DI"
 categories:
 - SPRING
 toc: true
 toc_sticky: true
 toc_label: 목차
+---
+
+신입 때 이런 경험이 있을 것이다. 서비스 클래스 안에서 `new RateDiscountPolicy()`를 직접 써뒀는데, 기획이 바뀌어서 `FixDiscountPolicy`로 교체해야 하는 순간. 수십 개 파일을 열어 `new`를 바꿔야 했다. IoC와 DI는 이 문제를 해결하기 위해 태어난 개념이다.
+
 ---
 
 ## 1. IoC(Inversion of Control)란?
@@ -43,39 +47,19 @@ IoC의 핵심은 **"내가 사용할 객체를 내가 만들지 않는다"**는 
 
 Spring IoC 컨테이너는 **Bean Definition**을 읽어서 Bean을 생성하고 관리한다.
 
-```
-+--------------------------------------------------+
-|              IoC Container                       |
-|                                                  |
-|  [Configuration 읽기]                            |
-|   - @Configuration + @Bean                       |
-|   - @ComponentScan + @Component                  |
-|   - XML (legacy)                                 |
-|         |                                        |
-|         v                                        |
-|  [BeanDefinition 생성]                           |
-|   - 클래스 정보, 스코프, 의존성 정보              |
-|         |                                        |
-|         v                                        |
-|  [Bean 인스턴스 생성]                            |
-|   - 생성자 호출                                  |
-|         |                                        |
-|         v                                        |
-|  [의존성 주입]                                   |
-|   - 생성자/세터/필드 주입                         |
-|         |                                        |
-|         v                                        |
-|  [초기화 콜백]                                   |
-|   - @PostConstruct, InitializingBean             |
-|         |                                        |
-|         v                                        |
-|  [Bean 사용]                                     |
-|         |                                        |
-|         v                                        |
-|  [소멸 콜백]                                     |
-|   - @PreDestroy, DisposableBean                  |
-+--------------------------------------------------+
-```
+<div class="mermaid">
+graph TD
+    A["Configuration 읽기<br/>@Configuration+@Bean<br/>@ComponentScan+@Component<br/>XML legacy"] --> B["BeanDefinition 생성<br/>클래스 정보, 스코프, 의존성 정보"]
+    B --> C["Bean 인스턴스 생성<br/>생성자 호출"]
+    C --> D["의존성 주입<br/>생성자/세터/필드 주입"]
+    D --> E["초기화 콜백<br/>@PostConstruct, InitializingBean"]
+    E --> F["Bean 사용"]
+    F --> G["소멸 콜백<br/>@PreDestroy, DisposableBean"]
+
+    style A fill:#e8f4f8
+    style F fill:#e8f8e8
+    style G fill:#f8e8e8
+</div>
 
 ---
 
@@ -142,36 +126,16 @@ ApplicationContext
 
 ## 4. Bean 생명주기
 
-```
-Spring Container 시작
-        |
-        v
-[1] Bean 인스턴스 생성
-    - 기본 생성자 또는 @Bean 팩토리 메서드 호출
-        |
-        v
-[2] 의존성 주입 (DI)
-    - 생성자 주입은 1단계에서 동시에 처리
-    - 세터/필드 주입은 이 단계에서 처리
-        |
-        v
-[3] 초기화 콜백
-    - @PostConstruct 메서드
-    - InitializingBean.afterPropertiesSet()
-    - @Bean(initMethod = "init")
-        |
-        v
-[4] Bean 사용 (애플리케이션 동작)
-        |
-        v
-[5] 소멸 콜백 (Container 종료 시)
-    - @PreDestroy 메서드
-    - DisposableBean.destroy()
-    - @Bean(destroyMethod = "close")
-        |
-        v
-Spring Container 종료
-```
+<div class="mermaid">
+graph TD
+    S([Spring Container 시작]) --> A
+    A["[1] Bean 인스턴스 생성<br/>기본 생성자 또는 @Bean 팩토리 메서드 호출"]
+    A --> B["[2] 의존성 주입 DI<br/>생성자 주입은 1단계에서 동시 처리<br/>세터/필드 주입은 이 단계에서 처리"]
+    B --> C["[3] 초기화 콜백<br/>@PostConstruct<br/>InitializingBean.afterPropertiesSet()<br/>@Bean(initMethod='init')"]
+    C --> D["[4] Bean 사용 (애플리케이션 동작)"]
+    D --> E["[5] 소멸 콜백 (Container 종료 시)<br/>@PreDestroy<br/>DisposableBean.destroy()<br/>@Bean(destroyMethod='close')"]
+    E --> END([Spring Container 종료])
+</div>
 
 ### 코드 예제
 
@@ -397,30 +361,16 @@ class OrderServiceTest {
 
 ### 매칭 순서
 
-```
-@Autowired 처리 순서:
-
-1. 타입(Type)으로 매칭 시도
-   - ApplicationContext에서 해당 타입의 Bean 검색
-        |
-        v
-2. 타입 매칭 Bean이 2개 이상이면?
-        |
-        +--→ @Qualifier 확인
-        |         |
-        |         v
-        |    @Qualifier("mainDiscountPolicy") 가 붙은 Bean 선택
-        |
-        +--→ @Primary 확인
-        |         |
-        |         v
-        |    @Primary가 붙은 Bean 선택
-        |
-        +--→ 필드명/파라미터명으로 매칭
-                  |
-                  v
-             변수명과 일치하는 Bean ID 선택
-```
+<div class="mermaid">
+graph TD
+    A["1. 타입Type으로 매칭 시도<br/>ApplicationContext에서 해당 타입의 Bean 검색"] --> B{타입 매칭 Bean이 2개 이상?}
+    B -->|"@Qualifier 있음"| C["@Qualifier 확인<br/>@Qualifier('mainDiscountPolicy') Bean 선택"]
+    B -->|"@Primary 있음"| D["@Primary 확인<br/>@Primary가 붙은 Bean 선택"]
+    B -->|"그 외"| E["필드명/파라미터명으로 매칭<br/>변수명과 일치하는 Bean ID 선택"]
+    C --> F[주입 완료]
+    D --> F
+    E --> F
+</div>
 
 ### 예제
 

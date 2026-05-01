@@ -10,6 +10,8 @@ date: 2026-05-01
 
 마이크로서비스 아키텍처에서는 단일 비즈니스 작업이 여러 서비스에 걸쳐 실행된다. 각 서비스는 독립적인 데이터베이스를 가지므로 전통적인 ACID 트랜잭션을 사용할 수 없다. 분산 트랜잭션은 이 문제를 해결하기 위한 다양한 패턴을 다룬다.
 
+> 비유: 여러 은행 계좌 간 이체와 같다. A 은행에서 출금하고 B 은행에 입금할 때 중간에 네트워크가 끊기면 출금만 되고 입금이 안 될 수 있다. 각 은행(서비스)이 독립적이라 한쪽이 실패해도 다른 쪽을 자동으로 되돌릴 수 없다.
+
 ---
 
 ## 왜 분산 트랜잭션이 어려운가
@@ -26,15 +28,14 @@ COMMIT; -- 또는 ROLLBACK (원자적)
 
 ### 마이크로서비스에서의 문제
 
-```
-[Order Service] → INSERT orders (DB A)
-[Inventory Service] → UPDATE inventory (DB B)
-[Payment Service] → INSERT payments (DB C)
-
-문제: 세 작업 중 하나가 실패하면?
-- DB A는 커밋됨, DB B, C는 롤백 → 데이터 불일치
-- 네트워크 장애로 응답을 못 받으면? → 커밋 여부 불명확
-```
+<div class="mermaid">
+graph LR
+    OS["Order Service\nINSERT orders — DB A"]
+    IS["Inventory Service\nUPDATE inventory — DB B"]
+    PS["Payment Service\nINSERT payments — DB C"]
+    FAIL["하나라도 실패하면?\nDB A 커밋됨, DB B·C 롤백\n→ 데이터 불일치"]
+    OS --> IS --> PS --> FAIL
+</div>
 
 ### CAP 정리
 
@@ -56,26 +57,31 @@ COMMIT; -- 또는 ROLLBACK (원자적)
 
 2PC는 분산 환경에서 강한 일관성(Strong Consistency)을 제공하려는 프로토콜이다. **코디네이터**가 모든 참여자를 조율한다.
 
-```
-Phase 1: Prepare (투표 단계)
-  코디네이터 → 모든 참여자에게 "준비되었나?" 질문
-  각 참여자  → 로컬 트랜잭션 준비 후 "Yes" 또는 "No" 응답
+| 단계 | 동작 |
+|------|------|
+| Phase 1: Prepare (투표) | 코디네이터가 모든 참여자에게 "준비됐나?" 질문 → 각 참여자가 로컬 트랜잭션 준비 후 Yes/No 응답 |
+| Phase 2: Commit/Rollback (결정) | 모든 참여자 Yes → Commit 명령 / 하나라도 No → Rollback 명령 |
 
-Phase 2: Commit/Rollback (결정 단계)
-  모든 참여자가 "Yes" → 코디네이터가 Commit 명령
-  하나라도 "No"      → 코디네이터가 Rollback 명령
-```
+<div class="mermaid">
+sequenceDiagram
+    participant CO as 코디네이터
+    participant ODB as Order DB
+    participant IDB as Inventory DB
+    participant PDB as Payment DB
 
-```
-[코디네이터]
-    │── Prepare → [Order DB]   → Yes
-    │── Prepare → [Inventory DB] → Yes
-    │── Prepare → [Payment DB]  → Yes
-    │
-    │── Commit  → [Order DB]
-    │── Commit  → [Inventory DB]
-    └── Commit  → [Payment DB]
-```
+    Note over CO,PDB: Phase 1 - Prepare (투표)
+    CO->>ODB: Prepare
+    ODB-->>CO: Yes
+    CO->>IDB: Prepare
+    IDB-->>CO: Yes
+    CO->>PDB: Prepare
+    PDB-->>CO: Yes
+
+    Note over CO,PDB: Phase 2 - Commit (결정)
+    CO->>ODB: Commit
+    CO->>IDB: Commit
+    CO->>PDB: Commit
+</div>
 
 ### 2PC의 문제점
 
@@ -146,11 +152,14 @@ Saga는 **각 서비스의 로컬 트랜잭션 + 실패 시 보상 트랜잭션(
 
 ### 보상 트랜잭션이란
 
-```
-주문 생성 → 재고 차감 → 결제
-              ↑ 결제 실패
-재고 복원 (보상) ← 주문 취소 (보상)
-```
+> 비유: 여행 예약과 같다. 항공권 예약 → 호텔 예약 → 렌터카 예약 중 렌터카가 실패하면, 이미 예약한 호텔과 항공권을 취소(보상)해야 한다.
+
+<div class="mermaid">
+graph LR
+    A["주문 생성"] --> B["재고 차감"] --> C["결제"]
+    C -->|결제 실패| D["주문 취소 보상"]
+    D --> E["재고 복원 보상"]
+</div>
 
 각 단계가 실패하면 **이미 완료된 단계를 되돌리는** 보상 트랜잭션을 실행한다.
 
@@ -160,25 +169,25 @@ Saga는 **각 서비스의 로컬 트랜잭션 + 실패 시 보상 트랜잭션(
 
 중앙 오케스트레이터 없이 **이벤트를 통해 각 서비스가 자율적으로 참여**한다.
 
-```
-[Order Service]
-  1. 주문 생성 → "OrderCreated" 이벤트 발행
+<div class="mermaid">
+sequenceDiagram
+    participant OS as Order Service
+    participant IS as Inventory Service
+    participant PS as Payment Service
 
-[Inventory Service]
-  2. "OrderCreated" 수신 → 재고 차감 → "InventoryReserved" 발행
-  (실패 시) "InventoryReservationFailed" 발행
-
-[Payment Service]
-  3. "InventoryReserved" 수신 → 결제 처리 → "PaymentCompleted" 발행
-  (실패 시) "PaymentFailed" 발행
-
-[Order Service]
-  4. "PaymentCompleted" 수신 → 주문 확정
-  (실패 이벤트 수신 시) → 주문 취소 + 보상 이벤트 발행
-
-[Inventory Service]
-  5. 주문 취소 이벤트 수신 → 재고 복원 (보상)
-```
+    OS->>OS: 주문 생성
+    OS-->>IS: OrderCreated 이벤트 발행
+    IS->>IS: 재고 차감
+    IS-->>PS: InventoryReserved 발행
+    Note over IS: 실패 시 InventoryReservationFailed 발행
+    PS->>PS: 결제 처리
+    PS-->>OS: PaymentCompleted 발행
+    Note over PS: 실패 시 PaymentFailed 발행
+    OS->>OS: 주문 확정
+    Note over OS: 실패 이벤트 수신 시 주문 취소 + 보상 이벤트 발행
+    OS-->>IS: 주문 취소 이벤트
+    IS->>IS: 재고 복원 (보상)
+</div>
 
 **장점**: 느슨한 결합, 단순한 구현, 중앙 실패 지점 없음
 
@@ -190,17 +199,23 @@ Saga는 **각 서비스의 로컬 트랜잭션 + 실패 시 보상 트랜잭션(
 
 **중앙 오케스트레이터(Saga Orchestrator)**가 전체 흐름을 제어한다.
 
-```
-[Saga Orchestrator]
-  1. Order Service에 "주문 생성" 명령
-  2. 성공 응답 수신
-  3. Inventory Service에 "재고 차감" 명령
-  4. 성공 응답 수신
-  5. Payment Service에 "결제 처리" 명령
-  6. 실패 응답 수신
-  7. Inventory Service에 "재고 복원" 명령 (보상)
-  8. Order Service에 "주문 취소" 명령 (보상)
-```
+<div class="mermaid">
+sequenceDiagram
+    participant SO as Saga Orchestrator
+    participant OS as Order Service
+    participant IS as Inventory Service
+    participant PS as Payment Service
+
+    SO->>OS: 주문 생성 명령
+    OS-->>SO: 성공 응답
+    SO->>IS: 재고 차감 명령
+    IS-->>SO: 성공 응답
+    SO->>PS: 결제 처리 명령
+    PS-->>SO: 실패 응답
+    Note over SO: 보상 트랜잭션 시작
+    SO->>IS: 재고 복원 명령 (보상)
+    SO->>OS: 주문 취소 명령 (보상)
+</div>
 
 **장점**: 전체 흐름이 한곳에 집중 → 이해하고 모니터링하기 쉬움
 
@@ -260,30 +275,40 @@ public class OrderSagaOrchestrator {
 
 TCC는 각 서비스의 비즈니스 로직을 Try / Confirm / Cancel 3단계로 분리한다.
 
-```
-Try:     리소스 예약 (잠금/임시 차감)
-Confirm: 예약 확정 (실제 처리)
-Cancel:  예약 취소 (원상 복구)
-```
+> 비유: 음식점 예약과 같다. Try(자리 임시 예약) → Confirm(당일 확정 입장) / Cancel(예약 취소). 자리를 실제로 점유하기 전에 먼저 확보해두고, 전체 조건이 맞으면 확정한다.
+
+| 단계 | 동작 |
+|------|------|
+| Try | 리소스 예약 — 잠금/임시 차감 |
+| Confirm | 예약 확정 — 실제 처리 |
+| Cancel | 예약 취소 — 원상 복구 |
 
 ### 동작 흐름
 
-```
-[Phase 1: Try]
-  Order Service:     주문 초안 생성 (status=PENDING)
-  Inventory Service: 재고 10개 임시 차감 (reserved_qty += 10)
-  Payment Service:   결제 금액 임시 잠금 (hold_amount = 50000)
+<div class="mermaid">
+sequenceDiagram
+    participant CO as Coordinator
+    participant OS as Order Service
+    participant IS as Inventory Service
+    participant PS as Payment Service
 
-[Phase 2: Confirm (모두 Try 성공)]
-  Order Service:     주문 확정 (status=CONFIRMED)
-  Inventory Service: 임시 차감 확정 (actual_qty -= 10)
-  Payment Service:   잠금 금액 실제 차감
+    Note over CO,PS: Phase 1 - Try (리소스 예약)
+    CO->>OS: Try - 주문 초안 생성 (PENDING)
+    CO->>IS: Try - 재고 10개 임시 차감 (reserved_qty += 10)
+    CO->>PS: Try - 결제 금액 임시 잠금 (hold_amount = 50000)
 
-[Phase 2: Cancel (하나라도 Try 실패)]
-  Order Service:     주문 초안 삭제
-  Inventory Service: 임시 차감 복원 (reserved_qty -= 10)
-  Payment Service:   잠금 금액 해제
-```
+    alt 모두 Try 성공
+        Note over CO,PS: Phase 2 - Confirm (확정)
+        CO->>OS: Confirm - 주문 확정 (CONFIRMED)
+        CO->>IS: Confirm - 임시 차감 확정 (actual_qty -= 10)
+        CO->>PS: Confirm - 잠금 금액 실제 차감
+    else 하나라도 Try 실패
+        Note over CO,PS: Phase 2 - Cancel (취소)
+        CO->>OS: Cancel - 주문 초안 삭제
+        CO->>IS: Cancel - 임시 차감 복원 (reserved_qty -= 10)
+        CO->>PS: Cancel - 잠금 금액 해제
+    end
+</div>
 
 ### 구현 예시
 
@@ -363,17 +388,20 @@ public void placeOrder(OrderRequest request) {
 
 ### Outbox 패턴 해결책
 
-```
-[Order Service DB]
-  orders 테이블: 주문 저장
-  outbox 테이블: 발행할 이벤트 저장
-  → 하나의 로컬 트랜잭션으로 함께 저장 (원자적)
-
-[Message Relay / Debezium]
-  outbox 테이블을 주기적으로 폴링 또는 CDC로 감시
-  → 미발행 이벤트를 Kafka/RabbitMQ에 발행
-  → 성공 시 outbox 레코드 삭제 또는 상태 변경
-```
+<div class="mermaid">
+graph TD
+    subgraph OS["Order Service"]
+        T["로컬 트랜잭션 (원자적)"]
+        T --> OT[orders 테이블에 주문 저장]
+        T --> OB[outbox 테이블에 이벤트 저장]
+    end
+    subgraph RELAY["Message Relay / Debezium"]
+        P["outbox 폴링 또는 CDC 감시"]
+        P --> PUB["Kafka/RabbitMQ에 미발행 이벤트 발행"]
+        PUB --> DEL["outbox 레코드 삭제 또는 상태 변경"]
+    end
+    OB --> P
+</div>
 
 ```java
 @Entity
@@ -457,29 +485,23 @@ public class OutboxEventRelay {
 
 ## 실무 선택 가이드
 
-```
-[강한 일관성이 필요한가?]
-  YES → 같은 DB를 사용하도록 서비스 경계 재설계 고려
-         또는 XA + 2PC (성능 저하 감수)
-
-[최종 일관성으로 가능한가?]
-  YES → Saga 패턴 선택
-
-[Saga 선택 기준]
-  서비스 수가 적고 흐름이 단순  → Choreography (이벤트 기반)
-  흐름이 복잡하고 가시성 필요   → Orchestration
-
-[이벤트 발행 원자성 필요]
-  YES → Outbox Pattern 반드시 적용
-
-[임시 데이터 외부 노출 불가]
-  YES → TCC 패턴 (Try로 격리, Confirm으로 확정)
-
-[실무 가장 많이 쓰는 조합]
-  Saga(Choreography) + Kafka + Outbox Pattern
-  또는
-  Saga(Orchestration) + Kafka + Outbox Pattern
-```
+<div class="mermaid">
+graph TD
+    START([시작]) --> Q1{강한 일관성이 필요한가?}
+    Q1 -->|YES| R1["같은 DB로 경계 재설계<br/>또는 XA + 2PC"]
+    Q1 -->|NO| Q2{최종 일관성으로 가능한가?}
+    Q2 -->|YES| SAGA[Saga 패턴 선택]
+    SAGA --> Q3{흐름이 단순한가?}
+    Q3 -->|YES| CHOREO["Choreography<br/>(이벤트 기반)"]
+    Q3 -->|NO| ORCH["Orchestration<br/>(중앙 오케스트레이터)"]
+    SAGA --> Q4{이벤트 발행 원자성 필요?}
+    Q4 -->|YES| OUTBOX[Outbox Pattern 적용]
+    SAGA --> Q5{임시 데이터 외부 노출 불가?}
+    Q5 -->|YES| TCC["TCC 패턴<br/>(Try/Confirm/Cancel)"]
+    OUTBOX --> BEST["실무 권장 조합<br/>Saga + Kafka + Outbox"]
+    style BEST fill:#8f8,stroke:#080,color:#000
+    style R1 fill:#f88,stroke:#c00,color:#000
+</div>
 
 ### 패턴별 특성 비교
 

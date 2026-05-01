@@ -10,6 +10,8 @@ date: 2026-05-01
 
 Spring의 `@Async`는 메서드를 별도 스레드에서 비동기로 실행하게 만드는 애노테이션이다. 단순히 붙이면 동작하는 것처럼 보이지만, 내부 동작과 주의사항을 모르면 예외가 무시되거나 MDC 컨텍스트가 사라지는 등 운영 장애로 이어질 수 있다.
 
+> 비유: 카페 직원(메인 스레드)이 손님 주문을 받고 "커피는 바리스타(별도 스레드)에게 맡길게요"라고 한 뒤 다음 손님을 받는 것과 같다. 단, 바리스타가 실수해도 직원은 알 수 없으므로 별도 오류 처리가 필요하다.
+
 ---
 
 ## @Async 동작 원리
@@ -18,10 +20,12 @@ Spring의 `@Async`는 메서드를 별도 스레드에서 비동기로 실행하
 
 `@Async`는 Spring AOP 프록시를 통해 동작한다. `@EnableAsync`가 설정되면 Spring은 `@Async`가 붙은 메서드를 가진 빈을 프록시로 감싸고, 해당 메서드 호출을 가로채서 `TaskExecutor`에 위임한다.
 
-```
-호출자 → [프록시] → TaskExecutor의 스레드 풀 → [실제 메서드 실행]
-         ↑ 여기서 별도 스레드 전환
-```
+<div class="mermaid">
+graph LR
+    A[호출자] --> B[프록시]
+    B -->|별도 스레드 전환| C["TaskExecutor 스레드 풀"]
+    C --> D[실제 메서드 실행]
+</div>
 
 **프록시 동작 방식**
 ```java
@@ -119,16 +123,19 @@ public class AsyncConfig implements AsyncConfigurer {
 
 ### 스레드 풀 동작 원리
 
-```
-요청 도착 시 스레드 할당 순서:
-1. corePoolSize 미만 → 새 스레드 생성
-2. corePoolSize 이상 → queueCapacity에 넣음
-3. queueCapacity 가득 참 → maxPoolSize까지 새 스레드 생성
-4. maxPoolSize도 가득 참 → RejectedExecutionHandler 실행
-
-※ 큐가 먼저 차고 그 다음에 maxPoolSize까지 늘어남
-  (일반적인 직관과 반대)
-```
+<div class="mermaid">
+graph TD
+    REQ[요청 도착] --> C1{corePoolSize 미만?}
+    C1 -->|YES| T1[새 스레드 생성]
+    C1 -->|NO| C2{queueCapacity 여유?}
+    C2 -->|YES| Q[queueCapacity에 넣음]
+    C2 -->|NO| C3{maxPoolSize 미만?}
+    C3 -->|YES| T2[maxPoolSize까지 새 스레드 생성]
+    C3 -->|NO| REJ[RejectedExecutionHandler 실행]
+    style REJ fill:#f88,stroke:#c00,color:#000
+    style T1 fill:#8f8,stroke:#080,color:#000
+    style T2 fill:#8f8,stroke:#080,color:#000
+</div>
 
 ### ThreadPoolTaskExecutor 상세 설정
 

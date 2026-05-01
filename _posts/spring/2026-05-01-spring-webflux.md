@@ -19,60 +19,55 @@ C10K 문제(Client 10,000 Problem)는 1999년 Dan Kegel이 제기한 문제로, 
 
 전통적인 Spring MVC는 **thread-per-request** 모델을 사용합니다. 요청 하나당 스레드 하나를 할당하고, 그 스레드가 요청 처리 완료까지 블로킹됩니다.
 
-```
-요청 1 -> [Thread-1] -> DB 쿼리 대기(블로킹) -> 응답
-요청 2 -> [Thread-2] -> 외부 API 대기(블로킹) -> 응답
-요청 N -> [Thread-N] -> 파일 I/O 대기(블로킹) -> 응답
-```
+<div class="mermaid">
+graph LR
+    R1[요청 1] --> T1[Thread-1]
+    R2[요청 2] --> T2[Thread-2]
+    RN[요청 N] --> TN[Thread-N]
+    T1 -->|"DB 쿼리 대기 블로킹"| A1[응답]
+    T2 -->|"외부 API 대기 블로킹"| A2[응답]
+    TN -->|"파일 I/O 대기 블로킹"| AN[응답]
+</div>
 
 문제는 스레드가 I/O 대기 중에도 메모리(기본 512KB~1MB)를 점유하며, 컨텍스트 스위칭 비용이 발생한다는 점입니다. 동시 요청이 10,000개라면 10,000개의 스레드가 필요하고, 이는 수 GB의 메모리를 소비합니다.
 
 WebFlux는 **이벤트 루프(Event Loop)** 모델로 이 문제를 해결합니다. 소수의 스레드(CPU 코어 수)로 수만 개의 동시 연결을 처리합니다.
 
-```
-요청 1 ---\
-요청 2 ----\
-요청 3 ------> [Event Loop Thread] -> 논블로킹 I/O -> 결과 콜백 -> 응답
-...
-요청 N ---/
-```
+<div class="mermaid">
+graph LR
+    R1[요청 1] --> EL
+    R2[요청 2] --> EL
+    R3[요청 3] --> EL
+    RN[요청 N] --> EL
+    EL[Event Loop Thread] -->|논블로킹 I/O| IO[결과 콜백]
+    IO --> RES[응답]
+</div>
 
 ### Spring MVC vs WebFlux 아키텍처 비교
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Spring MVC 아키텍처                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Client   →  [Servlet Container]  →  [DispatcherServlet]           │
-│                    │                         │                      │
-│             Thread Pool                  Controller                 │
-│           (Tomcat, default:200)          (블로킹)                    │
-│                    │                         │                      │
-│             [Thread-1] ──────────────→ DB (블로킹 대기)              │
-│             [Thread-2] ──────────────→ REST API (블로킹 대기)        │
-│             [Thread-3] ──────────────→ File I/O (블로킹 대기)        │
-│                                                                     │
-│  특징: 스레드가 I/O 완료까지 점유됨, 직관적, 동기 코드               │
-└─────────────────────────────────────────────────────────────────────┘
+<div class="mermaid">
+graph TD
+    subgraph MVC["Spring MVC 아키텍처 - 스레드가 I/O 완료까지 점유됨, 직관적, 동기"]
+        MC[Client] --> MS[Servlet Container]
+        MS --> MDS[DispatcherServlet]
+        MS --> MTP["Thread Pool (Tomcat, default:200)"]
+        MTP --> MT1["Thread-1 → DB (블로킹 대기)"]
+        MTP --> MT2["Thread-2 → REST API (블로킹 대기)"]
+        MTP --> MT3["Thread-3 → File I/O (블로킹 대기)"]
+        MDS --> MC2["Controller (블로킹)"]
+    end
 
-┌─────────────────────────────────────────────────────────────────────┐
-│                       Spring WebFlux 아키텍처                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Client   →  [Netty/Undertow]  →  [DispatcherHandler]              │
-│                    │                      │                         │
-│             Event Loop               RouterFunction /               │
-│           (코어 수 = N개 스레드)      @Controller                    │
-│                    │                      │                         │
-│        ┌──[Loop-1]─┤               논블로킹 I/O                      │
-│        ├──[Loop-2]─┤                      │                         │
-│        └──[Loop-N]─┘            결과가 준비되면                       │
-│                                  콜백으로 처리                        │
-│                                                                     │
-│  특징: 스레드 수 ≪ 동시 연결 수, 비동기, 리액티브 체인               │
-└─────────────────────────────────────────────────────────────────────┘
-```
+    subgraph WF["Spring WebFlux 아키텍처 - 스레드 수 << 동시 연결 수, 비동기, 리액티브"]
+        WC[Client] --> WN["Netty/Undertow"]
+        WN --> WH[DispatcherHandler]
+        WN --> WEL["Event Loop (코어 수 = N개 스레드)"]
+        WEL --> WL1[Loop-1]
+        WEL --> WL2[Loop-2]
+        WEL --> WLN[Loop-N]
+        WH --> WRF["RouterFunction / @Controller"]
+        WRF --> WIO["논블로킹 I/O → 결과가 준비되면 콜백으로 처리"]
+    end
+</div>
 
 ### 스레드 모델 차이
 
@@ -124,36 +119,34 @@ public interface Processor<T, R> extends Subscriber<T>, Publisher<R> {
 
 동작 흐름은 다음과 같습니다.
 
-```
-Publisher                    Subscriber
-    │                             │
-    │ <── subscribe(subscriber) ──│
-    │                             │
-    │ ──── onSubscribe(sub) ────> │
-    │                             │
-    │ <── sub.request(N) ─────── │  (N개 데이터 요청)
-    │                             │
-    │ ──── onNext(item1) ───────> │
-    │ ──── onNext(item2) ───────> │
-    │ ──── onNext(itemN) ───────> │
-    │                             │
-    │ ──── onComplete() ────────> │  (or onError)
-```
+<div class="mermaid">
+sequenceDiagram
+    participant P as Publisher
+    participant S as Subscriber
+
+    S->>P: subscribe(subscriber)
+    P->>S: onSubscribe(sub)
+    S->>P: sub.request(N) - N개 데이터 요청
+    P->>S: onNext(item1)
+    P->>S: onNext(item2)
+    P->>S: onNext(itemN)
+    P->>S: onComplete() 또는 onError()
+</div>
 
 ### 배압(Backpressure) 개념
 
 배압은 Subscriber가 처리할 수 있는 만큼만 Publisher에게 데이터를 요청하는 메커니즘입니다. 이를 통해 Producer가 Consumer보다 빠를 때 발생하는 OOM(Out of Memory)을 방지합니다.
 
-```
-배압 없음 (문제 상황):
-Producer [■■■■■■■■■■■■■■■] ───>>> Consumer [처리 중...] → OOM!
-                                   버퍼 폭주
-
-배압 있음 (Reactive Streams):
-Producer [■■■■■■■■■■■■■■■]
-         ↑ "5개 더 줘"
-Consumer [■■■■■] ← 처리 완료 → request(5) → Producer
-```
+<div class="mermaid">
+graph LR
+    subgraph "배압 없음 - 문제 상황"
+        P1[Producer] -->|"데이터 폭주"| B1["버퍼 폭주"] --> C1["Consumer 처리 중... → OOM!"]
+    end
+    subgraph "배압 있음 - Reactive Streams"
+        C2["Consumer 처리 완료"] -->|"request(5) - 5개 더 줘"| P2[Producer]
+        P2 -->|"5개만 전송"| C2
+    end
+</div>
 
 ```java
 // 배압 전략 예시 (Project Reactor)
@@ -333,43 +326,36 @@ Flux<String> shared = fetchLiveData().share();
 
 WebFlux의 기본 서버인 Netty는 Boss/Worker 그룹 구조를 사용합니다.
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                       Netty 서버 구조                           │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  [Client 1] ─────┐                                            │
-│  [Client 2] ─────┤──> [Boss Group]                            │
-│  [Client 3] ─────┤    (1~2개 스레드)  ← 연결 수락만 담당       │
-│      ...   ──────┘         │                                  │
-│                             │ 연결 할당                         │
-│                     ┌───────┼───────┐                         │
-│                     ↓       ↓       ↓                         │
-│               [Worker-1] [Worker-2] [Worker-N]                │
-│               (CPU 코어 수)                                     │
-│                     │       │       │                         │
-│               각 Worker는 EventLoop를 실행                      │
-│               - select/epoll로 I/O 감시                        │
-│               - I/O 완료 이벤트 발생 시 핸들러 실행              │
-│               - 블로킹 없이 루프 반복                            │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
-```
+<div class="mermaid">
+graph TD
+    C1[Client 1] --> BG
+    C2[Client 2] --> BG
+    C3[Client 3] --> BG
+    CN[...] --> BG
+    BG["Boss Group (1~2개 스레드)<br/>연결 수락만 담당"]
+    BG -->|연결 할당| W1
+    BG -->|연결 할당| W2
+    BG -->|연결 할당| WN
+    W1["Worker-1 EventLoop<br/>select/epoll로 I/O 감시<br/>I/O 완료 이벤트 발생 시 핸들러 실행<br/>블로킹 없이 루프 반복"]
+    W2["Worker-2 EventLoop"]
+    WN["Worker-N EventLoop<br/>(CPU 코어 수)"]
+</div>
 
 ### 논블로킹 I/O 동작 원리
 
-```
-전통적 블로킹 I/O:
-Thread ──→ DB 연결 요청 ──→ [대기............] ──→ 결과 수신 ──→ 처리
-           (스레드 블로킹)                          (스레드 깨어남)
-
-논블로킹 I/O (NIO):
-Thread ──→ DB 연결 요청 ──→ 즉시 반환 ──→ 다른 작업 처리...
-                │                                    │
-           Selector가                         I/O 완료 이벤트 발생
-           I/O 감시 중                               │
-                └────────────────────────────→ 콜백 실행
-```
+<div class="mermaid">
+graph TD
+    subgraph "전통적 블로킹 I/O"
+        T1[Thread] -->|DB 연결 요청| W1["대기... (스레드 블로킹)"]
+        W1 -->|결과 수신 스레드 깨어남| P1[처리]
+    end
+    subgraph "논블로킹 I/O NIO"
+        T2[Thread] -->|DB 연결 요청| IR[즉시 반환]
+        IR --> OW[다른 작업 처리...]
+        T2 --> SEL["Selector가 I/O 감시 중"]
+        SEL -->|I/O 완료 이벤트 발생| CB[콜백 실행]
+    end
+</div>
 
 실제 동작 수준에서는 Linux의 `epoll`, macOS의 `kqueue`, Windows의 `IOCP`를 사용하여 커널이 I/O 완료를 통지합니다.
 
@@ -409,35 +395,23 @@ Flux.range(1, 5)
 
 이 두 연산자는 WebFlux에서 가장 혼동하기 쉬운 개념입니다.
 
-```
-publishOn: 이 지점 이후의 연산자들이 지정된 스케줄러에서 실행
-
-subscribeOn: 구독 시점(소스 시작)의 스케줄러를 지정, 체인 어디에 놓든 소스에 영향
-
-┌───────────────────────────────────────────────────────┐
-│ publishOn 동작                                         │
-│                                                       │
-│ [main thread]                                         │
-│     Flux.just(1,2,3)   ← 소스 (main)                  │
-│         .map(A)        ← main에서 실행                 │
-│         .publishOn(Schedulers.parallel())             │
-│         .map(B)        ← parallel에서 실행             │
-│         .map(C)        ← parallel에서 실행             │
-│         .subscribe()                                  │
-└───────────────────────────────────────────────────────┘
-
-┌───────────────────────────────────────────────────────┐
-│ subscribeOn 동작                                       │
-│                                                       │
-│ [main thread]                                         │
-│     Flux.just(1,2,3)   ← boundedElastic에서 실행      │
-│         .map(A)        ← boundedElastic에서 실행      │
-│         .map(B)        ← boundedElastic에서 실행      │
-│         .subscribeOn(Schedulers.boundedElastic())     │
-│         .map(C)        ← boundedElastic에서 실행      │
-│         .subscribe()   ← main에서 구독 시작            │
-└───────────────────────────────────────────────────────┘
-```
+<div class="mermaid">
+graph TD
+    subgraph "publishOn 동작 - 이 지점 이후 연산자들이 지정 스케줄러에서 실행"
+        PA["Flux.just(1,2,3)<br/>소스 - main 스레드"] --> PB["map(A)<br/>main에서 실행"]
+        PB --> PC["publishOn(Schedulers.parallel())"]
+        PC --> PD["map(B)<br/>parallel에서 실행"]
+        PD --> PE["map(C)<br/>parallel에서 실행"]
+        PE --> PF[subscribe]
+    end
+    subgraph "subscribeOn 동작 - 소스 시작 스케줄러 지정, 체인 어디에 놓든 소스에 영향"
+        SA["Flux.just(1,2,3)<br/>boundedElastic에서 실행"] --> SB["map(A)<br/>boundedElastic에서 실행"]
+        SB --> SC["map(B)<br/>boundedElastic에서 실행"]
+        SC --> SD["subscribeOn(Schedulers.boundedElastic())"]
+        SD --> SE["map(C)<br/>boundedElastic에서 실행"]
+        SE --> SF["subscribe()<br/>main에서 구독 시작"]
+    end
+</div>
 
 ```java
 // 실제 예시: 블로킹 DB 호출 격리
@@ -1270,36 +1244,25 @@ class UserServiceTest {
 
 아래는 개략적인 시나리오별 성능 특성입니다. 실제 수치는 환경에 따라 달라집니다.
 
-```
-시나리오: 외부 API 호출 (응답 지연 100ms)
-동시 사용자: 1 ~ 10,000
-
-동시 사용자    Spring MVC (TPS)    Spring WebFlux (TPS)
-─────────────────────────────────────────────────────
-      10            95                   98
-     100           520                  580
-     500          1,200                2,800
-   1,000            700 (스레드 포화)   3,100
-   2,000            500 (GC 압박)      3,200
-   5,000            300 (타임아웃↑)    3,100
-  10,000            실패 (OOM 위험)    2,900
-
-메모리 사용량 (1,000 동시 요청):
-  Spring MVC:     ~2GB  (스레드 스택)
-  Spring WebFlux: ~300MB
-```
-
-```
-시나리오: 단순 CPU 연산 (DB 없음)
-
-동시 사용자    Spring MVC (TPS)    Spring WebFlux (TPS)
-─────────────────────────────────────────────────────
-      10          9,800               9,200
-     100         48,000              44,000
-     500         52,000              50,000
-
-→ CPU 집약 작업에서는 MVC가 오히려 약간 유리하거나 동등
-```
+<div class="mermaid">
+graph TD
+    subgraph S1["시나리오: 외부 API 호출 (응답 지연 100ms)"]
+        U10["동시 10명<br/>MVC: 95 TPS / WebFlux: 98 TPS"]
+        U100["동시 100명<br/>MVC: 520 TPS / WebFlux: 580 TPS"]
+        U500["동시 500명<br/>MVC: 1,200 TPS / WebFlux: 2,800 TPS"]
+        U1K["동시 1,000명<br/>MVC: 700 TPS (스레드 포화) / WebFlux: 3,100 TPS"]
+        U2K["동시 2,000명<br/>MVC: 500 TPS (GC 압박) / WebFlux: 3,200 TPS"]
+        U5K["동시 5,000명<br/>MVC: 300 TPS (타임아웃↑) / WebFlux: 3,100 TPS"]
+        U10K["동시 10,000명<br/>MVC: 실패 (OOM 위험) / WebFlux: 2,900 TPS"]
+        MEM["메모리 (1,000 동시 요청)<br/>Spring MVC: ~2GB / WebFlux: ~300MB"]
+    end
+    subgraph S2["시나리오: 단순 CPU 연산 (DB 없음)"]
+        C10["동시 10명<br/>MVC: 9,800 TPS / WebFlux: 9,200 TPS"]
+        C100["동시 100명<br/>MVC: 48,000 TPS / WebFlux: 44,000 TPS"]
+        C500["동시 500명<br/>MVC: 52,000 TPS / WebFlux: 50,000 TPS"]
+        NOTE["CPU 집약 작업에서는 MVC가 약간 유리하거나 동등"]
+    end
+</div>
 
 ### 언제 WebFlux가 유리한가?
 
