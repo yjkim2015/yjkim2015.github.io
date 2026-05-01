@@ -13,7 +13,7 @@ author_profile: false
   <div class="home-categories__grid">
     {% assign sorted_cats = site.categories | sort %}
     {% for cat in sorted_cats %}
-      <a href="/categories/{{ cat[0] | slugify }}/" class="category-chip">
+      <a href="/categories/{{ cat[0] | downcase | replace: ' ', '_' }}/" class="category-chip">
         <span class="category-chip__name">{{ cat[0] }}</span>
       </a>
     {% endfor %}
