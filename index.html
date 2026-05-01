@@ -3,6 +3,10 @@ layout: home
 author_profile: false
 ---
 
+<div class="visitor-counter">
+  <span id="visitor-count">Visitors: loading...</span>
+</div>
+
 <div class="home-categories">
   <div class="home-categories__grid">
     {% assign sorted_cats = site.categories | sort %}
@@ -13,3 +17,14 @@ author_profile: false
     {% endfor %}
   </div>
 </div>
+
+<script>
+  fetch('https://yjkim2015.goatcounter.com/counter/TOTAL.json')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('visitor-count').textContent = 'Total Visitors: ' + d.count_unique.toLocaleString();
+    })
+    .catch(() => {
+      document.getElementById('visitor-count').textContent = '';
+    });
+</script>

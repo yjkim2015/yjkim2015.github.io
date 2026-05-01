@@ -127,6 +127,18 @@ body {
   }
 }
 
+/* --- Visitor Counter --- */
+.visitor-counter {
+  text-align: left;
+  margin-bottom: 1em;
+  font-size: 0.82em;
+  color: #999;
+
+  #visitor-count {
+    font-weight: 500;
+  }
+}
+
 /* --- Home Categories Grid --- */
 .home-categories {
   max-width: 700px;
