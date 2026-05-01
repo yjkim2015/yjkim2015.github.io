@@ -65,8 +65,14 @@ body {
   width: 100% !important;
 }
 
+.initial-content {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
 .sidebar { display: none !important; width: 0 !important; }
 .page { float: none !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; }
+.page__inner-wrap { max-width: 100% !important; }
 
 /* ============================================
    Home Hero
