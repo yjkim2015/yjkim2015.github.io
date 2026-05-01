@@ -6,11 +6,18 @@ author_profile: false
 <div class="home-hero">
   <h1>YJ Kim</h1>
   <p class="home-hero__subtitle">Backend Developer</p>
-  <p class="home-hero__desc"></p>
-  <div class="home-hero__links">
-    <a href="https://github.com/yjkim2015" target="_blank">GitHub</a>
-    <a href="/categories/">Categories</a>
-    <a href="/tags/">Tags</a>
+</div>
+
+<div class="home-categories">
+  <h3 class="home-categories__title">Categories</h3>
+  <div class="home-categories__grid">
+    {% assign sorted_cats = site.categories | sort %}
+    {% for cat in sorted_cats %}
+      <a href="/categories/#{{ cat[0] | slugify }}" class="category-chip">
+        <span class="category-chip__name">{{ cat[0] }}</span>
+        <span class="category-chip__count">{{ cat[1].size }}</span>
+      </a>
+    {% endfor %}
   </div>
 </div>
 
