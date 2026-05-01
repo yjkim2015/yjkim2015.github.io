@@ -1,11 +1,15 @@
 ---
-title: "Kafka 동작 원리 딥다이브 — Producer부터 트랜잭션까지"
+title: "Kafka 내부 동작 원리 — Producer부터 트랜잭션까지"
 categories:
 - KAFKA
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
+
+초당 100만 건의 주문 이벤트가 쏟아지는 쇼핑몰을 상상해보자. `producer.send(record)`를 호출할 때마다 네트워크 요청이 한 번씩 나간다면 시스템은 버티지 못한다. Kafka Producer는 내부적으로 메시지를 배치로 모으고, 압축하고, 비동기로 전송하며 이 문제를 해결한다. 한 줄짜리 코드 뒤에 숨어있는 동작 원리를 파헤친다.
+
+> **비유**: Producer 내부는 택배 터미널과 같다. 소화물(메시지)이 들어오면 바로 트럭(네트워크)에 싣지 않고, 같은 목적지(파티션) 박스에 차곡차곡 담는다(RecordAccumulator). 박스가 꽉 차거나 일정 시간이 지나면 트럭이 출발한다(Sender). 한 번 출발할 때 박스째 싣는 덕분에 소화물 하나씩 싣는 것보다 훨씬 효율적이다.
 
 ## Producer 내부 동작
 

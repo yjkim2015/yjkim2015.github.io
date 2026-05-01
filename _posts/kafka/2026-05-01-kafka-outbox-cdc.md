@@ -1,11 +1,15 @@
 ---
-title: "Kafka Outbox 패턴과 CDC"
+title: "Kafka Outbox 패턴과 CDC 활용"
 categories:
 - KAFKA
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
+
+주문이 DB에 저장됐는데 Kafka 발행이 실패했다. 결제 서비스는 주문을 모른다. 반대로 Kafka 발행은 됐는데 DB 롤백이 됐다. 결제 서비스는 존재하지 않는 주문을 처리한다. 분산 트랜잭션 없이 이 문제를 해결하는 것이 Outbox 패턴이다.
+
+> **비유**: Outbox 패턴은 편지를 바로 우체통에 넣는 대신, 먼저 책상 서랍(Outbox 테이블)에 넣어두는 것이다. 우편배달부(Message Relay)가 주기적으로 서랍을 열어 편지를 가져가 우체통에 넣는다. 서랍에 넣는 행위와 비즈니스 처리는 한 번에 이루어지므로 둘 다 성공하거나 둘 다 실패한다.
 
 ## 왜 Outbox 패턴이 필요한가
 

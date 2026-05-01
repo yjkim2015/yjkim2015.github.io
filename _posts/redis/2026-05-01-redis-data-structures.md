@@ -1,5 +1,5 @@
 ---
-title: "Redis 자료구조와 명령어"
+title: "Redis 자료구조와 명령어 활용"
 categories:
 - REDIS
 toc: true
@@ -7,7 +7,11 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+실시간 랭킹을 구현해야 한다면? MySQL로 매 요청마다 `ORDER BY score DESC`를 돌리면 수천 명이 동시 접속할 때 DB가 버티지 못한다. Redis Sorted Set 하나로 수백만 명의 점수를 실시간으로 정렬해 1ms 안에 응답할 수 있다. Redis가 단순 캐시 저장소가 아닌 이유가 여기 있다.
+
 ## 개요
+
+> **비유**: Redis 자료구조는 스위스 군용 칼 같다. 하나의 도구지만 상황에 따라 칼날(String), 가위(List), 드라이버(Set), 줄(Sorted Set) 등 적합한 기능을 꺼내 쓴다. 무조건 String만 쓰는 건 가위로 나사를 조이는 것과 같다.
 
 Redis는 단순한 키-값 저장소가 아니라 **다양한 자료구조**를 네이티브로 지원한다. 각 자료구조는 특정 문제에 최적화된 명령어를 제공하며, 올바른 자료구조를 선택하는 것이 성능의 핵심이다.
 

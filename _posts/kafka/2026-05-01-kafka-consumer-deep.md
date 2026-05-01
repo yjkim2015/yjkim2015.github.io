@@ -1,5 +1,5 @@
 ---
-title: "Kafka Consumer"
+title: "Kafka Consumer 동작 원리와 파티션 할당"
 categories:
 - KAFKA
 toc: true
@@ -7,9 +7,13 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+주문 이벤트 처리 속도가 발행 속도를 따라가지 못한다. 컨슈머 인스턴스를 한 대 더 띄우면 해결될까? 파티션이 3개인데 컨슈머가 이미 3개라면 4번째 컨슈머는 아무것도 하지 않고 대기만 한다. 컨슈머 그룹과 파티션 할당 원리를 모르면 장비를 늘려도 성능이 나아지지 않는다.
+
 ## Consumer Group
 
 ### Consumer Group이란?
+
+> **비유**: Consumer Group은 콜센터 팀이다. 전화(메시지)가 들어오면 팀원(Consumer)이 나눠서 받는다. 한 팀원이 전화를 받는 동안 같은 팀의 다른 팀원은 그 전화를 받지 않는다. 다른 팀(Consumer Group)은 같은 전화를 독립적으로 받을 수 있다.
 
 여러 Consumer 인스턴스가 하나의 그룹으로 협력하여 토픽을 병렬 소비하는 단위다. 같은 그룹 내 Consumer들은 파티션을 나눠 가진다.
 

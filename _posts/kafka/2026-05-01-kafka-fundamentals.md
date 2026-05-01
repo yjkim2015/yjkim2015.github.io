@@ -1,11 +1,13 @@
 ---
-title: "Kafka 핵심 개념"
+title: "Kafka 핵심 개념 정리"
 categories:
 - KAFKA
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
+
+서비스가 성장하면서 주문, 결제, 배달, 통계, 알림 시스템이 서로 직접 API를 호출한다. 하나가 느려지면 전체가 느려지고, 하나가 죽으면 연쇄 장애가 난다. Kafka는 이 결합을 끊는다.
 
 ## Kafka란?
 

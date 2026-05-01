@@ -1,11 +1,15 @@
 ---
-title: "Kafka Producer"
+title: "Kafka Producer 내부 동작과 신뢰성 설정"
 categories:
 - KAFKA
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
+
+`kafkaTemplate.send("orders", event)` 한 줄이면 메시지가 전송된다고 생각하기 쉽다. 하지만 이 한 줄 뒤에는 직렬화, 파티셔닝, 배치 누적, 압축, 재시도, ACK 확인까지 수십 가지 동작이 숨어있다. acks 설정 하나 잘못 건드리면 메시지가 유실되거나 순서가 뒤집힌다.
+
+> **비유**: Producer는 택배 발송 창구 직원이다. 물건(메시지)을 받아 분류하고(파티셔닝), 박스에 담고(배치), 트럭에 싣는다(네트워크 전송). 물건이 제대로 도착했다는 확인서(ACK)를 받을 때까지 기록을 보관한다.
 
 ## Producer 내부 아키텍처
 
