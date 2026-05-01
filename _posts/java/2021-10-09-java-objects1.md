@@ -1,7 +1,7 @@
 ---
 title: 객체지향-객체(Object)
 categories:
-- Java
+- JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

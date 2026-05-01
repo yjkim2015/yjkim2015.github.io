@@ -2,7 +2,7 @@
 
 title: Spring Project 시작하기
 categories:
-- Spring Legacy
+- SPRING
 toc: true
 toc_sticky: true
 toc_label: 목차

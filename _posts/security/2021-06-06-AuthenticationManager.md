@@ -1,7 +1,7 @@
 ---
 title: Spring boot Security - Authentication Manager
 categories:
-- Spring Boot Security
+- SECURITY
 toc: true
 toc_sticky: true
 toc_label: 목차

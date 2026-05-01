@@ -1,7 +1,7 @@
 ---
 title: "Java 컬렉션 프레임워크 완전 정리"
 categories:
-- Java
+- JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

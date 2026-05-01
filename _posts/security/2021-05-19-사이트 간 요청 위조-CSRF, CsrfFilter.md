@@ -1,7 +1,7 @@
 ---
 title: Spring boot Security - 사이트 간 요청 위조 CSRF, CsrfFilter
 categories:
-- Spring Boot Security
+- SECURITY
 toc: true
 toc_sticky: true
 toc_label: 목차
