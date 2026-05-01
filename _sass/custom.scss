@@ -1,0 +1,74 @@
+/* Pretendard 폰트 적용 */
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.75;
+  background-color: #fafafa;
+}
+
+/* 본문 가독성 최적화 */
+.page__content {
+  font-size: 1.05em;
+
+  p, li, dl {
+    max-width: 720px;
+  }
+}
+
+/* 카드형 아카이브 아이템 */
+.archive__item {
+  border-radius: 12px;
+  padding: 20px;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin-bottom: 1em;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.archive__item-title {
+  font-weight: 700;
+  margin-top: 0;
+}
+
+/* 코드 블록 */
+div.highlighter-rouge,
+figure.highlight {
+  border-radius: 10px;
+  border: 1px solid #e8e8e8;
+}
+
+/* 홈 인트로 */
+.home-intro {
+  text-align: center;
+  padding: 2em 0 1em;
+
+  h2 {
+    font-weight: 700;
+    font-size: 1.6em;
+    margin-bottom: 0.3em;
+  }
+
+  p {
+    color: #666;
+    font-size: 1.1em;
+  }
+}
+
+/* masthead 깔끔하게 */
+.masthead {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* 제목 스타일 */
+.page__title {
+  font-weight: 800;
+}
+
+/* 사이드바 */
+.sidebar .author__name {
+  font-weight: 700;
+}
