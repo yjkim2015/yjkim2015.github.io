@@ -50,12 +50,14 @@ body {
   justify-content: center;
   padding: 2em 2em;
   min-height: 60vh;
-  max-width: 100% !important;
+  max-width: 1400px !important;
+  margin: 0 auto;
 }
 
 .content-container {
   width: 100% !important;
-  max-width: 1400px !important;
+  max-width: 100% !important;
+  padding: 0 !important;
 }
 
 /* 기존 MM 레이아웃 무력화 */
