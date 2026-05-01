@@ -9,22 +9,27 @@ toc_label: 목차
 
 ## 캐싱이란?
 
+> 비유: 도서관(DB)에서 책을 빌릴 때마다 왕복 30분이 걸린다면, 자주 보는 책은 책상(캐시) 위에 두는 것이 훨씬 빠르다. 단, 도서관에서 내용이 개정되면 책상의 책은 구판이 된다.
+
 캐싱(Caching)은 자주 사용되는 데이터를 빠르게 접근 가능한 임시 저장소에 보관하여 응답 속도를 높이고 원본 데이터 소스의 부하를 줄이는 기법이다.
 
-```
-캐시 없음:
-Client → [Application] → [DB] → 응답 (매번 DB 쿼리)
-         100ms          200ms    총 300ms
-
-캐시 있음:
-Client → [Application] → [Cache] → 응답 (Cache Hit)
-         100ms           1ms       총 101ms
-
-                or
-
-Client → [Application] → [Cache Miss] → [DB] → [Cache 저장] → 응답
-         100ms           1ms             200ms   1ms            총 302ms (최초 1회)
-```
+<div class="mermaid">
+graph LR
+    subgraph WITHOUT["캐시 없음 — 총 300ms"]
+        C1[Client] -->|100ms| A1[Application]
+        A1 -->|200ms| DB1[DB]
+    end
+    subgraph WITH_HIT["캐시 있음 — Cache Hit — 총 101ms"]
+        C2[Client] -->|100ms| A2[Application]
+        A2 -->|1ms| CACHE[Cache]
+    end
+    subgraph WITH_MISS["캐시 있음 — Cache Miss — 총 302ms (최초 1회)"]
+        C3[Client] -->|100ms| A3[Application]
+        A3 -->|1ms| CM[Cache Miss]
+        CM -->|200ms| DB3[DB]
+        DB3 -->|1ms| STORE[Cache 저장]
+    end
+</div>
 
 ### 캐시 핵심 용어
 
@@ -44,22 +49,20 @@ TTL:       Time To Live, 캐시 유효 기간
 
 ## Cache-Aside (Lazy Loading)
 
+> 비유: 도서관(DB)에 직접 가야 할지 책상(캐시) 위 책을 먼저 확인하는 것은 본인(App) 몫이다. 책상에 없으면 도서관에 가서 빌려와 책상에 올려둔다.
+
 가장 일반적인 캐싱 패턴이다. 애플리케이션이 직접 캐시와 DB를 모두 관리한다.
 
 ### 읽기 동작
 
-```
-1. 애플리케이션이 캐시 조회
-2. Cache Hit → 캐시 데이터 반환 (종료)
-3. Cache Miss → DB 조회
-4. DB 결과를 캐시에 저장 (TTL 설정)
-5. DB 결과 반환
-
-┌──────────┐   조회   ┌───────┐  Miss  ┌────┐
-│   App    │ ───────→ │ Cache │ ─────→ │ DB │
-│          │ ←─────── │       │ ←───── │    │
-└──────────┘   반환   └───────┘  저장  └────┘
-```
+<div class="mermaid">
+graph LR
+    App -->|1. 조회| Cache
+    Cache -->|2a. Hit: 반환| App
+    Cache -->|2b. Miss| DB
+    DB -->|3. 조회 결과| Cache
+    Cache -->|4. 저장 후 반환| App
+</div>
 
 ### 구현 예시
 
@@ -124,19 +127,23 @@ public class UserService {
 
 ## Read-Through
 
+> 비유: 비서(캐시)에게 자료를 요청하면, 비서가 없으면 직접 도서관(DB)에서 가져와 준다. 요청자(App)는 비서에게만 말하면 된다.
+
 캐시가 DB 앞에 위치하여 모든 읽기 요청이 캐시를 통과한다. Cache Miss 시 캐시 자체가 DB를 조회하고 저장한다.
 
 ### 동작
 
-```
-Client → Cache → (Miss) → DB
-            ↑ Miss 시 캐시가 직접 DB 조회 후 저장
-            ↓ Hit 시 캐시가 직접 응답
+<div class="mermaid">
+graph LR
+    App -->|요청| Cache
+    Cache -->|Hit: 즉시 반환| App
+    Cache -->|Miss: 캐시가 직접 조회| DB
+    DB -->|결과 반환| Cache
+    Cache -->|저장 후 App에 반환| App
+</div>
 
-Cache-Aside와 차이:
-  Cache-Aside: App이 Cache와 DB 모두 직접 관리
-  Read-Through: App은 Cache만 바라봄, DB 접근은 캐시가 담당
-```
+> Cache-Aside: App이 Cache와 DB 모두 직접 관리
+> Read-Through: App은 Cache만 바라봄, DB 접근은 캐시가 담당
 
 ### 구현 예시 (Spring Cache + 커스텀 로더)
 
@@ -199,17 +206,21 @@ public class ProductService {
 
 ## Write-Through
 
+> 비유: 중요한 서류를 작성할 때 원본(DB)과 복사본(캐시)을 동시에 만들어 두는 방식이다. 항상 두 곳이 일치하지만, 서류 작성 시간이 두 배가 걸린다.
+
 데이터를 쓸 때 캐시와 DB에 **동시에** 저장한다. 캐시와 DB가 항상 동기화된다.
 
 ### 동작
 
-```
-Client → App → Cache → DB (동기 쓰기)
-              ↗ 캐시에도 즉시 저장
-
-장점: 읽기 시 항상 최신 데이터
-단점: 쓰기 지연 증가 (Cache + DB 모두 완료 후 응답)
-```
+<div class="mermaid">
+graph LR
+    Client -->|쓰기 요청| App
+    App -->|동기 저장| Cache
+    App -->|동기 저장| DB
+    Cache -->|완료| App
+    DB -->|완료| App
+    App -->|응답| Client
+</div>
 
 ### 구현 예시
 
@@ -258,18 +269,18 @@ public class InventoryService {
 
 ## Write-Behind (Write-Back)
 
+> 비유: 메모장(캐시)에 먼저 받아 적고 즉시 응답한 뒤, 나중에 시간이 날 때 공식 문서(DB)에 옮겨 적는 방식이다. 빠르지만 메모장을 잃어버리면 내용이 사라진다.
+
 데이터를 캐시에만 먼저 쓰고, DB 동기화는 **나중에 비동기**로 처리한다.
 
 ### 동작
 
-```
-Client → App → Cache (즉시 응답)
-                ↓ 비동기
-               DB (나중에 배치 처리)
-
-장점: 쓰기 성능 극대화
-단점: 캐시 장애 시 캐시에만 있는 데이터 유실 위험
-```
+<div class="mermaid">
+graph LR
+    Client -->|쓰기 요청| App
+    App -->|즉시 저장 + 즉시 응답| Cache
+    Cache -.->|비동기 배치 처리| DB
+</div>
 
 ### 구현 예시
 
@@ -323,16 +334,26 @@ public class ViewCountService {
 
 ## Write-Around
 
+> 비유: 한 번 작성하고 거의 다시 보지 않는 서류(로그)는 창고(DB)에 바로 넣는다. 책상(캐시) 위는 자주 보는 서류만 두어 공간을 아낀다.
+
 쓰기 시 캐시를 **우회**하여 DB에만 저장한다. 읽기 시에만 캐시를 활용한다.
 
 ### 동작
 
-```
-쓰기: Client → App → DB (캐시 건너뜀)
-읽기: Client → App → Cache → (Miss 시) DB → Cache 저장
-
-목적: 한 번 쓰고 거의 읽지 않는 데이터로 캐시 오염 방지
-```
+<div class="mermaid">
+graph LR
+    subgraph WRITE["쓰기"]
+        CW[Client] -->|쓰기| AppW[App]
+        AppW -->|직접 저장 — 캐시 우회| DBW[DB]
+    end
+    subgraph READ["읽기"]
+        CR[Client] -->|읽기| AppR[App]
+        AppR -->|조회| CacheR[Cache]
+        CacheR -->|Miss 시| DBR[DB]
+        DBR -->|결과 저장| CacheR
+        CacheR -->|반환| AppR
+    end
+</div>
 
 ### 구현 예시
 
@@ -377,21 +398,21 @@ public class LogService {
 
 ## Refresh-Ahead (Read-Ahead)
 
+> 비유: 냉장고 음식이 유통기한 이틀 전에 자동으로 새 것으로 교체된다면, 꺼낼 때마다 항상 신선한 것을 쓸 수 있다. 유통기한이 다 돼서 버리고 마트에 달려가는 일이 없다.
+
 캐시 만료 **전**에 미리 데이터를 갱신하는 전략이다. TTL 만료로 인한 Cache Miss와 지연을 방지한다.
 
 ### 동작
 
-```
-TTL = 60초, Refresh Factor = 0.8
+<div class="mermaid">
+graph LR
+    T0["t=0s: 캐시 저장"] --> T48["t=48s: TTL 80% 도달\n백그라운드 갱신 시작"]
+    T48 --> T60["t=60s: TTL 만료\n이미 새 데이터로 교체 완료"]
+    T48 -.->|비동기 갱신| DB[DB]
+    DB -.->|새 데이터| Cache[Cache]
+</div>
 
-t=0s:   캐시 저장
-t=48s:  TTL의 80% 시점 → 백그라운드에서 미리 갱신
-t=60s:  TTL 만료 전에 이미 새 데이터로 교체
-
-요청이 t=50s에 오면:
-  → 캐시 Hit (이미 t=48s에 갱신됨)
-  → 지연 없음
-```
+> TTL = 60초, Refresh Factor = 0.8일 때 t=50s 요청 → Cache Hit (t=48s에 이미 갱신됨)
 
 ### 구현 예시
 
@@ -636,18 +657,20 @@ public class CacheWarmup implements ApplicationRunner {
 
 ## 다단계 캐시 (Multi-Level Cache)
 
+> 비유: 가장 자주 보는 메모는 손목 위 포스트잇(L1 로컬), 그 다음은 책상 서랍(L2 Redis), 최후에는 창고(DB)에서 꺼낸다. 가까울수록 빠르지만 공간이 작다.
+
 ### L1 (로컬 캐시) + L2 (Redis) 구조
 
-```
-Client → App
-              → L1 캐시 (JVM 내 메모리, 수 나노초)
-              → L2 캐시 (Redis, 수 밀리초)
-              → DB (수십~수백 밀리초)
-
-L1 Hit: 가장 빠름, 네트워크 없음
-L1 Miss → L2 Hit: Redis 네트워크 왕복
-L2 Miss → DB Hit: DB 쿼리
-```
+<div class="mermaid">
+graph LR
+    Client --> App
+    App -->|1. 나노초| L1["L1 캐시\nJVM 내 메모리"]
+    L1 -->|Miss → 2. 밀리초| L2["L2 캐시\nRedis"]
+    L2 -->|Miss → 3. 수십~수백ms| DB
+    L1 -->|Hit: 즉시 반환| App
+    L2 -->|Hit: 반환 + L1 저장| App
+    DB -->|Hit: 반환 + L1,L2 저장| App
+</div>
 
 ### Spring Boot + Caffeine (L1) + Redis (L2)
 
@@ -700,13 +723,13 @@ public class ProductService {
 
 ### 다단계 캐시 주의사항
 
-```
-문제: L1 캐시 일관성
-  - 여러 애플리케이션 인스턴스가 각자 L1 캐시를 가짐
-  - DB 업데이트 시 모든 인스턴스의 L1 캐시 무효화 어려움
+**문제: L1 캐시 일관성**
+- 여러 애플리케이션 인스턴스가 각자 L1 캐시를 가짐
+- DB 업데이트 시 모든 인스턴스의 L1 캐시 무효화 어려움
 
-해결: Redis Pub/Sub을 이용한 캐시 무효화 이벤트 브로드캐스트
+**해결: Redis Pub/Sub을 이용한 캐시 무효화 이벤트 브로드캐스트**
 
+```java
 // 캐시 무효화 시
 redisTemplate.convertAndSend("cache-invalidation", "product:" + productId);
 
@@ -724,17 +747,10 @@ public class CacheInvalidationListener implements MessageListener {
 
 ### L1 vs L2 데이터 분리 전략
 
-```
-L1 (로컬, 소용량, 짧은 TTL):
-  - 초당 수천 번 이상 읽히는 핫 데이터
-  - 크기가 작은 참조 데이터 (코드 테이블, 설정값)
-  - 실시간성보다 속도가 중요한 경우
-
-L2 (Redis, 대용량, 긴 TTL):
-  - 수 MB 크기의 중형 오브젝트
-  - 인스턴스 간 공유가 필요한 세션 데이터
-  - 캐시 일관성이 중요한 데이터
-```
+| 계층 | 특성 | 적합한 데이터 |
+|------|------|--------------|
+| **L1** (로컬, 소용량, 짧은 TTL) | 네트워크 없음, 나노초 응답 | 초당 수천 번 읽히는 핫 데이터, 코드 테이블·설정값 |
+| **L2** (Redis, 대용량, 긴 TTL) | 인스턴스 간 공유, 밀리초 응답 | 수 MB 중형 오브젝트, 세션 데이터, 일관성 중요 데이터 |
 
 ---
 

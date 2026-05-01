@@ -10,6 +10,8 @@ date: 2026-05-01
 
 동기(Synchronous), 비동기(Asynchronous), 블로킹(Blocking), 논블로킹(Non-blocking)은 I/O와 동시성 프로그래밍에서 자주 혼용되는 개념이다. 이 네 가지는 서로 독립된 두 축이며, 조합에 따라 4가지 모드가 만들어진다.
 
+> 비유: 음식점에서 음식을 기다리는 방법은 여러 가지다. 자리에서 주문하고 음식이 올 때까지 다른 아무것도 안 하면 동기+블로킹, 진동벨을 받고 돌아다니다가 벨이 울리면 받으러 가면 비동기+논블로킹이다.
+
 ---
 
 ## 핵심 개념 정의
@@ -40,12 +42,19 @@ date: 2026-05-01
 
 ### 1. 동기 + 블로킹 (Synchronous Blocking)
 
+> 비유: 전화를 걸고 상대방이 받을 때까지 수화기를 들고 기다린다. 그 동안 아무것도 할 수 없다.
+
 가장 일반적인 방식. 결과를 기다리는 동안 스레드가 멈춘다.
 
-```
-호출자 스레드:  ──────[요청]──[대기 중...]──[결과 수신]──[다음 작업]──→
-                               ↑ 스레드 블로킹
-```
+<div class="mermaid">
+sequenceDiagram
+    participant T as 호출자 스레드
+    participant IO as I/O
+    T->>IO: 요청
+    Note over T: 스레드 블로킹 (대기 중)
+    IO-->>T: 결과 수신
+    Note over T: 다음 작업 진행
+</div>
 
 ```java
 // Java - 전통적인 블로킹 I/O
@@ -74,12 +83,22 @@ ResultSet rs = ps.executeQuery(); // 쿼리 완료까지 블로킹
 
 ### 2. 동기 + 논블로킹 (Synchronous Non-blocking)
 
+> 비유: 음식점에서 "아직 됐어요?" 하고 반복해서 물어본다. 스레드는 막히지 않지만 계속 확인하느라 CPU를 낭비한다.
+
 I/O 시스템 콜은 즉시 반환하지만, 호출자가 직접 반복 폴링(polling)해서 결과를 확인한다.
 
-```
-호출자 스레드:  ──[요청]──[폴링]──[폴링]──[폴링]──[결과!]──[다음 작업]──→
-                            ↑EAGAIN  ↑EAGAIN  ↑완료
-```
+<div class="mermaid">
+sequenceDiagram
+    participant T as 호출자 스레드
+    participant IO as I/O
+    T->>IO: 요청
+    IO-->>T: EAGAIN (즉시 반환)
+    T->>IO: 폴링
+    IO-->>T: EAGAIN (즉시 반환)
+    T->>IO: 폴링
+    IO-->>T: 완료! 결과 반환
+    Note over T: 다음 작업 진행
+</div>
 
 ```java
 // Java NIO - 논블로킹 소켓
@@ -112,12 +131,19 @@ while ((bytesRead = channel.read(buffer)) == 0) {
 
 ### 3. 비동기 + 블로킹 (Asynchronous Blocking)
 
+> 비유: 진동벨을 받았지만 카운터 앞에 서서 벨이 울릴 때까지 기다린다. 비동기로 시작했지만 결국 블로킹하는 안티패턴이다.
+
 드문 조합. 비동기로 요청하지만 결과를 받을 때 블로킹한다.
 
-```
-호출자 스레드:  ──[요청 발행]──[Future.get() 블로킹]──[결과]──[다음 작업]──→
-                                      ↑ 블로킹
-```
+<div class="mermaid">
+sequenceDiagram
+    participant T as 호출자 스레드
+    participant BG as 별도 스레드
+    T->>BG: 요청 발행 (비동기)
+    Note over T: Future.get() — 블로킹 대기
+    BG-->>T: 결과 반환
+    Note over T: 다음 작업 진행
+</div>
 
 ```java
 // Java Future - 비동기 요청 후 블로킹 대기
@@ -157,13 +183,20 @@ String r3 = f3.get();
 
 ### 4. 비동기 + 논블로킹 (Asynchronous Non-blocking)
 
+> 비유: 진동벨을 받고 자리에 앉아 다른 일을 한다. 벨이 울리면 그때 가서 음식을 받는다. 스레드를 막지 않고 완료 시 콜백으로 통보된다.
+
 가장 효율적인 조합. 요청 후 즉시 반환되고, 완료 시 콜백/이벤트로 통보된다.
 
-```
-호출자 스레드:  ──[요청 발행]──[즉시 반환]──[다른 작업]──[다른 작업]──→
-                                                              ↑
-                                                  [완료 이벤트 수신 → 콜백 실행]
-```
+<div class="mermaid">
+sequenceDiagram
+    participant T as 호출자 스레드
+    participant IO as I/O / 커널
+    T->>IO: 요청 발행
+    IO-->>T: 즉시 반환
+    Note over T: 다른 작업 A 진행
+    Note over T: 다른 작업 B 진행
+    IO-->>T: 완료 이벤트 → 콜백 실행
+</div>
 
 ```java
 // Java NIO2 (AsynchronousSocketChannel)
@@ -239,49 +272,54 @@ Unix/Linux 시스템에서 I/O는 5가지 모델로 분류된다. (W. Richard St
 
 ### 1. Blocking I/O
 
-```
-Application                    Kernel
-    │──── recvfrom() 호출 ────→│
-    │                          │ 데이터 없음
-    │◄──────── 대기 ──────────►│ ...
-    │                          │ 데이터 도착
-    │                          │ 커널 버퍼 → 유저 버퍼 복사
-    │◄──── OK, 데이터 반환 ────│
-    │ (애플리케이션 재개)
-```
+<div class="mermaid">
+sequenceDiagram
+    participant App as Application
+    participant K as Kernel
+    App->>K: recvfrom() 호출
+    Note over App,K: 데이터 없음 — 대기 (블로킹)
+    Note over K: 데이터 도착\n커널 버퍼 → 유저 버퍼 복사
+    K-->>App: OK, 데이터 반환
+    Note over App: 애플리케이션 재개
+</div>
 
 ### 2. Non-blocking I/O
 
-```
-Application                    Kernel
-    │──── recvfrom() ─────────→│ 데이터 없음
-    │◄──── EAGAIN 즉시 반환 ───│
-    │ (폴링 반복)
-    │──── recvfrom() ─────────→│ 데이터 없음
-    │◄──── EAGAIN 즉시 반환 ───│
-    │──── recvfrom() ─────────→│ 데이터 도착! 복사 중
-    │◄──── OK, 데이터 반환 ────│
-```
+<div class="mermaid">
+sequenceDiagram
+    participant App as Application
+    participant K as Kernel
+    App->>K: recvfrom()
+    K-->>App: EAGAIN (즉시 반환 — 데이터 없음)
+    App->>K: recvfrom() (폴링)
+    K-->>App: EAGAIN (즉시 반환 — 데이터 없음)
+    App->>K: recvfrom() (폴링)
+    Note over K: 데이터 도착! 복사 중
+    K-->>App: OK, 데이터 반환
+</div>
 
 ### 3. I/O Multiplexing (select/poll/epoll)
 
 하나의 스레드로 여러 소켓을 감시할 수 있다. Java NIO Selector가 이 방식이다.
 
-```
-Application                    Kernel
-    │──── select() ───────────→│ 여러 소켓 감시 시작
-    │◄──── 블로킹 ────────────►│ 감시 중...
-    │                          │ 소켓 중 하나 준비됨
-    │◄──── 준비된 소켓 반환 ───│
-    │──── recvfrom() ─────────→│
-    │◄──── 데이터 반환 ────────│
-```
+<div class="mermaid">
+sequenceDiagram
+    participant App as Application
+    participant K as Kernel
+    App->>K: select() — 여러 소켓 감시 시작
+    Note over App,K: 블로킹 — 감시 중...
+    Note over K: 소켓 중 하나 준비됨
+    K-->>App: 준비된 소켓 반환
+    App->>K: recvfrom()
+    K-->>App: 데이터 반환
+</div>
 
 **epoll (Linux 고성능 방식)**
-```
-select/poll: O(n) — 감시 중인 모든 fd를 순회
-epoll:       O(1) — 준비된 fd만 반환
-```
+
+| 방식 | 복잡도 | 설명 |
+|------|--------|------|
+| select/poll | O(n) | 감시 중인 모든 fd를 순회 |
+| epoll | O(1) | 준비된 fd만 반환 |
 
 Java NIO `Selector`는 내부적으로 epoll(Linux), kqueue(macOS)를 사용한다.
 
@@ -327,29 +365,34 @@ while (true) {
 
 소켓이 준비되면 커널이 SIGIO 시그널을 보낸다. 잘 사용하지 않는다.
 
-```
-Application                    Kernel
-    │── sigaction() 등록 ──────→│
-    │ (즉시 반환, 다른 작업)
-    │                          │ 데이터 도착
-    │←─── SIGIO 시그널 ─────────│
-    │── recvfrom() ────────────→│
-    │←─── 데이터 반환 ──────────│
-```
+<div class="mermaid">
+sequenceDiagram
+    participant App as Application
+    participant K as Kernel
+    App->>K: sigaction() 등록
+    K-->>App: 즉시 반환
+    Note over App: 다른 작업 진행
+    Note over K: 데이터 도착
+    K-->>App: SIGIO 시그널
+    App->>K: recvfrom()
+    K-->>App: 데이터 반환
+</div>
 
 ### 5. Asynchronous I/O (aio_read)
 
 데이터 복사(커널 버퍼 → 유저 버퍼)까지 완료된 후 통보된다. Java의 `AsynchronousSocketChannel`이 이 방식이다.
 
-```
-Application                    Kernel
-    │── aio_read() ───────────→│
-    │ (즉시 반환, 다른 작업)
-    │                          │ 데이터 도착
-    │                          │ 커널 버퍼 → 유저 버퍼 복사 완료
-    │←─── 완료 시그널/콜백 ─────│
-    │ (데이터 이미 유저 버퍼에 있음)
-```
+<div class="mermaid">
+sequenceDiagram
+    participant App as Application
+    participant K as Kernel
+    App->>K: aio_read()
+    K-->>App: 즉시 반환
+    Note over App: 다른 작업 진행
+    Note over K: 데이터 도착\n커널 버퍼 → 유저 버퍼 복사 완료
+    K-->>App: 완료 시그널/콜백
+    Note over App: 데이터 이미 유저 버퍼에 있음
+</div>
 
 **5가지 모델 비교**
 
@@ -459,17 +502,16 @@ public class OrderService {
 
 ## 정리
 
-```
-동기 vs 비동기  → 결과를 누가 어떻게 받는가
-블로킹 vs 논블로킹 → I/O 대기 중 스레드가 어떻게 동작하는가
+| 구분 | 핵심 질문 |
+|------|----------|
+| 동기 vs 비동기 | 결과를 누가 어떻게 받는가 |
+| 블로킹 vs 논블로킹 | I/O 대기 중 스레드가 어떻게 동작하는가 |
 
-실무 조합:
-  동기 + 블로킹    → 전통 Spring MVC, JDBC (심플, 낮은 처리량)
-  동기 + 논블로킹  → NIO Selector (Netty 내부 구조)
-  비동기 + 블로킹  → Future.get() 안티패턴 (병렬 수집 시에만 유효)
-  비동기 + 논블로킹 → WebFlux, CompletableFuture (복잡, 높은 처리량)
+| 조합 | 대표 기술 | 특징 |
+|------|----------|------|
+| 동기 + 블로킹 | 전통 Spring MVC, JDBC | 심플, 낮은 처리량 |
+| 동기 + 논블로킹 | NIO Selector | Netty 내부 구조 |
+| 비동기 + 블로킹 | Future.get() | 안티패턴 (병렬 수집 시에만 유효) |
+| 비동기 + 논블로킹 | WebFlux, CompletableFuture | 복잡, 높은 처리량 |
 
-Java 21 Virtual Thread:
-  → 동기 블로킹 코드로 작성하지만 내부적으로 비동기처럼 동작
-  → 복잡한 리액티브 없이 높은 처리량 달성 가능
-```
+> **Java 21 Virtual Thread**: 동기 블로킹 코드로 작성하지만 내부적으로 비동기처럼 동작 — 복잡한 리액티브 없이 높은 처리량 달성 가능
