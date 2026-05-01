@@ -49,22 +49,24 @@ body {
   justify-content: center;
   padding: 2em 2em;
   min-height: 60vh;
+  max-width: 100% !important;
 }
 
 .content-container {
-  width: 100%;
-  max-width: 1300px;
+  width: 100% !important;
+  max-width: 1400px !important;
 }
 
 /* 기존 MM 레이아웃 무력화 */
 #main {
-  max-width: 1300px;
-  margin: 0 auto;
-  padding: 0 2em;
+  max-width: 1400px !important;
+  margin: 0 auto !important;
+  padding: 0 2em !important;
+  width: 100% !important;
 }
 
 .sidebar { display: none !important; width: 0 !important; }
-.page { float: none !important; width: 100% !important; }
+.page { float: none !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; }
 
 /* ============================================
    Home Hero
@@ -253,7 +255,7 @@ body {
 
 /* 상세 페이지 content-container를 넓게 */
 .layout--single .content-container {
-  max-width: 1300px;
+  max-width: 1400px !important;
   display: flex;
   gap: 3em;
 }
