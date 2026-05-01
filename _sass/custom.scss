@@ -53,12 +53,12 @@ body {
 
 .content-container {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1300px;
 }
 
 /* 기존 MM 레이아웃 무력화 */
 #main {
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
   padding: 0 2em;
 }
@@ -253,7 +253,7 @@ body {
 
 /* 상세 페이지 content-container를 넓게 */
 .layout--single .content-container {
-  max-width: 1100px;
+  max-width: 1300px;
   display: flex;
   gap: 3em;
 }
@@ -261,7 +261,6 @@ body {
 .layout--single .page-body {
   flex: 1;
   min-width: 0;
-  max-width: 800px;
 }
 
 .layout--single .page-toc-right {
@@ -459,15 +458,15 @@ div.highlighter-rouge,
 figure.highlight {
   border-radius: 8px;
   border: 1px solid #e1e4e8;
-  background: #f6f8fa !important;
+  background: #1e1e1e !important;
   margin: 1.5em 0;
   font-size: 14px !important;
   overflow-x: auto;
 }
 
 pre.highlight {
-  background: #f6f8fa !important;
-  padding: 1.1em 1.3em !important;
+  background: #1e1e1e !important;
+  padding: 1.2em 1.5em !important;
   margin: 0;
 }
 
@@ -477,17 +476,17 @@ div.highlighter-rouge pre,
 div.highlighter-rouge code,
 figure.highlight pre,
 figure.highlight code {
-  color: #24292e !important;
-  background: #f6f8fa !important;
+  color: #d4d4d4 !important;
+  background: #1e1e1e !important;
 }
 
-.highlight .c, .highlight .c1, .highlight .cm { color: #6a737d !important; }
-.highlight .k, .highlight .kd, .highlight .kn, .highlight .kp, .highlight .kr { color: #d73a49 !important; }
-.highlight .s, .highlight .s1, .highlight .s2, .highlight .sb, .highlight .sc, .highlight .sd, .highlight .sh { color: #032f62 !important; }
-.highlight .n, .highlight .na, .highlight .nb, .highlight .nc, .highlight .nd, .highlight .ni, .highlight .ne, .highlight .nf { color: #6f42c1 !important; }
-.highlight .mi, .highlight .mf, .highlight .mh, .highlight .mo { color: #005cc5 !important; }
-.highlight .o, .highlight .p { color: #24292e !important; }
-.highlight .nt { color: #22863a !important; }
+.highlight .c, .highlight .c1, .highlight .cm { color: #6a9955 !important; }
+.highlight .k, .highlight .kd, .highlight .kn, .highlight .kp, .highlight .kr { color: #569cd6 !important; }
+.highlight .s, .highlight .s1, .highlight .s2, .highlight .sb, .highlight .sc, .highlight .sd, .highlight .sh { color: #ce9178 !important; }
+.highlight .n, .highlight .na, .highlight .nb, .highlight .nc, .highlight .nd, .highlight .ni, .highlight .ne, .highlight .nf { color: #dcdcaa !important; }
+.highlight .mi, .highlight .mf, .highlight .mh, .highlight .mo { color: #b5cea8 !important; }
+.highlight .o, .highlight .p { color: #d4d4d4 !important; }
+.highlight .nt { color: #4ec9b0 !important; }
 
 code.highlighter-rouge {
   background: #eff1f3 !important;
@@ -547,6 +546,16 @@ code.highlighter-rouge {
   font-size: 0.9em;
   line-height: 1.5;
   p { margin: 0; }
+}
+
+/* ============================================
+   Pagination
+   ============================================ */
+.pagination {
+  margin-top: 2em;
+  text-align: center;
+  display: flex;
+  justify-content: center;
 }
 
 /* ============================================
