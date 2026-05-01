@@ -1,10 +1,10 @@
 ---
-title: "Http"
+title: "JPA"
 layout: archive
-permalink: /categories/http/
+permalink: /categories/jpa/
 ---
 
-{% assign posts = site.categories["Http"] %}
+{% assign posts = site.categories["JPA"] %}
 {% for post in posts %}
   {% include archive-single.html %}
 {% endfor %}
