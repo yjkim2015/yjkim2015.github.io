@@ -1,7 +1,7 @@
 ---
 title: 추상화 수준에 맞는 예외를 던지라 - Effective Java[73]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

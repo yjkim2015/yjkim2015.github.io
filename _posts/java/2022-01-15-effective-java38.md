@@ -1,7 +1,7 @@
 ---
 title: 확장할 수 있는 열거 타입이 필요하면 인터페이스를 사용하라 - Effective Java[38]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

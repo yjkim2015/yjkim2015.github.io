@@ -1,7 +1,7 @@
 ---
 title: Serializable을 구현할지는 신중히 결정하라 - Effective Java[86]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

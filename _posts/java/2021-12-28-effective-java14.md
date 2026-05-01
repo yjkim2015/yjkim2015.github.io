@@ -1,7 +1,7 @@
 ---
 title: Comparable을 구현할지 고려하라. - Effective Java[14]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

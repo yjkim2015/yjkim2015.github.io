@@ -1,7 +1,7 @@
 ---
 title: 메서드가 던지는 모든 예외를 문서화하라 - Effective Java[74]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

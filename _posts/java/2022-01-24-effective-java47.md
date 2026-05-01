@@ -1,7 +1,7 @@
 ---
 title: 반환 타입으로는 스트림보다는 컬렉션이 낫다 - Effective Java[47]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

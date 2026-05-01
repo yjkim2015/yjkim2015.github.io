@@ -1,7 +1,7 @@
 ---
 title: 로(raw) 타입은 사용하지 말라 - Effective Java[26]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

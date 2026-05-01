@@ -1,7 +1,7 @@
 ---
 title: 커스텀 직렬화 형태를 고려해보라 - Effective Java[87]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

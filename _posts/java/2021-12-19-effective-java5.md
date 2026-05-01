@@ -1,7 +1,7 @@
 ---
 title: 자원을 직접 명시하지말고 의존 객체 주입을 사용하라. - Effective Java[5]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

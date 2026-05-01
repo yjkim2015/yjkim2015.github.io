@@ -1,7 +1,7 @@
 ---
 title: 추상 클래스보다는 인터페이스를 우선하라 - Effective Java[20]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

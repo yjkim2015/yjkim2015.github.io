@@ -1,7 +1,7 @@
 ---
 title: 필요 없는 검사 예외 사용은 피하라 - Effective Java[71]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

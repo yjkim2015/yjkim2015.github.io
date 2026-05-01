@@ -1,7 +1,7 @@
 ---
 title: 정의하려는 것이 타입이라면 마커 인터페이스를 사용하라 - Effective Java[41]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

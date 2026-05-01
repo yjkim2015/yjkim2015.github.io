@@ -1,7 +1,7 @@
 ---
 title: equals는 일반 규약을 지켜 재정의하라 - Effective Java[10]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

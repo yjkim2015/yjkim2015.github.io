@@ -1,7 +1,7 @@
 ---
 title: int 상수 대신 열거 타입을 사용하라 - Effective Java[34]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

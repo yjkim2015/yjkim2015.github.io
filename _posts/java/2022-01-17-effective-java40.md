@@ -1,7 +1,7 @@
 ---
 title: Override 애너테이션을 일관되게 사용하라 - Effective Java[40]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

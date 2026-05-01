@@ -1,7 +1,7 @@
 ---
 title: 정확한 답이 필요하다면 float와 double은 피하라 - Effective Java[60]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

@@ -1,7 +1,7 @@
 ---
 title: 불필요한 객체 생성을 피해라 - Effective Java[6]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

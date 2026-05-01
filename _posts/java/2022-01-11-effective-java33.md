@@ -1,7 +1,7 @@
 ---
 title: 타입 안전 이종 컨테이너를 고려하라 - Effective Java[33]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

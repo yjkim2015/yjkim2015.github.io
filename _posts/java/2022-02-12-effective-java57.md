@@ -1,7 +1,7 @@
 ---
 title: 지역변수의 범위를 최소화하라 - Effective Java[57]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

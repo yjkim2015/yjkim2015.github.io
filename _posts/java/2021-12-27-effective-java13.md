@@ -1,7 +1,7 @@
 ---
 title: clone 재정의는 주의해서 진행해라 - Effective Java[13]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

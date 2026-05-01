@@ -2,7 +2,7 @@
 
 title: SpringBoot [gradle] View 환경 설정
 categories:
-- Spring Boot
+- SPRING
 toc: true
 toc_sticky: true
 toc_label: 목차

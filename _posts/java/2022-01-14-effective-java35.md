@@ -1,7 +1,7 @@
 ---
 title: ordinal 메소드 대신 인스턴스 필드를 사용하라 - Effective Java[35]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

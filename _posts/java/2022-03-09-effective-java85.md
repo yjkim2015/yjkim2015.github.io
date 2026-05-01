@@ -1,7 +1,7 @@
 ---
 title: 자바 직렬화의 대안을 찾으라 - Effective Java[85]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

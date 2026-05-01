@@ -1,7 +1,7 @@
 ---
 title: 전통적인 for 문보다는 for-each 문을 사용하라 - Effective Java[58]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

@@ -1,7 +1,7 @@
 ---
 title: 제네릭과 가변인수를 함께 쓸 때는 신중하라 - Effective Java[32]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

@@ -1,7 +1,7 @@
 ---
 title: finalizer와 cleaner 사용을 피하라 - Effective Java[8]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

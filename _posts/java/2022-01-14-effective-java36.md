@@ -1,7 +1,7 @@
 ---
 title: 비트 필드 대신 EnumSet을 사용하라 - Effective Java[36]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

@@ -1,7 +1,7 @@
 ---
 title: 익명 클래스보다는 람다를 사용하라 - Effective Java[42]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

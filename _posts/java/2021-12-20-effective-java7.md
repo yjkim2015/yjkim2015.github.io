@@ -1,7 +1,7 @@
 ---
 title: 다 쓴 객체 참조를 해제하라 - Effective Java[7]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

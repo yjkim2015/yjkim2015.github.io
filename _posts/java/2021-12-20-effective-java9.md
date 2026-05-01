@@ -1,7 +1,7 @@
 ---
 title: try-finally보다는 try-with-resources를 사용하라 - Effective Java[9]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

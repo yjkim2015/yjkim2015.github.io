@@ -2,7 +2,7 @@
 
 title: SpringBoot [gradle] 프로젝트 구성
 categories:
-- Spring Boot
+- SPRING
 toc: true
 toc_sticky: true
 toc_label: 목차

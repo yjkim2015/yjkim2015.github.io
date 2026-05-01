@@ -1,7 +1,7 @@
 ---
 title: 인스턴스 수를 통제해야 한다면 readResolve보다는 열거 타입을 사용하라 - Effective Java[89]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

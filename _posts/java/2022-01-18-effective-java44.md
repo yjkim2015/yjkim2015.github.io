@@ -1,7 +1,7 @@
 ---
 title: 표준 함수형 인터페이스를 사용하라 - Effective Java[44]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

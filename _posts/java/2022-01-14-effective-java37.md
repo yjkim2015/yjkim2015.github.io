@@ -1,7 +1,7 @@
 ---
 title: ordinal 인덱싱 대신 EnumMap을 사용하라 - Effective Java[37]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

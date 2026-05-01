@@ -1,7 +1,7 @@
 ---
 title: 예외를 무시하지 말라 - Effective Java[77]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

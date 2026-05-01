@@ -1,7 +1,7 @@
 ---
 title: 다중정의는 신중히 사용하라 - Effective Java[52]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

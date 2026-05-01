@@ -2,7 +2,7 @@
 
 title: SpringBoot - 회원 관리 예제
 categories:
-- Spring Boot
+- SPRING
 toc: true
 toc_sticky: true
 toc_label: 목차

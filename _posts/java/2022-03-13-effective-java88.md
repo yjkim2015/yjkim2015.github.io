@@ -1,7 +1,7 @@
 ---
 title: readObject 메서드는 방어적으로 작성하라 - Effective Java[88]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

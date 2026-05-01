@@ -1,7 +1,7 @@
 ---
 title: 한정적 와일드카드를 사용해 API 유연성을 높여라 - Effective Java[31]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

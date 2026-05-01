@@ -1,7 +1,7 @@
 ---
 title: 프로그램의 동작을 스레드 스케줄러에 기대하지 말라 - Effective Java[84]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

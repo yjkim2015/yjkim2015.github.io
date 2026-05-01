@@ -1,7 +1,7 @@
 ---
 title: 리플렉션보다는 인터페이스를 사용하라 - Effective Java[65]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

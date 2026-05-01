@@ -1,7 +1,7 @@
 ---
 title: 예외의 상세 메시지에 실패 관련 정보를 담으라 - Effective Java[75]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

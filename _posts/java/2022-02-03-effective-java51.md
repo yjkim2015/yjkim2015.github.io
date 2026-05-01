@@ -1,7 +1,7 @@
 ---
 title: 메서드 시그니처를 신중히 설계하라 - Effective Java[51]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

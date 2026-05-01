@@ -1,7 +1,7 @@
 ---
 title: 직렬화된 인스턴스 대신 직렬화 프록시 사용을 검토하라 - Effective Java[90]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

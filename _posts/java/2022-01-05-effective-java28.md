@@ -1,7 +1,7 @@
 ---
 title: 배열보다는 리스트를 사용하라 - Effective Java[28]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

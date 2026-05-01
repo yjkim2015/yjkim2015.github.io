@@ -1,7 +1,7 @@
 ---
 title: 생성자에 매개변수가 많다면 빌더를 고려하라 - Effective Java[2]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

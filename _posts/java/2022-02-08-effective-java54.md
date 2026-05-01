@@ -1,7 +1,7 @@
 ---
 title: null이 아닌, 빈 컬렉션이나 배열을 반환하라 - Effective Java[54]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

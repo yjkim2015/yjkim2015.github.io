@@ -1,7 +1,7 @@
 ---
 title: 명명 패턴보다 애너테이션을 사용하라 - Effective Java[39]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

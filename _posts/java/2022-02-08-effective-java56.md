@@ -1,7 +1,7 @@
 ---
 title: 공개된 API 요소에는 항상 문서화 주석을 작성하라 - Effective Java[56]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

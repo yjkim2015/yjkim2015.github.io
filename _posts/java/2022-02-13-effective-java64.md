@@ -1,7 +1,7 @@
 ---
 title: 객체는 인터페이스를 사용해 참조하라 - Effective Java[64]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

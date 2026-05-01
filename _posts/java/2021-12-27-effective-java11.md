@@ -1,7 +1,7 @@
 ---
 title: equals를 재정의하려거든 hashCode도 재정의하라. - Effective Java[11]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

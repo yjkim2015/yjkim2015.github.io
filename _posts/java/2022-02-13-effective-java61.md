@@ -1,7 +1,7 @@
 ---
 title: 박싱된 기본 타입보다는 기본 타입을 사용하라 - Effective Java[61]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

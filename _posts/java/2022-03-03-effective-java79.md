@@ -1,7 +1,7 @@
 ---
 title: 과도한 동기화는 피하라 - Effective Java[79]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

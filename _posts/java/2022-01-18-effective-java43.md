@@ -1,7 +1,7 @@
 ---
 title: 람다보다는 메소드 참조를 사용하라 - Effective Java[43]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

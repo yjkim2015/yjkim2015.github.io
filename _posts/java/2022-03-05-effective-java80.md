@@ -1,7 +1,7 @@
 ---
 title: 스레드보다는 실행자, 태스크, 스트림을 애용하라- Effective Java[80]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

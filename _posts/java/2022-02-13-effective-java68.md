@@ -1,7 +1,7 @@
 ---
 title: 일반적으로 통용되는 명명 규칙을 따르라 - Effective Java[68]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

@@ -2,7 +2,7 @@
 
 title: SpringBoot - 정적 컨텐츠, MVC와 템플릿 엔진, API
 categories:
-- Spring Boot
+- SPRING
 toc: true
 toc_sticky: true
 toc_label: 목차

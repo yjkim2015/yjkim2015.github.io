@@ -1,7 +1,7 @@
 ---
 title: 라이브러리를 익히고 사용하라 - Effective Java[59]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

@@ -1,7 +1,7 @@
 ---
 title: wait와 notify보다는 동시성 유릴리티를 애용하라 - Effective Java[81]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

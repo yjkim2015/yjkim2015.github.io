@@ -1,7 +1,7 @@
 ---
 title: toString을 항상 재정의하라 - Effective Java[12]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

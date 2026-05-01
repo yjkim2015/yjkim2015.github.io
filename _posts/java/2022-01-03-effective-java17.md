@@ -1,7 +1,7 @@
 ---
 title: 변경 가능성을 최소화하라 - Effective Java[17]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

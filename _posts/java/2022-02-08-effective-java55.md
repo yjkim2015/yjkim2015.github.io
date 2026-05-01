@@ -1,7 +1,7 @@
 ---
 title: 옵셔널 반환은 신중히하라 - Effective Java[55]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

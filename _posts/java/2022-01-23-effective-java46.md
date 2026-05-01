@@ -1,7 +1,7 @@
 ---
 title: 스트림에서는 부작용 없는 함수를 사용하라 - Effective Java[46]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

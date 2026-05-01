@@ -1,7 +1,7 @@
 ---
 title: 표준 예외를 사용하라 - Effective Java[72]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

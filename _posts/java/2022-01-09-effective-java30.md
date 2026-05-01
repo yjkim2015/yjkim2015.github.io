@@ -1,7 +1,7 @@
 ---
 title: 이왕이면 제네릭 메소드로 만들라 - Effective Java[30]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

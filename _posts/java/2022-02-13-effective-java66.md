@@ -1,7 +1,7 @@
 ---
 title: 네이티브 메서드는 신중히 사용하라 - Effective Java[66]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

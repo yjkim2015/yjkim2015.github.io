@@ -1,7 +1,7 @@
 ---
 title: 예외는 진짜 예외 상황에만 사용하라 - Effective Java[69]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

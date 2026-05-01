@@ -1,7 +1,7 @@
 ---
 title: 비검사 경고를 제거하라 - Effective Java[27]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

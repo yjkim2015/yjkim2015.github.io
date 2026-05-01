@@ -1,7 +1,7 @@
 ---
 title: 공유 중인 가변 데이터는 동기화해 사용하라 - Effective Java[78]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

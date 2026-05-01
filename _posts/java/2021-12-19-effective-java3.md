@@ -1,7 +1,7 @@
 ---
 title: private 생성자나 열거 타입으로 싱글턴임을 보증하라 - Effective Java[3]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

@@ -1,7 +1,7 @@
 ---
 title: 상속보다는 컴포지션을 사용하라. - Effective Java[18]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

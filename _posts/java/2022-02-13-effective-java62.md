@@ -1,7 +1,7 @@
 ---
 title: 다른 타입이 적절하다면 문자열 사용을 피하라 - Effective Java[62]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

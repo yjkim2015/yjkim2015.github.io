@@ -1,7 +1,7 @@
 ---
 title: 쓰레드 안전성 수준을 문서화하라 - Effective Java[82]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

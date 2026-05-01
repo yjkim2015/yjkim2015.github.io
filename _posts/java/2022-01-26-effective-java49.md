@@ -1,7 +1,7 @@
 ---
 title: 매개변수가 유효한지 검사하라 - Effective Java[49]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

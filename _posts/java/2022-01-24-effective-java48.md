@@ -1,7 +1,7 @@
 ---
 title: 스트림 병렬화는 주의해서 적용하라 - Effective Java[48]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

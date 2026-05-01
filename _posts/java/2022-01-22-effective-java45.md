@@ -1,7 +1,7 @@
 ---
 title: 스트림은 주의해서 사용하라 - Effective Java[45]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

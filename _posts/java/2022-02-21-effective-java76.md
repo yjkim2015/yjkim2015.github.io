@@ -1,7 +1,7 @@
 ---
 title: 가능한 한 실패 원자적으로 만들라 - Effective Java[76]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차

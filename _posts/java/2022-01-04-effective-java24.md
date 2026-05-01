@@ -1,7 +1,7 @@
 ---
 title: 멤버 클래스는 되도록 static으로 만들라 - Effective Java[24]
 categories:
-- Java
+- EFFECTIVE_JAVA
 toc: true
 toc_sticky: true
 toc_label: 목차
