@@ -121,55 +121,48 @@ body {
 
 /* --- Home Categories Grid --- */
 .home-categories {
-  margin-bottom: 2em;
-}
-
-.home-categories__title {
-  font-size: 1.1em;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin-bottom: 1em;
-  padding-bottom: 0.5em;
-  border-bottom: 2px solid #1a8917;
-  display: inline-block;
+  max-width: 700px;
+  margin: 0 auto 2em;
 }
 
 .home-categories__grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6em;
+  justify-content: center;
+  gap: 0.5em;
 }
 
 .category-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.4em;
-  padding: 0.45em 1em;
-  border: 1px solid #e0e0e0;
-  border-radius: 20px;
+  gap: 0.35em;
+  padding: 0.4em 0.9em;
+  background: #f6f8fa;
+  border: 1px solid transparent;
+  border-radius: 6px;
   text-decoration: none !important;
   transition: all 0.2s;
-  font-size: 0.85em;
+  font-size: 0.82em;
 
   &:hover {
     background: #1a8917;
-    border-color: #1a8917;
     .category-chip__name { color: #fff !important; }
-    .category-chip__count { color: rgba(255,255,255,0.8) !important; background: rgba(255,255,255,0.2); }
+    .category-chip__count { color: rgba(255,255,255,0.7) !important; }
   }
 }
 
 .category-chip__name {
   font-weight: 600;
-  color: #333 !important;
+  color: #444 !important;
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.3px;
 }
 
 .category-chip__count {
-  font-size: 0.8em;
-  color: #999 !important;
-  background: #f0f0f0;
-  padding: 0.1em 0.5em;
-  border-radius: 10px;
+  font-size: 0.78em;
+  color: #aaa !important;
+  font-weight: 400;
 }
 
 .home-divider {
