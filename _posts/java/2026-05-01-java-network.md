@@ -1,5 +1,5 @@
 ---
-title: "Java 네트워크 프로그래밍 완전 정리"
+title: "Java 네트워크 프로그래밍"
 categories:
 - JAVA
 toc: true

@@ -1,5 +1,5 @@
 ---
-title: "MDC(Mapped Diagnostic Context) 완전 정리 — 분산 환경 로그 추적"
+title: "MDC(Mapped Diagnostic Context) — 분산 환경 로그 추적"
 categories:
 - SPRING
 toc: true

@@ -1,5 +1,5 @@
 ---
-title: "Spring WebFlux 완전 정리 — 리액티브 프로그래밍 딥다이브"
+title: "Spring WebFlux — 리액티브 프로그래밍"
 categories:
 - SPRING
 toc: true

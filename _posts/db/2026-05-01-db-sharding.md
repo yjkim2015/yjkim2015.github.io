@@ -1,5 +1,5 @@
 ---
-title: "데이터베이스 샤딩 완전 정리"
+title: "데이터베이스 샤딩"
 categories:
 - DB
 toc: true

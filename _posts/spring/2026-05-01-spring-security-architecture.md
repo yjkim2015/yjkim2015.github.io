@@ -1,5 +1,5 @@
 ---
-title: "Spring Security 아키텍처 완전 정리"
+title: "Spring Security 아키텍처"
 categories:
 - SPRING
 toc: true

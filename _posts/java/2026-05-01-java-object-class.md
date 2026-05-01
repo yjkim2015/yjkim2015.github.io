@@ -1,5 +1,5 @@
 ---
-title: "Java Object 클래스 완전 정리"
+title: "Java Object 클래스"
 categories:
 - JAVA
 toc: true

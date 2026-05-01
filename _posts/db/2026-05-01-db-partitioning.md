@@ -1,5 +1,5 @@
 ---
-title: "데이터베이스 파티셔닝 완전 정리"
+title: "데이터베이스 파티셔닝"
 categories:
 - DB
 toc: true

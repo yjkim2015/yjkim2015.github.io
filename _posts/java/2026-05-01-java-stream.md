@@ -1,5 +1,5 @@
 ---
-title: "Java 스트림(Stream) API 완전 정리"
+title: "Java 스트림(Stream) API"
 categories:
 - JAVA
 toc: true

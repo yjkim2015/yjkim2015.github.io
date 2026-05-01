@@ -1,5 +1,5 @@
 ---
-title: "Java 날짜와 시간 API 완전 정리 (java.time)"
+title: "Java 날짜와 시간 API (java.time)"
 categories:
 - JAVA
 toc: true

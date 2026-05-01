@@ -1,5 +1,5 @@
 ---
-title: "Java 예외 처리 완전 정리"
+title: "Java 예외 처리"
 categories:
 - JAVA
 toc: true

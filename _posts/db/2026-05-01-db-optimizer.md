@@ -1,5 +1,5 @@
 ---
-title: "MySQL 옵티마이저 동작 원리 완전 정리"
+title: "MySQL 옵티마이저 동작 원리"
 categories:
 - DB
 toc: true

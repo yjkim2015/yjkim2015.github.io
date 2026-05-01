@@ -1,5 +1,5 @@
 ---
-title: "Java 가비지 컬렉터(GC) 완전 정리"
+title: "Java 가비지 컬렉터(GC)"
 categories:
 - JAVA
 toc: true

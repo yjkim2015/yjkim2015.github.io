@@ -1,5 +1,5 @@
 ---
-title: "Java 리플렉션(Reflection) 완전 정리"
+title: "Java 리플렉션(Reflection)"
 categories:
 - JAVA
 toc: true

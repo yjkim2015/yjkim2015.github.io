@@ -1,5 +1,5 @@
 ---
-title: "Java 컬렉션 프레임워크 완전 정리"
+title: "Java 컬렉션 프레임워크"
 categories:
 - JAVA
 toc: true

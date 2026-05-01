@@ -1,5 +1,5 @@
 ---
-title: "Java Virtual Thread(가상 스레드) 완전 정리"
+title: "Java Virtual Thread(가상 스레드)"
 categories:
 - JAVA
 toc: true

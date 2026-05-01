@@ -1,5 +1,5 @@
 ---
-title: "Java 람다(Lambda) 표현식 완전 정리"
+title: "Java 람다(Lambda) 표현식"
 categories:
 - JAVA
 toc: true

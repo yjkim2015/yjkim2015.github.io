@@ -1,5 +1,5 @@
 ---
-title: "Java 래퍼 클래스와 오토박싱 완전 정리"
+title: "Java 래퍼 클래스와 오토박싱"
 categories:
 - JAVA
 toc: true

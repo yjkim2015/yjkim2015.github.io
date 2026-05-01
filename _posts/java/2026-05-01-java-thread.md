@@ -1,5 +1,5 @@
 ---
-title: "Java 스레드(Thread) 완전 정리 — 동시성 프로그래밍 딥다이브"
+title: "Java 스레드(Thread) — 동시성 프로그래밍"
 categories:
 - JAVA
 toc: true

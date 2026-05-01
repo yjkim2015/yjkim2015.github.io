@@ -1,5 +1,5 @@
 ---
-title: "Java 제네릭(Generics) 완전 정리"
+title: "Java 제네릭(Generics)"
 categories:
 - JAVA
 toc: true

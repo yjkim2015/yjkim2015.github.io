@@ -1,5 +1,5 @@
 ---
-title: "Java ThreadLocal 완전 정리 — 동작 원리부터 메모리 누수까지"
+title: "Java ThreadLocal — 동작 원리부터 메모리 누수까지"
 categories:
 - JAVA
 toc: true
