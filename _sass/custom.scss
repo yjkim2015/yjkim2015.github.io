@@ -553,11 +553,20 @@ code.highlighter-rouge {
 /* ============================================
    Pagination
    ============================================ */
-.pagination {
-  margin-top: 2em;
-  text-align: center;
-  display: flex;
-  justify-content: center;
+.pagination,
+.paginator,
+nav.pagination {
+  margin-top: 2em !important;
+  text-align: center !important;
+  display: flex !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+.pagination .page_number,
+.pagination a,
+.paginator a {
+  display: inline-block;
 }
 
 /* ============================================

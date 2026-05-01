@@ -11,12 +11,14 @@ toc_label: 목차
 
 Redis 복제는 **마스터(Master)** 노드의 데이터를 하나 이상의 **레플리카(Replica)** 노드에 실시간으로 복사하는 기능이다.
 
-```
-       쓰기/읽기             읽기 전용
-Client ──────→ [Master] ──→ [Replica 1]
-                        ──→ [Replica 2]
-                        ──→ [Replica 3]
-```
+<div class="mermaid">
+graph LR
+    C[Client]
+    C -->|쓰기/읽기| M[Master]
+    M -->|복제 읽기 전용| R1[Replica 1]
+    M -->|복제 읽기 전용| R2[Replica 2]
+    M -->|복제 읽기 전용| R3[Replica 3]
+</div>
 
 ### 목적
 
