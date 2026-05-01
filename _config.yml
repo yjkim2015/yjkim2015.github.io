@@ -27,7 +27,7 @@ repository               : # GitHub username/repo-name e.g. "mmistakes/minimal-m
 teaser                   : # path of fallback teaser image, e.g. "/assets/images/500x300.png"
 logo                     : # path of logo image to display in the masthead, e.g. "/assets/images/88x88.png"
 masthead_title           : "YJ Kim Devlog"
-breadcrumbs              : true # true, false (default)
+breadcrumbs              : false # true, false (default)
 words_per_minute         : 200
 comments:
   provider               : "disqus" # false (default), "disqus", "discourse", "facebook", "staticman", "staticman_v2", "utterances", "custom"
@@ -180,7 +180,7 @@ sass:
 
 # Outputting
 permalink: /:categories/:title/
-paginate: 20 # amount of posts to show
+paginate: 10 # amount of posts to show
 paginate_path: /page:num/
 timezone: # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 
@@ -246,10 +246,10 @@ defaults:
       type: posts
     values:
       layout: single
-      author_profile: true
+      author_profile: false
       read_time: true
-      comments: true
-      share: true
+      comments: false
+      share: false
       related: true
 
   # _pages
@@ -258,6 +258,6 @@ defaults:
       type: pages
     values:
       layout: single
-      author_profile: true
+      author_profile: false
       
 category_list: [ JAVA, HTTP, SECURITY, SPRING, NEWS ]

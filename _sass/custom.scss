@@ -1,74 +1,332 @@
-/* Pretendard 폰트 적용 */
+/* ================================================
+   Medium / Brunch Style — Typography-first Design
+   ================================================ */
+
+/* --- Global --- */
 body {
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.75;
-  background-color: #fafafa;
+  line-height: 1.8;
+  background-color: #fff;
+  color: #292929;
 }
 
-/* 본문 가독성 최적화 */
-.page__content {
-  font-size: 1.05em;
+/* --- Masthead (top nav) --- */
+.masthead {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background: #fff;
 
-  p, li, dl {
-    max-width: 720px;
+  .masthead__inner-wrap {
+    max-width: 780px;
+    margin: 0 auto;
   }
 }
 
-/* 카드형 아카이브 아이템 */
-.archive__item {
-  border-radius: 12px;
-  padding: 20px;
-  background: #fff;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  margin-bottom: 1em;
+.site-title {
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.greedy-nav a {
+  color: #292929;
 
   &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    color: #1a8917;
+  }
+}
+
+.greedy-nav .visible-links a:before {
+  background: #1a8917;
+}
+
+/* --- Page width — Medium-style narrow column --- */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 1.5em;
+  float: none !important;
+  width: 100% !important;
+}
+
+#main {
+  max-width: 720px;
+  margin: 0 auto;
+
+  .page__content {
+    max-width: 100%;
+  }
+}
+
+.archive {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* --- Sidebar 숨김 (Medium 스타일) --- */
+.sidebar {
+  display: none !important;
+}
+
+/* full width when no sidebar */
+.page {
+  @at-root .layout--single & ,
+  .layout--home & {
+    width: 100% !important;
+  }
+}
+
+/* --- Typography --- */
+.page__content {
+  font-size: 1.1em;
+  line-height: 1.85;
+
+  p {
+    margin-bottom: 1.6em;
+    word-break: keep-all;
+  }
+
+  h1, h2, h3, h4 {
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin-top: 2.2em;
+    margin-bottom: 0.6em;
+    color: #1a1a1a;
+  }
+
+  h1 { font-size: 2em; }
+  h2 {
+    font-size: 1.55em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  h3 { font-size: 1.25em; }
+
+  a {
+    color: #1a8917;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+
+    &:hover {
+      border-bottom-color: #1a8917;
+    }
+  }
+
+  blockquote {
+    border-left: 3px solid #1a8917;
+    padding-left: 1.2em;
+    color: #555;
+    font-style: normal;
+    margin: 1.8em 0;
+  }
+
+  ul, ol {
+    margin-bottom: 1.6em;
+  }
+
+  li {
+    margin-bottom: 0.4em;
+  }
+}
+
+/* --- Code blocks --- */
+div.highlighter-rouge,
+figure.highlight {
+  border-radius: 6px;
+  border: none;
+  background: #f7f7f7;
+  margin: 1.8em 0;
+}
+
+code.highlighter-rouge {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.88em;
+  color: #e74c3c;
+}
+
+/* --- Home hero (Medium landing) --- */
+.home-hero {
+  text-align: center;
+  padding: 4em 1em 2em;
+  max-width: 600px;
+  margin: 0 auto;
+
+  h1 {
+    font-size: 2.8em;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 0.15em;
+    color: #1a1a1a;
+  }
+
+  &__subtitle {
+    font-size: 1.3em;
+    color: #1a8917;
+    font-weight: 600;
+    margin-bottom: 0.5em;
+  }
+
+  &__desc {
+    font-size: 1.1em;
+    color: #757575;
+    line-height: 1.6;
+    margin-bottom: 1.5em;
+  }
+
+  &__links {
+    display: flex;
+    justify-content: center;
+    gap: 1.5em;
+
+    a {
+      color: #292929;
+      font-size: 0.95em;
+      font-weight: 500;
+      text-decoration: none;
+      padding: 0.5em 1.2em;
+      border: 1px solid #e0e0e0;
+      border-radius: 20px;
+      transition: all 0.2s;
+
+      &:hover {
+        background: #1a8917;
+        color: #fff;
+        border-color: #1a8917;
+      }
+    }
+  }
+}
+
+.home-divider {
+  max-width: 720px;
+  margin: 0 auto 2em;
+  border: none;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* --- Post list (Medium style) --- */
+.archive__item {
+  border-radius: 0;
+  padding: 1.8em 0;
+  background: transparent;
+  box-shadow: none;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 0;
+  transition: none;
+
+  &:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  &:last-child {
+    border-bottom: none;
   }
 }
 
 .archive__item-title {
+  font-size: 1.35em;
   font-weight: 700;
+  letter-spacing: -0.3px;
   margin-top: 0;
-}
+  margin-bottom: 0.3em;
+  line-height: 1.35;
 
-/* 코드 블록 */
-div.highlighter-rouge,
-figure.highlight {
-  border-radius: 10px;
-  border: 1px solid #e8e8e8;
-}
+  a {
+    color: #292929;
+    text-decoration: none;
 
-/* 홈 인트로 */
-.home-intro {
-  text-align: center;
-  padding: 2em 0 1em;
-
-  h2 {
-    font-weight: 700;
-    font-size: 1.6em;
-    margin-bottom: 0.3em;
-  }
-
-  p {
-    color: #666;
-    font-size: 1.1em;
+    &:hover {
+      color: #1a8917;
+    }
   }
 }
 
-/* masthead 깔끔하게 */
-.masthead {
-  border-bottom: 1px solid #f0f0f0;
+.archive__item-excerpt {
+  color: #757575;
+  font-size: 0.95em;
+  line-height: 1.55;
+  margin-bottom: 0.5em;
 }
 
-/* 제목 스타일 */
+.page__meta {
+  color: #b0b0b0;
+  font-size: 0.82em;
+}
+
+/* --- Post page (single) --- */
 .page__title {
+  font-size: 2.2em;
   font-weight: 800;
+  letter-spacing: -0.8px;
+  line-height: 1.25;
+  margin-bottom: 0.3em;
 }
 
-/* 사이드바 */
-.sidebar .author__name {
-  font-weight: 700;
+.page__meta {
+  margin-bottom: 2em;
+}
+
+/* --- Footer (minimal) --- */
+.page__footer {
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
+  color: #b0b0b0;
+
+  footer {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  a {
+    color: #757575;
+
+    &:hover {
+      color: #1a8917;
+    }
+  }
+}
+
+/* --- Pagination --- */
+.pagination {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* --- Navigation links --- */
+.nav__list .nav__items a {
+  color: #292929;
+
+  &:hover {
+    color: #1a8917;
+  }
+}
+
+/* --- Breadcrumbs 숨김 --- */
+.breadcrumbs {
+  display: none;
+}
+
+/* --- Related posts --- */
+.page__related {
+  max-width: 720px;
+  margin: 0 auto;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 2em;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  .home-hero h1 {
+    font-size: 2em;
+  }
+
+  .page__title {
+    font-size: 1.7em;
+  }
+
+  .page__content {
+    font-size: 1em;
+  }
 }
