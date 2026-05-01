@@ -1,5 +1,5 @@
 ---
-title: "Spring 트랜잭션 관리 완전 정리"
+title: "Spring 트랜잭션"
 categories:
 - SPRING
 toc: true
@@ -560,3 +560,227 @@ class OrderServiceTest {
 | Checked 예외 | 기본 커밋 (rollbackFor 설정 필요) |
 | Self-invocation | 프록시 우회 → TX 미적용 |
 | private 메서드 | AOP 미적용 → TX 동작 안 함 |
+
+---
+
+## 극한 시나리오
+
+실무에서 만나는 트랜잭션 지옥을 모두 정리한다.
+
+### 시나리오 1: REQUIRES_NEW 중첩 — 부모 롤백 시 자식은?
+
+```java
+@Transactional
+public void parentMethod() {
+    orderRepository.save(order);        // 1. 저장
+    childService.childMethod();         // 2. REQUIRES_NEW
+    throw new RuntimeException("부모 실패"); // 3. 예외
+}
+
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public void childMethod() {
+    paymentRepository.save(payment);    // 별도 트랜잭션
+}
+```
+
+**결과**:
+- 부모(order): 롤백
+- 자식(payment): **커밋됨** (별도 커넥션이므로)
+- 비유: 부모가 이혼해도 성인 자녀의 재산은 영향 없음
+
+**위험**: 주문은 취소됐는데 결제는 된 상태 → 보상 트랜잭션 필요
+
+### 시나리오 2: REQUIRES_NEW 중첩 — 자식 예외를 부모가 잡으면?
+
+```java
+@Transactional
+public void parentMethod() {
+    orderRepository.save(order);
+    try {
+        childService.childMethod(); // REQUIRES_NEW, 예외 발생
+    } catch (Exception e) {
+        log.warn("자식 실패, 무시하고 계속");
+    }
+    // 부모는 계속 진행
+}
+```
+
+**결과**:
+- 자식: 롤백
+- 부모: **정상 커밋** (예외를 잡았으므로)
+- 주문은 성공, 결제만 실패 → 이것도 정합성 문제
+
+### 시나리오 3: REQUIRED 중첩 — 자식에서 예외 터지면?
+
+```java
+@Transactional  // REQUIRED (기본)
+public void parentMethod() {
+    orderRepository.save(order);
+    try {
+        childService.childMethod(); // REQUIRED → 같은 트랜잭션
+    } catch (Exception e) {
+        log.warn("잡았으니 괜찮겠지?");
+    }
+    // 여기 도달해도...
+}
+
+@Transactional  // REQUIRED → 부모 트랜잭션 참여
+public void childMethod() {
+    throw new RuntimeException("자식 폭탄");
+}
+```
+
+**결과**: `UnexpectedRollbackException` 발생!
+- 자식이 같은 트랜잭션에 rollback-only 마킹
+- 부모가 catch 해도 **이미 트랜잭션은 오염됨**
+- 커밋 시점에 `UnexpectedRollbackException` 터짐
+- 비유: 한 명이라도 코로나 걸리면 같은 방 사람 전원 격리
+- **가장 흔한 실수** — catch로 해결 안 됨
+
+### 시나리오 4: Self-Invocation — @Transactional이 안 먹히는 경우
+
+```java
+@Service
+public class OrderService {
+
+    public void process() {
+        this.saveOrder(); // self-invocation!
+    }
+
+    @Transactional
+    public void saveOrder() {
+        orderRepository.save(order);
+        // 트랜잭션 없이 실행됨!
+    }
+}
+```
+
+**원인**: `this.saveOrder()`는 프록시를 거치지 않고 직접 호출
+**해결**:
+1. 별도 서비스로 분리
+2. `AopContext.currentProxy()` 사용 (비권장)
+3. TransactionTemplate 직접 사용
+
+### 시나리오 5: Checked Exception — 롤백 안 되는 함정
+
+```java
+@Transactional
+public void transfer() throws InsufficientFundsException {
+    accountRepository.debit(fromAccount, amount);
+
+    if (balance < 0) {
+        throw new InsufficientFundsException(); // Checked!
+    }
+
+    accountRepository.credit(toAccount, amount);
+}
+```
+
+**결과**: debit은 **커밋됨**! Checked Exception은 기본적으로 롤백 안 함
+**해결**: `@Transactional(rollbackFor = Exception.class)`
+
+### 시나리오 6: 긴 트랜잭션 — DB 커넥션 고갈
+
+```java
+@Transactional
+public void heavyProcess() {
+    List<Order> orders = orderRepository.findAll(); // 10만 건
+
+    for (Order order : orders) {
+        externalApiClient.call(order); // 외부 API 호출 (1초)
+        order.setStatus("PROCESSED");
+    }
+    // 10만 초 = 27시간 동안 커넥션 점유!
+}
+```
+
+**증상**: 커넥션 풀 고갈 → 다른 요청 전부 타임아웃
+- 비유: 화장실 1개인데 1명이 27시간 점유
+
+**해결**:
+- 외부 API 호출은 트랜잭션 밖으로
+- 배치 단위로 쪼개기 (100건씩)
+- `@Transactional` 범위 최소화
+
+### 시나리오 7: 동시성 — 같은 데이터 동시 수정
+
+```java
+@Transactional
+public void purchase(Long productId) {
+    Product product = productRepository.findById(productId);
+
+    if (product.getStock() > 0) {
+        product.decreaseStock(); // stock = stock - 1
+        orderRepository.save(new Order(product));
+    }
+}
+```
+
+**문제**: 2명이 동시에 재고 1인 상품 구매 → 둘 다 `stock > 0` 통과 → 재고 -1
+**해결**:
+- 비관적 락: `@Lock(PESSIMISTIC_WRITE)` + `findById`
+- 낙관적 락: `@Version` 필드
+- Redis 분산 락
+- DB 유니크 제약 조건
+
+### 시나리오 8: 트랜잭션 + 이벤트 발행 — 순서 문제
+
+```java
+@Transactional
+public void createOrder(OrderRequest request) {
+    Order order = orderRepository.save(new Order(request));
+    eventPublisher.publish(new OrderCreatedEvent(order.getId()));
+    // 이벤트는 발행됐는데... 아직 커밋 안 됨!
+}
+```
+
+**문제**: 이벤트 수신자가 DB 조회 시 → 아직 커밋 전이라 데이터 없음
+**해결**: `@TransactionalEventListener(phase = AFTER_COMMIT)`
+
+### 시나리오 9: readOnly = true인데 쓰기가 되는 경우
+
+```java
+@Transactional(readOnly = true)
+public void report() {
+    User user = userRepository.findById(1L);
+    user.setName("변경됨"); // Dirty Checking으로 UPDATE 실행될까?
+}
+```
+
+**결과**: DB에 따라 다름
+- Hibernate + MySQL: flush 모드가 MANUAL이라 **쓰기 안 됨** (안전)
+- 하지만 네이티브 쿼리로 INSERT/UPDATE 직접 실행하면 **실행됨**
+- `readOnly`는 힌트일 뿐, 강제 제약이 아님
+
+### 시나리오 10: 다중 DataSource — 어느 트랜잭션 매니저?
+
+```java
+@Transactional("orderTransactionManager")
+public void processOrder() {
+    orderRepository.save(order); // orderDB
+
+    // paymentDB의 데이터도 변경하고 싶다면?
+    paymentRepository.save(payment); // 다른 DB!
+}
+```
+
+**문제**: 하나의 `@Transactional`로 2개 DB를 원자적으로 처리 불가
+**해결**:
+- JTA (XA 2PC) — 성능 저하
+- Saga 패턴 — 보상 트랜잭션
+- Outbox 패턴 — 이벤트 기반
+
+---
+
+## 트랜잭션 체크리스트
+
+| 체크 항목 | 확인 |
+|-----------|------|
+| `@Transactional` 범위가 최소한인가? | |
+| 외부 API/파일 I/O가 트랜잭션 안에 있지는 않은가? | |
+| Checked Exception에 `rollbackFor` 설정했는가? | |
+| Self-invocation 하고 있지는 않은가? | |
+| `readOnly = true` 적절히 사용하고 있는가? | |
+| REQUIRES_NEW 사용 시 보상 로직이 있는가? | |
+| 동시성 이슈에 대한 락 전략이 있는가? | |
+| 이벤트 발행은 AFTER_COMMIT으로 하고 있는가? | |
