@@ -260,4 +260,4 @@ defaults:
       layout: single
       author_profile: false
       
-category_list: [ JAVA, HTTP, SECURITY, SPRING, NEWS ]
+category_list: [ JAVA, HTTP, SECURITY, SPRING, REDIS, KAFKA, LOCAL_CACHE, DB, NOSQL, NEWS ]
