@@ -4,3 +4,27 @@
 
 <!-- end custom head snippets -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        mermaid.initialize({
+          startOnLoad: true,
+          theme: 'default',
+          themeVariables: {
+            primaryColor: '#e8f5e9',
+            primaryBorderColor: '#1a8917',
+            primaryTextColor: '#1a1a1a',
+            lineColor: '#666',
+            secondaryColor: '#f3e5f5',
+            tertiaryColor: '#e3f2fd',
+            fontSize: '14px'
+          }
+        });
+      });
+    </script>
+    <style>
+      .mermaid {
+        text-align: center;
+        margin: 1.5em 0;
+      }
+    </style>
