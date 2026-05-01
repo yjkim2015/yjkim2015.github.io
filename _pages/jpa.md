@@ -8,9 +8,11 @@ permalink: /categories/jpa/
   <div class="content-container">
     <h1 class="category-page__title">JPA</h1>
 
-    {% assign posts = site.categories["JPA"] %}
-    {% for post in posts %}
-      {% include archive-single.html %}
-    {% endfor %}
+    <div class="posts-grid">
+      {% assign posts = site.categories["JPA"] %}
+      {% for post in posts %}
+        {% include archive-single.html type="card" %}
+      {% endfor %}
+    </div>
   </div>
 </div>

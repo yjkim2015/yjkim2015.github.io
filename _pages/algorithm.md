@@ -8,9 +8,11 @@ permalink: /categories/algorithm/
   <div class="content-container">
     <h1 class="category-page__title">Algorithm</h1>
 
-    {% assign posts = site.categories["Algorithm"] %}
-    {% for post in posts %}
-      {% include archive-single.html %}
-    {% endfor %}
+    <div class="posts-grid">
+      {% assign posts = site.categories["Algorithm"] %}
+      {% for post in posts %}
+        {% include archive-single.html type="card" %}
+      {% endfor %}
+    </div>
   </div>
 </div>
