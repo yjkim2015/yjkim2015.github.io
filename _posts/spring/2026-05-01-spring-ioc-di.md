@@ -49,12 +49,12 @@ Spring IoC 컨테이너는 **Bean Definition**을 읽어서 Bean을 생성하고
 
 <div class="mermaid">
 graph TD
-    A["Configuration 읽기<br/>@Configuration+@Bean<br/>@ComponentScan+@Component<br/>XML legacy"] --> B["BeanDefinition 생성<br/>클래스 정보, 스코프, 의존성 정보"]
-    B --> C["Bean 인스턴스 생성<br/>생성자 호출"]
-    C --> D["의존성 주입<br/>생성자/세터/필드 주입"]
-    D --> E["초기화 콜백<br/>@PostConstruct, InitializingBean"]
+    A["Configuration 읽기<br>@Configuration+@Bean<br>@ComponentScan+@Component<br>XML legacy"] --> B["BeanDefinition 생성<br>클래스 정보, 스코프, 의존성 정보"]
+    B --> C["Bean 인스턴스 생성<br>생성자 호출"]
+    C --> D["의존성 주입<br>생성자/세터/필드 주입"]
+    D --> E["초기화 콜백<br>@PostConstruct, InitializingBean"]
     E --> F["Bean 사용"]
-    F --> G["소멸 콜백<br/>@PreDestroy, DisposableBean"]
+    F --> G["소멸 콜백<br>@PreDestroy, DisposableBean"]
 
     style A fill:#e8f4f8
     style F fill:#e8f8e8
@@ -129,11 +129,11 @@ ApplicationContext
 <div class="mermaid">
 graph TD
     S([Spring Container 시작]) --> A
-    A["[1] Bean 인스턴스 생성<br/>기본 생성자 또는 @Bean 팩토리 메서드 호출"]
-    A --> B["[2] 의존성 주입 DI<br/>생성자 주입은 1단계에서 동시 처리<br/>세터/필드 주입은 이 단계에서 처리"]
-    B --> C["[3] 초기화 콜백<br/>@PostConstruct<br/>InitializingBean.afterPropertiesSet()<br/>@Bean(initMethod='init')"]
+    A["[1] Bean 인스턴스 생성<br>기본 생성자 또는 @Bean 팩토리 메서드 호출"]
+    A --> B["[2] 의존성 주입 DI<br>생성자 주입은 1단계에서 동시 처리<br>세터/필드 주입은 이 단계에서 처리"]
+    B --> C["[3] 초기화 콜백<br>@PostConstruct<br>InitializingBean.afterPropertiesSet()<br>@Bean(initMethod='init')"]
     C --> D["[4] Bean 사용 (애플리케이션 동작)"]
-    D --> E["[5] 소멸 콜백 (Container 종료 시)<br/>@PreDestroy<br/>DisposableBean.destroy()<br/>@Bean(destroyMethod='close')"]
+    D --> E["[5] 소멸 콜백 (Container 종료 시)<br>@PreDestroy<br>DisposableBean.destroy()<br>@Bean(destroyMethod='close')"]
     E --> END([Spring Container 종료])
 </div>
 
@@ -363,10 +363,10 @@ class OrderServiceTest {
 
 <div class="mermaid">
 graph TD
-    A["1. 타입Type으로 매칭 시도<br/>ApplicationContext에서 해당 타입의 Bean 검색"] --> B{타입 매칭 Bean이 2개 이상?}
-    B -->|"@Qualifier 있음"| C["@Qualifier 확인<br/>@Qualifier('mainDiscountPolicy') Bean 선택"]
-    B -->|"@Primary 있음"| D["@Primary 확인<br/>@Primary가 붙은 Bean 선택"]
-    B -->|"그 외"| E["필드명/파라미터명으로 매칭<br/>변수명과 일치하는 Bean ID 선택"]
+    A["1. 타입Type으로 매칭 시도<br>ApplicationContext에서 해당 타입의 Bean 검색"] --> B{타입 매칭 Bean이 2개 이상?}
+    B -->|"@Qualifier 있음"| C["@Qualifier 확인<br>@Qualifier('mainDiscountPolicy') Bean 선택"]
+    B -->|"@Primary 있음"| D["@Primary 확인<br>@Primary가 붙은 Bean 선택"]
+    B -->|"그 외"| E["필드명/파라미터명으로 매칭<br>변수명과 일치하는 Bean ID 선택"]
     C --> F[주입 완료]
     D --> F
     E --> F

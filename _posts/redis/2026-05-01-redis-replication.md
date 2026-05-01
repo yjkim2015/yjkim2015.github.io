@@ -93,7 +93,7 @@ sequenceDiagram
     participant Rep as Replica
     participant M as Master
 
-    Note over M: replication backlog (원형 버퍼)<br/>cmd1, cmd2, cmd3, cmd4, cmd5
+    Note over M: replication backlog (원형 버퍼)<br>cmd1, cmd2, cmd3, cmd4, cmd5
     Rep->>M: PSYNC &lt;replid&gt; 12345 (offset 12345까지 받았음)
     Note over M: backlog에 offset 12345 이후 데이터 존재 확인
     M-->>Rep: cmd3, cmd4, cmd5 전송 (Partial Sync)

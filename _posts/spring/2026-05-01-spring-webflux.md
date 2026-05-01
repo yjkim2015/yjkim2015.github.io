@@ -332,13 +332,13 @@ graph TD
     C2[Client 2] --> BG
     C3[Client 3] --> BG
     CN[...] --> BG
-    BG["Boss Group (1~2개 스레드)<br/>연결 수락만 담당"]
+    BG["Boss Group (1~2개 스레드)<br>연결 수락만 담당"]
     BG -->|연결 할당| W1
     BG -->|연결 할당| W2
     BG -->|연결 할당| WN
-    W1["Worker-1 EventLoop<br/>select/epoll로 I/O 감시<br/>I/O 완료 이벤트 발생 시 핸들러 실행<br/>블로킹 없이 루프 반복"]
+    W1["Worker-1 EventLoop<br>select/epoll로 I/O 감시<br>I/O 완료 이벤트 발생 시 핸들러 실행<br>블로킹 없이 루프 반복"]
     W2["Worker-2 EventLoop"]
-    WN["Worker-N EventLoop<br/>(CPU 코어 수)"]
+    WN["Worker-N EventLoop<br>(CPU 코어 수)"]
 </div>
 
 ### 논블로킹 I/O 동작 원리
@@ -398,18 +398,18 @@ Flux.range(1, 5)
 <div class="mermaid">
 graph TD
     subgraph "publishOn 동작 - 이 지점 이후 연산자들이 지정 스케줄러에서 실행"
-        PA["Flux.just(1,2,3)<br/>소스 - main 스레드"] --> PB["map(A)<br/>main에서 실행"]
+        PA["Flux.just(1,2,3)<br>소스 - main 스레드"] --> PB["map(A)<br>main에서 실행"]
         PB --> PC["publishOn(Schedulers.parallel())"]
-        PC --> PD["map(B)<br/>parallel에서 실행"]
-        PD --> PE["map(C)<br/>parallel에서 실행"]
+        PC --> PD["map(B)<br>parallel에서 실행"]
+        PD --> PE["map(C)<br>parallel에서 실행"]
         PE --> PF[subscribe]
     end
     subgraph "subscribeOn 동작 - 소스 시작 스케줄러 지정, 체인 어디에 놓든 소스에 영향"
-        SA["Flux.just(1,2,3)<br/>boundedElastic에서 실행"] --> SB["map(A)<br/>boundedElastic에서 실행"]
-        SB --> SC["map(B)<br/>boundedElastic에서 실행"]
+        SA["Flux.just(1,2,3)<br>boundedElastic에서 실행"] --> SB["map(A)<br>boundedElastic에서 실행"]
+        SB --> SC["map(B)<br>boundedElastic에서 실행"]
         SC --> SD["subscribeOn(Schedulers.boundedElastic())"]
-        SD --> SE["map(C)<br/>boundedElastic에서 실행"]
-        SE --> SF["subscribe()<br/>main에서 구독 시작"]
+        SD --> SE["map(C)<br>boundedElastic에서 실행"]
+        SE --> SF["subscribe()<br>main에서 구독 시작"]
     end
 </div>
 
@@ -1247,19 +1247,19 @@ class UserServiceTest {
 <div class="mermaid">
 graph TD
     subgraph S1["시나리오: 외부 API 호출 (응답 지연 100ms)"]
-        U10["동시 10명<br/>MVC: 95 TPS / WebFlux: 98 TPS"]
-        U100["동시 100명<br/>MVC: 520 TPS / WebFlux: 580 TPS"]
-        U500["동시 500명<br/>MVC: 1,200 TPS / WebFlux: 2,800 TPS"]
-        U1K["동시 1,000명<br/>MVC: 700 TPS (스레드 포화) / WebFlux: 3,100 TPS"]
-        U2K["동시 2,000명<br/>MVC: 500 TPS (GC 압박) / WebFlux: 3,200 TPS"]
-        U5K["동시 5,000명<br/>MVC: 300 TPS (타임아웃↑) / WebFlux: 3,100 TPS"]
-        U10K["동시 10,000명<br/>MVC: 실패 (OOM 위험) / WebFlux: 2,900 TPS"]
-        MEM["메모리 (1,000 동시 요청)<br/>Spring MVC: ~2GB / WebFlux: ~300MB"]
+        U10["동시 10명<br>MVC: 95 TPS / WebFlux: 98 TPS"]
+        U100["동시 100명<br>MVC: 520 TPS / WebFlux: 580 TPS"]
+        U500["동시 500명<br>MVC: 1,200 TPS / WebFlux: 2,800 TPS"]
+        U1K["동시 1,000명<br>MVC: 700 TPS (스레드 포화) / WebFlux: 3,100 TPS"]
+        U2K["동시 2,000명<br>MVC: 500 TPS (GC 압박) / WebFlux: 3,200 TPS"]
+        U5K["동시 5,000명<br>MVC: 300 TPS (타임아웃↑) / WebFlux: 3,100 TPS"]
+        U10K["동시 10,000명<br>MVC: 실패 (OOM 위험) / WebFlux: 2,900 TPS"]
+        MEM["메모리 (1,000 동시 요청)<br>Spring MVC: ~2GB / WebFlux: ~300MB"]
     end
     subgraph S2["시나리오: 단순 CPU 연산 (DB 없음)"]
-        C10["동시 10명<br/>MVC: 9,800 TPS / WebFlux: 9,200 TPS"]
-        C100["동시 100명<br/>MVC: 48,000 TPS / WebFlux: 44,000 TPS"]
-        C500["동시 500명<br/>MVC: 52,000 TPS / WebFlux: 50,000 TPS"]
+        C10["동시 10명<br>MVC: 9,800 TPS / WebFlux: 9,200 TPS"]
+        C100["동시 100명<br>MVC: 48,000 TPS / WebFlux: 44,000 TPS"]
+        C500["동시 500명<br>MVC: 52,000 TPS / WebFlux: 50,000 TPS"]
         NOTE["CPU 집약 작업에서는 MVC가 약간 유리하거나 동등"]
     end
 </div>

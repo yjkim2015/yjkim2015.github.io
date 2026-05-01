@@ -14,9 +14,9 @@ Spring Security는 **Servlet Filter 체인**으로 구현된다. `DelegatingFilt
 <div class="mermaid">
 graph TD
     A[HTTP 요청] --> B[Servlet Container]
-    B --> C["DelegatingFilterProxy<br/>Servlet Filter, Spring Bean이 아닌 척 동작"]
-    C -->|"Spring ApplicationContext에서<br/>FilterChainProxy Bean을 찾아 위임"| D["FilterChainProxy<br/>Spring Bean, SecurityFilterChain 목록 관리"]
-    D -->|"요청 URL에 맞는 SecurityFilterChain 선택"| E["SecurityFilterChain (보안 필터 목록)<br/>1. DisableEncodeUrlFilter<br/>2. WebAsyncManagerIntegrationFilter<br/>3. SecurityContextHolderFilter<br/>4. HeaderWriterFilter<br/>5. CorsFilter<br/>6. CsrfFilter<br/>7. LogoutFilter<br/>8. UsernamePasswordAuthenticationFilter<br/>9. DefaultLoginPageGeneratingFilter<br/>10. BasicAuthenticationFilter<br/>11. RequestCacheAwareFilter<br/>12. SecurityContextHolderAwareRequestFilter<br/>13. AnonymousAuthenticationFilter<br/>14. SessionManagementFilter<br/>15. ExceptionTranslationFilter<br/>16. AuthorizationFilter"]
+    B --> C["DelegatingFilterProxy<br>Servlet Filter, Spring Bean이 아닌 척 동작"]
+    C -->|"Spring ApplicationContext에서<br>FilterChainProxy Bean을 찾아 위임"| D["FilterChainProxy<br>Spring Bean, SecurityFilterChain 목록 관리"]
+    D -->|"요청 URL에 맞는 SecurityFilterChain 선택"| E["SecurityFilterChain (보안 필터 목록)<br>1. DisableEncodeUrlFilter<br>2. WebAsyncManagerIntegrationFilter<br>3. SecurityContextHolderFilter<br>4. HeaderWriterFilter<br>5. CorsFilter<br>6. CsrfFilter<br>7. LogoutFilter<br>8. UsernamePasswordAuthenticationFilter<br>9. DefaultLoginPageGeneratingFilter<br>10. BasicAuthenticationFilter<br>11. RequestCacheAwareFilter<br>12. SecurityContextHolderAwareRequestFilter<br>13. AnonymousAuthenticationFilter<br>14. SessionManagementFilter<br>15. ExceptionTranslationFilter<br>16. AuthorizationFilter"]
     E --> F[DispatcherServlet]
     F --> G[Controller]
 </div>
@@ -172,7 +172,7 @@ graph TD
     C -->|AccessDeniedException 인가 실패| D{사용자 유형}
     D -->|익명 사용자| E["AuthenticationEntryPoint (401)"]
     D -->|인증된 사용자| F["AccessDeniedHandler (403)"]
-    C -->|AuthenticationException 인증 실패| G["AuthenticationEntryPoint<br/>LoginUrlAuthenticationEntryPoint: 로그인 페이지 리다이렉트<br/>HttpStatusEntryPoint: 401 반환 REST API<br/>BearerTokenAuthenticationEntryPoint: WWW-Authenticate 헤더"]
+    C -->|AuthenticationException 인증 실패| G["AuthenticationEntryPoint<br>LoginUrlAuthenticationEntryPoint: 로그인 페이지 리다이렉트<br>HttpStatusEntryPoint: 401 반환 REST API<br>BearerTokenAuthenticationEntryPoint: WWW-Authenticate 헤더"]
 </div>
 
 ---
@@ -184,9 +184,9 @@ graph TD
 <div class="mermaid">
 graph TD
     AM[AuthenticationManager] -->|구현체| PM[ProviderManager]
-    PM -->|등록된 AuthenticationProvider 순회| AP1["DaoAuthenticationProvider<br/>(username/password)"]
-    PM --> AP2["JwtAuthenticationProvider<br/>(JWT 커스텀)"]
-    PM --> AP3["OAuth2LoginAuthenticationProvider<br/>(OAuth2)"]
+    PM -->|등록된 AuthenticationProvider 순회| AP1["DaoAuthenticationProvider<br>(username/password)"]
+    PM --> AP2["JwtAuthenticationProvider<br>(JWT 커스텀)"]
+    PM --> AP3["OAuth2LoginAuthenticationProvider<br>(OAuth2)"]
     PM --> AP4[RememberMeAuthenticationProvider]
     PM --> AP5[AnonymousAuthenticationProvider]
 </div>
@@ -314,12 +314,12 @@ public class CustomUserDetails implements UserDetails {
 
 <div class="mermaid">
 graph TD
-    SCH["SecurityContextHolder<br/>기본 전략: ThreadLocalSecurityContextHolderStrategy"] --> SC["SecurityContext<br/>ThreadLocal로 Thread마다 독립"]
+    SCH["SecurityContextHolder<br>기본 전략: ThreadLocalSecurityContextHolderStrategy"] --> SC["SecurityContext<br>ThreadLocal로 Thread마다 독립"]
     SC --> AUTH[Authentication]
-    AUTH --> P["Principal<br/>UserDetails 또는 사용자 식별자"]
-    AUTH --> CR["Credentials<br/>비밀번호, 인증 후 보통 null로 초기화"]
-    AUTH --> AU["Authorities<br/>권한 목록"]
-    AUTH --> IA["isAuthenticated<br/>인증 여부"]
+    AUTH --> P["Principal<br>UserDetails 또는 사용자 식별자"]
+    AUTH --> CR["Credentials<br>비밀번호, 인증 후 보통 null로 초기화"]
+    AUTH --> AU["Authorities<br>권한 목록"]
+    AUTH --> IA["isAuthenticated<br>인증 여부"]
 </div>
 
 ```java
@@ -349,11 +349,11 @@ public String myPage(@AuthenticationPrincipal CustomUserDetails user) {
 graph TD
     subgraph "요청 1 - Thread-1"
         A1[FilterChainProxy] -->|SecurityContext 생성| B1[ThreadLocal 저장]
-        B1 --> C1["Controller → SecurityContextHolder.getContext()<br/>→ Thread-1의 SecurityContext"]
+        B1 --> C1["Controller → SecurityContextHolder.getContext()<br>→ Thread-1의 SecurityContext"]
     end
     subgraph "요청 2 - Thread-2"
         A2[FilterChainProxy] -->|SecurityContext 생성| B2[ThreadLocal 저장]
-        B2 --> C2["Controller → SecurityContextHolder.getContext()<br/>→ Thread-2의 SecurityContext"]
+        B2 --> C2["Controller → SecurityContextHolder.getContext()<br>→ Thread-2의 SecurityContext"]
     end
     C1 --- NOTE["각 Thread가 독립적인 SecurityContext를 가짐 → Thread 안전"]
     C2 --- NOTE
@@ -411,7 +411,7 @@ sequenceDiagram
     participant S as 서버
 
     C->>CF: GET /form-page
-    CF->>CF: CsrfToken 생성 (랜덤 값)<br/>세션 또는 쿠키에 저장
+    CF->>CF: CsrfToken 생성 (랜덤 값)<br>세션 또는 쿠키에 저장
     CF-->>C: 폼 응답 (hidden input _csrf=토큰값 포함)
 
     C->>CF: POST /submit (데이터 + _csrf=토큰값)

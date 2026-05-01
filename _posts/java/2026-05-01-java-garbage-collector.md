@@ -175,7 +175,7 @@ graph LR
 <div class="mermaid">
 graph LR
     subgraph "객체 수명 분포 (Weak Generational Hypothesis)"
-        S["짧은 수명<br/>(대다수 객체)"] -->|"수명 증가 → 객체 수 급감"| L["긴 수명<br/>(소수 객체)"]
+        S["짧은 수명<br>(대다수 객체)"] -->|"수명 증가 → 객체 수 급감"| L["긴 수명<br>(소수 객체)"]
     end
     N1["대부분의 객체는 생성 직후 회수됨"]
     N2["살아남은 객체는 오래 생존하는 경향"]

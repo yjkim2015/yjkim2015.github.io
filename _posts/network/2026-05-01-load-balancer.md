@@ -19,13 +19,13 @@ toc_label: 목차
 
 <div class="mermaid">
 graph TD
-    L7[L7 Application Layer<br/>HTTP, HTTPS, WebSocket]
-    L4[L4 Transport Layer<br/>TCP, UDP]
-    L3[L3 Network Layer<br/>IP]
-    L2[L2 Data Link Layer<br/>MAC]
+    L7[L7 Application Layer<br>HTTP, HTTPS, WebSocket]
+    L4[L4 Transport Layer<br>TCP, UDP]
+    L3[L3 Network Layer<br>IP]
+    L2[L2 Data Link Layer<br>MAC]
 
-    LB_L7[L7 로드밸런서<br/>Nginx, AWS ALB, HAProxy]
-    LB_L4[L4 로드밸런서<br/>AWS NLB, HAProxy, LVS]
+    LB_L7[L7 로드밸런서<br>Nginx, AWS ALB, HAProxy]
+    LB_L4[L4 로드밸런서<br>AWS NLB, HAProxy, LVS]
 
     L7 --> LB_L7
     L4 --> LB_L4

@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd \\\"C:\\\\Users\\\\Kim\\\\OneDrive\\\\문서\\\\yjkim2015.github.io\\\" && python3 -c \\\"\\nimport re\\n\\nfiles = [\\n    '_posts/java/2026-05-01-java-garbage-collector.md',\\n    '_posts/java/2026-05-01-java...",
+  "error": "Exit code 2\n/usr/bin/bash: eval: line 46: unexpected EOF while looking for matching ``'",
+  "timestamp": "2026-05-01T14:35:56.614Z",
+  "retry_count": 1
+}

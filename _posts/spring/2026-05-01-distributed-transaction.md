@@ -488,17 +488,17 @@ public class OutboxEventRelay {
 <div class="mermaid">
 graph TD
     START([시작]) --> Q1{강한 일관성이 필요한가?}
-    Q1 -->|YES| R1["같은 DB로 경계 재설계<br/>또는 XA + 2PC"]
+    Q1 -->|YES| R1["같은 DB로 경계 재설계<br>또는 XA + 2PC"]
     Q1 -->|NO| Q2{최종 일관성으로 가능한가?}
     Q2 -->|YES| SAGA[Saga 패턴 선택]
     SAGA --> Q3{흐름이 단순한가?}
-    Q3 -->|YES| CHOREO["Choreography<br/>(이벤트 기반)"]
-    Q3 -->|NO| ORCH["Orchestration<br/>(중앙 오케스트레이터)"]
+    Q3 -->|YES| CHOREO["Choreography<br>(이벤트 기반)"]
+    Q3 -->|NO| ORCH["Orchestration<br>(중앙 오케스트레이터)"]
     SAGA --> Q4{이벤트 발행 원자성 필요?}
     Q4 -->|YES| OUTBOX[Outbox Pattern 적용]
     SAGA --> Q5{임시 데이터 외부 노출 불가?}
-    Q5 -->|YES| TCC["TCC 패턴<br/>(Try/Confirm/Cancel)"]
-    OUTBOX --> BEST["실무 권장 조합<br/>Saga + Kafka + Outbox"]
+    Q5 -->|YES| TCC["TCC 패턴<br>(Try/Confirm/Cancel)"]
+    OUTBOX --> BEST["실무 권장 조합<br>Saga + Kafka + Outbox"]
     style BEST fill:#8f8,stroke:#080,color:#000
     style R1 fill:#f88,stroke:#c00,color:#000
 </div>

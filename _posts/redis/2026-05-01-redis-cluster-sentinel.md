@@ -661,13 +661,13 @@ public RedissonClient redissonClient() {
 
 <div class="mermaid">
 graph TD
-    START([요구사항 분석]) --> Q1{데이터가 단일 서버<br/>메모리에 충분히 들어가는가?}
-    Q1 -->|NO| CLUSTER[클러스터 모드<br/>수평 확장 필요]
-    Q1 -->|YES| Q2{마스터 장애 시<br/>자동 복구가 필요한가?}
+    START([요구사항 분석]) --> Q1{데이터가 단일 서버<br>메모리에 충분히 들어가는가?}
+    Q1 -->|NO| CLUSTER[클러스터 모드<br>수평 확장 필요]
+    Q1 -->|YES| Q2{마스터 장애 시<br>자동 복구가 필요한가?}
     Q2 -->|YES| SENTINEL1[센티넬 모드]
-    Q2 -->|NO| Q3{개발/테스트<br/>환경인가?}
+    Q2 -->|NO| Q3{개발/테스트<br>환경인가?}
     Q3 -->|YES| SINGLE[싱글 모드]
-    Q3 -->|NO| SENTINEL2[센티넬 모드<br/>운영 환경 권장]
+    Q3 -->|NO| SENTINEL2[센티넬 모드<br>운영 환경 권장]
     style CLUSTER fill:#88f,stroke:#00c,color:#000
     style SENTINEL1 fill:#8f8,stroke:#080,color:#000
     style SENTINEL2 fill:#8f8,stroke:#080,color:#000

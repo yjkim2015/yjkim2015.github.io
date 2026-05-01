@@ -1,0 +1,503 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1777628784845,
+  "projectRoot": "C:\\Users\\Kim\\OneDrive\\문서\\yjkim2015.github.io",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": ">= 0.10.0",
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "Ruby",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "Gemfile"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "bundler",
+    "runtime": "Node.js 0.10.0"
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {
+      "uglify": "uglifyjs assets/js/vendor/jquery/jquery-3.4.1.js assets/js/plugins/jquery.fitvids.js assets/js/plugins/jquery.greedy-navigation.js assets/js/plugins/jquery.magnific-popup.js assets/js/plugins/jquery.ba-throttle-debounce.js assets/js/plugins/smooth-scroll.js assets/js/plugins/gumshoe.js assets/js/_main.js -c -m -o assets/js/main.min.js",
+      "add-banner": "node banner.js",
+      "watch:js": "onchange \"assets/js/**/*.js\" -e \"assets/js/main.min.js\" -- npm run build:js",
+      "build:js": "npm run uglify && npm run add-banner"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "assets",
+      "docs",
+      "pages"
+    ],
+    "gitBranches": {
+      "defaultBranch": "master",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "assets": {
+      "path": "assets",
+      "purpose": "Static assets",
+      "fileCount": 1,
+      "lastAccessed": 1777628784800,
+      "keyFiles": [
+        "portfolio.png"
+      ]
+    },
+    "dest": {
+      "path": "dest",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1777628784801,
+      "keyFiles": [
+        "jekyll-search.js",
+        "jekyll-search.min.js"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 5,
+      "lastAccessed": 1777628784802,
+      "keyFiles": [
+        "Gemfile",
+        "screenshot-layouts.png",
+        "screenshot.png",
+        "_config.dev.yml",
+        "_config.yml"
+      ]
+    },
+    "pages": {
+      "path": "pages",
+      "purpose": "Page components",
+      "fileCount": 4,
+      "lastAccessed": 1777628784812,
+      "keyFiles": [
+        "404.md",
+        "category-archive.md",
+        "tag.md",
+        "year-archive.md"
+      ]
+    },
+    "_data": {
+      "path": "_data",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1777628784813,
+      "keyFiles": [
+        "navigation.yml",
+        "ui-text.yml"
+      ]
+    },
+    "_includes": {
+      "path": "_includes",
+      "purpose": null,
+      "fileCount": 36,
+      "lastAccessed": 1777628784814,
+      "keyFiles": [
+        "analytics.html",
+        "archive-single.html",
+        "author-profile-custom-links.html",
+        "author-profile.html",
+        "breadcrumbs.html"
+      ]
+    },
+    "_layouts": {
+      "path": "_layouts",
+      "purpose": null,
+      "fileCount": 16,
+      "lastAccessed": 1777628784815,
+      "keyFiles": [
+        "archive-taxonomy.html",
+        "archive.html",
+        "categories.html",
+        "category.html",
+        "collection.html"
+      ]
+    },
+    "_plugins": {
+      "path": "_plugins",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1777628784815,
+      "keyFiles": [
+        "simple_search_filter.rb"
+      ]
+    },
+    "_posts": {
+      "path": "_posts",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1777628784816,
+      "keyFiles": []
+    },
+    "_sass": {
+      "path": "_sass",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1777628784817,
+      "keyFiles": [
+        "custom.scss",
+        "dark.scss",
+        "minimal-mistakes.scss",
+        "plain.scss",
+        "search.scss"
+      ]
+    },
+    "_site": {
+      "path": "_site",
+      "purpose": null,
+      "fileCount": 15,
+      "lastAccessed": 1777628784817,
+      "keyFiles": [
+        "404.html",
+        "ads.txt",
+        "banner.js",
+        "dark.png",
+        "feed.xml"
+      ]
+    },
+    "docs\\assets": {
+      "path": "docs\\assets",
+      "purpose": "Static assets",
+      "fileCount": 0,
+      "lastAccessed": 1777628784819,
+      "keyFiles": []
+    },
+    "_site\\assets": {
+      "path": "_site\\assets",
+      "purpose": "Static assets",
+      "fileCount": 1,
+      "lastAccessed": 1777628784822,
+      "keyFiles": [
+        "portfolio.png"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "_posts\\java\\2026-05-01-java-garbage-collector.md",
+      "accessCount": 51,
+      "lastAccessed": 1777646168447,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-collections.md",
+      "accessCount": 28,
+      "lastAccessed": 1777646181130,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-io.md",
+      "accessCount": 16,
+      "lastAccessed": 1777646181924,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\caching\\2026-05-01-caching-strategy.md",
+      "accessCount": 13,
+      "lastAccessed": 1777645672039,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\network\\2026-05-01-osi-7-layer.md",
+      "accessCount": 12,
+      "lastAccessed": 1777645933809,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\jpa\\2026-05-01-jpa-fundamentals.md",
+      "accessCount": 11,
+      "lastAccessed": 1777645395859,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\server\\2026-05-01-tomcat-vs-netty.md",
+      "accessCount": 11,
+      "lastAccessed": 1777645754399,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\server\\2026-05-01-sync-async-block-nonblock.md",
+      "accessCount": 11,
+      "lastAccessed": 1777645846064,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\network\\2026-05-01-dns.md",
+      "accessCount": 11,
+      "lastAccessed": 1777646064496,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-rate-limiting.md",
+      "accessCount": 10,
+      "lastAccessed": 1777646125407,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-01-db-locks.md",
+      "accessCount": 8,
+      "lastAccessed": 1777645313822,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\jpa\\2026-05-01-jpa-n-plus-1.md",
+      "accessCount": 8,
+      "lastAccessed": 1777645419293,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\localcache\\2026-05-01-local-cache-comparison.md",
+      "accessCount": 8,
+      "lastAccessed": 1777645450041,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\localcache\\2026-05-01-cache-eviction-algorithms.md",
+      "accessCount": 7,
+      "lastAccessed": 1777645491807,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-virtual-thread.md",
+      "accessCount": 6,
+      "lastAccessed": 1777645291449,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\kafka\\2026-05-01-kafka-fundamentals.md",
+      "accessCount": 6,
+      "lastAccessed": 1777645536046,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-async.md",
+      "accessCount": 5,
+      "lastAccessed": 1777646097203,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\redis\\2026-05-01-redis-ttl.md",
+      "accessCount": 4,
+      "lastAccessed": 1777645362043,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\redis\\2026-05-01-redis-replication.md",
+      "accessCount": 4,
+      "lastAccessed": 1777645372801,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\kafka\\2026-05-01-kafka-internals.md",
+      "accessCount": 4,
+      "lastAccessed": 1777645561070,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-cloud-gateway.md",
+      "accessCount": 4,
+      "lastAccessed": 1777646106578,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\ai\\2026-05-01-ai-driven-development.md",
+      "accessCount": 4,
+      "lastAccessed": 1777646144372,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-ioc-di.md",
+      "accessCount": 3,
+      "lastAccessed": 1777645302473,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-01-db-internals.md",
+      "accessCount": 3,
+      "lastAccessed": 1777645313579,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\kafka\\2026-05-01-kafka-replication.md",
+      "accessCount": 3,
+      "lastAccessed": 1777645476730,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\kafka\\2026-05-01-kafka-consumer-deep.md",
+      "accessCount": 3,
+      "lastAccessed": 1777645488206,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\kafka\\2026-05-01-kafka-producer-deep.md",
+      "accessCount": 3,
+      "lastAccessed": 1777645497736,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\kafka\\2026-05-01-kafka-broker-deep.md",
+      "accessCount": 3,
+      "lastAccessed": 1777645509097,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\ai\\2026-05-01-ai-tools.md",
+      "accessCount": 3,
+      "lastAccessed": 1777646134318,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-thread.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645291523,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-aop.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645302806,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-transaction.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645306897,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-mvc.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645307730,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-security-architecture.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645308035,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-webflux.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645313250,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\redis\\2026-05-01-redis-lua-script.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645399815,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\redis\\2026-05-01-redis-data-structures.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645413617,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\redis\\2026-05-01-redis-cluster-sentinel.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645424165,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-01-db-sharding.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645508123,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-01-db-index.md",
+      "accessCount": 2,
+      "lastAccessed": 1777645508389,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-01-db-partitioning.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628805463,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-01-db-optimizer.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628805478,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-spring-mdc.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628809253,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-generics.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628809734,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-01-rest-client-comparison.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628810074,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-01-db-comparison.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628810675,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-lambda.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628815734,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-stream.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628820803,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-functional-programming.md",
+      "accessCount": 1,
+      "lastAccessed": 1777628821161,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\java\\2026-05-01-java-completablefuture.md",
+      "accessCount": 1,
+      "lastAccessed": 1777645301433,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

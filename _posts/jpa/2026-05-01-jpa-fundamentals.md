@@ -50,8 +50,8 @@ public interface EntityManager {
 
 <div class="mermaid">
 graph TD
-    SDJ["Spring Data JPA<br/>(JpaRepository, 쿼리 메서드 자동 생성)"]
-    JPA["JPA<br/>(Java Persistence API - 표준 명세)"]
+    SDJ["Spring Data JPA<br>(JpaRepository, 쿼리 메서드 자동 생성)"]
+    JPA["JPA<br>(Java Persistence API - 표준 명세)"]
     HIB["Hibernate"]
     ECL["EclipseLink"]
     OJP["OpenJPA"]
@@ -95,9 +95,9 @@ EntityManager는 영속성 컨텍스트에 접근하는 창구 역할을 하며,
 
 <div class="mermaid">
 graph LR
-    APP["Application<br/>em.persist(member)"]
+    APP["Application<br>em.persist(member)"]
     subgraph EM["EntityManager"]
-        PC["영속성 컨텍스트<br/>─────────────<br/>[1차 캐시]<br/>[쓰기지연 SQL]"]
+        PC["영속성 컨텍스트<br>─────────────<br>[1차 캐시]<br>[쓰기지연 SQL]"]
     end
     DB["Database"]
 
@@ -237,8 +237,8 @@ graph TD
     FIND["em.find() 시점"]
     SAVE1["1차 캐시에 엔티티 저장"]
     SAVE2["최초 상태를 스냅샷으로 저장"]
-    SET["member.setUsername('newName')<br/>member.setAge(30)"]
-    CMP["엔티티 vs 스냅샷 비교<br/>→ 변경 감지!"]
+    SET["member.setUsername('newName')<br>member.setAge(30)"]
+    CMP["엔티티 vs 스냅샷 비교<br>→ 변경 감지!"]
     FL["flush() 시점"]
     GEN["UPDATE SQL 생성"]
     REG["쓰기 지연 SQL 저장소에 등록"]
@@ -319,7 +319,7 @@ sequenceDiagram
 
     App->>EM: em.find(Member.class, 1L)
     EM-->>App: Member 반환 (team 필드 = TeamProxy)
-    Note over Proxy: target: null<br/>id: 2L (FK만 알고 있음)
+    Note over Proxy: target: null<br>id: 2L (FK만 알고 있음)
     App->>Proxy: team.getName() 호출
     Proxy->>DB: SELECT * FROM Team WHERE id=2
     DB-->>Proxy: Team 데이터
@@ -627,9 +627,9 @@ public class Movie extends Item {
 
 <div class="mermaid">
 graph TD
-    ITEM["ITEM 테이블<br/>──────────<br/>id<br/>name<br/>price<br/>DTYPE"]
-    ALBUM["ALBUM 테이블<br/>──────────<br/>item_id (FK)<br/>artist"]
-    MOVIE["MOVIE 테이블<br/>──────────<br/>item_id (FK)<br/>director<br/>actor"]
+    ITEM["ITEM 테이블<br>──────────<br>id<br>name<br>price<br>DTYPE"]
+    ALBUM["ALBUM 테이블<br>──────────<br>item_id (FK)<br>artist"]
+    MOVIE["MOVIE 테이블<br>──────────<br>item_id (FK)<br>director<br>actor"]
     ITEM --> ALBUM
     ITEM --> MOVIE
 </div>
@@ -641,7 +641,7 @@ graph TD
 
 <div class="mermaid">
 graph TD
-    ITEM["ITEM 테이블 (단일)<br/>────────────────────────────────<br/>id │ name │ price │ DTYPE │ artist │ director<br/>────────────────────────────────<br/>1 │ 음반 │ 10000 │ A │ BTS │ null<br/>2 │ 영화 │ 20000 │ M │ null │ 봉준호"]
+    ITEM["ITEM 테이블 (단일)<br>────────────────────────────────<br>id │ name │ price │ DTYPE │ artist │ director<br>────────────────────────────────<br>1 │ 음반 │ 10000 │ A │ BTS │ null<br>2 │ 영화 │ 20000 │ M │ null │ 봉준호"]
 </div>
 
 - 장점: JOIN 없어 조회 성능 빠름, 쿼리 단순
@@ -651,8 +651,8 @@ graph TD
 
 <div class="mermaid">
 graph LR
-    ALBUM["ALBUM 테이블<br/>──────────────────<br/>id │ name │ price │ artist"]
-    MOVIE["MOVIE 테이블<br/>─────────────────────────<br/>id │ name │ price │ director"]
+    ALBUM["ALBUM 테이블<br>──────────────────<br>id │ name │ price │ artist"]
+    MOVIE["MOVIE 테이블<br>─────────────────────────<br>id │ name │ price │ director"]
 </div>
 
 - 장점: 서브타입 명확히 구분, not null 제약 가능
