@@ -260,4 +260,4 @@ defaults:
       layout: single
       author_profile: false
       
-category_list: [ JAVA, EFFECTIVE_JAVA, HTTP, SECURITY, SPRING, REDIS, KAFKA, LOCAL_CACHE, DB, NOSQL, NEWS ]
+category_list: [ JAVA, EFFECTIVE_JAVA, HTTP, SECURITY, SPRING, REDIS, KAFKA, LOCAL_CACHE, DB, NOSQL, SERVER, AI, NETWORK, CACHING, NEWS ]
