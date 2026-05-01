@@ -1,10 +1,16 @@
 ---
 title: "JPA"
-layout: archive
+layout: default
 permalink: /categories/jpa/
 ---
 
-{% assign posts = site.categories["JPA"] %}
-{% for post in posts %}
-  {% include archive-single.html %}
-{% endfor %}
+<div class="main-container">
+  <div class="content-container">
+    <h1 class="category-page__title">JPA</h1>
+
+    {% assign posts = site.categories["JPA"] %}
+    {% for post in posts %}
+      {% include archive-single.html %}
+    {% endfor %}
+  </div>
+</div>

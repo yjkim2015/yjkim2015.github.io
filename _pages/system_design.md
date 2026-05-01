@@ -1,10 +1,16 @@
 ---
 title: "SYSTEM_DESIGN"
-layout: archive
+layout: default
 permalink: /categories/system_design/
 ---
 
-{% assign posts = site.categories["SYSTEM_DESIGN"] %}
-{% for post in posts %}
-  {% include archive-single.html %}
-{% endfor %}
+<div class="main-container">
+  <div class="content-container">
+    <h1 class="category-page__title">SYSTEM_DESIGN</h1>
+
+    {% assign posts = site.categories["SYSTEM_DESIGN"] %}
+    {% for post in posts %}
+      {% include archive-single.html %}
+    {% endfor %}
+  </div>
+</div>
