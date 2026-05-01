@@ -394,13 +394,23 @@ Redisson의 가장 큰 장점 중 하나는 락 대기 방식이다.
 
 ### Lettuce (스핀락)
 
-```
-[Thread B] tryLock → 실패
-           sleep(100ms) → tryLock → 실패
-           sleep(100ms) → tryLock → 실패
-           ...
-           sleep(100ms) → tryLock → 성공
-```
+<div class="mermaid">
+sequenceDiagram
+    participant B as Thread B
+    participant R as Redis
+
+    B->>R: tryLock
+    R-->>B: FAIL
+    Note over B: sleep(100ms)
+    B->>R: tryLock
+    R-->>B: FAIL
+    Note over B: sleep(100ms)
+    B->>R: tryLock
+    R-->>B: FAIL
+    Note over B: sleep(100ms)
+    B->>R: tryLock
+    R-->>B: OK (성공)
+</div>
 
 - 불필요한 Redis 명령어 반복 실행
 - 슬랙(sleep) 간격만큼 대기 지연 발생
@@ -408,12 +418,24 @@ Redisson의 가장 큰 장점 중 하나는 락 대기 방식이다.
 
 ### Redisson (Pub/Sub)
 
-```
-[Thread A] 락 획득 → 작업 완료 → unlock() → PUBLISH "lockReleased" 이벤트
+<div class="mermaid">
+sequenceDiagram
+    participant A as Thread A
+    participant R as Redis
+    participant B as Thread B
 
-[Thread B] tryLock → 실패 → SUBSCRIBE 채널 등록 → 대기...
-           → PUBLISH 수신 → 즉시 tryLock → 성공
-```
+    A->>R: 락 획득
+    R-->>A: OK
+    B->>R: tryLock
+    R-->>B: FAIL
+    B->>R: SUBSCRIBE redisson_lock__channel
+    Note over B: 대기...
+    Note over A: 작업 완료
+    A->>R: unlock() + PUBLISH lockReleased
+    R-->>B: 이벤트 수신
+    B->>R: tryLock
+    R-->>B: OK (즉시 성공)
+</div>
 
 - 락 해제 시 **즉시** 알림 수신
 - 불필요한 Redis 명령어 없음
@@ -427,18 +449,23 @@ Redisson의 가장 큰 장점 중 하나는 락 대기 방식이다.
 
 Redisson은 leaseTime을 지정하지 않으면 **Watchdog**을 통해 락 TTL을 자동으로 연장한다.
 
-```
-lockWatchdogTimeout = 30s (기본값)
-갱신 주기 = lockWatchdogTimeout / 3 = 10s
+<div class="mermaid">
+sequenceDiagram
+    participant App as Application
+    participant WD as Watchdog
+    participant R as Redis
 
-타임라인:
-0s   → 락 획득, TTL = 30s
-10s  → Watchdog 갱신, TTL = 30s (리셋)
-20s  → Watchdog 갱신, TTL = 30s (리셋)
-30s  → Watchdog 갱신, TTL = 30s (리셋)
-...
-Ns   → unlock() → Watchdog 중단, 키 삭제
-```
+    App->>R: lock() 획득 (TTL=30s)
+    Note over WD: 갱신 주기: 10s (30s / 3)
+    WD->>R: TTL 갱신 (10s 경과)
+    Note over R: TTL 리셋 → 30s
+    WD->>R: TTL 갱신 (20s 경과)
+    Note over R: TTL 리셋 → 30s
+    WD->>R: TTL 갱신 (30s 경과)
+    Note over R: TTL 리셋 → 30s
+    App->>R: unlock() → 키 삭제
+    Note over WD: Watchdog 중단
+</div>
 
 **주의:** leaseTime을 명시적으로 설정하면 Watchdog이 비활성화된다.
 
@@ -476,10 +503,19 @@ lock.tryLock(10, 30, TimeUnit.SECONDS); // 30초 후 강제 해제
 
 ### 시나리오 1: 락 보유 중 프로세스 크래시
 
-```
-[A] 락 획득(TTL=30s) → 크래시
-[B]                    ... TTL 만료(30s 후) → 락 획득
-```
+<div class="mermaid">
+sequenceDiagram
+    participant A as Process A
+    participant B as Process B
+    participant R as Redis
+
+    A->>R: 락 획득 (TTL=30s)
+    R-->>A: OK
+    Note over A: 크래시
+    Note over R: TTL 만료 (30s 후) → 키 삭제
+    B->>R: 락 획득
+    R-->>B: OK
+</div>
 
 **해결:** TTL이 반드시 설정되어 있어야 한다. TTL 없이 키만 남으면 데드락이다.
 
@@ -487,12 +523,22 @@ lock.tryLock(10, 30, TimeUnit.SECONDS); // 30초 후 강제 해제
 
 ### 시나리오 2: 작업 시간이 TTL 초과
 
-```
-0s   [A] 락 획득(TTL=30s), 작업 시작
-30s      TTL 만료
-30s  [B] 락 획득, 작업 시작
-45s  [A] 작업 완료, DEL 실행 → B의 락을 삭제!
-```
+<div class="mermaid">
+sequenceDiagram
+    participant A as Process A
+    participant B as Process B
+    participant R as Redis
+
+    A->>R: 락 획득 (TTL=30s)
+    R-->>A: OK
+    Note over A: 작업 시작
+    Note over R: 30s 경과 → TTL 만료
+    B->>R: 락 획득
+    R-->>B: OK
+    Note over B: 작업 시작
+    A->>R: DEL lock (작업 완료)
+    Note over A,R: ⚠️ B의 락을 삭제!
+</div>
 
 **해결 1:** Lua 스크립트로 자신의 value인지 확인 후 삭제
 
@@ -519,12 +565,21 @@ if (ttl != null && ttl < MINIMUM_WORK_TIME_MS) {
 
 ### 시나리오 3: 비동기 복제 중 마스터 장애
 
-```
-[A] 마스터에 락 획득 → 마스터 크래시(복제 전)
-    레플리카 승격 (락 데이터 없음)
-[B] 승격된 마스터에 락 획득 → 성공
-→ A, B 동시에 임계 영역 진입!
-```
+<div class="mermaid">
+sequenceDiagram
+    participant A as Process A
+    participant M as Master
+    participant Rep as Replica
+    participant B as Process B
+
+    A->>M: 락 획득
+    M-->>A: OK
+    Note over M: 크래시 💀 (복제 전)
+    Note over Rep: 마스터로 승격 (락 데이터 없음)
+    B->>Rep: 락 획득
+    Rep-->>B: OK
+    Note over A,B: ⚠️ A, B 동시에 임계 영역 진입!
+</div>
 
 **해결 1:** Redlock (과반수 노드에 락)
 
@@ -542,13 +597,23 @@ redisTemplate.execute((RedisCallback<Long>) conn ->
 
 ### 시나리오 4: GC Stop-the-World
 
-```
-0s   [A] 락 획득(TTL=30s)
-5s       GC STW 시작
-35s      GC 종료 → 락 이미 만료
-30s  [B] 락 획득
-35s  [A] 작업 재개 → A, B 동시 임계 영역!
-```
+<div class="mermaid">
+sequenceDiagram
+    participant A as Process A
+    participant B as Process B
+    participant R as Redis
+
+    A->>R: 락 획득 (TTL=30s)
+    R-->>A: OK
+    Note over A: GC STW 시작 (5s 경과)
+    Note over R: 30s 경과 → TTL 만료
+    B->>R: 락 획득
+    R-->>B: OK
+    Note over B: 작업 시작
+    Note over A: GC 종료 (35s) → 락 이미 만료
+    Note over A: 작업 재개
+    Note over A,B: ⚠️ A, B 동시에 임계 영역 진입!
+</div>
 
 **해결:** Fencing Token 패턴
 

@@ -25,11 +25,11 @@ Redis는 운영 목적과 규모에 따라 세 가지 배포 모드를 제공한
 
 단일 Redis 프로세스로 동작한다. 선택적으로 레플리카(Replica)를 추가할 수 있지만, 페일오버는 수동으로 처리해야 한다.
 
-```
-[Client] → [Redis Master]
-                ↓ (비동기 복제, 선택 사항)
-           [Redis Replica]
-```
+<div class="mermaid">
+graph LR
+    C[Client] --> M[Redis Master]
+    M -->|비동기 복제 선택 사항| R[Redis Replica]
+</div>
 
 ### 기본 설정 (redis.conf)
 
@@ -90,18 +90,30 @@ replica-read-only yes
 
 Sentinel은 Redis 마스터/레플리카를 **모니터링**하고, 마스터 장애 시 **자동으로 레플리카를 마스터로 승격**시키는 별도 프로세스다.
 
-```
-[Client] → [Sentinel 클러스터] → [Redis Master]
-                                        ↓ (복제)
-                                  [Redis Replica 1]
-                                  [Redis Replica 2]
+<div class="mermaid">
+graph TD
+    C[Client] --> SC[Sentinel 클러스터]
+    SC --> M[Redis Master]
+    M -->|복제| R1[Redis Replica 1]
+    M -->|복제| R2[Redis Replica 2]
+</div>
 
 장애 발생:
-[Redis Master 다운]
-[Sentinel] → SDOWN 감지 → 다른 Sentinel들과 quorum 합의 → ODOWN 선언
-           → 레플리카 중 하나를 새 마스터로 승격
-           → 클라이언트에게 새 마스터 주소 알림
-```
+
+<div class="mermaid">
+sequenceDiagram
+    participant S as Sentinel
+    participant M as Redis Master
+    participant R as Replica
+    participant C as Client
+
+    Note over M: 다운 💀
+    S->>S: SDOWN 감지
+    S->>S: 다른 Sentinel들과 quorum 합의
+    S->>S: ODOWN 선언
+    S->>R: REPLICAOF NO ONE (새 마스터로 승격)
+    S-->>C: 새 마스터 주소 알림
+</div>
 
 **최소 구성:** Sentinel 3개 이상 (quorum 과반수 필요)
 
@@ -154,34 +166,45 @@ sentinel auth-pass mymaster mypassword
 
 ### Sentinel 클러스터 구성 예시
 
-```
-서버 1: Redis Master (6379) + Sentinel (26379)
-서버 2: Redis Replica (6379) + Sentinel (26379)
-서버 3: Redis Replica (6379) + Sentinel (26379)
-```
+<div class="mermaid">
+graph TD
+    SV1["서버 1"]
+    SV2["서버 2"]
+    SV3["서버 3"]
+    SV1 --> M["Redis Master :6379"]
+    SV1 --> S1["Sentinel 1 :26379"]
+    SV2 --> R1["Redis Replica :6379"]
+    SV2 --> S2["Sentinel 2 :26379"]
+    SV3 --> R2["Redis Replica :6379"]
+    SV3 --> S3["Sentinel 3 :26379"]
+    M -->|복제| R1
+    M -->|복제| R2
+</div>
 
 ### 자동 페일오버 흐름
 
-```
-1. 마스터 응답 없음 감지 (Sentinel 1)
-   → SDOWN 상태로 변경
+<div class="mermaid">
+sequenceDiagram
+    participant S1 as Sentinel 1
+    participant S2 as Sentinel 2/3
+    participant M as Master
+    participant R1 as 선택된 Replica
+    participant R2 as 나머지 Replica
+    participant C as Client
 
-2. 다른 Sentinel들에게 마스터 상태 공유
-   → quorum(2) 이상 동의 → ODOWN 선언
-
-3. 페일오버 리더 선출 (Sentinel끼리 투표)
-
-4. 리더 Sentinel이 레플리카 중 하나를 선택
-   기준: 복제 지연 적음, 우선순위, run ID
-
-5. 선택된 레플리카에 REPLICAOF NO ONE 명령
-   → 새 마스터로 승격
-
-6. 나머지 레플리카에 새 마스터를 바라보도록 재설정
-
-7. 클라이언트에게 새 마스터 주소 알림
-   (클라이언트가 Sentinel API로 쿼리 시 반환)
-```
+    S1->>M: PING (응답 없음)
+    Note over S1: SDOWN 선언
+    S1->>S2: 마스터 상태 공유
+    Note over S2: quorum(2) 이상 동의
+    Note over S1,S2: ODOWN 선언
+    S1->>S2: 페일오버 리더 투표
+    Note over S1: 리더 선출됨
+    Note over S1: 레플리카 선택 (복제 지연, 우선순위, run ID 기준)
+    S1->>R1: REPLICAOF NO ONE
+    Note over R1: 새 마스터로 승격
+    S1->>R2: 새 마스터를 바라보도록 재설정
+    S1-->>C: 새 마스터 주소 알림
+</div>
 
 ### Sentinel API 활용
 
@@ -207,14 +230,13 @@ redis-cli -p 26379 SENTINEL sentinels mymaster
 
 Redis Cluster는 **16384개의 해시 슬롯**을 사용해 데이터를 분산한다.
 
-```
-슬롯 번호 = CRC16(key) % 16384
-
-3개 마스터 구성 예시:
-- 마스터 A: 슬롯 0     ~ 5460
-- 마스터 B: 슬롯 5461  ~ 10922
-- 마스터 C: 슬롯 10923 ~ 16383
-```
+<div class="mermaid">
+graph LR
+    KEY[key] -->|CRC16 % 16384| SLOT[슬롯 번호]
+    SLOT -->|0 ~ 5460| MA[마스터 A]
+    SLOT -->|5461 ~ 10922| MB[마스터 B]
+    SLOT -->|10923 ~ 16383| MC[마스터 C]
+</div>
 
 키를 저장할 때 슬롯 번호를 계산하고, 해당 슬롯을 담당하는 노드에 저장한다. 클라이언트가 잘못된 노드에 요청하면 `MOVED` 리다이렉션 응답을 받는다.
 
@@ -379,22 +401,29 @@ redisTemplate.opsForValue().multiSet(Map.of(
 
 ### 복제 구조
 
-```
-마스터 A (슬롯 0~5460)     ← 비동기 복제 → 레플리카 A
-마스터 B (슬롯 5461~10922) ← 비동기 복제 → 레플리카 B
-마스터 C (슬롯 10923~16383)← 비동기 복제 → 레플리카 C
-```
+<div class="mermaid">
+graph LR
+    MA["마스터 A (슬롯 0~5460)"] <-->|비동기 복제| RA[레플리카 A]
+    MB["마스터 B (슬롯 5461~10922)"] <-->|비동기 복제| RB[레플리카 B]
+    MC["마스터 C (슬롯 10923~16383)"] <-->|비동기 복제| RC[레플리카 C]
+</div>
 
 ### 자동 페일오버
 
-```
-1. 마스터 A가 cluster-node-timeout 동안 응답 없음
-2. 마스터 A를 PFAIL(Possible Fail) 상태로 표시
-3. 과반수 마스터가 PFAIL에 동의 → FAIL 선언
-4. 레플리카 A가 페일오버 요청 투표
-5. 과반수 마스터가 투표 → 레플리카 A가 새 마스터로 승격
-6. 슬롯 0~5460이 새 마스터 A로 이전
-```
+<div class="mermaid">
+sequenceDiagram
+    participant MA as 마스터 A
+    participant MB as 마스터 B/C
+    participant RA as 레플리카 A
+
+    Note over MA: cluster-node-timeout 동안 응답 없음
+    Note over MB: 마스터 A → PFAIL 상태로 표시
+    MB->>MB: 과반수 마스터 PFAIL 동의 → FAIL 선언
+    RA->>MB: 페일오버 투표 요청
+    MB-->>RA: 투표 승인 (과반수)
+    Note over RA: 새 마스터로 승격
+    Note over RA: 슬롯 0~5460 담당 인계
+</div>
 
 ### 페일오버 후 복구
 
@@ -626,19 +655,20 @@ public RedissonClient redissonClient() {
 
 ## 모드 선택 가이드
 
-```
-요구사항 분석:
-│
-├─ 데이터가 단일 서버 메모리에 충분히 들어가는가?
-│   ├─ NO  → 클러스터 모드 (수평 확장 필요)
-│   └─ YES →
-│       ├─ 마스터 장애 시 자동 복구가 필요한가?
-│       │   ├─ YES → 센티넬 모드
-│       │   └─ NO  →
-│       │       ├─ 개발/테스트 환경인가?
-│       │       │   └─ YES → 싱글 모드
-│       │       └─ NO  → 센티넬 모드 (운영 환경 권장)
-```
+<div class="mermaid">
+graph TD
+    START([요구사항 분석]) --> Q1{데이터가 단일 서버<br/>메모리에 충분히 들어가는가?}
+    Q1 -->|NO| CLUSTER[클러스터 모드<br/>수평 확장 필요]
+    Q1 -->|YES| Q2{마스터 장애 시<br/>자동 복구가 필요한가?}
+    Q2 -->|YES| SENTINEL1[센티넬 모드]
+    Q2 -->|NO| Q3{개발/테스트<br/>환경인가?}
+    Q3 -->|YES| SINGLE[싱글 모드]
+    Q3 -->|NO| SENTINEL2[센티넬 모드<br/>운영 환경 권장]
+    style CLUSTER fill:#88f,stroke:#00c,color:#000
+    style SENTINEL1 fill:#8f8,stroke:#080,color:#000
+    style SENTINEL2 fill:#8f8,stroke:#080,color:#000
+    style SINGLE fill:#ff8,stroke:#880,color:#000
+</div>
 
 **실무 권장:**
 - 개발/테스트: 싱글 모드

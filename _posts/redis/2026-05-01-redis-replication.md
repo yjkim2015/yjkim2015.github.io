@@ -63,25 +63,20 @@ REPLICAOF NO ONE
 
 레플리카가 **최초 연결** 시 또는 **재동기화가 불가능**할 때 수행된다.
 
-```
-시간 →
+<div class="mermaid">
+sequenceDiagram
+    participant Rep as Replica
+    participant M as Master
 
-[Replica] ──PSYNC ? -1──→ [Master]
-                           │
-                           ├─ 1. BGSAVE 실행 (RDB 스냅샷 생성)
-                           │   이 동안 새로운 쓰기는 replication buffer에 저장
-                           │
-[Replica] ←── RDB 파일 ───┤
-  │                        │
-  ├─ 2. RDB 로딩           │
-  │   (기존 데이터 전부 삭제) │
-  │                        │
-[Replica] ←── buffer ─────┘
-  │
-  └─ 3. buffer의 명령어 적용
-
-  → 동기화 완료!
-```
+    Rep->>M: PSYNC ? -1
+    Note over M: 1. BGSAVE 실행 (RDB 스냅샷 생성)
+    Note over M: 새 쓰기는 replication buffer에 저장
+    M-->>Rep: RDB 파일 전송
+    Note over Rep: 2. RDB 로딩 (기존 데이터 전부 삭제)
+    M-->>Rep: replication buffer 전송
+    Note over Rep: 3. buffer 명령어 적용
+    Note over Rep,M: 동기화 완료!
+</div>
 
 **주의**: Full Sync 중 마스터는 **BGSAVE + 버퍼 유지**로 메모리를 추가 사용한다. 데이터가 크면 수 GB 단위로 메모리가 증가할 수 있다.
 
@@ -89,18 +84,17 @@ REPLICAOF NO ONE
 
 연결이 잠시 끊겼다가 재연결되면, **끊긴 부분부터** 이어서 동기화한다.
 
-```
-[Master]  replication backlog (원형 버퍼, 기본 1MB)
-          ┌──────────────────────────────────┐
-          │ cmd1 │ cmd2 │ cmd3 │ cmd4 │ cmd5 │
-          └──────────────────────────────────┘
-                         ↑
-                   레플리카의 offset
+<div class="mermaid">
+sequenceDiagram
+    participant Rep as Replica
+    participant M as Master
 
-[Replica] "나는 offset 12345까지 받았어"
-[Master]  "backlog에 12345 이후 데이터가 있네 → 보내줄게"
-          → Partial Sync 성공!
-```
+    Note over M: replication backlog (원형 버퍼)<br/>cmd1, cmd2, cmd3, cmd4, cmd5
+    Rep->>M: PSYNC &lt;replid&gt; 12345 (offset 12345까지 받았음)
+    Note over M: backlog에 offset 12345 이후 데이터 존재 확인
+    M-->>Rep: cmd3, cmd4, cmd5 전송 (Partial Sync)
+    Note over Rep,M: Partial Sync 성공!
+</div>
 
 **실패 조건**: 레플리카의 offset이 backlog에 없으면 (너무 오래 끊어짐) → **Full Sync로 폴백**
 
@@ -113,15 +107,20 @@ repl-backlog-size 256mb
 
 동기화 완료 후, 마스터의 모든 쓰기 명령어가 **실시간으로** 레플리카에 전파된다.
 
-```
-Client: SET user:1 "Kim"
-         │
-[Master] 실행 → 응답 반환
-         │
-         └──→ [Replica 1] 실행
-         └──→ [Replica 2] 실행
-         └──→ [Replica 3] 실행
-```
+<div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant M as Master
+    participant R1 as Replica 1
+    participant R2 as Replica 2
+    participant R3 as Replica 3
+
+    C->>M: SET user:1 "Kim"
+    M-->>C: OK
+    M->>R1: SET user:1 "Kim" (비동기)
+    M->>R2: SET user:1 "Kim" (비동기)
+    M->>R3: SET user:1 "Kim" (비동기)
+</div>
 
 **비동기**: 마스터는 레플리카의 응답을 **기다리지 않는다.** 따라서 레플리카는 항상 마스터보다 약간 뒤처질 수 있다.
 
@@ -131,19 +130,23 @@ Client: SET user:1 "Kim"
 
 ### 체인 복제
 
-```
-[Master] → [Replica A] → [Replica B] → [Replica C]
-```
+<div class="mermaid">
+graph LR
+    M[Master] --> RA[Replica A]
+    RA --> RB[Replica B]
+    RB --> RC[Replica C]
+</div>
 
 마스터의 부하를 줄일 수 있지만, 전파 지연이 길어진다.
 
 ### 스타 복제
 
-```
-            ┌→ [Replica A]
-[Master] ───┼→ [Replica B]
-            └→ [Replica C]
-```
+<div class="mermaid">
+graph LR
+    M[Master] --> RA[Replica A]
+    M --> RB[Replica B]
+    M --> RC[Replica C]
+</div>
 
 지연이 짧지만, 마스터의 네트워크 부하가 레플리카 수에 비례한다.
 
@@ -153,15 +156,19 @@ Client: SET user:1 "Kim"
 
 ### 데이터 유실 시나리오
 
-```
-시간 →
-[Client] SET key value → [Master] 응답 OK
-                          [Master] → 레플리카 전파 시도...
-                          [Master] 💀 크래시!
+<div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant M as Master
+    participant Rep as Replica
 
-[Replica] 승격 → 새 마스터 (key가 없음!)
-→ 클라이언트는 OK 받았지만 데이터 유실
-```
+    C->>M: SET key value
+    M-->>C: OK
+    M--)Rep: 전파 시도 (비동기)...
+    Note over M: 크래시 💀
+    Note over Rep: 승격 → 새 마스터 (key 없음!)
+    Note over C,Rep: 클라이언트는 OK 받았지만 데이터 유실!
+</div>
 
 ### WAIT 명령어 — 동기 복제 흉내
 
@@ -180,14 +187,17 @@ WAIT 2 5000
 
 수동으로 레플리카를 승격시키는 것은 비현실적이다. **Redis Sentinel**이 자동으로 처리한다.
 
-```
-[Sentinel 1]  [Sentinel 2]  [Sentinel 3]
-     │              │              │
-     └──────────────┼──────────────┘
-                    │ 감시
-     ┌──────────────┼──────────────┐
-[Master]      [Replica 1]    [Replica 2]
-```
+<div class="mermaid">
+graph TD
+    S1[Sentinel 1] --- S2[Sentinel 2]
+    S2 --- S3[Sentinel 3]
+    S3 --- S1
+    S1 & S2 & S3 -->|감시| M[Master]
+    S1 & S2 & S3 -->|감시| R1[Replica 1]
+    S1 & S2 & S3 -->|감시| R2[Replica 2]
+    M -->|복제| R1
+    M -->|복제| R2
+</div>
 
 ### 동작 과정
 
@@ -209,11 +219,12 @@ WAIT 2 5000
 
 Redis Cluster는 **샤딩 + 복제**를 결합한다.
 
-```
-[Master A: 0~5460]     → [Replica A']
-[Master B: 5461~10922] → [Replica B']
-[Master C: 10923~16383]→ [Replica C']
-```
+<div class="mermaid">
+graph LR
+    MA["Master A (슬롯 0~5460)"] --> RA[Replica A']
+    MB["Master B (슬롯 5461~10922)"] --> RB[Replica B']
+    MC["Master C (슬롯 10923~16383)"] --> RC[Replica C']
+</div>
 
 - 각 마스터가 해시 슬롯의 일부를 담당
 - 마스터 장애 시 해당 레플리카가 자동 승격
@@ -268,10 +279,19 @@ replica-serve-stale-data yes     # 동기화 중에도 (오래된) 데이터 제
 
 마스터가 혼자 남으면 쓰기를 거부하여, **장애 시 데이터 유실 범위**를 제한한다.
 
-```
-정상:  [Master] ←→ [Replica] → 쓰기 허용
-장애:  [Master] ←× [Replica] → 쓰기 거부! (유실 방지)
-```
+<div class="mermaid">
+graph LR
+    subgraph 정상
+        M1[Master] <-->|연결| R1[Replica]
+        M1 --> W1[쓰기 허용]
+    end
+    subgraph 장애
+        M2[Master] -. 연결 끊김 ✕ .- R2[Replica]
+        M2 --> W2[쓰기 거부 - 유실 방지]
+    end
+    style W1 fill:#8f8,stroke:#080
+    style W2 fill:#f88,stroke:#c00
+</div>
 
 ---
 
