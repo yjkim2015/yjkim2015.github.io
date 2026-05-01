@@ -7,6 +7,12 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+JWT 토큰이 없는 요청이 `/api/admin`에 들어왔는데 그냥 통과됐다. 필터 순서가 잘못됐거나 필터 자체가 누락된 것이다. Spring Security 아키텍처를 모르면 어디서 막혀야 하는지조차 알 수 없다.
+
+> **비유로 먼저 이해하기**: Spring Security는 공항 보안검색대와 같다. 탑승구(Controller)에 도달하려면 발권 확인(인증 필터), 수하물 검사(권한 필터), 위험물 탐지(CSRF 필터) 등 여러 단계를 순서대로 통과해야 한다. 한 단계라도 실패하면 그 자리에서 차단된다.
+
+---
+
 ## 1. SecurityFilterChain 구조
 
 Spring Security는 **Servlet Filter 체인**으로 구현된다. `DelegatingFilterProxy`가 Servlet 컨테이너와 Spring Security를 연결한다.

@@ -7,6 +7,10 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+> **비유로 먼저 이해하기**: MVC는 레스토랑과 같다. 손님 요청을 웨이터(Controller)가 받아 주방(Service)에 전달하고, 셰프가 요리(비즈니스 로직)를 완성하면 접시(View)에 담아 손님에게 돌려준다. 손님은 주방이 어떻게 돌아가는지 알 필요가 없다.
+
+---
+
 ## 1. DispatcherServlet 구조
 
 Spring MVC의 핵심은 **DispatcherServlet**이다. 모든 HTTP 요청을 받아 적절한 핸들러에 위임하는 **Front Controller** 패턴을 구현한다.
