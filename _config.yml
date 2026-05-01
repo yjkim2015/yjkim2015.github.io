@@ -18,7 +18,7 @@ minimal_mistakes_skin    : "air" # "air", "aqua", "contrast", "dark", "dirt", "n
 locale                   : "ko-KR"
 title                    : "YJ Kim Devlog"
 title_separator          : "-"
-subtitle                 : "Java / Spring / Security"
+subtitle                 : # site tagline
 name                     : "YJ Kim"
 description              : "Java / Spring / Security 기록"
 url                      : "https://yjkim2015.github.io"
@@ -260,4 +260,4 @@ defaults:
       layout: single
       author_profile: false
       
-category_list: [ JAVA, HTTP, SECURITY, SPRING, REDIS, KAFKA, LOCAL_CACHE, DB, NOSQL, NEWS ]
+category_list: [ JAVA, EFFECTIVE_JAVA, HTTP, SECURITY, SPRING, REDIS, KAFKA, LOCAL_CACHE, DB, NOSQL, NEWS ]
