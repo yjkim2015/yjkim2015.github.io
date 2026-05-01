@@ -4,7 +4,9 @@ author_profile: false
 ---
 
 <div class="visitor-counter">
-  <span id="visitor-count">Visitors: loading...</span>
+  <a href="https://hits.sh/yjkim2015.github.io/">
+    <img src="https://hits.sh/yjkim2015.github.io.svg?view=today-total&style=flat-square&label=visitors&color=333&labelColor=f5f5f5" alt="Visitors"/>
+  </a>
 </div>
 
 <div class="home-categories">
@@ -17,14 +19,3 @@ author_profile: false
     {% endfor %}
   </div>
 </div>
-
-<script>
-  fetch('https://yjkim2015.goatcounter.com/counter/TOTAL.json')
-    .then(r => r.json())
-    .then(d => {
-      document.getElementById('visitor-count').textContent = 'Total Visitors: ' + d.count_unique.toLocaleString();
-    })
-    .catch(() => {
-      document.getElementById('visitor-count').textContent = '';
-    });
-</script>
