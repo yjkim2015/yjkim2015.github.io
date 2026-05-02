@@ -610,6 +610,488 @@ nav.pagination,
 .breadcrumbs { display: none !important; }
 
 /* ============================================
+   카테고리 페이지 타이틀
+   ============================================ */
+.category-page__title {
+  font-size: 2em !important;
+  font-weight: 800;
+  color: #1a1a1a !important;
+  margin-bottom: 1.2em;
+  padding-bottom: 0.4em;
+  border-bottom: 3px solid #1a8917;
+  display: inline-block;
+  letter-spacing: -0.5px;
+}
+
+/* ============================================
+   이전/다음 포스트 네비게이션 카드
+   ============================================ */
+.post-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1em;
+  margin-top: 3em;
+  padding-top: 2em;
+  border-top: 1px solid #f0f0f0;
+}
+
+.post-nav__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  padding: 1.2em 1.4em;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  text-decoration: none !important;
+  transition: all 0.22s ease;
+  background: #fafafa;
+  min-height: 90px;
+
+  &:hover {
+    border-color: #1a8917;
+    background: #f0faf0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(26,137,23,0.08);
+  }
+
+  &--prev { align-items: flex-start; }
+  &--next { align-items: flex-end; text-align: right; }
+  &--empty { background: transparent; border-color: transparent; }
+}
+
+.post-nav__direction {
+  font-size: 0.75em;
+  color: #aaa !important;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.post-nav__category {
+  display: inline-block;
+  font-size: 0.68em;
+  font-weight: 700;
+  color: #1a8917 !important;
+  background: rgba(26,137,23,0.08);
+  padding: 0.15em 0.55em;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.post-nav__title {
+  font-size: 0.92em;
+  font-weight: 600;
+  color: #1a1a1a !important;
+  line-height: 1.45;
+}
+
+/* ============================================
+   연도별 아카이브 (홈 페이지)
+   ============================================ */
+.year-archive {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.year-group {
+  margin-bottom: 2.5em;
+}
+
+.year-group__header {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  padding: 0.6em 0;
+  text-decoration: none !important;
+  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: 0.8em;
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: #1a8917;
+    .year-group__arrow { transform: translateX(4px); }
+  }
+}
+
+.year-group__year {
+  font-size: 1.4em;
+  font-weight: 800;
+  color: #1a1a1a !important;
+  letter-spacing: -0.5px;
+}
+
+.year-group__count {
+  font-size: 0.82em;
+  color: #aaa !important;
+  background: #f6f8fa;
+  padding: 0.2em 0.7em;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.year-group__arrow {
+  margin-left: auto;
+  font-size: 1em;
+  color: #ccc !important;
+  transition: transform 0.2s;
+}
+
+.year-group__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.year-group__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.5em 0;
+  border-bottom: 1px solid #f9f9f9;
+
+  &:last-child { border-bottom: none; }
+
+  &--more {
+    a {
+      font-size: 0.82em;
+      color: #1a8917 !important;
+      text-decoration: none;
+      font-weight: 500;
+      &:hover { text-decoration: underline; }
+    }
+  }
+}
+
+.year-group__post-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  text-decoration: none !important;
+  flex: 1;
+  min-width: 0;
+
+  &:hover .year-group__post-title { color: #1a8917 !important; }
+}
+
+.year-group__post-cat {
+  display: inline-block;
+  font-size: 0.68em;
+  font-weight: 700;
+  color: #1a8917 !important;
+  background: rgba(26,137,23,0.08);
+  padding: 0.15em 0.5em;
+  border-radius: 4px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.year-group__post-title {
+  font-size: 0.92em;
+  color: #333 !important;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s;
+}
+
+.year-group__post-date {
+  font-size: 0.75em;
+  color: #bbb !important;
+  flex-shrink: 0;
+  margin-left: 1em;
+}
+
+/* ============================================
+   이것만은 알고가자! 섹션
+   ============================================ */
+.must-know-section {
+  margin: 2.5em 0;
+}
+
+.must-know-details {
+  border: 1.5px solid #e6f4e6;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fef8;
+
+  &[open] .must-know-toggle-icon::after { content: "▲"; }
+}
+
+.must-know-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.9em 1.2em;
+  cursor: pointer;
+  list-style: none;
+  background: #edfaed;
+  font-weight: 700;
+  font-size: 0.97em;
+  color: #1a6b18 !important;
+  user-select: none;
+  transition: background 0.15s;
+
+  &::-webkit-details-marker { display: none; }
+  &:hover { background: #dff5df; }
+}
+
+.must-know-icon {
+  font-size: 1.1em;
+}
+
+.must-know-label {
+  flex: 1;
+}
+
+.must-know-toggle-icon {
+  font-size: 0.75em;
+  color: #999 !important;
+  &::after { content: "▼"; }
+}
+
+.must-know-body {
+  padding: 1.2em 1.5em;
+}
+
+.must-know-list {
+  margin: 0 0 1em;
+  padding-left: 1.4em;
+
+  li {
+    margin-bottom: 0.5em;
+    color: #333 !important;
+    font-size: 0.93em;
+    line-height: 1.7;
+
+    &::marker { color: #1a8917; }
+  }
+}
+
+.must-know-content {
+  font-size: 0.93em;
+  color: #333 !important;
+  line-height: 1.7;
+  margin-bottom: 1em;
+}
+
+.must-know-ad {
+  margin-top: 1em;
+  text-align: center;
+}
+
+/* ============================================
+   광고 유닛 공통
+   ============================================ */
+.ad-unit {
+  margin: 2em auto;
+  text-align: center;
+  max-width: 100%;
+
+  ins.adsbygoogle {
+    display: block;
+  }
+}
+
+.ad-unit--header {
+  margin-top: 0;
+  margin-bottom: 2em;
+  padding-bottom: 1.5em;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.ad-unit--mid {
+  margin: 2.5em 0;
+  padding: 0.5em 0;
+}
+
+.ad-unit--footer {
+  margin-top: 2.5em;
+  padding-top: 1.5em;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ============================================
+   타이포그래피 계층 강화 (h1-h4)
+   ============================================ */
+.page__content {
+  h1 {
+    font-size: 1.9em !important;
+    font-weight: 800;
+    color: #1a1a1a !important;
+    margin-top: 2.5em;
+    margin-bottom: 0.6em;
+    letter-spacing: -0.5px;
+    border-bottom: 2px solid #1a8917;
+    padding-bottom: 0.3em;
+  }
+
+  h2 {
+    font-size: 1.5em !important;
+    font-weight: 700;
+    color: #1a1a1a !important;
+    margin-top: 2.5em;
+    margin-bottom: 0.7em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  h3 {
+    font-size: 1.22em !important;
+    font-weight: 700;
+    color: #222 !important;
+    margin-top: 2em;
+    margin-bottom: 0.6em;
+    padding-left: 0.7em;
+    border-left: 3px solid #1a8917;
+  }
+
+  h4 {
+    font-size: 1.05em !important;
+    font-weight: 600;
+    color: #444 !important;
+    margin-top: 1.5em;
+    margin-bottom: 0.4em;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 0.95em !important;
+    color: #666 !important;
+  }
+}
+
+/* ============================================
+   코드 블록 가독성 강화
+   ============================================ */
+div.highlighter-rouge,
+figure.highlight {
+  border-radius: 10px;
+  border: 1px solid #2d2d2d;
+  background: #1e1e1e !important;
+  margin: 1.8em 0;
+  font-size: 14px !important;
+  overflow-x: auto;
+  position: relative;
+
+  &::before {
+    content: attr(data-lang);
+    position: absolute;
+    top: 0.6em;
+    right: 0.9em;
+    font-size: 0.7em;
+    color: #666;
+    text-transform: uppercase;
+    font-family: monospace;
+    letter-spacing: 0.5px;
+  }
+}
+
+pre.highlight {
+  background: #1e1e1e !important;
+  padding: 1.4em 1.6em !important;
+  margin: 0;
+  line-height: 1.65;
+}
+
+/* ============================================
+   블록쿼트 스타일 강화
+   ============================================ */
+.page__content blockquote {
+  border-left: 4px solid #1a8917;
+  padding: 0.8em 1.4em;
+  margin: 2em 0;
+  background: linear-gradient(135deg, #f8fef8 0%, #f0faf0 100%);
+  border-radius: 0 8px 8px 0;
+  color: #445 !important;
+  font-style: normal;
+  box-shadow: inset 0 0 0 1px rgba(26,137,23,0.06);
+
+  p { margin: 0; color: #445 !important; }
+
+  strong { color: #1a6b18 !important; }
+
+  &::before {
+    content: "\201C";
+    font-size: 2.5em;
+    color: rgba(26,137,23,0.2);
+    line-height: 0;
+    vertical-align: -0.4em;
+    margin-right: 0.1em;
+  }
+}
+
+/* ============================================
+   테이블 — 교대 행 강조
+   ============================================ */
+.page__content table {
+  width: 100%;
+  margin: 1.8em 0;
+  border-collapse: collapse;
+  font-size: 0.91em;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+
+  thead tr { background: #1a8917; }
+
+  th {
+    background: #1a8917 !important;
+    color: #fff !important;
+    font-weight: 700;
+    text-align: left;
+    padding: 0.75em 1em;
+  }
+
+  td {
+    padding: 0.65em 1em;
+    border-bottom: 1px solid #f0f0f0;
+    color: #333 !important;
+  }
+
+  tbody tr:nth-child(even) td { background: #f8f9fa; }
+  tbody tr:hover td { background: #edfaed; }
+}
+
+/* ============================================
+   Mermaid 다이어그램
+   ============================================ */
+.mermaid,
+pre.mermaid {
+  background: #f9fafb !important;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 1.5em;
+  margin: 2em auto;
+  text-align: center;
+  overflow-x: auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+/* ============================================
+   링크 호버 효과
+   ============================================ */
+.page__content a {
+  color: #1a8917 !important;
+  text-decoration: none;
+  background-image: linear-gradient(#1a8917, #1a8917);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.25s ease, color 0.15s;
+
+  &:hover {
+    background-size: 100% 1px;
+    color: #15730f !important;
+  }
+}
+
+/* ============================================
+   부드러운 스크롤
+   ============================================ */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ============================================
    Responsive
    ============================================ */
 @media (max-width: 1024px) {
@@ -630,6 +1112,10 @@ nav.pagination,
     position: static;
     max-height: none;
   }
+
+  .post-nav {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 768px) {
@@ -641,8 +1127,78 @@ nav.pagination,
     grid-template-columns: 1fr;
   }
 
+  .post-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .post-nav__card--next {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .year-group__post-title {
+    white-space: normal;
+  }
+
   .home-hero h1 { font-size: 2em !important; }
   .page__title { font-size: 1.7em !important; }
   .page__content { font-size: 16px !important; }
   .main-container { padding: 1.5em 1em; }
+}
+
+/* ============================================
+   인쇄 스타일
+   ============================================ */
+@media print {
+  .masthead,
+  .page__footer,
+  .post-nav,
+  .page__related,
+  .toc-sticky,
+  .toc-inline,
+  .ad-unit,
+  .must-know-ad,
+  nav.pagination,
+  .home-categories,
+  .visitor-counter {
+    display: none !important;
+  }
+
+  body {
+    font-size: 12pt;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  .page__content {
+    font-size: 12pt !important;
+    color: #000 !important;
+
+    a {
+      color: #000 !important;
+      text-decoration: underline;
+      background-image: none !important;
+    }
+
+    h1, h2, h3, h4 { color: #000 !important; page-break-after: avoid; }
+    p, li { color: #000 !important; orphans: 3; widows: 3; }
+
+    blockquote {
+      border-left: 3px solid #555;
+      background: none !important;
+      box-shadow: none !important;
+    }
+
+    pre, code {
+      border: 1px solid #ccc;
+      font-size: 10pt;
+    }
+  }
+
+  .main-container,
+  .content-container,
+  #main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
 }

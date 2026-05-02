@@ -1,7 +1,7 @@
 ---
 title: "JPA 핵심 개념"
 categories:
-- SPRING
+- JPA
 toc: true
 toc_sticky: true
 toc_label: 목차

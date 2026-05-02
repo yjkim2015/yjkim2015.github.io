@@ -1,0 +1,33 @@
+{% if include.title or include.items %}
+<div class="must-know-section">
+  <details class="must-know-details">
+    <summary class="must-know-summary">
+      <span class="must-know-icon">&#128161;</span>
+      <span class="must-know-label">이것만은 알고가자!</span>
+      <span class="must-know-toggle-icon"></span>
+    </summary>
+    <div class="must-know-body">
+      {% if include.items %}
+        <ul class="must-know-list">
+          {% assign items_arr = include.items | split: "|" %}
+          {% for item in items_arr %}
+            <li>{{ item | strip }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if include.content %}
+        <div class="must-know-content">{{ include.content }}</div>
+      {% endif %}
+      <div class="must-know-ad">
+        <ins class="adsbygoogle"
+             style="display:block"
+             data-ad-client="ca-pub-7225106491387870"
+             data-ad-slot="0000000000"
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      </div>
+    </div>
+  </details>
+</div>
+{% endif %}

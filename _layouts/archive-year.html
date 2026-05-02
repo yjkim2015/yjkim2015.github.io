@@ -1,0 +1,16 @@
+---
+layout: default
+---
+
+<div class="main-container">
+  <div class="content-container">
+    <h1 class="category-page__title">{{ page.year }}년 글 목록</h1>
+
+    <div class="posts-grid">
+      {% assign year_posts = site.posts | where_exp: "post", "post.date | date: '%Y' == page.year" %}
+      {% for post in year_posts %}
+        {% include archive-single.html type="card" %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
