@@ -1,5 +1,5 @@
 ---
-title: "URL 단축기 설계 — bit.ly를 직접 만들어보자"
+title: "URL 단축기 설계 — bit.ly가 7글자로 3.5조 개의 URL을 처리하는 방법"
 categories:
 - SYSTEMDESIGN
 toc: true
@@ -7,243 +7,182 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-## 실생활 비유: 책의 색인
+트위터가 140자 제한이었던 시절, `https://www.example.com/very/long/path?campaign=summer&source=newsletter&medium=email` 같은 URL은 그 자체로 트윗 대부분을 차지했다. bit.ly는 이 문제를 7글자로 해결했다. 단순해 보이지만, 초당 10만 건의 리다이렉트를 100ms 이내에 처리하고 수십 TB의 데이터를 수년간 관리하는 시스템이다. **"짧게 만든다"는 단순한 기능 뒤에 어떤 설계가 숨어있는가.**
 
-두꺼운 백과사전에서 원하는 내용을 찾으려면 어떻게 하나요? 매번 전체를 뒤지는 대신, 뒤쪽의 **색인(Index)**에서 짧은 페이지 번호를 찾아 바로 이동합니다. URL 단축기도 마찬가지입니다. 긴 URL을 짧은 코드로 바꾸고, 그 코드를 보면 원래 URL로 안내해줍니다.
-
-`https://www.example.com/very/long/path?param1=value1&param2=value2` → `https://bit.ly/3xK9mP`
-
----
-
-## 1. 요구사항 분석
+## 요구사항 분석
 
 ### 기능 요구사항
 
-1. URL을 입력하면 짧은 URL 생성
+1. 긴 URL을 입력하면 짧은 URL 생성
 2. 짧은 URL로 접속하면 원래 URL로 리다이렉트
 3. 사용자 지정 단축 URL 지원 (선택)
 4. 링크 만료 기간 설정 (선택)
 
-### 비기능 요구사항
+### 비기능 요구사항 — 왜 이 숫자가 중요한가
 
-- **고가용성**: 99.99% (연간 52분 다운타임)
-- **저지연**: 리다이렉트 100ms 미만
-- **확장성**: 초당 쓰기 1,000건, 읽기 10만건
-- **내구성**: 데이터 영구 보존
+```
+읽기:쓰기 = 100:1   → 리다이렉트가 대부분, 캐시 전략이 핵심
+리다이렉트 100ms 이내 → 사용자가 링크를 클릭했는데 느리면 이탈
+99.99% 가용성       → 연간 52분. 이 서비스가 죽으면 모든 bit.ly 링크가 404가 됨
+```
 
 ### 규모 추정
 
 ```
-일일 새 URL 생성: 1억건
-읽기:쓰기 비율 = 100:1
-일일 리다이렉트: 100억건
+일일 새 URL 생성:   1억 건
+읽기:쓰기 비율  = 100:1
+일일 리다이렉트:   100억 건
 
-쓰기 QPS = 100,000,000 / 86,400 ≈ 1,160 QPS
-읽기 QPS = 1,160 × 100 = 116,000 QPS
-피크 QPS = 116,000 × 3 ≈ 350,000 QPS
+쓰기 QPS  = 1억 / 86,400 ≈ 1,160 QPS
+읽기 QPS  = 1,160 × 100  = 116,000 QPS
+피크 QPS  = 116,000 × 3  ≈ 350,000 QPS
 
-URL 하나 저장 크기:
-- shortURL: 7자 = 7B
-- longURL: 평균 100자 = 100B
-- createdAt: 8B
-- expiresAt: 8B
-- userID: 8B
-총 ≈ 130B/건
+URL 하나 크기:
+  shortCode: 7B, longURL: 100B, 메타데이터: 30B → 약 137B
 
 10년 저장량:
-1억 × 365 × 10 × 130B ≈ 47.5TB
+  1억 × 365 × 10 × 137B ≈ 50TB
 ```
 
 ---
 
-## 2. 핵심 설계: 짧은 코드 생성
+## 핵심 설계: 7자리 코드를 어떻게 만드는가
 
-### 가장 중요한 질문: 7자리 코드를 어떻게 만들까?
+> **비유**: 도서관의 책 청구기호와 같다. 수십만 권의 책에 각각 짧은 고유 번호를 부여하고, 그 번호만 알면 정확한 위치를 찾아갈 수 있다. 번호는 짧아야 하고, 절대 중복되어선 안 된다.
 
-```mermaid
-graph TD
-    A["짧은 코드 생성 방법"] --> B["해시 방식"]
-    A --> C["ID 생성 + Base62 인코딩"]
+7자리로 얼마나 많은 URL을 표현할 수 있는가? **문자 집합 선택**이 핵심이다.
 
-    B --> D["MD5/SHA256 해시 → 앞 7자리"]
-    B --> E["단점: 충돌 가능성"]
+| 방식 | 문자 수 | 7자리 공간 |
+|------|--------|----------|
+| 숫자만 (0-9) | 10 | 1,000만 |
+| Base62 (0-9, a-z, A-Z) | 62 | **3.5조** |
+| Base64 (+ +, /) | 64 | 4.4조 |
 
-    C --> F["고유 ID 생성"]
-    C --> G["Base62 변환"]
-    G --> H["충돌 없음, 예측 불가"]
-```
+Base62를 선택하는 이유: URL에서 특수문자 없이 3.5조 공간 확보. 10년치 1억 개/일로는 3,650억 개가 필요한데 충분하다.
 
-### Base62 인코딩 이해하기
+### Base62 인코딩 원리
 
-Base62는 숫자(0-9), 소문자(a-z), 대문자(A-Z) 총 62가지 문자를 사용합니다.
-
-```
-7자리 Base62로 표현 가능한 URL 수:
-62^7 = 3,521,614,606,208 ≈ 3.5조 개
-```
-
-**Base62 변환 예시:**
+숫자(고유 ID)를 62진법으로 변환하는 것이다:
 
 ```python
 CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 def encode(num: int) -> str:
-    """숫자를 Base62 문자열로 변환"""
+    """고유 ID → Base62 문자열"""
     if num == 0:
         return CHARS[0]
-
     result = []
     while num > 0:
         result.append(CHARS[num % 62])
         num //= 62
-
     return ''.join(reversed(result))
 
-def decode(s: str) -> int:
-    """Base62 문자열을 숫자로 변환"""
-    result = 0
-    for char in s:
-        result = result * 62 + CHARS.index(char)
-    return result
-
-# 예시
-print(encode(1000000))  # "4c92"
-print(encode(12345678)) # "W7e"
+# 12345678 → "W7e"
+# 복호화: W=32, 7=7, e=40 → 32×62² + 7×62 + 40 = 12345678
 ```
 
-### 충돌 방지: 분산 ID 생성
+### 고유 ID를 어떻게 만드는가 — Snowflake ID
+
+Base62 인코딩은 "고유한 숫자"가 있어야 한다. 서버 20대가 동시에 같은 숫자를 생성하면 같은 단축 코드가 나온다. **Snowflake ID**가 이 문제를 해결한다:
 
 ```mermaid
-graph TD
-    Request["URL 생성 요청"] --> IDGen["ID 생성기"]
-    IDGen --> Snowflake["Twitter Snowflake 방식"]
-
-    subgraph "Snowflake ID 구조 64비트"
-        T["타임스탬프 41비트"]
-        M["머신 ID 10비트"]
-        S["시퀀스 12비트"]
+graph LR
+    subgraph "Snowflake ID 64비트 구조"
+        T["41비트: 밀리초 타임스탬프<br>(약 69년치)"]
+        M["10비트: 머신 ID<br>(1024대 서버)"]
+        S["12비트: 시퀀스<br>(같은 ms에 4096개)"]
     end
-
-    Snowflake --> Base62["Base62 인코딩"]
-    Base62 --> ShortURL["7자리 단축 코드"]
+    T --> ID["초당 409만 6천 개<br>고유 ID 생성"]
+    M --> ID
+    S --> ID
+    ID --> BASE62["Base62 인코딩 → 7자리 코드"]
 ```
 
-**Snowflake ID 구조:**
-```
-| 1비트(부호) | 41비트(밀리초 타임스탬프) | 10비트(머신ID) | 12비트(시퀀스) |
-→ 초당 409만6000개의 고유 ID 생성 가능
-→ 여러 서버에서 동시 생성해도 충돌 없음
-```
+만약 Snowflake 없이 UUID를 쓰면? UUID는 128비트라 Base62로 변환하면 22자리가 넘는다. "짧은" URL이 되지 않는다. 단순 AUTO_INCREMENT를 쓰면? 여러 서버에서 동시에 같은 번호가 나온다.
 
 ---
 
-## 3. 전체 아키텍처
+## 전체 아키텍처
 
 ```mermaid
 graph TD
-    Client["클라이언트"] --> DNS[DNS]
-    DNS --> LB["로드밸런서"]
-
-    LB --> API1["API 서버 1"]
-    LB --> API2["API 서버 2"]
-    LB --> API3["API 서버 N"]
-
-    API1 --> Cache["Redis 캐시 클러스터"]
-    API2 --> Cache
-    API3 --> Cache
-
-    API1 --> IDService["ID 생성 서비스"]
-    API2 --> IDService
-
-    API1 --> DB_W["("MySQL 마스터<br>쓰기 전용")"]
-    DB_W --> DB_R1["("MySQL 레플리카 1<br>읽기 전용")"]
-    DB_W --> DB_R2["("MySQL 레플리카 2<br>읽기 전용")"]
-
-    API1 --> DB_R1
-    API2 --> DB_R1
-    API3 --> DB_R2
+    Client["클라이언트"] --> LB["로드밸런서"]
+    LB --> API["API 서버 (Auto Scaling)"]
+    API --> Cache["Redis 클러스터<br>읽기 트래픽 90% 처리"]
+    API --> IDService["Snowflake ID 서비스 (이중화)"]
+    API --> DB_W["MySQL 마스터 (쓰기)"]
+    DB_W --> DB_R["MySQL 레플리카 (읽기)"]
+    API --> Kafka["Kafka (클릭 이벤트 비동기)"]
+    Kafka --> Analytics["분석 파이프라인"]
 ```
 
 ---
 
-## 4. URL 단축 흐름 (쓰기)
+## URL 단축 흐름 (쓰기)
 
 ```mermaid
 sequenceDiagram
-    participant C as 클라이언트
-    participant LB as 로드밸런서
-    participant API as API 서버
-    participant ID as ID 생성기
-    participant Cache as Redis
-    participant DB as MySQL
+    participant C as "클라이언트"
+    participant API as "API 서버"
+    participant ID as "ID 생성기"
+    participant Cache as "Redis"
+    participant DB as "MySQL"
 
-    C->>LB: POST /api/v1/shorten { longUrl: "https://..." }
-    LB->>API: 요청 전달
-
-    API->>API: longUrl 유효성 검사
-    API->>DB: SELECT shortUrl WHERE longUrl = ? (중복 확인)
-
-    alt 이미 단축된 URL
-        DB-->>API: shortUrl 반환
+    C->>API: POST /shorten { longUrl }
+    API->>API: 1. longUrl 유효성 검사
+    API->>DB: 2. 이미 단축된 URL 있는지 확인 (중복 방지)
+    alt 이미 있으면
+        DB-->>API: 기존 shortCode 반환
     else 새 URL
-        API->>ID: 새 ID 요청
-        ID-->>API: 고유 ID (예: 12345678)
-        API->>API: Base62 인코딩 → "W7e"
-        API->>DB: INSERT INTO urls (shortCode, longUrl, createdAt)
-        API->>Cache: SET "W7e" → "https://..." EX=86400
+        API->>ID: 3. 고유 ID 요청
+        ID-->>API: 12345678
+        API->>API: 4. Base62 인코딩 → "W7e"
+        API->>DB: 5. INSERT urls (shortCode, longUrl)
+        API->>Cache: 6. SET "W7e" → longUrl EX 86400
     end
-
     API-->>C: { shortUrl: "https://bit.ly/W7e" }
 ```
 
 ---
 
-## 5. URL 리다이렉트 흐름 (읽기)
+## URL 리다이렉트 흐름 (읽기) — 왜 캐시가 필수인가
+
+읽기 QPS가 116,000이다. 이 모두를 DB에서 처리하면 MySQL이 즉시 과부하된다. **캐시 히트율 80%**가 목표다:
 
 ```mermaid
 sequenceDiagram
-    participant C as 브라우저
-    participant LB as 로드밸런서
-    participant API as API 서버
-    participant Cache as Redis
-    participant DB as MySQL
+    participant C as "브라우저"
+    participant API as "API 서버"
+    participant Cache as "Redis"
+    participant DB as "MySQL"
 
-    C->>LB: GET /W7e
-    LB->>API: 요청 전달
-
+    C->>API: GET /W7e
     API->>Cache: GET "W7e"
-
-    alt Cache Hit (캐시에 있음)
+    alt Cache Hit (80% 케이스)
         Cache-->>API: "https://example.com/..."
-        API-->>C: 301/302 Redirect
-    else Cache Miss (캐시에 없음)
-        Cache-->>API: null
+        API-->>C: 302 Redirect (DB 조회 없음)
+    else Cache Miss (20% 케이스)
+        Cache-->>API: nil
         API->>DB: SELECT longUrl WHERE shortCode = "W7e"
         DB-->>API: "https://example.com/..."
-        API->>Cache: SET "W7e" → "https://..." EX=86400
-        API-->>C: 301/302 Redirect
+        API->>Cache: SET "W7e" → longUrl EX 86400 (다음부터 캐시 히트)
+        API-->>C: 302 Redirect
     end
-
-    C->>C: 원래 URL로 이동
 ```
 
-### 301 vs 302 리다이렉트
+### 301 vs 302 — 왜 bit.ly는 302를 쓰는가
 
-| 구분 | 301 Moved Permanently | 302 Found (Temporary) |
-|------|----------------------|----------------------|
-| 의미 | 영구 이동 | 임시 이동 |
-| 브라우저 캐싱 | O (다음엔 서버 안 거침) | X (매번 서버 거침) |
+| 구분 | 301 (영구) | 302 (임시) |
+|------|-----------|-----------|
+| 브라우저 캐싱 | O — 다음엔 서버 안 거침 | X — 매번 서버 거침 |
 | 서버 부하 | 낮음 | 높음 |
-| 클릭 추적 | 불가 | 가능 |
-| 추천 상황 | 부하 최소화 | 분석/추적 필요 시 |
+| 클릭 추적 | **불가** — 브라우저가 직접 이동 | **가능** — 매번 서버 거쳐감 |
 
-> bit.ly는 **302**를 사용합니다. 클릭 수, 지역, 기기 정보를 추적하기 위해서입니다.
+bit.ly의 수익은 클릭 분석 데이터다. 몇 명이 어디서 어떤 기기로 클릭했는지를 알아야 광고주에게 팔 수 있다. 그래서 302를 쓴다. 순수히 부하 최소화가 목표라면 301이 낫다.
 
 ---
 
-## 6. 데이터베이스 설계
-
-### 테이블 스키마
+## 데이터베이스 설계
 
 ```sql
 CREATE TABLE urls (
@@ -253,329 +192,111 @@ CREATE TABLE urls (
     user_id     BIGINT,
     created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at  DATETIME,
-    click_count BIGINT      DEFAULT 0,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_short_code (short_code),
-    INDEX idx_long_url (long_url(255)),  -- 중복 URL 빠른 조회
-    INDEX idx_user_id (user_id),
-    INDEX idx_expires_at (expires_at)   -- 만료 정리 작업용
-);
-
-CREATE TABLE users (
-    id          BIGINT      NOT NULL AUTO_INCREMENT,
-    email       VARCHAR(255) NOT NULL,
-    api_key     VARCHAR(64),
-    tier        ENUM('free', 'pro', 'enterprise') DEFAULT 'free',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_email (email),
-    INDEX idx_api_key (api_key)
-);
-
--- 클릭 분석 (별도 저장 또는 Kafka → 데이터웨어하우스)
-CREATE TABLE click_logs (
-    id          BIGINT      NOT NULL AUTO_INCREMENT,
-    short_code  VARCHAR(7)  NOT NULL,
-    clicked_at  DATETIME    NOT NULL,
-    ip_country  VARCHAR(2),
-    device_type VARCHAR(20),
-    referer     VARCHAR(255),
-    PRIMARY KEY (id),
-    INDEX idx_short_code_time (short_code, clicked_at)
+    UNIQUE KEY uk_short_code (short_code),   -- 단축 코드 중복 방지
+    INDEX idx_long_url (long_url(255)),       -- 동일 URL 재요청 시 빠른 조회
+    INDEX idx_expires_at (expires_at)         -- 만료 배치 작업용
 );
 ```
 
-### NoSQL vs RDBMS 선택
-
-```mermaid
-graph TD
-    Q{"어떤 DB를?"}
-    Q --> A["RDBMS MySQL/PostgreSQL"]
-    Q --> B["NoSQL Cassandra/DynamoDB"]
-
-    A --> A1["장점: ACID 트랜잭션<br>중복 URL 체크 원자적"]
-    A --> A2["단점: 수평 확장 어려움<br>대용량 시 샤딩 필요"]
-
-    B --> B1["장점: 수평 확장 쉬움<br>대용량 처리 탁월"]
-    B --> B2["단점: 중복 체크 복잡<br>트랜잭션 제한적"]
-
-    A --> C["추천: 초기~중간 규모"]
-    B --> D["추천: 초대규모 글로벌"]
-```
+왜 `long_url`에 인덱스를 걸지 않으면 안 되는가? 같은 긴 URL을 두 번 단축 요청할 때 기존 코드를 반환해야 한다. 인덱스 없으면 매번 풀 스캔이다.
 
 ---
 
-## 7. 캐싱 전략
+## 캐시 크기 계산
 
-### Redis 캐시 설계
-
-```python
-class URLCache:
-    def __init__(self, redis_client, ttl=86400):  # 24시간 기본
-        self.redis = redis_client
-        self.ttl = ttl
-
-    def get_long_url(self, short_code: str) -> str | None:
-        """캐시에서 원래 URL 조회"""
-        return self.redis.get(f"url:{short_code}")
-
-    def set_url(self, short_code: str, long_url: str, ttl: int = None):
-        """URL 매핑 캐시 저장"""
-        self.redis.setex(
-            f"url:{short_code}",
-            ttl or self.ttl,
-            long_url
-        )
-
-    def invalidate(self, short_code: str):
-        """캐시 무효화"""
-        self.redis.delete(f"url:{short_code}")
-```
-
-### 캐시 크기 계산
+파레토 법칙: 상위 20% URL이 트래픽 80%를 처리한다.
 
 ```
-캐시 히트율 목표: 80%
-인기 URL 비율: 상위 20%가 트래픽 80% 처리 (파레토 법칙)
-
-일일 읽기 QPS = 116,000
-캐시해야 할 URL 수 = 1억 × 0.2 = 2,000만건
-URL 하나 크기 = 7 + 100 = 107B
-
+전체 URL 수 = 1억 × 0.2 (상위 20%) = 2,000만 건
+URL 하나 캐시 크기 = 7B + 100B = 107B
 필요 메모리 = 2,000만 × 107B ≈ 2.1GB
-Redis 서버 1대(16GB)면 충분!
+
+→ Redis 서버 1대 (16GB)로 충분
 ```
+
+캐시가 없다면? DB에 초당 116,000 쿼리. MySQL 커넥션 풀이 즉시 고갈된다.
 
 ---
 
-## 8. 사용자 지정 URL
+## 확장성 — 언제 샤딩이 필요한가
 
-```python
-def create_custom_url(long_url: str, custom_code: str, user_id: int) -> str:
-    # 1. 코드 유효성 검사 (영숫자, 3-16자)
-    if not re.match(r'^[a-zA-Z0-9_-]{3,16}$', custom_code):
-        raise ValueError("Invalid custom code format")
-
-    # 2. 예약어 확인 (admin, api, login 등)
-    RESERVED = {'admin', 'api', 'login', 'logout', 'help', 'about'}
-    if custom_code.lower() in RESERVED:
-        raise ValueError("Reserved word")
-
-    # 3. 중복 확인
-    existing = db.query("SELECT id FROM urls WHERE short_code = ?", custom_code)
-    if existing:
-        raise ConflictError("Custom code already taken")
-
-    # 4. 저장
-    db.execute(
-        "INSERT INTO urls (short_code, long_url, user_id) VALUES (?, ?, ?)",
-        (custom_code, long_url, user_id)
-    )
-
-    return f"https://bit.ly/{custom_code}"
-```
-
----
-
-## 9. 확장성 — 샤딩 전략
-
-데이터가 수십 TB를 넘어서면 단일 DB로는 감당이 안 됩니다.
+10년 저장량이 50TB다. 단일 MySQL로는 한계가 있다. **Consistent Hashing**으로 샤딩하면 샤드 추가 시 데이터 이동을 최소화할 수 있다:
 
 ```mermaid
 graph TD
-    Router["샤드 라우터"] --> S1["샤드 1<br>short_code A-G<br>MySQL"]
-    Router --> S2["샤드 2<br>short_code H-N<br>MySQL"]
-    Router --> S3["샤드 3<br>short_code O-Z<br>MySQL"]
-    Router --> S4["샤드 4<br>short_code 0-9<br>MySQL"]
-
-    API["API 서버"] --> Router
-```
-
-**일관된 해싱 (Consistent Hashing)**을 사용하면 샤드 추가/제거 시 데이터 이동을 최소화할 수 있습니다.
-
-```python
-def get_shard(short_code: str, num_shards: int) -> int:
-    """short_code의 첫 글자 기준 샤드 결정"""
-    hash_value = sum(ord(c) for c in short_code)
-    return hash_value % num_shards
+    API["API 서버"] --> Router["샤드 라우터<br>(short_code 기준 해싱)"]
+    Router -->|"hash % 4 == 0"| S1["샤드 1 (MySQL)"]
+    Router -->|"hash % 4 == 1"| S2["샤드 2 (MySQL)"]
+    Router -->|"hash % 4 == 2"| S3["샤드 3 (MySQL)"]
+    Router -->|"hash % 4 == 3"| S4["샤드 4 (MySQL)"]
 ```
 
 ---
 
-## 10. URL 만료 처리
+## URL 만료 처리
 
 ```mermaid
 graph TD
-    A["URL 만료 처리 방법"]
-    A --> B["요청 시 확인 Lazy"]
-    A --> C["배치 작업 Eager"]
-
-    B --> D["장점: 구현 단순<br>단점: 만료 URL이 DB에 남음"]
-    C --> E["장점: DB 정리됨<br>단점: 배치 부하"]
-
-    E --> F["Cron Job<br>매일 새벽 3시 실행"]
-    F --> G["DELETE FROM urls<br>WHERE expires_at < NOW()<br>LIMIT 10000"]
+    A["만료 처리 전략"] --> B["Lazy (요청 시 확인)"]
+    A --> C["Eager (배치 정리)"]
+    B --> B1["장점: 구현 단순"]
+    B --> B2["단점: 만료된 행이 DB에 계속 존재"]
+    C --> C1["장점: DB 용량 관리"]
+    C --> C2["단점: 배치 부하"]
 ```
 
-**요청 시 만료 확인:**
+실무에서는 **두 가지 조합**: 요청 시 만료 확인(즉시 응답)  + 새벽 배치 정리(DB 정리).
+
 ```python
 def redirect(short_code: str):
-    url = db.query(
-        "SELECT long_url, expires_at FROM urls WHERE short_code = ?",
-        short_code
-    )
-
+    url = db.query("SELECT long_url, expires_at FROM urls WHERE short_code = ?", short_code)
     if not url:
-        raise NotFoundError("URL not found")
-
+        raise NotFoundError()
     if url.expires_at and url.expires_at < datetime.now():
-        raise GoneError("URL has expired")  # 410 Gone
-
+        raise GoneError()  # 410 Gone — 영구 삭제된 리소스
     return RedirectResponse(url.long_url, status_code=302)
 ```
 
 ---
 
-## 11. 분석 및 통계
+## 극한 시나리오: 슈퍼볼 광고 순간
 
-```mermaid
-graph LR
-    Click["클릭 이벤트"] --> Kafka["Kafka<br>메시지 큐"]
-    Kafka --> StreamProcessor["Flink/Spark Streaming<br>실시간 집계"]
-    StreamProcessor --> Redis["Redis<br>실시간 클릭수"]
-    Kafka --> S3["S3<br>원시 데이터"]
-    S3 --> Athena["AWS Athena<br>배치 분석"]
-    Athena --> Dashboard["분석 대시보드"]
-```
-
-**클릭 추적 비동기 처리:**
-```python
-async def track_click(short_code: str, request: Request):
-    """클릭을 비동기로 추적 (리다이렉트 속도 영향 없음)"""
-    asyncio.create_task(
-        kafka_producer.send('click-events', {
-            'short_code': short_code,
-            'ip': request.client.host,
-            'user_agent': request.headers.get('user-agent'),
-            'referer': request.headers.get('referer'),
-            'timestamp': time.time()
-        })
-    )
-```
-
----
-
-## 12. Rate Limiting (남용 방지)
-
-```python
-def check_rate_limit(user_id: str, tier: str) -> bool:
-    """Redis 기반 Rate Limiting"""
-    limits = {
-        'free': 100,       # 시간당 100건
-        'pro': 1000,       # 시간당 1000건
-        'enterprise': 10000
-    }
-
-    key = f"rate:{user_id}:{int(time.time() / 3600)}"  # 시간 단위
-
-    current = redis.incr(key)
-    if current == 1:
-        redis.expire(key, 3600)  # 1시간 TTL
-
-    return current <= limits.get(tier, 100)
-```
-
----
-
-## 13. 극한 시나리오: 슈퍼볼 광고 순간
-
-2023년 슈퍼볼에서 코인베이스가 QR코드만 보여주는 광고를 방영했습니다. 수천만 명이 동시에 스캔하며 서버가 다운됐습니다. URL 단축기도 유사한 상황이 발생할 수 있습니다.
-
-```
-시나리오: 유명 유튜버가 bit.ly 링크를 방송에서 보여줌
-순간 트래픽: 초당 50만 요청 (평상시 100배)
-```
-
-### 대응 방안
+유명 방송에서 bit.ly 링크가 노출되면 순간 트래픽이 평상시 100배가 된다.
 
 ```mermaid
 graph TD
-    Traffic["초당 50만 요청"] --> CDN["CDN Edge<br>301 캐싱된 경우 처리"]
-    Traffic --> LB["오토스케일링 로드밸런서"]
-
-    LB --> AS["Auto Scaling Group<br>EC2 자동 증가"]
-    LB --> RateLimit["Rate Limiter<br>IP당 초당 10건 제한"]
-
-    AS --> Cache["Redis 클러스터<br>캐시 히트 99%"]
-    Cache --> DB["DB 조회 최소화"]
-
-    subgraph "Hot URL 처리"
-        HotDetect["인기 URL 감지<br>Redis Sorted Set"]
-        HotDetect --> PreCache["사전 캐싱"]
-        HotDetect --> LocalCache["각 서버 로컬 캐시"]
-    end
+    Traffic["순간 초당 50만 요청"] --> CDN["CDN Edge<br>301 캐싱된 경우 바로 처리"]
+    Traffic --> LB["Auto Scaling<br>서버 자동 증설"]
+    LB --> LocalCache["각 서버 로컬 캐시<br>(Caffeine) — Redis도 우회"]
+    LB --> Redis["Redis 클러스터<br>캐시 히트 99%"]
+    Redis --> DB["DB 조회 극소화"]
 ```
 
-**Hot URL 감지:**
+**Hot URL 사전 감지:**
+
 ```python
 def record_access(short_code: str):
-    """인기 URL 추적 (Redis Sorted Set)"""
-    redis.zincrby("hot_urls", 1, short_code)
+    redis.zincrby("hot_urls", 1, short_code)  # 클릭마다 점수 증가
 
-def get_hot_urls(top_n: int = 100) -> list:
-    """상위 N개 인기 URL 반환"""
-    return redis.zrevrange("hot_urls", 0, top_n - 1, withscores=True)
-
-# 매 5분마다 HOT URL을 서버 로컬 캐시에 프리로딩
+# 매 5분마다 상위 1000개를 서버 로컬 메모리에 pre-loading
 @scheduler.every(minutes=5)
 def preload_hot_urls():
-    hot_urls = get_hot_urls(top_n=1000)
-    for short_code, _ in hot_urls:
-        long_url = db.get(short_code)
-        local_cache[short_code] = long_url
+    for short_code, _ in redis.zrevrange("hot_urls", 0, 999, withscores=True):
+        local_cache[short_code] = db.get(short_code)
 ```
 
----
-
-## 14. 완성된 아키텍처 다이어그램
-
-```mermaid
-graph TD
-    Client["클라이언트"] --> CF["CloudFront CDN<br>301 리다이렉트 캐싱"]
-    CF --> Route53[Route53 DNS]
-    Route53 --> ALB[Application Load Balancer]
-
-    ALB --> API_ASG["API 서버 Auto Scaling Group<br>최소 3대, 최대 50대"]
-
-    API_ASG --> LocalCache["로컬 캐시<br>Caffeine / Guava"]
-    API_ASG --> Redis["Redis Cluster<br>캐시 + Rate Limit + Hot URL"]
-    API_ASG --> IDService["Snowflake ID 서비스<br>2대 이중화"]
-
-    API_ASG --> DBProxy["RDS Proxy<br>Connection Pool"]
-    DBProxy --> RDS_M["("RDS Aurora 마스터<br>Multi-AZ")"]
-    RDS_M --> RDS_R1["("Aurora 읽기 레플리카 1")"]
-    RDS_M --> RDS_R2["("Aurora 읽기 레플리카 2")"]
-
-    API_ASG --> Kafka["Kafka<br>클릭 이벤트 스트리밍"]
-    Kafka --> Flink["Flink<br>실시간 집계"]
-    Kafka --> S3["S3<br>원시 로그 아카이브"]
-    Flink --> Analytics_Redis["Redis<br>실시간 통계"]
-
-    subgraph "운영 도구"
-        CloudWatch["CloudWatch 모니터링"]
-        Lambda["Lambda<br>만료 URL 정리"]
-    end
-```
+이 패턴이 없으면? Redis에도 초당 50만 요청이 몰린다. Redis는 빠르지만 무한하지 않다.
 
 ---
 
 ## 설계 결정 요약
 
-| 결정 사항 | 선택 | 이유 |
-|----------|------|------|
-| 코드 생성 방식 | Snowflake + Base62 | 충돌 없음, 확장 용이 |
-| 코드 길이 | 7자리 | 3.5조 URL 지원 |
-| 리다이렉트 방식 | 302 | 클릭 추적 가능 |
-| 캐시 | Redis Cluster | 분산 환경 적합 |
-| DB | Aurora MySQL | 안정성 + 읽기 레플리카 |
-| 클릭 추적 | Kafka 비동기 | 리다이렉트 성능 영향 없음 |
-| Rate Limit | Redis 슬라이딩 윈도우 | 정확한 제한 |
+| 결정 | 선택 | 이유 |
+|------|------|------|
+| 코드 생성 | Snowflake + Base62 | 분산 환경 충돌 없음, 7자리 3.5조 공간 |
+| 리다이렉트 | 302 (임시) | 클릭 추적 가능 |
+| 캐시 | Redis Cluster | 읽기 116k QPS를 DB에서 분리 |
+| DB | Aurora MySQL | ACID + 읽기 레플리카 |
+| 클릭 추적 | Kafka 비동기 | 리다이렉트 응답 시간에 영향 없음 |
+| 샤딩 | Consistent Hashing | 샤드 추가 시 재배치 최소화 |

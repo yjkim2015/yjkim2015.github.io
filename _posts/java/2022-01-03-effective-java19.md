@@ -1,5 +1,5 @@
 ---
-title: 상속을 고려해 설계하고 문서화하라. 그러지 않았다면 상속을 금지하라 - Effective Java[19]
+title: "상속을 고려해 설계하고 문서화하라, 그러지 않았다면 상속을 금지하라 — Effective Java[19]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,232 +7,252 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+상속은 강력하지만, "무심코" 열어두면 폭탄이 됩니다. 상속을 허용하려면 내부 동작 방식을 철저히 문서화해야 하고, 그게 어렵다면 차라리 상속을 아예 막는 게 낫습니다.
 
+---
 
+## 1. 상속용 클래스에서 문서화가 필요한 이유
 
-#### 🔗 상속을 고려한 설계와 문서화가 정확히 무슨 말이야?
+비유하자면 **복잡한 기계 부품의 설계 도면**입니다. 도면(문서) 없이 부품을 개조하면, 개조자가 내부 연결 구조를 모른 채 한 곳을 건드렸다가 전혀 다른 곳이 망가집니다. 상속도 마찬가지입니다.
 
-* 메소드를 재정의하면 어떤 일이 일어나는지를 정확히 정리하여 문서로 남겨야 한다. 
-  **즉, 상속용 클래스는 재정의 할 수 있는 메소드들을 내부적으로 어떻게 이용하는지(자기사용) 문서로 남겨야 한다.**
-* 클래스의 API로 공개된 메소드에서 클래스 자신의 또 다른 메소드를 호출할 수도 있다. 그런데 호출되는 메소드가 재정의 가능 메소드라면 그 사실을 호출하는 메소드의 API설명에 적시해야 한다.
-
-
-
-<hr>
-
-
-
-##### 💎 Implementation Requirements? 
-
-**API** 문서의 메소드 설명 끝에서 종종 위 문구로 시작하는 절을 볼 수 있는데, 그 메소드의 내부 동작 방식을 설명하는 곳이다.
-
-이 절은 메소드 주석에 <span style="color:red;">@implSpec</span> 태그를 붙여주면 자바독 도구가 생성해준다.
-
-<hr>
-
-다음은 **java.util.AbstractCollection**에서 발췌한 예이다.
-
-
-
-> public boolean remove(Object o)
->
-> 주어진 원소가 이 컬렉션 안에 있다면 그 인스턴스 하나 제거한다(선택적 동작)
-> 더 정확하게 말하면, 이 컬렉션 안에 'Object.equals(o, e) 가 참인 원소' e가 
-> 하나 이상 있다면 그 중 하나를 제거한다. 주어진 원소가 컬렉션 안에 있었다면(즉, 호출 결과 이 컬렉션이 변경됐다면) true를 반환한다.
->
-> Implementation Requirements : 이 메소드는 컬렉션을 순회하며 주어진 원소를 찾도록 구현되었다. 주어진 원소를 찾으면 반복자의 remove 메소드를 사용해 컬렉션에서 제거한다. 이 컬렉션이 주어진 객체를 갖고 있으나, 이 컬렉션의 iterator 메소드가 반환한 반복자가 remove 메소드를 구현하지 않았다면 UnsupportedOperationException을 던지니 주의하자.
-
-<br>
-
-**위 설명에 따르면 iterator 메소드를 재정의하면 remove 메소드의 동작에 영향을 줌을 알 수 있다. iterator 메소드로 얻은 반복자의 동작이 remove 메소드의 동작에 주는 영향도 정확히 설명 했다.**
-
-
-
-**<span style="color:red;">클래스를 안전하게 상속할 수 있도록 하려면 내부 구현 방식을 설명해야만 한다.</span>**
-
-
-
-> @impleSpec 태그는 자바 8에서 처음 도입되어 자바 9부터 본격적으로 사용되기 시작했다.
-
-<hr>
-
-#### 💎 훅 (Hook)?
-
-효율적인 하위 클래스를 큰 어려움 없이 만들 수 있게 하려면 클래스의 내부 동작 과정 중간에 끼어들 수 있는 **훅(hook)**을 잘 선별하여 **protected** **메소드 형태로 공개해야 할 수도 있다.**
-
-드물게는 protected 필드로 공개해야 할수도 있다.
-
-<hr>
-
-java.util.AbstractList의 removeRange 메소드를 예로 살펴보자.
-
-> proctected void removeRange(int fromIndex, int toIndex)
->
-> fromIndex(포함) 부터 toIndex(미포함)까지의 모든 원소를 이 리스트에서 제거한다.
->
-> toIndex 이후의 원소들은 앞으로 (index만큼씩) 당겨진다. 이 호출로 리스트는 'toIndex - fromIndex' 만큼 짧아진다. (toIndex == fromIndex라면 아무 효과가 없다.)
->
-> 이 리스트 혹은 이 리스트의 부분리스트에 정의된 clear 연산이 이 메소드를 호출한다. 리스트 구현의 내부 구조를 활용하도록 이 메소드를 재정의하면 이 리스트와 부분리스트의 clear 연산 성능을 크게 개선할 수 있다.
->
-> Implementation Requirements : 이 메소드는 fromIndex에서 시작하는 리스트 반복자를 얻어 모든 원소를 제거할 때 까지 ListIterator.next와 ListIterator.remove를 반복 호출하도록 구현되었다. 
->
-> 주의 : ListIterator.remove가 선형 시간이 걸리면 이 구현의 성능은 제곱이 비례한다.
->
-> Parameters:
-> 	fromIndex	제거할 첫 원소의 인덱스
-> 	toIndex		 제거할 마지막 원소의 다음 인덱스
-
-List 구현체의 최종 사용자는 removeRnage 메소드에 관심이 없다.
-
-**그럼에도 불구하고 이 메소드를 제공하는 이유는 단지 하위 클래스에서 부분리스트의 <span style="color:red;">clear 메소드를 고성능으로 만들기 쉽게 하기 위해서이다.</span>**
-
-removeRange 메소드가 없다면 하위 클래스에서 clear 메소드를 호출하면 제곱에 비례해 성능이 느려지거나 부분리스트의 메커니즘을 밑바닥 부터 새로 구현해야 했을 것이다.
-
-<br>
-
-**그렇다면 상속용 클래스를 설계 할 때 어떤 메소드를 protected로 노출해야 할지는 어떻게 결정 할까?**
-
-특별한 방법은 없고 소위 말하는 <span style="color:red;">'노가다'</span>가 필요하다.
-
-심사숙고해서 잘 예측해본 다음, 실제 하위 클래스를 만들어 시험해보는것이 최선이다.
-
-**protected 메소드 하나하나가 내부 구현에 해당하므로 그 수는 가능한 한 적어야 한다. 한편으로는 너무 적게 노출해서 상속으로 얻는 이점마저 없애지 않도록 주의해야 한다.**
-
-<hr>
-
-
-
-#### 💎 상속 용 클래스를 시험하는 방법?
-
-이또한 노가다다.. **즉,  상속용 클래스를 시험하는 방법은 직접 하위 클래스를 만들어 보는 것이 <span style="color:red">유일</span>하다**.
-
-<br>
-
-꼭 필요한 protected 멤버를 놓쳤다면 하위 클래스를 작성할 때 그 빈자리가 확연히 드러난다. 
-거꾸로 하위 클래스를 여러 개 만들 때까지 전혀 쓰이지 않는 protected 멤버는
-사실 private이었어야 할 가능성이 크다.
-
-<br>
-
-**널리 쓰일 클래스를 상속용으로 설계한다면 문서화한 내부 사용 패턴과, protected 메소드와 필드를 구현하면서 선택한 결정에 영원히 책임져야 함을 잘 인식해야 한다.**
-
-이 결정들이 그 클래스의 성능과 기능에 영원한 족쇄가 될 수 있다.
-
-**<span style="color:red">그러니</span> 상속용으로 설계한 클래스는 배포 전에 반드시 하위 클래스를 만들어 검증해야한다.**
-
-
-
-<hr>
-
-#### 🔗 상속을 허용하는 클래스가 지켜야 할 제약
-
-**상속용 클래스의 생성자는 직접적으로든 간접적으로든 재정의 가능 메소드를 호출해서는 안된다.**
-
-<br>
-
-상위 클래스의 생성자가 하위 클래스의 생성자보다 먼저 실행되므로 하위 클래스에서 재정의한 메소드가 하위 클래스의 생성자보다 먼저 호출된다.
-
-이때 그 재정의한 메소드가 <span style="color:red">하위 클래스의 생성자에서 초기화하는 값에 의존한다면 </span>의도대로 동작 하지 않을것이다.
-
-<hr>
-
-예시를 보자.
-
-```java
-public class Super {
-    //잘못된 예 - 생성자가 재정의 가능 메소드를 호출한다.
-    public Super() {
-        overrideMe();
-    }
-    
-    public void overrideMe() {
-    }
-}
+```mermaid
+graph TD
+    A["상속용 클래스 설계 원칙"] --> B["재정의 가능 메서드의\n자기 사용 패턴 문서화"]
+    A --> C["내부적으로 어떤 메서드가\n어느 메서드를 호출하는지 명시"]
+    A --> D["protected hook 메서드를\n잘 선별해 공개"]
+    B --> E["@implSpec 태그로\nJavadoc 자동 생성"]
+    style A fill:#4a9eff,color:#fff
 ```
 
+핵심 원칙: **재정의 가능한 메서드를 내부에서 어떻게 사용하는지(자기 사용, self-use)를 반드시 문서로 남겨야 합니다.**
 
+---
+
+## 2. @implSpec — 내부 구현 방식을 문서화하는 방법
+
+`AbstractCollection.remove()`의 실제 Javadoc을 봅시다.
+
+```java
+/**
+ * 주어진 원소가 이 컬렉션 안에 있다면 그 인스턴스 하나를 제거합니다.
+ *
+ * @implSpec
+ * 이 메서드는 컬렉션을 순회하며 주어진 원소를 찾도록 구현되었습니다.
+ * 주어진 원소를 찾으면 반복자의 remove 메서드를 사용해 제거합니다.
+ * 이 컬렉션의 iterator()가 반환한 반복자가 remove를 구현하지 않았다면
+ * UnsupportedOperationException을 던집니다.
+ */
+public boolean remove(Object o) { ... }
+```
+
+이 문서를 통해 알 수 있는 것: **`iterator()` 메서드를 재정의하면 `remove()` 동작이 바뀝니다.** 이 관계가 문서에 명시되어 있으므로 하위 클래스 작성자가 안전하게 설계할 수 있습니다.
+
+```mermaid
+sequenceDiagram
+    participant Client as 클라이언트
+    participant AC as AbstractCollection
+    participant Sub as 하위 클래스
+
+    Client->>AC: remove(o) 호출
+    AC->>Sub: iterator() 호출 (재정의된 버전!)
+    Sub-->>AC: 커스텀 Iterator 반환
+    AC->>AC: iterator.remove() 호출
+    Note over Sub: iterator()를 재정의하면<br/>remove()도 영향받음<br/>→ 문서가 이 사실을 명시해야 함
+```
+
+**만약 이걸 문서화하지 않으면?** 하위 클래스 작성자는 `iterator()`를 재정의했을 때 `remove()`까지 영향받는다는 것을 모릅니다. 다음 Java 릴리즈에서 `remove()`의 내부 구현이 바뀌면 하위 클래스가 갑자기 오동작할 수 있습니다.
+
+---
+
+## 3. 훅(Hook) 메서드 — protected로 내부 진입점 제공
+
+비유하자면 **공장 라인의 점검구**입니다. 외부에서 라인 전체를 교체할 수 없지만, 설계자가 미리 만들어둔 점검구를 통해서는 특정 부분만 교체할 수 있습니다.
+
+`AbstractList.removeRange()`가 대표적인 예입니다.
+
+```java
+/**
+ * fromIndex(포함)부터 toIndex(미포함)까지의 원소를 모두 제거합니다.
+ *
+ * @implSpec
+ * fromIndex에서 시작하는 리스트 반복자를 얻어 모든 원소를 제거할 때까지
+ * ListIterator.next와 ListIterator.remove를 반복 호출합니다.
+ * 주의: ListIterator.remove가 선형 시간이 걸리면 이 구현의 성능은 제곱에 비례합니다.
+ */
+protected void removeRange(int fromIndex, int toIndex) { ... }
+```
+
+`List` 최종 사용자는 `removeRange()`를 직접 호출하지 않습니다. 그런데 왜 `protected`로 공개했을까요?
+
+```mermaid
+graph LR
+    A["list.subList(2, 5).clear()"] --> B["AbstractList.clear()"]
+    B --> C["removeRange(2, 5) 호출"]
+    C --> D{"removeRange\n재정의했나?"}
+    D -->|"No (기본 구현)"| E["각 원소마다 iterator.remove\n→ O(n²) 성능"]
+    D -->|"Yes (ArrayList 등)"| F["배열 복사로 한 번에 제거\n→ O(n) 성능"]
+    style E fill:#ff6b6b,color:#fff
+    style F fill:#51cf66,color:#fff
+```
+
+`removeRange()`가 없었다면, `clear()`를 최적화하려는 하위 클래스가 밑바닥부터 다시 구현해야 했습니다.
+
+**어떤 메서드를 protected로 노출할지는 어떻게 결정하나?** 정해진 공식은 없습니다. 직접 하위 클래스를 여러 개 만들어보는 것이 유일한 방법입니다. protected 메서드를 만들었는데 하위 클래스에서 한 번도 쓰이지 않는다면 `private`이었어야 합니다.
+
+---
+
+## 4. 상속용 클래스의 가장 큰 함정 — 생성자에서 재정의 가능 메서드 호출
+
+이것이 가장 흔하고 치명적인 실수입니다.
+
+```java
+// 잘못된 설계 — 생성자에서 재정의 가능 메서드 호출!
+public class Super {
+    public Super() {
+        overrideMe();  // 위험!
+    }
+
+    public void overrideMe() { }
+}
+```
 
 ```java
 public final class Sub extends Super {
-    //초기화 되지 않은 final 필드, 생성자에서 초기화 한다.
     private final Instant instant;
-    
+
     Sub() {
-        instant = Instant.now();
+        // super() 생성자가 먼저 실행됨 → overrideMe() 호출됨
+        // 그 시점에 instant는 아직 null!
+        instant = Instant.now();  // 이후에 실행됨
     }
-    
-    //재정의 가능 메소드, 상위 클래스의 생성자가 호출한다.
+
     @Override
     public void overrideMe() {
-        System.out.println(instant);
+        System.out.println(instant);  // 첫 번째 호출 시 null 출력!
     }
-    
+
     public static void main(String[] args) {
         Sub sub = new Sub();
-        sub.overrideMe();
+        sub.overrideMe();  // 두 번째 호출은 정상 출력
+    }
+}
+// 출력: null
+//       2024-01-01T12:00:00Z
+```
+
+**왜 이런 일이 생기나?**
+
+```mermaid
+sequenceDiagram
+    participant Client as main()
+    participant Sub as Sub 생성자
+    participant Super as Super 생성자
+    participant OV as overrideMe()
+
+    Client->>Sub: new Sub() 호출
+    Sub->>Super: super() 자동 호출 (Java 규칙)
+    Super->>OV: overrideMe() 호출
+    Note over OV: instant는 아직 null!<br/>Sub 생성자가 아직 실행 전
+    OV-->>Super: null 출력
+    Super-->>Sub: Super 생성자 완료
+    Sub->>Sub: instant = Instant.now() 실행
+    Sub-->>Client: Sub 객체 완성
+```
+
+상위 클래스 생성자가 **항상 하위 클래스 생성자보다 먼저** 실행됩니다. 생성자에서 재정의 가능한 메서드를 호출하면, 하위 클래스의 초기화가 끝나기 전에 그 메서드가 실행됩니다.
+
+> `private`, `final`, `static` 메서드는 재정의가 불가능하므로 생성자에서 안전하게 호출할 수 있습니다.
+
+---
+
+## 5. Cloneable과 Serializable — 상속을 더 어렵게 만드는 인터페이스
+
+`clone()`과 `readObject()`는 생성자와 유사합니다. 새 객체를 만들기 때문입니다. 따라서 동일한 규칙이 적용됩니다.
+
+```mermaid
+graph TD
+    A["clone() / readObject()"] --> B["내부적으로 재정의 가능 메서드를\n호출해서는 안 됨"]
+    B --> C["readObject의 경우"]
+    B --> D["clone의 경우"]
+    C --> C1["하위 클래스 상태가 미처\n역직렬화되기 전에\n재정의한 메서드가 호출됨"]
+    D --> D1["복제본 상태 수정 전에\n재정의한 메서드가 호출됨"]
+    style C1 fill:#ff6b6b,color:#fff
+    style D1 fill:#ff6b6b,color:#fff
+```
+
+또한, `Serializable`을 구현하는 상속용 클래스에 `readResolve()`나 `writeReplace()` 메서드가 있다면 반드시 `protected`로 선언해야 합니다. `private`으로 선언하면 하위 클래스에서 무시됩니다.
+
+---
+
+## 6. 상속을 허용할 명분이 없다면 — 상속을 금지하라
+
+상속을 위해 설계하지 않은 클래스는 상속을 막는 것이 최선입니다.
+
+**방법 1: final 클래스로 선언**
+
+```java
+public final class MyClass {
+    // 아무도 이 클래스를 상속할 수 없음
+}
+```
+
+**방법 2: 모든 생성자를 private/package-private으로 + 정적 팩토리**
+
+```java
+public class MyClass {
+    private MyClass() { }  // 외부에서 상속 불가 (생성자 접근 불가)
+
+    public static MyClass create() {
+        return new MyClass();
     }
 }
 ```
 
-위 프로그램이 instant를 두 번 출력하리라 기대했겠지만, 첫 번째는 null을 출력한다. 상위 클래스의 생성자는 하위 클래스의 생성자가 인스턴스 필드를 초기화 하기도 전에 overrideMe를 호출하기 때문이다.
+**상속을 꼭 허용해야 하는데 상속용으로 설계되지 않은 클래스라면?** 재정의 가능 메서드의 자기 사용을 없애는 방법이 있습니다.
 
-<hr>
+```java
+public class Base {
+    // 재정의 가능한 메서드의 실제 로직을 private 도우미로 분리
+    private void doSomethingHelper() {
+        // 실제 로직
+    }
 
-> private, final, static 메소드는 재정의가 불가능하니 생성자에서 안심하고 호출해도 된다.
+    // 재정의 가능한 메서드는 private 도우미를 호출
+    public void doSomething() {
+        doSomethingHelper();
+    }
 
-<hr>
-
-
-
-#### 💎 상속의 설계를 더 어렵게 ! Cloneable, Serializable
-
-Cloneable과 Serializable 인터페이스 둘 중 하나라도 구현한 클래스를 상속할 수 있게 설계하는 것은 일반적으로 좋지 않은 생각이다. 
-
-그 클래스를 확장하려는 프로그래머에게 엄청난 부담을 지우기 때문이다.
-
-<br>
-
-
-
-clone과 readObject 메소드는 생성자와 비슷한 효과를 낸다(새로운 객체를 만든다). 
-
-**즉, clone과 readObject 모두 직접적으로든 간접적으로든 재정의 가능 메소드를 호출해서는 안 된다.**
-
-<br>
-
-**readObject**의 경우 하위 클래스의 상태가 미처 다 역직렬화 되기 전에 재정의한 메소드부터 호출하게 된다.
-
-**clone**의 경우 하위 클래스의 clone 메소드가 복제본의 상태를 (올바른 상태로) 수정하기 전에 재정의한 메소드를 호출한다.
-
-<span style="color:red;">어느 쪽이든 프로그램 오작동으로 이어질 것이다.</span>
-
-<br>
-
-**마지막으로**, Serializable을 구현한 상속용 클래스가 **readResolve나 writeReplace** 메소드를 갖는다면 이 메소드들은 **private이 아닌 protected로 선언해야 한다.**
-
-private으로 선언한다면 하위 클래스에서 상속을 허용하기 위해 내부 구현을 클래스 API로 공개하는 예 중 하나이다.
-
-
-
-<hr>
-
-
-
-> 상속용 클래스를 설계하기란 결코 만만치 않다. 
-> 클래스 내부에서 스스로를 어떻게 사용하는지(자기사용 패턴) 모두 문서로 남겨야 하며, 일단 문서화한 것은 그 클래스가 쓰이는 한 반드시 지켜야 한다. 
-> 그렇지 않으면 그 내부 구현 방식을 믿고 활용하던 하위 클래스를 오동작하게 만들 수 있다. 
->
-> 다른 이가 효율 좋은 하위 클래스를 만들 수 있도록 일부 메소드를 protected로 제공해야 할 수도 있다.
->
-> **그러니 클래스를 확장해야 할 명확한 이유가 떠오르지 않으면 상속을 금지하는 편이 나을 것이다.**
->
-> **상속을 금지하려면 클래스를 final로 선언하거나 생성자 모두를 외부에서 접근할 수 없도록 만들면 된다.**
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+    // 생성자에서는 private 도우미를 호출 — 재정의 가능 메서드 호출 X
+    public Base() {
+        doSomethingHelper();  // 안전
+    }
+}
 ```
 
+---
+
+## 7. 요약
+
+```mermaid
+graph TD
+    A["상속용 클래스를 만들어야 한다면"] --> B["자기 사용 패턴 모두 @implSpec 문서화"]
+    A --> C["필요한 hook은 protected로 공개\n(직접 하위 클래스 만들어 검증)"]
+    A --> D["생성자에서 재정의 가능 메서드\n절대 호출 금지"]
+    A --> E["clone/readObject에서도\n재정의 가능 메서드 호출 금지"]
+
+    F["상속할 이유가 없다면"] --> G["final 클래스 또는\nprivate 생성자로 상속 금지"]
+
+    style D fill:#ff6b6b,color:#fff
+    style E fill:#ff6b6b,color:#fff
+    style G fill:#51cf66,color:#fff
+```
+
+**체크리스트:**
+1. 재정의 가능 메서드가 내부에서 다른 메서드를 호출하나? → `@implSpec`으로 문서화
+2. 생성자, `clone()`, `readObject()`에서 재정의 가능 메서드를 호출하나? → 즉시 제거
+3. 상속이 꼭 필요한 클래스인가? 아니라면 `final`로 선언
+4. 하위 클래스를 직접 만들어서 protected 메서드 설계를 검증했나?
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

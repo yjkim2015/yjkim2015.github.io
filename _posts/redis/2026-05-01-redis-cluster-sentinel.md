@@ -1,5 +1,5 @@
 ---
-title: "Redis 배포 모드 — 싱글, 센티넬, 클러스터"
+title: "Redis 배포 모드 — 싱글, 센티넬, 클러스터를 언제 써야 하는가"
 categories:
 - REDIS
 toc: true
@@ -7,270 +7,239 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-개발 환경에서 잘 돌아가던 Redis가 프로덕션에서 새벽에 죽었다. 마스터 한 대뿐이었고, 자동 복구 수단도 없었다. 엔지니어가 잠에서 깨 수동으로 레플리카를 마스터로 승격시키기까지 20분이 걸렸다. 센티넬이 있었다면 30초 안에 자동으로 해결됐을 문제다.
+새벽 2시, 서비스가 죽었다는 알림이 온다. Redis 마스터 서버 한 대가 다운됐다. 재시작하려면 엔지니어가 일어나서 접속해야 한다. 복구까지 20분. 그 20분 동안 캐시가 없으니 DB에 쿼리가 몰리고, DB도 죽는다. 센티넬이 있었다면 30초 안에 자동으로 레플리카가 승격되어 서비스가 살아났을 것이다. **배포 모드 선택은 "언제 복구될 것인가"를 결정하는 인프라 설계다.**
 
-## 개요
+## 세 가지 모드, 세 가지 상황
 
-> **비유**: 싱글 모드는 혼자 일하는 자영업자, 센티넬은 매니저가 있는 직원, 클러스터는 여러 지점을 운영하는 프랜차이즈다. 규모와 안정성 요구에 따라 선택이 달라진다.
+> **비유**: 싱글 모드는 혼자 일하는 자영업자다 — 주인이 아프면 가게가 닫힌다. 센티넬은 매니저가 있는 직원 구조다 — 주인이 쓰러져도 매니저가 대리를 세운다. 클러스터는 전국 프랜차이즈다 — 한 지점이 타도 다른 지점이 영업한다. 어느 구조를 선택할지는 "얼마나 크게, 얼마나 안정적으로 운영해야 하는가"에 달려 있다.
 
-Redis는 운영 목적과 규모에 따라 세 가지 배포 모드를 제공한다.
-
-| 모드 | 특징 | 적합 환경 |
-|------|------|----------|
-| **싱글(Standalone)** | 단일 노드, 간단한 구성 | 개발, 소규모 서비스 |
-| **센티넬(Sentinel)** | 자동 페일오버, 고가용성 | 중규모, 단일 마스터 |
-| **클러스터(Cluster)** | 수평 확장, 데이터 분산 | 대규모, 고처리량 |
+| 모드 | 자동 복구 | 수평 확장 | 최소 노드 | 적합 환경 |
+|------|---------|---------|---------|---------|
+| **싱글(Standalone)** | 없음 (수동) | 불가 | 1 | 개발, 테스트 |
+| **센티넬(Sentinel)** | 있음 | 불가 (단일 마스터) | 4 (Sentinel 3 + Redis 1) | 운영, 수백 GB 이하 |
+| **클러스터(Cluster)** | 있음 | 가능 | 6 (마스터 3 + 레플리카 3) | 대규모, TB급, 높은 처리량 |
 
 ---
 
-## 싱글 모드 (Standalone)
+## 싱글 모드 — 왜 운영 환경에서는 쓰면 안 되는가
 
-### 구성
-
-단일 Redis 프로세스로 동작한다. 선택적으로 레플리카(Replica)를 추가할 수 있지만, 페일오버는 수동으로 처리해야 한다.
+싱글 모드는 Redis 프로세스 한 개가 전부다. 선택적으로 레플리카를 붙일 수 있지만, 마스터가 죽으면 사람이 직접 레플리카를 승격시켜야 한다.
 
 ```mermaid
 graph LR
-    C[Client] --> M[Redis Master]
-    M -->|비동기 복제 선택 사항| R[Redis Replica]
+    C["Client"] --> M["Redis Master"]
+    M -->|"비동기 복제 (선택)"| R["Redis Replica"]
 ```
+
+### 왜 싱글 모드는 운영에 위험한가
+
+마스터가 죽는 순간 **모든 쓰기가 실패**한다. 레플리카가 있어도 자동 승격이 없으므로:
+
+1. 모니터링 알림이 울린다
+2. 엔지니어가 잠에서 깨 접속한다
+3. `REPLICAOF NO ONE`으로 레플리카를 수동 승격한다
+4. 애플리케이션 설정의 Redis 주소를 바꾼다
+5. 재배포한다
+
+이 과정이 30분이면 서비스는 30분 죽는다. 새벽이면 1시간도 된다.
 
 ### 기본 설정 (redis.conf)
 
 ```conf
-# 바인딩 주소
+# 싱글 모드 기본 설정
 bind 0.0.0.0
-
-# 포트
 port 6379
-
-# 백그라운드 실행
 daemonize yes
 
-# 데이터 디렉토리
-dir /var/lib/redis
-
-# RDB 스냅샷 (초:변경횟수)
-save 900 1
+# 영속성 — 없으면 재시작 시 모든 데이터가 사라진다
+save 900 1          # 900초 안에 1개 이상 변경 시 스냅샷
 save 300 10
 save 60 10000
-
-# AOF 활성화
-appendonly yes
+appendonly yes      # AOF: 매 명령어를 로그로 기록
 appendfsync everysec
 
-# 최대 메모리 설정
+# 메모리 한도 초과 시 퇴거 정책
 maxmemory 2gb
 maxmemory-policy allkeys-lru
 
-# 로그 파일
 logfile /var/log/redis/redis.log
 ```
 
-### 레플리카 설정
+### 레플리카 추가 (반쪽짜리 고가용성)
 
 ```conf
-# 레플리카 서버에서 설정
+# 레플리카 서버의 redis.conf
 replicaof 192.168.1.10 6379
-
-# 레플리카 읽기 전용 (기본값)
-replica-read-only yes
+replica-read-only yes   # 레플리카는 읽기 전용 — 실수로 쓰면 데이터 불일치 발생
 ```
 
-### 한계
-
-| 한계 | 설명 |
-|------|------|
-| **단일 장애점** | 마스터가 죽으면 서비스 중단 |
-| **수동 페일오버** | 레플리카 승격을 사람이 직접 수행 |
-| **단일 노드 용량** | 서버 메모리 이상으로 데이터 확장 불가 |
-| **쓰기 성능** | 단일 마스터가 모든 쓰기 처리 |
+레플리카를 붙이면 **읽기 분산**과 **데이터 백업**은 되지만, 자동 페일오버가 없으므로 여전히 수동 개입이 필요하다.
 
 ---
 
-## 센티넬 모드 (Sentinel)
+## 센티넬 모드 — 자동 페일오버의 실제 동작
 
-### 아키텍처
+> **비유**: 센티넬은 24시간 교대 근무하는 경비원이다. 주 건물(마스터)에 문제가 생기면 경비원들이 투표를 거쳐 부건물(레플리카)을 주 건물로 승격시키고, 고객(클라이언트)에게 "이제 저쪽으로 가세요"라고 안내한다.
 
-Sentinel은 Redis 마스터/레플리카를 **모니터링**하고, 마스터 장애 시 **자동으로 레플리카를 마스터로 승격**시키는 별도 프로세스다.
+Sentinel은 Redis 마스터/레플리카를 **감시**하고, 마스터 장애 시 **자동으로 레플리카를 마스터로 승격**시키는 별도 프로세스다.
+
+### 왜 Sentinel을 3개 이상 써야 하는가
+
+Sentinel 1개면 그 Sentinel 자체가 죽었을 때 페일오버가 불가능해진다. 2개면 과반수(2/2)가 필요한데, 한 쪽이 죽으면 과반수 미달이다. **3개 이상, 홀수**로 배포해야 과반수 quorum이 안정적으로 작동한다.
 
 ```mermaid
 graph TD
-    C[Client] --> SC[Sentinel 클러스터]
-    SC --> M[Redis Master]
-    M -->|복제| R1[Redis Replica 1]
-    M -->|복제| R2[Redis Replica 2]
+    S1["Sentinel 1"] --- S2["Sentinel 2"]
+    S2 --- S3["Sentinel 3"]
+    S3 --- S1
+    S1 & S2 & S3 -->|"PING 감시"| M["Redis Master :6379"]
+    S1 & S2 & S3 -->|"PING 감시"| R1["Replica 1 :6379"]
+    S1 & S2 & S3 -->|"PING 감시"| R2["Replica 2 :6379"]
+    M -->|"비동기 복제"| R1
+    M -->|"비동기 복제"| R2
 ```
 
-장애 발생:
+### 페일오버의 5단계
 
 ```mermaid
 sequenceDiagram
-    participant S as Sentinel
-    participant M as Redis Master
-    participant R as Replica
-    participant C as Client
+    participant S1 as "Sentinel 1 (감시자)"
+    participant S23 as "Sentinel 2,3 (동료)"
+    participant M as "Master (다운)"
+    participant R1 as "Replica 1 (후보)"
+    participant C as "Client"
 
-    Note over M: 다운 💀
-    S->>S: SDOWN 감지
-    S->>S: 다른 Sentinel들과 quorum 합의
-    S->>S: ODOWN 선언
-    S->>R: REPLICAOF NO ONE (새 마스터로 승격)
-    S-->>C: 새 마스터 주소 알림
+    Note over M: 💀 마스터 다운
+    S1->>M: PING (응답 없음)
+    Note over S1: 1단계. SDOWN 선언 (나 혼자 판단)
+    S1->>S23: "마스터가 안 응답해, 너희도 그래?"
+    S23->>M: PING (응답 없음)
+    Note over S1,S23: 2단계. ODOWN 선언 (quorum 이상 동의)
+    Note over S1: 3단계. 페일오버 리더 투표
+    S1->>R1: REPLICAOF NO ONE (4단계. 승격)
+    Note over R1: 새 마스터로 승격
+    S1-->>C: 5단계. 새 마스터 주소 알림
 ```
 
-**최소 구성:** Sentinel 3개 이상 (quorum 과반수 필요)
+**SDOWN vs ODOWN**:
+- **SDOWN (Subjectively Down)**: 내 눈에만 죽어 보임. 네트워크 일시 단절일 수 있음.
+- **ODOWN (Objectively Down)**: quorum 이상이 동의. 그제서야 페일오버 시작.
 
-### SDOWN vs ODOWN
+이 두 단계 구분이 없으면, 네트워크가 잠깐 튀는 것만으로 불필요한 페일오버가 발생한다.
 
-| 상태 | 의미 | 조건 |
-|------|------|------|
-| **SDOWN** (Subjectively Down) | 하나의 Sentinel이 마스터와 통신 실패 감지 | `down-after-milliseconds` 초과 |
-| **ODOWN** (Objectively Down) | 과반수 Sentinel이 SDOWN에 동의 | quorum 수 이상 동의 |
-
-ODOWN이 되어야 페일오버가 시작된다. 이를 통해 네트워크 일시 단절로 인한 오탐을 방지한다.
-
-### Sentinel 설정
-
-**Redis 서버 설정 (redis.conf):**
+### Sentinel 설정 파일
 
 ```conf
-# 마스터 서버
-port 6379
-bind 0.0.0.0
-
-# 레플리카 서버
-port 6379
-replicaof 192.168.1.10 6379
-```
-
-**Sentinel 설정 (sentinel.conf):**
-
-```conf
+# sentinel.conf
 port 26379
 daemonize yes
 logfile /var/log/redis/sentinel.log
 
-# 모니터링할 마스터 이름, 주소, 포트, quorum
-# quorum: 페일오버를 선언하는 데 필요한 최소 Sentinel 수
+# 모니터링할 마스터: 이름, IP, 포트, quorum 수
+# quorum 2 = 최소 2개 Sentinel이 동의해야 ODOWN 선언
 sentinel monitor mymaster 192.168.1.10 6379 2
 
-# 마스터와 통신 불가로 판단할 시간 (밀리초)
+# 5초 응답 없으면 SDOWN
 sentinel down-after-milliseconds mymaster 5000
 
-# 페일오버 타임아웃
+# 페일오버 최대 허용 시간 (이 안에 완료 안 되면 실패 처리)
 sentinel failover-timeout mymaster 60000
 
-# 페일오버 후 동시에 마스터를 바라보게 할 레플리카 수
+# 페일오버 후 레플리카들이 새 마스터를 동시에 동기화하는 수
+# 1로 낮게 설정 → 나머지 레플리카들은 순차 동기화 (읽기 가용성 유지)
 sentinel parallel-syncs mymaster 1
 
-# 인증 (마스터에 requirepass 설정된 경우)
+# 마스터에 requirepass 설정된 경우
 sentinel auth-pass mymaster mypassword
 ```
 
-### Sentinel 클러스터 구성 예시
+### 레플리카 선택 기준 (우선순위)
 
-```mermaid
-graph TD
-    SV1["서버 1"]
-    SV2["서버 2"]
-    SV3["서버 3"]
-    SV1 --> M["Redis Master :6379"]
-    SV1 --> S1["Sentinel 1 :26379"]
-    SV2 --> R1["Redis Replica :6379"]
-    SV2 --> S2["Sentinel 2 :26379"]
-    SV3 --> R2["Redis Replica :6379"]
-    SV3 --> S3["Sentinel 3 :26379"]
-    M -->|복제| R1
-    M -->|복제| R2
+페일오버 시 어떤 레플리카를 마스터로 선택할지:
+
+1. `replica-priority`가 가장 낮은 노드 (0이면 후보 제외)
+2. 복제 offset이 가장 큰 노드 — 마스터 데이터를 가장 많이 받은 노드
+3. Run ID가 사전순으로 가장 작은 노드 (tie-breaker)
+
+**실무 팁**: 특정 레플리카를 "절대 마스터가 되어선 안 되는" 용도(백업 전용)로 쓰려면 `replica-priority 0`으로 설정한다.
+
+### Spring Boot 센티넬 연결
+
+```yaml
+spring:
+  data:
+    redis:
+      sentinel:
+        master: mymaster          # sentinel.conf의 이름과 일치해야 함
+        nodes:
+          - 192.168.1.10:26379
+          - 192.168.1.11:26379
+          - 192.168.1.12:26379
+        password: sentinelpassword
+      password: redispassword
+      lettuce:
+        pool:
+          max-active: 10
 ```
 
-### 자동 페일오버 흐름
-
-```mermaid
-sequenceDiagram
-    participant S1 as Sentinel 1
-    participant S2 as Sentinel 2/3
-    participant M as Master
-    participant R1 as 선택된 Replica
-    participant R2 as 나머지 Replica
-    participant C as Client
-
-    S1->>M: PING (응답 없음)
-    Note over S1: SDOWN 선언
-    S1->>S2: 마스터 상태 공유
-    Note over S2: quorum(2) 이상 동의
-    Note over S1,S2: ODOWN 선언
-    S1->>S2: 페일오버 리더 투표
-    Note over S1: 리더 선출됨
-    Note over S1: 레플리카 선택 (복제 지연, 우선순위, run ID 기준)
-    S1->>R1: REPLICAOF NO ONE
-    Note over R1: 새 마스터로 승격
-    S1->>R2: 새 마스터를 바라보도록 재설정
-    S1-->>C: 새 마스터 주소 알림
-```
-
-### Sentinel API 활용
-
-```bash
-# 마스터 주소 조회
-redis-cli -p 26379 SENTINEL get-master-addr-by-name mymaster
-
-# 마스터 정보
-redis-cli -p 26379 SENTINEL masters
-
-# 레플리카 목록
-redis-cli -p 26379 SENTINEL replicas mymaster
-
-# Sentinel 목록
-redis-cli -p 26379 SENTINEL sentinels mymaster
+```java
+// 레플리카에서 읽기 분산 설정
+@Bean
+public LettuceClientConfigurationBuilderCustomizer lettuceCustomizer() {
+    // REPLICA_PREFERRED: 레플리카 우선, 없으면 마스터
+    // 읽기 부하를 레플리카로 분산하면서 페일오버 중에도 마스터에서 읽을 수 있다
+    return builder -> builder.readFrom(ReadFrom.REPLICA_PREFERRED);
+}
 ```
 
 ---
 
-## 클러스터 모드 (Cluster)
+## 클러스터 모드 — 수평 확장의 작동 원리
 
-### 해시 슬롯과 데이터 분산
+> **비유**: Redis Cluster는 우체국 시스템과 같다. 우편번호(해시 슬롯)에 따라 서울 우체국(마스터 A), 부산 우체국(마스터 B), 대구 우체국(마스터 C)이 나눠 처리한다. 편지(데이터)는 우편번호를 보고 자동으로 올바른 우체국으로 라우팅된다.
 
-Redis Cluster는 **16384개의 해시 슬롯**을 사용해 데이터를 분산한다.
+단일 서버의 메모리 한계를 넘어서거나, 쓰기 처리량이 단일 마스터의 한계를 넘을 때 클러스터가 필요하다.
+
+### 해시 슬롯: 데이터 분산의 핵심
+
+Redis Cluster는 **16384개의 해시 슬롯**으로 키를 분산한다.
 
 ```mermaid
 graph LR
-    KEY[key] -->|CRC16 % 16384| SLOT[슬롯 번호]
-    SLOT -->|0 ~ 5460| MA[마스터 A]
-    SLOT -->|5461 ~ 10922| MB[마스터 B]
-    SLOT -->|10923 ~ 16383| MC[마스터 C]
+    KEY["'user:123'"] -->|"CRC16('user:123') % 16384"| SLOT["슬롯 번호 계산"]
+    SLOT -->|"0 ~ 5460"| MA["마스터 A"]
+    SLOT -->|"5461 ~ 10922"| MB["마스터 B"]
+    SLOT -->|"10923 ~ 16383"| MC["마스터 C"]
+    MA <-->|"비동기 복제"| RA["레플리카 A"]
+    MB <-->|"비동기 복제"| RB["레플리카 B"]
+    MC <-->|"비동기 복제"| RC["레플리카 C"]
 ```
 
-키를 저장할 때 슬롯 번호를 계산하고, 해당 슬롯을 담당하는 노드에 저장한다. 클라이언트가 잘못된 노드에 요청하면 `MOVED` 리다이렉션 응답을 받는다.
+클라이언트가 잘못된 노드에 요청하면 `MOVED` 리다이렉션 응답이 온다:
 
 ```bash
-# 클라이언트가 노드 A에 요청
-GET mykey
-
-# 실제 슬롯은 노드 B에 있으면
--MOVED 7638 192.168.1.11:6379
-# 클라이언트는 해당 노드로 재요청
+GET user:123
+# 이 키의 슬롯이 마스터 B에 있으면:
+-MOVED 7638 192.168.1.11:7001
+# 클라이언트는 해당 주소로 재요청한다
 ```
 
-### 클러스터 구성
+**클러스터 인식 클라이언트**(Lettuce, Jedis, Redisson)는 이 MOVED 리다이렉션을 자동으로 처리한다. 일반 클라이언트는 처리 못한다.
 
-**최소 구성:** 마스터 3개 + 레플리카 3개 (각 마스터당 1개 레플리카)
+### 클러스터 생성 (최소 6노드)
 
-**redis.conf 설정:**
-
-```conf
+```bash
+# redis.conf — 각 노드에 설정
 port 7000
 cluster-enabled yes
-cluster-config-file nodes-7000.conf   # 클러스터 상태 자동 저장 파일
-cluster-node-timeout 5000             # 노드 장애 판단 시간 (밀리초)
+cluster-config-file nodes-7000.conf  # 클러스터 상태 자동 저장
+cluster-node-timeout 5000            # 5초 응답 없으면 PFAIL
+
 appendonly yes
 ```
 
-**클러스터 생성:**
-
 ```bash
-# 6개 노드로 클러스터 생성 (마스터 3 + 레플리카 3)
+# 6노드로 클러스터 생성 (마스터 3 + 레플리카 3)
 redis-cli --cluster create \
   192.168.1.10:7000 \
   192.168.1.11:7001 \
@@ -278,273 +247,114 @@ redis-cli --cluster create \
   192.168.1.10:7003 \
   192.168.1.11:7004 \
   192.168.1.12:7005 \
-  --cluster-replicas 1   # 마스터당 레플리카 1개
+  --cluster-replicas 1   # 마스터 1개당 레플리카 1개
 ```
 
-### 클러스터 상태 확인
+### 클러스터 페일오버 동작
 
-```bash
-# 클러스터 정보
-redis-cli -p 7000 cluster info
+센티넬과 달리 클러스터는 **노드들이 직접 투표**한다:
 
-# 노드 목록 및 슬롯 분배
-redis-cli -p 7000 cluster nodes
+```mermaid
+sequenceDiagram
+    participant MA as "마스터 A (다운)"
+    participant MB as "마스터 B"
+    participant MC as "마스터 C"
+    participant RA as "레플리카 A (후보)"
 
-# 슬롯별 노드 확인
-redis-cli -p 7000 cluster slots
-```
-
-### 리샤딩 (Resharding)
-
-데이터를 재분배하거나 노드를 추가/제거할 때 슬롯을 이동한다.
-
-```bash
-# 리샤딩 실행
-redis-cli --cluster reshard 192.168.1.10:7000
-
-# 이동할 슬롯 수 입력
-How many slots do you want to move (from 1 to 16384)? 1000
-
-# 슬롯을 받을 노드 ID 입력
-What is the receiving node ID? <node-id>
-
-# 슬롯을 줄 노드 지정 (all 또는 특정 노드 ID)
-Please enter all the source node IDs.
-Type 'all' to use all nodes as source nodes for the hash slots.
-Source node #1: all
-```
-
-**리샤딩 중에도 서비스 중단 없이 진행된다.** 슬롯 이동 시 `ASK` 리다이렉션으로 클라이언트가 정상 처리한다.
-
-### 노드 추가
-
-```bash
-# 새 마스터 노드 추가
-redis-cli --cluster add-node \
-  192.168.1.13:7006 \    # 새 노드
-  192.168.1.10:7000      # 기존 클러스터 노드
-
-# 새 레플리카 노드 추가
-redis-cli --cluster add-node \
-  192.168.1.13:7007 \
-  192.168.1.10:7000 \
-  --cluster-slave \
-  --cluster-master-id <master-node-id>
-
-# 이후 리샤딩으로 슬롯 분배
-```
-
-### 노드 제거
-
-```bash
-# 제거 전 슬롯을 다른 노드로 이동 (리샤딩)
-redis-cli --cluster reshard 192.168.1.10:7000
-
-# 노드 제거
-redis-cli --cluster del-node \
-  192.168.1.10:7000 \
-  <node-id-to-remove>
+    Note over MA: 💀 마스터 A 다운
+    MB->>MA: PING (응답 없음)
+    MC->>MA: PING (응답 없음)
+    Note over MB,MC: 1. 과반수 마스터 동의 → FAIL 선언
+    RA->>MB: "나를 마스터로 선출해줘" (투표 요청)
+    RA->>MC: "나를 마스터로 선출해줘"
+    MB-->>RA: 투표 승인
+    MC-->>RA: 투표 승인
+    Note over RA: 2. 과반수 승인 → 새 마스터 승격
+    Note over RA: 3. 슬롯 0~5460 담당 인계
 ```
 
 ---
 
-## 클러스터에서 Multi-key 명령어 제약
+## Multi-key 명령어 제약 — 클러스터의 가장 큰 함정
 
-Redis Cluster에서는 **하나의 명령어에 포함된 모든 키가 같은 슬롯**에 있어야 한다.
+클러스터에서 가장 많이 당하는 함정이다. **여러 키를 한 명령어에서 다루면 에러가 난다.**
 
 ```bash
-# 에러 발생 — key1과 key2가 다른 슬롯에 있을 수 있음
-MSET key1 val1 key2 val2
+MSET user:1:name "김철수" user:2:name "이영희"
 # → CROSSSLOT Keys in request don't hash to the same slot
-
-SUNION set1 set2
-LMOVE list1 list2 LEFT RIGHT
+# 이유: user:1과 user:2가 다른 슬롯에 배치될 수 있다
 ```
+
+만약 이 제약을 무시하면? 클러스터에 배포하는 순간 기존에 잘 돌던 `MSET`, `SUNION`, `KEYS *`, Lua 스크립트가 모두 에러를 뿜는다.
 
 ### 해시 태그로 해결
 
-키 이름에 `{태그}` 형식을 사용하면, 슬롯 계산 시 `{}` 안의 내용만 사용한다.
+키 이름의 `{...}` 안의 내용만으로 슬롯을 결정한다:
 
 ```bash
-# {user:1} 부분으로만 슬롯 결정 → 같은 슬롯에 배치
+# {user:1} 부분만 슬롯 계산에 사용 → 두 키 모두 같은 슬롯
 MSET {user:1}:name "김철수" {user:1}:email "kim@example.com"
-HSET {user:1}:profile name "김철수"
-SET {user:1}:session "token123"
+MGET {user:1}:name {user:1}:email  # OK — 같은 슬롯
 
-# 이제 같은 슬롯이므로 사용 가능
-MGET {user:1}:name {user:1}:email
+# 주의: 태그가 다르면 다른 슬롯
+MSET {user:1}:name "김" {user:2}:name "이"  # 여전히 에러
 ```
 
 ```java
-// Spring Data Redis에서 해시 태그 사용
+// Spring Data Redis에서 해시 태그 패턴
 String userId = "1";
 String nameKey    = "{user:" + userId + "}:name";
 String emailKey   = "{user:" + userId + "}:email";
 String sessionKey = "{user:" + userId + "}:session";
 
-// MSET 사용 가능 — 모두 같은 슬롯
+// 세 키 모두 {user:1} 기준으로 같은 슬롯 → MSET 가능
 redisTemplate.opsForValue().multiSet(Map.of(
     nameKey, "김철수",
     emailKey, "kim@example.com"
 ));
 ```
 
-**제약이 있는 명령어:**
+**클러스터에서 제약이 있는 명령어들:**
 
-| 명령어 | 클러스터 제약 |
-|--------|------------|
-| MSET, MGET | 모든 키가 같은 슬롯 |
-| SUNION, SINTER, SDIFF | 모든 키가 같은 슬롯 |
-| ZUNIONSTORE, ZINTERSTORE | 모든 키가 같은 슬롯 |
-| LMOVE, RPOPLPUSH | 모든 키가 같은 슬롯 |
-| EVAL (Lua) | KEYS의 모든 키가 같은 슬롯 |
+| 명령어 | 제약 | 해결책 |
+|--------|------|--------|
+| `MSET`, `MGET` | 모든 키 같은 슬롯 | 해시 태그 |
+| `SUNION`, `SINTER` | 모든 키 같은 슬롯 | 해시 태그 |
+| `ZUNIONSTORE` | 모든 키 같은 슬롯 | 해시 태그 |
+| `EVAL` (Lua) | KEYS의 모든 키 같은 슬롯 | 해시 태그 |
+| `KEYS *` | 현재 노드만 반환 | 전 노드에 `SCAN` 실행 |
 
 ---
 
-## 클러스터 복제와 페일오버
+## 클러스터 운영
 
-### 복제 구조
-
-```mermaid
-graph LR
-    MA["마스터 A (슬롯 0~5460)"] <-->|비동기 복제| RA[레플리카 A]
-    MB["마스터 B (슬롯 5461~10922)"] <-->|비동기 복제| RB[레플리카 B]
-    MC["마스터 C (슬롯 10923~16383)"] <-->|비동기 복제| RC[레플리카 C]
-```
-
-### 자동 페일오버
-
-```mermaid
-sequenceDiagram
-    participant MA as 마스터 A
-    participant MB as 마스터 B/C
-    participant RA as 레플리카 A
-
-    Note over MA: cluster-node-timeout 동안 응답 없음
-    Note over MB: 마스터 A → PFAIL 상태로 표시
-    MB->>MB: 과반수 마스터 PFAIL 동의 → FAIL 선언
-    RA->>MB: 페일오버 투표 요청
-    MB-->>RA: 투표 승인 (과반수)
-    Note over RA: 새 마스터로 승격
-    Note over RA: 슬롯 0~5460 담당 인계
-```
-
-### 페일오버 후 복구
+### 노드 추가 절차
 
 ```bash
-# 다운된 마스터를 재시작하면 자동으로 레플리카로 참여
-# 수동으로 마스터로 복귀시키려면
-redis-cli -p 7003 cluster failover
+# 1. 새 마스터 노드 추가 (슬롯 없는 상태로 참여)
+redis-cli --cluster add-node \
+  192.168.1.13:7006 \    # 새 노드
+  192.168.1.10:7000      # 기존 클러스터 아무 노드
+
+# 2. 리샤딩으로 슬롯 분배
+redis-cli --cluster reshard 192.168.1.10:7000
+# → 이동할 슬롯 수, 받을 노드 ID, 줄 노드 지정
 ```
+
+리샤딩 중에도 서비스 중단 없이 진행된다. 슬롯 이동 중에는 `ASK` 리다이렉션으로 클라이언트가 임시 위치를 안내받는다.
 
 ### 클러스터 전체 다운 조건
 
-한 마스터와 그 **모든 레플리카가 동시에 죽으면** 해당 슬롯에 접근 불가 → 클러스터 전체가 에러 상태가 된다.
+한 마스터와 그 **모든 레플리카가 동시에 죽으면** 해당 슬롯에 접근 불가 → 기본 설정(`cluster-require-full-coverage yes`)에서는 클러스터 전체가 에러 상태가 된다.
 
 ```conf
-# 일부 슬롯이 죽어도 나머지로 계속 서비스하려면
-cluster-require-full-coverage no  # 기본값: yes
+# 일부 슬롯이 죽어도 나머지 슬롯은 서비스 유지하려면
+cluster-require-full-coverage no
 ```
 
----
+이 설정은 "일부 데이터가 안 되더라도 나머지는 살려야 한다"는 상황에만 사용한다.
 
-## 세 모드 비교 표
-
-| 항목 | 싱글 | 센티넬 | 클러스터 |
-|------|------|--------|---------|
-| **고가용성** | 없음 | 있음 (자동 페일오버) | 있음 (자동 페일오버) |
-| **수평 확장** | 불가 | 불가 (단일 마스터) | 가능 (다중 마스터) |
-| **데이터 분산** | 단일 노드 | 단일 마스터 | 16384 슬롯 분산 |
-| **최소 노드 수** | 1 | 3 (Sentinel) + 1 (Redis) | 6 (마스터 3 + 레플리카 3) |
-| **Multi-key 명령어** | 제한 없음 | 제한 없음 | 해시 태그 필요 |
-| **Lua 스크립트** | 제한 없음 | 제한 없음 | 단일 슬롯 제약 |
-| **클라이언트 복잡도** | 낮음 | 중간 (Sentinel URL) | 높음 (클러스터 클라이언트) |
-| **운영 복잡도** | 낮음 | 중간 | 높음 |
-| **페일오버 시간** | 수동 | 수십 초 | 수십 초 |
-| **읽기 스케일** | 레플리카로 가능 | 레플리카로 가능 | 각 마스터의 레플리카 |
-| **적합 환경** | 개발, 테스트 | 단일 마스터 운영 | 대규모, 고처리량 |
-
----
-
-## Spring Boot 연결 설정
-
-### 싱글 모드
-
-```yaml
-spring:
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      password: yourpassword
-      timeout: 2000ms
-      lettuce:
-        pool:
-          max-active: 10
-          max-idle: 10
-          min-idle: 1
-          max-wait: 1000ms
-```
-
-```java
-@Configuration
-public class RedisConfig {
-
-    @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
-        RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(factory);
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-        template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
-        return template;
-    }
-}
-```
-
----
-
-### 센티넬 모드
-
-```yaml
-spring:
-  data:
-    redis:
-      sentinel:
-        master: mymaster                # sentinel.conf의 이름과 일치
-        nodes:
-          - 192.168.1.10:26379
-          - 192.168.1.11:26379
-          - 192.168.1.12:26379
-        password: sentinelpassword      # Sentinel 인증 (설정된 경우)
-      password: redispassword           # Redis 서버 인증
-      lettuce:
-        pool:
-          max-active: 10
-```
-
-```java
-// 읽기 전략 설정 (레플리카에서 읽기)
-@Bean
-public LettuceClientConfigurationBuilderCustomizer lettuceCustomizer() {
-    return builder -> builder.readFrom(ReadFrom.REPLICA_PREFERRED);
-}
-```
-
-**읽기 전략 옵션:**
-
-| 전략 | 설명 |
-|------|------|
-| `MASTER` | 항상 마스터에서 읽기 (기본값) |
-| `MASTER_PREFERRED` | 마스터 우선, 불가 시 레플리카 |
-| `REPLICA` | 항상 레플리카에서 읽기 |
-| `REPLICA_PREFERRED` | 레플리카 우선, 불가 시 마스터 |
-| `NEAREST` | 가장 낮은 지연 노드 |
-
----
-
-### 클러스터 모드
+### Spring Boot 클러스터 연결
 
 ```yaml
 spring:
@@ -553,105 +363,28 @@ spring:
       cluster:
         nodes:
           - 192.168.1.10:7000
-          - 192.168.1.10:7003
           - 192.168.1.11:7001
-          - 192.168.1.11:7004
           - 192.168.1.12:7002
+          - 192.168.1.10:7003
+          - 192.168.1.11:7004
           - 192.168.1.12:7005
-        max-redirects: 3              # MOVED 리다이렉션 최대 횟수
+        max-redirects: 3         # MOVED 리다이렉션 최대 횟수
       password: yourpassword
       lettuce:
         cluster:
           refresh:
-            adaptive: true            # 토폴로지 변경 시 자동 갱신
-            period: 60s               # 주기적 토폴로지 갱신
+            adaptive: true       # 페일오버 등 토폴로지 변경 시 자동 갱신
+            period: 60s
         pool:
           max-active: 10
 ```
 
 ```java
-@Configuration
-public class RedisClusterConfig {
-
-    // 클러스터에서도 레플리카 읽기 설정
-    @Bean
-    public LettuceClientConfigurationBuilderCustomizer lettuceCustomizer() {
-        return builder -> builder
-            .readFrom(ReadFrom.REPLICA_PREFERRED)
-            .commandTimeout(Duration.ofSeconds(2));
-    }
-
-    // 클러스터 토폴로지 갱신 설정
-    @Bean
-    public ClusterTopologyRefreshOptions clusterTopologyRefreshOptions() {
-        return ClusterTopologyRefreshOptions.builder()
-            .enableAdaptiveRefreshTrigger(
-                RefreshTrigger.MOVED_REDIRECT,
-                RefreshTrigger.PERSISTENT_RECONNECTS
-            )
-            .adaptiveRefreshTriggersTimeout(Duration.ofSeconds(30))
-            .build();
-    }
-}
-```
-
----
-
-### Redisson 연결 설정
-
-```yaml
-# application.yml (Redisson Spring Boot Starter)
-spring:
-  redis:
-    redisson:
-      config: |
-        # 싱글 모드
-        singleServerConfig:
-          address: "redis://localhost:6379"
-
-        # 센티넬 모드
-        sentinelServersConfig:
-          masterName: mymaster
-          sentinelAddresses:
-            - "redis://192.168.1.10:26379"
-            - "redis://192.168.1.11:26379"
-            - "redis://192.168.1.12:26379"
-
-        # 클러스터 모드
-        clusterServersConfig:
-          nodeAddresses:
-            - "redis://192.168.1.10:7000"
-            - "redis://192.168.1.11:7001"
-            - "redis://192.168.1.12:7002"
-```
-
-```java
-// 코드로 설정
 @Bean
-public RedissonClient redissonClient() {
-    Config config = new Config();
-
-    // 싱글
-    config.useSingleServer().setAddress("redis://localhost:6379");
-
-    // 센티넬
-    config.useSentinelServers()
-        .setMasterName("mymaster")
-        .addSentinelAddress(
-            "redis://192.168.1.10:26379",
-            "redis://192.168.1.11:26379",
-            "redis://192.168.1.12:26379"
-        );
-
-    // 클러스터
-    config.useClusterServers()
-        .addNodeAddress(
-            "redis://192.168.1.10:7000",
-            "redis://192.168.1.11:7001",
-            "redis://192.168.1.12:7002"
-        );
-
-    return Redisson.create(config);
+public LettuceClientConfigurationBuilderCustomizer lettuceCustomizer() {
+    return builder -> builder
+        .readFrom(ReadFrom.REPLICA_PREFERRED)  // 레플리카에서 읽기 분산
+        .commandTimeout(Duration.ofSeconds(2));
 }
 ```
 
@@ -661,37 +394,40 @@ public RedissonClient redissonClient() {
 
 ```mermaid
 graph TD
-    START([요구사항 분석]) --> Q1{데이터가 단일 서버<br>메모리에 충분히 들어가는가?}
-    Q1 -->|NO| CLUSTER[클러스터 모드<br>수평 확장 필요]
-    Q1 -->|YES| Q2{마스터 장애 시<br>자동 복구가 필요한가?}
-    Q2 -->|YES| SENTINEL1[센티넬 모드]
-    Q2 -->|NO| Q3{개발/테스트<br>환경인가?}
-    Q3 -->|YES| SINGLE[싱글 모드]
-    Q3 -->|NO| SENTINEL2[센티넬 모드<br>운영 환경 권장]
+    START(["요구사항 분석"]) --> Q1{"데이터가 단일 서버<br>메모리에 들어가는가?"}
+    Q1 -->|"NO (TB급)"| CLUSTER["클러스터 모드<br>— 수평 확장 필요"]
+    Q1 -->|"YES"| Q2{"운영 환경인가?<br>(마스터 장애 시 자동 복구 필요)"}
+    Q2 -->|"YES"| SENTINEL["센티넬 모드<br>— 자동 페일오버"]
+    Q2 -->|"NO (개발/테스트)"| SINGLE["싱글 모드<br>— 간단, 빠른 설정"]
     style CLUSTER fill:#88f,stroke:#00c,color:#000
-    style SENTINEL1 fill:#8f8,stroke:#080,color:#000
-    style SENTINEL2 fill:#8f8,stroke:#080,color:#000
+    style SENTINEL fill:#8f8,stroke:#080,color:#000
     style SINGLE fill:#ff8,stroke:#880,color:#000
 ```
 
-**실무 권장:**
-- 개발/테스트: 싱글 모드
-- 운영 (수백 GB 이하): 센티넬 모드
-- 운영 (TB급, 높은 처리량): 클러스터 모드
+---
+
+## 세 모드 종합 비교
+
+| 항목 | 싱글 | 센티넬 | 클러스터 |
+|------|------|--------|---------|
+| 자동 페일오버 | 없음 | 있음 (30초 내) | 있음 (수십 초) |
+| 수평 확장 | 불가 | 불가 | 가능 (마스터 추가) |
+| 최소 노드 수 | 1 | Sentinel 3 + Redis 3 | 6 |
+| Multi-key 명령어 | 자유 | 자유 | 해시 태그 필요 |
+| 클라이언트 복잡도 | 낮음 | 중간 | 높음 |
+| 운영 복잡도 | 낮음 | 중간 | 높음 |
+| 쓰기 처리량 | 단일 마스터 | 단일 마스터 | 마스터 수에 비례 |
 
 ---
 
-## 운영 주의사항
+## 운영 주의사항 요약
 
-### 센티넬
+**센티넬**:
+- Sentinel 3개 이상, 홀수, **서로 다른 물리 서버**에 배포해야 한다. 같은 서버 2개가 죽으면 quorum이 깨진다.
+- 페일오버 후 구 마스터가 재시작되면 자동으로 레플리카로 편입된다.
+- 클라이언트는 Sentinel 주소로 연결하고, Sentinel이 현재 마스터 주소를 알려준다. Redis 주소를 직접 하드코딩하면 페일오버 후 연결이 끊긴다.
 
-- Sentinel을 **최소 3개** 홀수로 배포해야 quorum을 만족시킬 수 있다.
-- Sentinel을 마스터/레플리카와 **다른 물리 서버**에 배포해야 네트워크 분리 상황에서 올바르게 동작한다.
-- 페일오버 후 구 마스터가 돌아오면 **자동으로 레플리카로 편입**된다.
-
-### 클러스터
-
-- 노드 추가 후 반드시 **리샤딩**으로 슬롯을 균등 분배해야 한다.
-- `cluster-require-full-coverage yes` (기본값)이면 일부 슬롯이 죽을 때 클러스터 전체가 에러 상태가 된다. 부분 서비스를 허용하려면 `no`로 변경한다.
-- 클러스터 환경에서 `KEYS *`는 **현재 노드의 키만** 반환한다. 전체 키를 순회하려면 모든 노드에 `SCAN`을 실행해야 한다.
-- 클라이언트는 **클러스터 인식 클라이언트**(Lettuce, Jedis, Redisson)를 사용해야 한다. 일반 클라이언트는 `MOVED` 리다이렉션을 처리하지 못한다.
+**클러스터**:
+- 노드 추가 후 반드시 리샤딩으로 슬롯을 균등 분배해야 한다. 안 하면 새 노드는 빈 슬롯만 갖고 부하를 받지 못한다.
+- `KEYS *`는 현재 노드의 키만 반환한다. 전체 키 순회가 필요하면 모든 노드에 `SCAN`을 실행해야 한다.
+- Lua 스크립트에서 접근하는 모든 키는 KEYS 배열에 명시해야 한다. KEYS에 없으면 클러스터가 올바른 노드로 라우팅하지 못한다.

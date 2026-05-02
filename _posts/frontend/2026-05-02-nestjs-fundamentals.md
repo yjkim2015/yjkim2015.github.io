@@ -7,38 +7,37 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-## 왜 이게 중요한가?
+## Express로 충분하지 않은 이유
 
-Express로 규모가 커진 백엔드는 파일 구조와 의존성 관리가 개발자마다 달라 유지보수가 어려워진다. NestJS는 Angular에서 영감을 받아 **모듈-컨트롤러-서비스** 삼층 구조를 강제함으로써 팀 협업과 테스트 가능성을 높인다. 의존성 주입(DI) 컨테이너를 내장하고, 요청 처리 파이프라인(미들웨어 → 가드 → 인터셉터 → 파이프 → 컨트롤러)이 명확하게 정의되어 인증, 로깅, 유효성 검사 같은 횡단 관심사를 깔끔하게 분리할 수 있다.
+Express로 프로젝트를 시작하면 처음에는 빠릅니다. 파일 하나에 라우터, 비즈니스 로직, DB 접근 코드가 다 들어가도 동작은 합니다. 문제는 6개월 후입니다. 팀원이 늘어나고 기능이 쌓이면 "이 코드가 어디 있지?", "이 함수가 어디서 불리지?"가 반복됩니다.
 
-## 비유로 이해하기
+NestJS는 Angular에서 영감을 받아 **모듈-컨트롤러-서비스**라는 삼층 구조를 강제합니다. 강제한다는 것이 포인트입니다. 구조를 강제하면 팀원이 바뀌어도 코드가 어디 있는지 예측할 수 있고, 테스트 작성이 쉬워집니다.
 
-NestJS의 구조는 대형 병원과 비슷합니다.
+> 비유: NestJS의 구조는 대형 병원과 같습니다. 모듈은 각 진료과(내과, 외과), 컨트롤러는 접수창구, 서비스는 실제 진료하는 의사입니다. 병원에서 치과 업무가 내과 창구에서 처리되는 일은 없습니다. NestJS도 마찬가지입니다.
 
-- **모듈 (Module)**: 각 진료과 (내과, 외과, 소아과)
-- **컨트롤러 (Controller)**: 접수창구 - 환자(요청) 접수
-- **서비스 (Service)**: 의사 - 실제 진료(비즈니스 로직)
-- **미들웨어**: 병원 입구 체온계 - 모든 방문자 체크
-- **가드 (Guard)**: 보안 요원 - 입장 권한 확인
-- **파이프 (Pipe)**: 접수 폼 검증 - 정보가 올바른지 확인
-- **인터셉터**: 원무과 기록 - 모든 진료 전후 기록
+- **모듈 (Module)**: 각 진료과 — 관련 기능을 묶는 단위
+- **컨트롤러 (Controller)**: 접수창구 — 요청을 받아 적절한 서비스에 전달
+- **서비스 (Service)**: 의사 — 실제 비즈니스 로직 처리
+- **가드 (Guard)**: 보안 요원 — 입장 권한 확인 (인증/인가)
+- **파이프 (Pipe)**: 접수 폼 검증 — 데이터가 올바른지 확인
+- **인터셉터 (Interceptor)**: 원무과 기록 — 모든 진료 전후 공통 처리
 
 ---
 
-## 1. NestJS 아키텍처 개요
+## 1번 다이어그램 - NestJS 요청 처리 파이프라인
 
 ```mermaid
 graph TD
     CLIENT["클라이언트"] --> MW["미들웨어"]
-    MW --> GUARD["가드 ("인증/인가")"]
-    GUARD --> INTERCEPTOR1["인터셉터 ("전처리")"]
-    INTERCEPTOR1 --> PIPE["파이프 ("유효성 검사")"]
+    MW --> GUARD["가드 인증/인가"]
+    GUARD --> INTERCEPTOR1["인터셉터 전처리"]
+    INTERCEPTOR1 --> PIPE["파이프 유효성 검사"]
     PIPE --> CTRL["컨트롤러"]
-    CTRL --> SERVICE["서비스 ("비즈니스 로직")"]
-    SERVICE --> REPO["레포지토리 (DB)"]
+    CTRL --> SERVICE["서비스 비즈니스 로직"]
+    SERVICE --> REPO["레포지토리 DB"]
     REPO --> SERVICE
     SERVICE --> CTRL
-    CTRL --> INTERCEPTOR2["인터셉터 ("후처리")"]
+    CTRL --> INTERCEPTOR2["인터셉터 후처리"]
     INTERCEPTOR2 --> CLIENT
 
     style GUARD fill:#e74c3c,color:#fff
@@ -47,29 +46,24 @@ graph TD
     style INTERCEPTOR1 fill:#3498db,color:#fff
 ```
 
+이 파이프라인이 중요한 이유가 있습니다. 왜냐하면 인증, 로깅, 유효성 검사 같은 **횡단 관심사(Cross-cutting Concerns)**를 비즈니스 로직과 완전히 분리할 수 있기 때문입니다. 컨트롤러와 서비스는 순수하게 자신의 일만 합니다.
+
 ---
 
-## 2. 모듈 (Module)
+## 2. 모듈 — 기능의 경계선
 
-NestJS의 기본 구성 단위입니다.
+모듈은 NestJS의 기본 구성 단위입니다. 관련된 컨트롤러, 서비스, 엔티티를 하나로 묶습니다. 모듈 경계를 잘 나누면 나중에 마이크로서비스로 분리하기도 쉬워집니다.
 
 ```typescript
 // users/users.module.ts
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { UsersController } from './users.controller';
-import { UsersService } from './users.service';
-import { User } from './entities/user.entity';
-import { EmailModule } from '../email/email.module';
-
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]), // 레포지토리 주입
+    TypeOrmModule.forFeature([User]), // 이 모듈에서 User 엔티티 사용
     EmailModule                        // 다른 모듈 가져오기
   ],
   controllers: [UsersController],
   providers: [UsersService],
-  exports: [UsersService]              // 다른 모듈에 UsersService 공개
+  exports: [UsersService]              // 다른 모듈에서 UsersService를 쓸 수 있게 공개
 })
 export class UsersModule {}
 ```
@@ -86,7 +80,7 @@ graph TD
         ES["EmailService"]
     end
 
-    subgraph "AppModule (루트)"
+    subgraph "AppModule 루트"
         AM["AppModule"]
         AM --> UsersModule
         AM --> EmailModule
@@ -101,72 +95,28 @@ graph TD
     style US fill:#2ecc71,color:#fff
 ```
 
-### 동적 모듈
-
-```typescript
-// database/database.module.ts
-@Module({})
-export class DatabaseModule {
-  static forRoot(options: DatabaseOptions): DynamicModule {
-    return {
-      module: DatabaseModule,
-      providers: [
-        {
-          provide: DATABASE_OPTIONS,
-          useValue: options
-        },
-        DatabaseService
-      ],
-      exports: [DatabaseService],
-      global: true // 전역 모듈로 설정
-    };
-  }
-}
-
-// app.module.ts
-@Module({
-  imports: [
-    DatabaseModule.forRoot({
-      host: 'localhost',
-      port: 5432,
-      database: 'mydb'
-    })
-  ]
-})
-export class AppModule {}
-```
+> 비유: `exports`는 모듈의 공개 API입니다. exports에 포함되지 않은 서비스는 "이 진료과 내부에서만 쓰는 것"이고, exports에 포함된 서비스는 "다른 진료과에서도 의뢰할 수 있는 것"입니다.
 
 ---
 
-## 3. 컨트롤러 (Controller)
+## 3. 컨트롤러 — 요청을 받는 창구
 
-HTTP 요청을 처리하는 라우팅 레이어입니다.
+컨트롤러는 HTTP 요청을 받아서 적절한 서비스 메서드를 호출하고 응답을 반환합니다. 비즈니스 로직은 없고 **라우팅과 요청/응답 처리만** 담당합니다.
 
 ```typescript
-import {
-  Controller, Get, Post, Put, Delete, Patch,
-  Param, Body, Query, Headers, Req, Res,
-  HttpCode, HttpStatus, ParseIntPipe, UseGuards
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  @ApiOperation({ summary: '모든 사용자 조회' })
   findAll(@Query('page') page = 1, @Query('limit') limit = 10) {
     return this.usersService.findAll({ page, limit });
   }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
+    // ParseIntPipe가 파이프라인에서 문자열 ':id'를 숫자로 변환합니다
     return this.usersService.findOne(id);
   }
 
@@ -177,8 +127,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard) // 이 엔드포인트만 인증 필요
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto
@@ -197,43 +146,26 @@ export class UsersController {
 
 ---
 
-## 4. 서비스 (Service)와 의존성 주입
+## 4. 서비스와 의존성 주입 — DI 컨테이너의 마법
+
+서비스는 비즈니스 로직이 사는 곳입니다. `@Injectable()` 데코레이터를 붙이면 NestJS의 DI 컨테이너에 등록됩니다.
+
+> 비유: DI 컨테이너는 인력 파견 회사와 같습니다. 서비스가 "저는 이메일 서비스가 필요합니다"라고 하면, 파견 회사(DI 컨테이너)가 알아서 EmailService 인스턴스를 만들어서 넘겨줍니다. 직접 `new EmailService()`를 할 필요가 없습니다.
 
 ```typescript
-// users/users.service.ts
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
-import { EmailService } from '../email/email.service';
-import { CreateUserDto } from './dto/create-user.dto';
-
-@Injectable() // DI 컨테이너에 등록
+@Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly emailService: EmailService // 자동 주입
+    private readonly emailService: EmailService // NestJS가 자동으로 주입
   ) {}
-
-  async findAll(options: { page: number; limit: number }) {
-    const { page, limit } = options;
-    const [users, total] = await this.userRepository.findAndCount({
-      skip: (page - 1) * limit,
-      take: limit,
-      order: { createdAt: 'DESC' }
-    });
-
-    return {
-      data: users,
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
-    };
-  }
 
   async findOne(id: number): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
 
     if (!user) {
+      // NestJS 내장 예외 — 자동으로 404 응답으로 변환됩니다
       throw new NotFoundException(`ID ${id}의 사용자를 찾을 수 없습니다`);
     }
 
@@ -252,7 +184,7 @@ export class UsersService {
     const user = this.userRepository.create(createUserDto);
     const saved = await this.userRepository.save(user);
 
-    // 이메일 서비스 사용
+    // 이메일 서비스를 생성자에서 주입받았으므로 그냥 사용합니다
     await this.emailService.sendWelcomeEmail(saved.email, saved.name);
 
     return saved;
@@ -260,136 +192,52 @@ export class UsersService {
 }
 ```
 
-### 의존성 주입 원리
-
-```mermaid
-graph TD
-    DI["DI 컨테이너"] -->|"인스턴스 생성/제공"| US["UsersService"]
-    DI -->|"인스턴스 생성/제공"| ES["EmailService"]
-    DI -->|"인스턴스 생성/제공"| REPO["UserRepository"]
-
-    US -->|"의존"| ES
-    US -->|"의존"| REPO
-
-    UC["UsersController"] -->|"의존"| US
-    DI -->|"주입"| UC
-
-    style DI fill:#e74c3c,color:#fff
-```
+만약 DI를 안 쓰면? 테스트할 때 `new UsersService(new UserRepository(...), new EmailService(...))`처럼 모든 의존성을 직접 만들어야 합니다. DI를 쓰면 테스트에서 가짜 서비스로 교체하기 쉬워집니다.
 
 ---
 
-## 5. DTO와 유효성 검사
+## 5. DTO와 ValidationPipe — 쓰레기는 들어오기 전에 막기
+
+DTO(Data Transfer Object)는 "이 API는 이런 데이터를 받습니다"를 선언하는 클래스입니다. `ValidationPipe`와 함께 쓰면 잘못된 데이터가 서비스 코드까지 도달하기 전에 400 에러로 막을 수 있습니다.
+
+> 비유: 병원 접수창구에서 "성함, 생년월일, 증상을 작성해 주세요"라는 서류(DTO)를 주고, 작성이 불완전하면 접수 자체를 거부합니다. 의사(서비스)는 항상 완전한 정보를 받습니다.
 
 ```typescript
-// users/dto/create-user.dto.ts
-import {
-  IsEmail, IsString, IsOptional, MinLength, MaxLength,
-  IsEnum, IsDateString, ValidateNested
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
-
-export enum UserRole {
-  ADMIN = 'admin',
-  USER = 'user',
-  MODERATOR = 'moderator'
-}
-
-export class AddressDto {
-  @IsString()
-  city: string;
-
-  @IsString()
-  country: string;
-}
-
 export class CreateUserDto {
-  @ApiProperty({ example: '홍길동' })
   @IsString()
   @MinLength(2, { message: '이름은 최소 2자 이상이어야 합니다' })
   @MaxLength(50)
   name: string;
 
-  @ApiProperty({ example: 'user@example.com' })
   @IsEmail({}, { message: '올바른 이메일 형식이 아닙니다' })
   email: string;
 
-  @ApiProperty({ example: 'password123' })
   @IsString()
   @MinLength(8, { message: '비밀번호는 최소 8자 이상이어야 합니다' })
   password: string;
 
-  @ApiProperty({ enum: UserRole, default: UserRole.USER })
   @IsEnum(UserRole)
   @IsOptional()
   role?: UserRole = UserRole.USER;
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => AddressDto)
-  address?: AddressDto;
 }
 
-// main.ts에서 글로벌 파이프 설정
+// main.ts — 전역으로 ValidationPipe 적용
 app.useGlobalPipes(new ValidationPipe({
-  whitelist: true,       // DTO에 없는 속성 제거
-  transform: true,       // 타입 자동 변환 (string → number)
-  forbidNonWhitelisted: true, // 알 수 없는 속성 에러
-  exceptionFactory: (errors) => new BadRequestException(errors)
+  whitelist: true,            // DTO에 없는 필드 자동 제거 (보안)
+  transform: true,            // 문자열 → 숫자 자동 변환
+  forbidNonWhitelisted: true  // DTO에 없는 필드가 오면 400 에러
 }));
 ```
 
----
-
-## 6. 미들웨어
-
-```typescript
-// middleware/logger.middleware.ts
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
-
-@Injectable()
-export class LoggerMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction) {
-    const { method, originalUrl } = req;
-    const start = Date.now();
-
-    res.on('finish', () => {
-      const { statusCode } = res;
-      const elapsed = Date.now() - start;
-      console.log(`${method} ${originalUrl} ${statusCode} ${elapsed}ms`);
-    });
-
-    next();
-  }
-}
-
-// 적용
-@Module({})
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(LoggerMiddleware)
-      .exclude(
-        { path: 'health', method: RequestMethod.GET }
-      )
-      .forRoutes('*'); // 모든 라우트에 적용
-  }
-}
-```
+`whitelist: true`가 중요한 이유가 있습니다. 왜냐하면 클라이언트가 `{ name: "홍길동", isAdmin: true }`처럼 DTO에 없는 필드를 보내도 자동으로 제거되기 때문입니다. 보안상 의도치 않은 필드가 DB에 저장되는 것을 막습니다.
 
 ---
 
-## 7. 가드 (Guard) - 인증/인가
+## 6. 가드 — 인증/인가의 관문
+
+가드는 특정 라우트에 대한 접근을 허용할지 거부할지 결정합니다. `canActivate()`가 `true`를 반환하면 통과, `false`를 반환하거나 예외를 던지면 거부됩니다.
 
 ```typescript
-// auth/guards/jwt-auth.guard.ts
-import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(private reflector: Reflector) {
@@ -397,7 +245,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   canActivate(context: ExecutionContext) {
-    // @Public() 데코레이터가 있으면 인증 스킵
+    // @Public() 데코레이터가 있는 라우트는 인증 스킵
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass()
@@ -405,15 +253,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     if (isPublic) return true;
 
-    return super.canActivate(context);
+    return super.canActivate(context); // JWT 검증
   }
 }
 
-// 역할 기반 가드
+// 역할 기반 접근 제어
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
-
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>('roles', [
       context.getHandler(),
@@ -427,15 +273,6 @@ export class RolesGuard implements CanActivate {
   }
 }
 
-// 커스텀 데코레이터
-export const Roles = (...roles: UserRole[]) => SetMetadata('roles', roles);
-export const CurrentUser = createParamDecorator(
-  (data: string, ctx: ExecutionContext) => {
-    const request = ctx.switchToHttp().getRequest();
-    return data ? request.user?.[data] : request.user;
-  }
-);
-
 // 컨트롤러에서 사용
 @Get('admin')
 @Roles(UserRole.ADMIN)
@@ -447,19 +284,16 @@ adminOnly(@CurrentUser() user: User) {
 
 ---
 
-## 8. 인터셉터 (Interceptor)
+## 7. 인터셉터 — 공통 전후처리
+
+인터셉터는 컨트롤러 실행 전후에 끼어들어 공통 처리를 합니다. RxJS Observable로 구현되어 있어서 응답을 변환하거나 캐싱 처리를 할 수 있습니다.
 
 ```typescript
-// interceptors/response-transform.interceptor.ts
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
-
+// 모든 응답에 { success: true, data: ..., timestamp: ... } 형태 적용
 @Injectable()
 export class ResponseTransformInterceptor<T> implements NestInterceptor<T> {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const now = Date.now();
-    const { method, url } = context.switchToHttp().getRequest();
 
     return next.handle().pipe(
       map(data => ({
@@ -468,149 +302,17 @@ export class ResponseTransformInterceptor<T> implements NestInterceptor<T> {
         timestamp: new Date().toISOString()
       })),
       tap(() => {
+        const { method, url } = context.switchToHttp().getRequest();
         console.log(`${method} ${url} - ${Date.now() - now}ms`);
       })
     );
   }
 }
-
-// 캐싱 인터셉터
-@Injectable()
-export class CacheInterceptor implements NestInterceptor {
-  constructor(private readonly cacheService: CacheService) {}
-
-  async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
-    const request = context.switchToHttp().getRequest();
-    const key = `cache:${request.url}`;
-
-    const cached = await this.cacheService.get(key);
-    if (cached) return of(cached);
-
-    return next.handle().pipe(
-      tap(async (data) => {
-        await this.cacheService.set(key, data, 60); // 60초 캐시
-      })
-    );
-  }
-}
 ```
 
 ---
 
-## 9. TypeORM 연동
-
-```typescript
-// entities/user.entity.ts
-import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, OneToMany, BeforeInsert
-} from 'typeorm';
-import * as bcrypt from 'bcrypt';
-
-@Entity('users')
-export class User {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({ length: 100 })
-  name: string;
-
-  @Column({ unique: true })
-  email: string;
-
-  @Column({ select: false }) // 기본 쿼리에서 제외
-  password: string;
-
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
-  role: UserRole;
-
-  @Column({ default: true })
-  isActive: boolean;
-
-  @OneToMany(() => Post, post => post.author)
-  posts: Post[];
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  @BeforeInsert()
-  async hashPassword() {
-    this.password = await bcrypt.hash(this.password, 12);
-  }
-}
-
-// TypeORM 설정
-TypeOrmModule.forRootAsync({
-  imports: [ConfigModule],
-  useFactory: (config: ConfigService) => ({
-    type: 'postgres',
-    host: config.get('DB_HOST'),
-    port: config.get<number>('DB_PORT'),
-    username: config.get('DB_USER'),
-    password: config.get('DB_PASS'),
-    database: config.get('DB_NAME'),
-    entities: [__dirname + '/**/*.entity{.ts,.js}'],
-    synchronize: config.get('NODE_ENV') !== 'production',
-    migrations: ['dist/migrations/*.js'],
-    migrationsRun: true,
-    logging: config.get('NODE_ENV') === 'development'
-  }),
-  inject: [ConfigService]
-})
-```
-
----
-
-## 10. 예외 처리
-
-```typescript
-// filters/http-exception.filter.ts
-import {
-  ExceptionFilter, Catch, ArgumentsHost,
-  HttpException, HttpStatus
-} from '@nestjs/common';
-
-@Catch()
-export class AllExceptionsFilter implements ExceptionFilter {
-  catch(exception: unknown, host: ArgumentsHost) {
-    const ctx = host.switchToHttp();
-    const response = ctx.getResponse();
-    const request = ctx.getRequest();
-
-    const status = exception instanceof HttpException
-      ? exception.getStatus()
-      : HttpStatus.INTERNAL_SERVER_ERROR;
-
-    const message = exception instanceof HttpException
-      ? exception.getResponse()
-      : '서버 내부 오류가 발생했습니다';
-
-    // 로깅
-    if (status >= 500) {
-      console.error('서버 오류:', exception);
-      // Sentry.captureException(exception);
-    }
-
-    response.status(status).json({
-      success: false,
-      statusCode: status,
-      timestamp: new Date().toISOString(),
-      path: request.url,
-      message
-    });
-  }
-}
-
-// main.ts
-app.useGlobalFilters(new AllExceptionsFilter());
-```
-
----
-
-## 11. 전체 구조 흐름
+## 2번 다이어그램 - 전체 요청 흐름 시퀀스
 
 ```mermaid
 sequenceDiagram
@@ -629,9 +331,9 @@ sequenceDiagram
     G->>G: JWT 검증, 권한 확인
     G->>INT: 인터셉터 전처리
     INT->>PIPE: 파이프 실행
-    PIPE->>PIPE: DTO 유효성 검사, 변환
+    PIPE->>PIPE: DTO 유효성 검사, 타입 변환
     PIPE->>CTRL: 컨트롤러 메서드 호출
-    CTRL->>SVC: 비즈니스 로직
+    CTRL->>SVC: 비즈니스 로직 위임
     SVC->>DB: DB 쿼리
     DB-->>SVC: 결과
     SVC-->>CTRL: 처리 결과
@@ -642,11 +344,11 @@ sequenceDiagram
 
 ---
 
-## 12. 극한 시나리오
+## 8. 극한 시나리오 — 자주 마주치는 문제들
 
-### 시나리오 1: 순환 의존성(Circular Dependency)
+### 순환 의존성
 
-모듈 A가 모듈 B를 임포트하고, 모듈 B가 다시 모듈 A를 임포트하면 NestJS가 DI 컨테이너를 초기화할 때 무한 루프에 빠진다.
+모듈 A가 모듈 B를 임포트하고, 모듈 B가 다시 모듈 A를 임포트하면 DI 컨테이너가 초기화할 때 무한 루프에 빠집니다.
 
 ```typescript
 // 해결: forwardRef() 사용
@@ -655,7 +357,6 @@ sequenceDiagram
 })
 export class UsersModule {}
 
-// 서비스 레벨에서도 동일하게 처리
 @Injectable()
 export class UsersService {
   constructor(
@@ -665,52 +366,38 @@ export class UsersService {
 }
 ```
 
-순환 의존성이 자주 발생한다면 두 모듈이 공통 기능에 의존하는 구조로 리팩토링하는 것이 올바른 해결책이다.
+순환 의존성이 자주 발생한다면, 두 모듈이 공통 기능에 의존하는 구조로 리팩토링하는 것이 근본 해결책입니다. `forwardRef`는 임시 처방입니다.
 
-### 시나리오 2: 가드가 실행됐는데 인터셉터가 응답을 변환하지 못한다
+### ValidationPipe의 whitelist가 데이터를 삭제한다
 
-가드에서 예외를 던지면 인터셉터의 `next.handle()` 이후 파이프가 실행되지 않는다. 예외 필터(`ExceptionFilter`)가 대신 예외를 처리한다.
-
-```
-요청 흐름:
-미들웨어 → 가드(예외 발생) → ExceptionFilter가 처리
-                            ↑ 인터셉터 후처리, 파이프는 실행 안 됨
-```
-
-전역 예외 필터를 등록해 모든 예외를 일관된 형식으로 반환해야 한다.
-
-### 시나리오 3: ValidationPipe의 whitelist가 데이터를 삭제한다
-
-`whitelist: true`는 DTO에 정의되지 않은 속성을 자동으로 제거한다. 클라이언트가 보낸 필드가 사라져 버그처럼 보일 수 있다.
+`whitelist: true` 설정 시 DTO에 정의되지 않은 속성이 자동으로 제거됩니다. 클라이언트가 보낸 필드가 사라져 버그처럼 보일 수 있습니다. 이것은 버그가 아니라 의도된 보안 동작입니다.
 
 ```typescript
 // whitelist: true 설정 시
 // 클라이언트: { name: '홍길동', hackerField: 'inject' }
-// DTO 도달: { name: '홍길동' }  ← hackerField 제거됨 (보안상 올바른 동작)
+// 서비스 도달: { name: '홍길동' }  ← hackerField 제거됨 (보안)
 
 // forbidNonWhitelisted: true 추가 시
 // 알 수 없는 속성이 있으면 400 에러 반환 (더 엄격한 보안)
 ```
 
-의도적으로 동적 필드를 허용해야 한다면 DTO에 `@IsObject()` + `additionalProperties` 방식으로 명시적으로 설계해야 한다.
-
 ---
 
-## 13. 정리
+## 3번 다이어그램 - NestJS 정리
 
 ```mermaid
 mindmap
   root((NestJS))
     구성 요소
-      Module: 기능 단위
-      Controller: 라우팅
-      Service: 비즈니스 로직
-      Provider: DI 등록
+      Module 기능 단위
+      Controller 라우팅
+      Service 비즈니스 로직
+      Provider DI 등록
     요청 처리 파이프라인
-      Middleware: 전처리
-      Guard: 인증/인가
-      Interceptor: 전후처리
-      Pipe: 변환/검증
+      Middleware 전처리
+      Guard 인증 인가
+      Interceptor 전후처리
+      Pipe 변환 검증
     데이터 레이어
       TypeORM
       Entity
@@ -722,4 +409,4 @@ mindmap
       WebSocket
 ```
 
-NestJS는 **Angular에서 영감을 받은 아키텍처**로, 대규모 백엔드 애플리케이션 개발에 강력한 구조를 제공합니다. 모듈 기반 아키텍처와 의존성 주입으로 **테스트하기 쉽고 확장 가능한** 애플리케이션을 만들 수 있습니다.
+NestJS는 **Angular에서 영감을 받은 아키텍처**로, 규모가 커져도 유지보수 가능한 백엔드를 만들기 위한 강제적인 구조를 제공합니다. 처음에는 보일러플레이트가 많다고 느낄 수 있습니다. 하지만 팀이 커지고 기능이 복잡해질수록, 이 구조가 있느냐 없느냐의 차이는 엄청납니다. 6개월 후의 자신을 위해 구조를 투자하는 것입니다.

@@ -1,5 +1,5 @@
 ---
-title: "알림 시스템 설계 — 푸시·SMS·이메일 통합 알림 플랫폼"
+title: "알림 시스템 설계 — 1억 명에게 10초 안에 푸시를 보내는 구조"
 categories:
 - SYSTEMDESIGN
 toc: true
@@ -7,651 +7,289 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-## 실생활 비유: 우체국 분류 센터
+블랙프라이데이 자정, 쿠팡이 1억 명에게 동시에 "특가 시작!" 푸시를 보낸다. 10초 안에 전달되어야 한다. 하나의 서버가 직접 APNs와 FCM을 1억 번 호출하면? 서버는 즉시 죽는다. 알림 하나를 보내는 것은 쉽다. **신뢰할 수 있게, 대량으로, 빠르게** 보내는 것이 시스템 설계의 전부다.
 
-알림 시스템은 대형 우체국 분류 센터와 같습니다. 수천만 통의 편지(알림)가 들어오면, 종류별로 분류하고(SMS/이메일/푸시), 우선순위를 정하고(긴급/일반), 각 배달부(채널 서비스)에게 전달합니다. 배달 실패 시 재시도도 합니다. 이 모든 과정이 알림 시스템의 역할입니다.
+## 왜 알림 시스템이 어려운가
+
+> **비유**: 대형 우체국 분류 센터와 같다. 1억 통의 편지가 동시에 들어오면, 긴급/일반으로 분류하고, 각 배달부(APNs, FCM, Twilio, SendGrid)에게 적절히 배분하고, 배달 실패 시 재시도하고, 수신 거부 처리를 하고, 중복 발송을 막아야 한다. 이 모든 것이 동시에 일어난다.
+
+단순 API 호출로 구현하면 어떤 문제가 생기는가:
+
+| 문제 | 설명 |
+|------|------|
+| 동기 처리 | 알림 1건 전송에 200ms → 1억 건이면 231일 |
+| 중복 발송 | 워커 재시작 시 같은 알림이 두 번 전송 |
+| APNs/FCM 차단 | 초당 요청 한도 초과 시 IP 차단 |
+| 단일 장애점 | APNs가 느려지면 전체 시스템이 막힘 |
+| 데이터 유실 | 서버 재시작 시 메모리에 있던 알림이 사라짐 |
 
 ---
 
-## 1. 요구사항 분석
+## 요구사항 분석
 
 ### 기능 요구사항
 
-1. 푸시 알림 (iOS APNs, Android FCM)
+1. 모바일 푸시 (iOS APNs, Android FCM)
 2. SMS 문자 메시지
 3. 이메일
 4. 알림 우선순위 (긴급/일반)
-5. 알림 중복 방지 (중복 발송 차단)
-6. 전송 보장 (최소 1회 전달)
-7. 사용자 수신 설정 (특정 채널 거부 가능)
-
-### 비기능 요구사항
-
-- **규모**: 일일 1000만건 모바일 푸시, 100만건 SMS, 500만건 이메일
-- **지연**: 긴급 알림 10초 이내 전달
-- **안정성**: 알림 유실 없음 (최소 1회 전달 보장)
-- **확장성**: 트래픽 급증 처리
+5. 중복 발송 방지
+6. 전송 보장 (최소 1회)
+7. 사용자별 수신 거부 설정
 
 ### 규모 추정
 
 ```
-모바일 푸시: 10,000,000건/일 → 116 QPS (평균), 350 QPS (피크)
-SMS:          1,000,000건/일 → 11.6 QPS
-이메일:       5,000,000건/일 → 58 QPS
+모바일 푸시: 1,000만 건/일 → 116 QPS (평균), 350 QPS (피크)
+SMS:          100만 건/일 →  11 QPS
+이메일:       500만 건/일 →  58 QPS
 
-총 알림:    16,000,000건/일 → 약 185 QPS
-피크 처리량: ~600 QPS
+총 알림: 1,600만 건/일 → 약 185 QPS (평균), ~600 QPS (피크)
 ```
 
 ---
 
-## 2. 전체 아키텍처
+## 전체 아키텍처
 
 ```mermaid
 graph TD
-    Sources["알림 발생 서비스들"] --> API["알림 API 게이트웨이"]
+    Services["마이크로서비스들<br>(주문·결제·마케팅)"] --> API["알림 API 게이트웨이"]
 
-    subgraph Sources
-        OrderSvc["주문 서비스"]
-        PaySvc["결제 서비스"]
-        MarketSvc["마케팅 서비스"]
-        SystemSvc["시스템 알림"]
-    end
+    API --> PrefCheck["1. 사용자 수신 설정 확인 (Redis 캐시)"]
+    API --> Dedup["2. 중복 방지 (Redis SET NX)"]
+    API --> Priority["3. 우선순위 분류"]
 
-    API --> Validator["유효성 검사<br>+ 사용자 설정 확인"]
-    Validator --> Priority["우선순위 분류기"]
+    Priority --> P0["Kafka: notifications-critical<br>파티션 20개"]
+    Priority --> P1["Kafka: notifications-high<br>파티션 10개"]
+    Priority --> P2["Kafka: notifications-normal"]
+    Priority --> P3["Kafka: notifications-low"]
 
-    Priority --> Q_High["긴급 큐<br>Kafka: high-priority"]
-    Priority --> Q_Normal["일반 큐<br>Kafka: normal"]
+    P0 & P1 --> PushWorker["푸시 워커 × 10"]
+    P0 & P1 --> SMSWorker["SMS 워커 × 5"]
+    P2 & P3 --> EmailWorker["이메일 워커 × 10"]
 
-    Q_High --> Dispatcher["알림 디스패처"]
-    Q_Normal --> Dispatcher
+    PushWorker -->|"실패"| DLQ["Dead Letter Queue"]
+    SMSWorker -->|"실패"| DLQ
+    EmailWorker -->|"실패"| DLQ
 
-    Dispatcher --> PushWorker["푸시 워커"]
-    Dispatcher --> SMSWorker["SMS 워커"]
-    Dispatcher --> EmailWorker["이메일 워커"]
-
-    PushWorker --> APNs[Apple APNs]
-    PushWorker --> FCM[Google FCM]
-    SMSWorker --> Twilio[Twilio]
-    SMSWorker --> Nexmo["Nexmo/대체"]
-    EmailWorker --> SendGrid[SendGrid]
-    EmailWorker --> SES[AWS SES]
-
-    Dispatcher --> LogDB["("알림 로그 DB")"]
-    Dispatcher --> Redis["Redis<br>중복 방지"]
+    PushWorker --> APNs["Apple APNs"]
+    PushWorker --> FCM["Google FCM"]
+    SMSWorker --> Twilio["Twilio (1차)"]
+    SMSWorker --> Nexmo["Nexmo (fallback)"]
+    EmailWorker --> SendGrid["SendGrid"]
 ```
 
 ---
 
-## 3. 알림 채널별 상세 흐름
+## 알림 채널별 동작 방식
 
-### 모바일 푸시 알림
+### 모바일 푸시 — APNs와 FCM이 다른 이유
+
+APNs(Apple)와 FCM(Google)은 각각 다른 프로토콜과 토큰 형식을 사용한다. 푸시 워커는 기기 타입을 보고 분기한다:
 
 ```mermaid
 sequenceDiagram
-    participant App as 서비스
-    participant API as 알림 API
-    participant Kafka as Kafka
-    participant Worker as 푸시 워커
-    participant APNs as Apple APNs
-    participant FCM as Google FCM
+    participant API as "알림 API"
+    participant Kafka as "Kafka"
+    participant Worker as "푸시 워커"
+    participant APNs as "Apple APNs"
+    participant FCM as "Google FCM"
 
-    App->>API: POST /notify { userId, title, body, type }
-    API->>API: 사용자 기기 정보 조회
-    API->>API: 중복 알림 체크 (Redis)
-    API->>Kafka: 메시지 발행
-    API-->>App: 202 Accepted (비동기)
+    API->>API: 1. 사용자 기기 정보 조회 (device_token, platform)
+    API->>API: 2. 중복 체크 (Redis)
+    API->>Kafka: 3. 메시지 발행 (비동기)
+    API-->>API: 4. 202 Accepted 즉시 반환
 
-    Kafka->>Worker: 메시지 소비
-
-    alt iOS 기기
-        Worker->>APNs: HTTP/2 요청
+    Kafka->>Worker: 5. 메시지 소비
+    alt iOS 기기 (platform = 'ios')
+        Worker->>APNs: HTTP/2 + device_token
         APNs-->>Worker: 200 OK
-    else Android 기기
-        Worker->>FCM: HTTP 요청
+    else Android 기기 (platform = 'android')
+        Worker->>FCM: HTTP + registration_token
         FCM-->>Worker: success: 1
     end
-
-    Worker->>LogDB: 전송 결과 기록
+    Worker->>LogDB: 6. 전송 결과 기록
 ```
 
-### SMS 발송
+왜 API가 즉시 202를 반환하는가? 실제 전송은 수백ms~수초가 걸린다. 동기로 기다리면 API 서버의 스레드가 모두 블로킹된다. Kafka에 발행하고 즉시 반환한다.
+
+### SMS — 공급자 Fallback이 왜 필요한가
+
+Twilio가 장애나면 SMS가 전혀 안 간다. 주문 완료 SMS가 안 오면 고객 불안이 폭증한다. **공급자 이중화**:
 
 ```mermaid
 sequenceDiagram
-    participant Worker as SMS 워커
-    participant Twilio as Twilio (1차)
-    participant Nexmo as Nexmo (2차)
-    participant DB as 로그 DB
+    participant W as "SMS 워커"
+    participant T as "Twilio (1차)"
+    participant N as "Nexmo (2차)"
 
-    Worker->>Twilio: SMS 발송 요청
-    alt Twilio 성공
-        Twilio-->>Worker: 200 OK, messageId
-        Worker->>DB: SUCCESS 기록
-    else Twilio 실패 (3번 재시도 후)
-        Worker->>Nexmo: 대체 공급자로 발송
+    W->>T: SMS 발송
+    alt 성공
+        T-->>W: 200 OK
+    else 실패 (3회 재시도 후)
+        W->>N: 대체 공급자로 발송
         alt Nexmo 성공
-            Nexmo-->>Worker: 200 OK
-            Worker->>DB: SUCCESS (fallback) 기록
+            N-->>W: 200 OK
         else 모두 실패
-            Worker->>DB: FAILED 기록
-            Worker->>AlertTeam: 운영팀 알림
+            W->>DLQ: Dead Letter Queue
+            W->>Alert: 운영팀 알림
         end
     end
 ```
 
 ---
 
-## 4. 중복 알림 방지
+## 중복 알림 방지 — 왜 반드시 필요한가
 
-### 왜 중복이 발생하는가?
-
-```mermaid
-graph TD
-    Problem["왜 중복 발생?"]
-    Problem --> R1["Kafka 재처리: 워커 장애 후 재시작"]
-    Problem --> R2["네트워크 타임아웃: 실제 전송됐지만 ACK 못 받음"]
-    Problem --> R3["여러 서비스가 같은 알림 요청"]
-    Problem --> R4["재시도 로직의 부작용"]
-```
-
-### 멱등성 기반 중복 방지
+Kafka에서 메시지를 소비하다 워커가 크래시하면, 재시작 후 같은 메시지를 다시 처리한다. 이것이 **At-Least-Once** 전달의 부작용이다. 사용자 입장에서는 같은 주문 완료 알림이 두 번 온다.
 
 ```python
-import hashlib
-import time
-
 class DeduplicationService:
     def __init__(self, redis, window_seconds=3600):
         self.redis = redis
         self.window = window_seconds
 
-    def generate_key(self, user_id: str, event_type: str,
-                     content_hash: str) -> str:
-        """알림 고유 키 생성"""
-        raw = f"{user_id}:{event_type}:{content_hash}"
-        return f"dedup:{hashlib.md5(raw.encode()).hexdigest()}"
-
-    def is_duplicate(self, user_id: str, event_type: str,
-                     content: str) -> bool:
-        """중복 여부 확인"""
+    def is_duplicate(self, user_id: str, event_type: str, content: str) -> bool:
+        # user_id + event_type + content_hash를 키로 사용
         content_hash = hashlib.md5(content.encode()).hexdigest()
-        key = self.generate_key(user_id, event_type, content_hash)
+        key = f"dedup:{user_id}:{event_type}:{content_hash}"
 
-        # SET NX (Not eXists): 키가 없을 때만 설정
+        # SET NX: 키가 없을 때만 설정
+        # result = True → 새로 설정됨 → 중복 아님
+        # result = None → 이미 존재 → 중복
         result = self.redis.set(key, "1", ex=self.window, nx=True)
-        return result is None  # None이면 이미 존재 → 중복
-
-    def mark_sent(self, notification_id: str):
-        """전송 완료 표시 (DB에도 기록)"""
-        self.redis.setex(f"sent:{notification_id}", self.window, "1")
+        return result is None
 ```
 
-**실전 예시:**
-```python
-def send_notification(user_id, event_type, title, body):
-    dedup = DeduplicationService(redis)
-
-    # 중복 체크
-    if dedup.is_duplicate(user_id, event_type, f"{title}{body}"):
-        logger.info(f"중복 알림 차단: user={user_id}, type={event_type}")
-        return {"status": "skipped", "reason": "duplicate"}
-
-    # 알림 전송
-    notification_id = send_push(user_id, title, body)
-    return {"status": "sent", "id": notification_id}
-```
+만약 중복 방지가 없으면? 마케팅 캠페인 알림이 5번 오는 상황이 발생한다. 사용자 이탈과 앱 삭제로 이어진다.
 
 ---
 
-## 5. 사용자 알림 설정 (User Preferences)
-
-```mermaid
-graph TD
-    Incoming["알림 요청"] --> PrefCheck{"사용자 설정 확인"}
-
-    PrefCheck --> GlobalOff{"전체 수신 거부?"}
-    GlobalOff -->|Yes| Discard["폐기"]
-    GlobalOff -->|No| ChannelCheck{"채널별 설정"}
-
-    ChannelCheck --> Push{"푸시 허용?"}
-    ChannelCheck --> SMS{"SMS 허용?"}
-    ChannelCheck --> Email{"이메일 허용?"}
-
-    Push -->|Yes| PushQueue["푸시 큐"]
-    SMS -->|Yes| SMSQueue["SMS 큐"]
-    Email -->|Yes| EmailQueue["이메일 큐"]
-
-    Push -->|No| Skip1["건너뜀"]
-    SMS -->|No| Skip2["건너뜀"]
-    Email -->|No| Skip3["건너뜀"]
-```
-
-**사용자 설정 스키마:**
-```sql
-CREATE TABLE user_notification_settings (
-    user_id         BIGINT NOT NULL,
-    push_enabled    BOOLEAN DEFAULT TRUE,
-    sms_enabled     BOOLEAN DEFAULT TRUE,
-    email_enabled   BOOLEAN DEFAULT TRUE,
-
-    -- 알림 유형별 설정
-    marketing_push  BOOLEAN DEFAULT TRUE,
-    marketing_sms   BOOLEAN DEFAULT FALSE,  -- SMS 마케팅은 기본 거부
-    marketing_email BOOLEAN DEFAULT TRUE,
-
-    -- 방해 금지 시간
-    quiet_hours_start TIME,    -- 예: 22:00
-    quiet_hours_end   TIME,    -- 예: 08:00
-    timezone          VARCHAR(50) DEFAULT 'Asia/Seoul',
-
-    PRIMARY KEY (user_id)
-);
-```
-
----
-
-## 6. 우선순위 큐 설계
+## 우선순위 큐 — 긴급 알림이 마케팅 알림에 막히지 않게
 
 ```mermaid
 graph TD
     Notif["알림 요청"] --> Classify{"우선순위 분류"}
-
-    Classify -->|"P0: 긴급"| Critical["긴급 큐<br>결제 완료, 보안 알림<br>즉시 처리"]
-    Classify -->|"P1: 높음"| High["높음 큐<br>주문 상태, 배송 알림<br>1분 이내"]
-    Classify -->|"P2: 보통"| Normal["보통 큐<br>소셜 알림, 댓글<br>5분 이내"]
-    Classify -->|"P3: 낮음"| Low["낮음 큐<br>마케팅, 뉴스레터<br>1시간 이내"]
-
-    subgraph "워커 할당"
-        Critical --> W_C["전용 워커 10개"]
-        High --> W_H["전용 워커 5개"]
-        Normal --> W_N["공유 워커 3개"]
-        Low --> W_L["공유 워커 2개"]
-    end
+    Classify -->|"P0: 보안/결제"| P0["Kafka: critical<br>전용 워커 10개"]
+    Classify -->|"P1: 주문/배송"| P1["Kafka: high<br>전용 워커 5개"]
+    Classify -->|"P2: 소셜/댓글"| P2["Kafka: normal<br>공유 워커"]
+    Classify -->|"P3: 마케팅"| P3["Kafka: low<br>공유 워커"]
 ```
 
-**Kafka 토픽 설계:**
-```python
-KAFKA_TOPICS = {
-    'P0': 'notifications-critical',   # 파티션 20개
-    'P1': 'notifications-high',        # 파티션 10개
-    'P2': 'notifications-normal',      # 파티션 5개
-    'P3': 'notifications-low',         # 파티션 3개
-}
-
-def publish_notification(notification: dict):
-    priority = determine_priority(notification['type'])
-    topic = KAFKA_TOPICS[priority]
-
-    producer.send(
-        topic,
-        key=notification['user_id'].encode(),
-        value=json.dumps(notification).encode()
-    )
-```
+왜 같은 큐를 쓰면 안 되는가? 블랙프라이데이에 P3(마케팅) 알림 수천만 건이 쌓이면, 그 뒤에 들어온 P0(결제 완료) 알림이 수십 분 후에야 전달된다. **토픽 분리 + 전용 워커**로 P0는 항상 10초 이내를 보장한다.
 
 ---
 
-## 7. 재시도 전략 (Retry Strategy)
+## 재시도 전략 — 지수 백오프가 왜 중요한가
+
+APNs가 일시적으로 느려졌을 때 모든 워커가 즉시 재시도하면? 수천 개의 요청이 동시에 몰려 APNs를 더 힘들게 만든다(Thundering Herd). **지수 백오프 + 지터(Jitter)**:
 
 ```mermaid
 graph TD
-    Send["알림 전송 시도"]
-    Send --> Success{"성공?"}
-    Success -->|Yes| Done["완료 기록"]
-    Success -->|No| Retry{"재시도 횟수?"}
-
-    Retry -->|"1회"| Wait1["1초 대기"]
-    Wait1 --> Send
-
-    Retry -->|"2회"| Wait2["4초 대기"]
-    Wait2 --> Send
-
-    Retry -->|"3회"| Wait3["16초 대기"]
-    Wait3 --> Send
-
-    Retry -->|"4회 초과"| DLQ["Dead Letter Queue<br>실패 큐"]
+    Send["알림 전송"] --> Fail{"실패?"}
+    Fail -->|"1회"| W1["1초 대기"]
+    W1 --> Send
+    Fail -->|"2회"| W2["4초 대기"]
+    W2 --> Send
+    Fail -->|"3회"| W3["16초 대기"]
+    W3 --> Send
+    Fail -->|"4회 초과"| DLQ["Dead Letter Queue"]
     DLQ --> Alert["운영팀 알림"]
-    DLQ --> Manual["수동 처리"]
 ```
 
-**지수 백오프(Exponential Backoff) 구현:**
 ```python
-import asyncio
-import random
+async def execute_with_retry(self, func, *args):
+    for attempt in range(self.max_retries + 1):
+        try:
+            return await func(*args)
+        except (NetworkError, TimeoutError) as e:
+            if attempt == self.max_retries:
+                await self.send_to_dlq(func, args, e)
+                raise
 
-class RetryHandler:
-    def __init__(self, max_retries=3, base_delay=1.0, max_delay=60.0):
-        self.max_retries = max_retries
-        self.base_delay = base_delay
-        self.max_delay = max_delay
-
-    async def execute_with_retry(self, func, *args):
-        last_exception = None
-
-        for attempt in range(self.max_retries + 1):
-            try:
-                return await func(*args)
-            except (NetworkError, TimeoutError) as e:
-                last_exception = e
-
-                if attempt == self.max_retries:
-                    break
-
-                # 지수 백오프 + 지터(jitter)로 thundering herd 방지
-                delay = min(
-                    self.base_delay * (2 ** attempt) + random.uniform(0, 1),
-                    self.max_delay
-                )
-                await asyncio.sleep(delay)
-
-        # 모든 재시도 실패 → Dead Letter Queue
-        await self.send_to_dlq(func, args, last_exception)
-        raise last_exception
+            # 지수 백오프 + 랜덤 지터 (thundering herd 방지)
+            delay = min(
+                self.base_delay * (2 ** attempt) + random.uniform(0, 1),
+                self.max_delay
+            )
+            await asyncio.sleep(delay)
 ```
 
 ---
 
-## 8. 전송 보장 패턴
+## 전송 보장 — Transactional Outbox 패턴
 
-### At-Least-Once (최소 1회 전달) 구현
+주문이 DB에 저장되는 것과 알림 발송이 **원자적**으로 처리되어야 한다. 주문은 DB에 저장됐는데 알림 발행 직전에 서버가 죽으면? 주문 완료 알림이 영원히 안 간다.
 
-```mermaid
-sequenceDiagram
-    participant Worker as 워커
-    participant APNs as APNs
-    participant DB as 로그 DB
-    participant Kafka as Kafka
-
-    Worker->>APNs: 알림 전송
-    APNs-->>Worker: 200 OK
-
-    Worker->>DB: 전송 성공 기록
-    Worker->>Kafka: offset commit (처리 완료)
-
-    Note over Worker: 만약 DB 기록 전에 워커 재시작되면?
-    Worker->>APNs: 동일 알림 재전송 (중복!)
-    Note over Worker: → 멱등성 키로 중복 방지 필요
-```
-
-**트랜잭셔널 아웃박스 패턴:**
 ```sql
--- 알림 발송 요청과 비즈니스 로직을 같은 트랜잭션으로
+-- 같은 트랜잭션 안에서 처리
 BEGIN TRANSACTION;
 
--- 1. 주문 상태 업데이트
+-- 1. 비즈니스 로직
 UPDATE orders SET status = 'PAID' WHERE id = 12345;
 
--- 2. 알림 발송 예약 (같은 트랜잭션!)
-INSERT INTO notification_outbox (
-    user_id, type, payload, status, created_at
-) VALUES (
-    1001, 'ORDER_PAID',
-    '{"orderId": 12345, "amount": 50000}',
-    'PENDING', NOW()
-);
+-- 2. 알림을 같은 트랜잭션에 기록 (발행은 나중에)
+INSERT INTO notification_outbox (user_id, type, payload, status)
+VALUES (1001, 'ORDER_PAID', '{"orderId": 12345}', 'PENDING');
 
 COMMIT;
-
--- 별도 스케줄러가 PENDING 알림을 폴링하여 발송
--- 발송 성공 시 status = 'SENT'로 업데이트
+-- 별도 스케줄러가 PENDING 행을 폴링해서 Kafka에 발행
+-- 발행 완료 시 status = 'SENT'
 ```
+
+이 패턴 없이 직접 Kafka에 발행하면? 트랜잭션이 롤백됐는데 Kafka에는 메시지가 이미 발행된 상황이 생긴다.
 
 ---
 
-## 9. 알림 로그 및 분석
-
-```mermaid
-graph LR
-    Notif["알림 발송"] --> Log["알림 로그 DB"]
-    Log --> Dashboard["운영 대시보드"]
-
-    Dashboard --> M1["전송률 - Delivery Rate"]
-    Dashboard --> M2["열람률 - Open Rate"]
-    Dashboard --> M3["클릭률 - CTR"]
-    Dashboard --> M4["실패율 - Failure Rate"]
-    Dashboard --> M5["채널별 성능 비교"]
-```
-
-**알림 로그 스키마:**
-```sql
-CREATE TABLE notification_logs (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    notification_id VARCHAR(64) NOT NULL,  -- 멱등성 키
-    user_id         BIGINT NOT NULL,
-    channel         ENUM('PUSH', 'SMS', 'EMAIL'),
-    type            VARCHAR(50),           -- ORDER_PAID, DELIVERY_STARTED 등
-    title           VARCHAR(255),
-    status          ENUM('PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED'),
-    provider        VARCHAR(50),           -- APNs, FCM, Twilio, SendGrid
-    sent_at         DATETIME,
-    delivered_at    DATETIME,
-    error_message   TEXT,
-    retry_count     INT DEFAULT 0,
-
-    INDEX idx_user_id (user_id),
-    INDEX idx_sent_at (sent_at),
-    INDEX idx_status (status)
-);
-```
-
----
-
-## 10. 이메일 발송 최적화
-
-### SPF, DKIM, DMARC 설정 (스팸 방지)
-
-```
-SPF (Sender Policy Framework):
-  → 우리 서버 IP만 이메일 발송 허용
-  DNS TXT: "v=spf1 include:sendgrid.net ~all"
-
-DKIM (DomainKeys Identified Mail):
-  → 이메일에 디지털 서명
-  수신 서버가 서명 검증 → 위조 방지
-
-DMARC (Domain-based Message Authentication):
-  → SPF/DKIM 실패 시 처리 방법 지시
-  DNS TXT: "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com"
-```
-
-### 이메일 발송 속도 제한 (Throttling)
+## 사용자 수신 설정 — 방해 금지 시간
 
 ```python
-class EmailThrottler:
-    """이메일 발송 속도 제한 - ISP 차단 방지"""
-
-    LIMITS = {
-        'gmail.com': 50,    # 초당 50건
-        'naver.com': 30,
-        'daum.net': 20,
-        'default': 100
-    }
-
-    async def send_batch(self, emails: list[dict]):
-        # 도메인별로 그룹화
-        by_domain = {}
-        for email in emails:
-            domain = email['to'].split('@')[1]
-            by_domain.setdefault(domain, []).append(email)
-
-        for domain, domain_emails in by_domain.items():
-            limit = self.LIMITS.get(domain, self.LIMITS['default'])
-            # 속도 제한 준수하며 발송
-            for chunk in chunks(domain_emails, limit):
-                await asyncio.gather(*[send_email(e) for e in chunk])
-                await asyncio.sleep(1)  # 1초 대기
-```
-
----
-
-## 11. 방해 금지 시간 (Quiet Hours)
-
-```python
-from datetime import datetime, time
-import pytz
-
 def should_send_now(user_id: str, priority: str) -> bool:
-    """방해 금지 시간 체크"""
-
-    # 긴급 알림은 무조건 발송
+    # P0(보안/결제)는 방해 금지 무시 — 항상 전송
     if priority == 'P0':
         return True
 
     settings = get_user_settings(user_id)
-    if not settings.quiet_hours_start:
-        return True
-
-    user_tz = pytz.timezone(settings.timezone)
+    user_tz  = pytz.timezone(settings.timezone)
     user_now = datetime.now(user_tz).time()
 
-    start = settings.quiet_hours_start  # 예: 22:00
-    end = settings.quiet_hours_end      # 예: 08:00
-
-    # 자정 넘어가는 경우 처리
-    if start > end:
-        # 22:00 ~ 다음날 08:00
-        in_quiet = user_now >= start or user_now < end
-    else:
-        in_quiet = start <= user_now < end
+    # 22:00 ~ 08:00 방해 금지 시간 (자정 넘어가는 케이스 처리)
+    start, end = settings.quiet_hours_start, settings.quiet_hours_end
+    in_quiet = (user_now >= start or user_now < end) if start > end \
+               else (start <= user_now < end)
 
     if in_quiet:
-        # 방해 금지 해제 시간으로 스케줄링
-        schedule_for_later(user_id, settings.quiet_hours_end)
+        schedule_for_later(user_id, end)  # 방해 금지 해제 시간에 재스케줄
         return False
-
     return True
 ```
 
 ---
 
-## 12. 극한 시나리오: 1억명에게 동시 마케팅 알림
-
-쿠팡이 블랙프라이데이 행사를 1억 명에게 동시에 알림 발송하는 경우를 설계합니다.
-
-```
-문제:
-- 1억건 푸시 알림을 얼마나 빨리 보낼 수 있나?
-- APNs/FCM의 처리 한계는?
-- 서버가 버틸 수 있나?
-```
+## 극한 시나리오: 1억 명에게 동시 마케팅 알림
 
 ```mermaid
 graph TD
-    Marketing["마케팅팀: 1억명에게 발송"]
-    Marketing --> Segmentation["사용자 세그먼테이션<br>DB에서 대상 추출"]
-    Segmentation --> Batching["배치 분할<br>1000명씩 10만 배치"]
-    Batching --> Kafka["Kafka에 순차 발행<br>초당 1만건"]
-    Kafka --> Workers["100개 워커 병렬 처리"]
+    Marketing["마케팅팀: 1억명 캠페인 발송"] --> Segment["사용자 세그먼트 추출<br>(DB 쿼리)"]
+    Segment --> Batch["1000명씩 10만 배치 분할"]
+    Batch --> Kafka["Kafka: notifications-low<br>초당 1만 건 발행 (속도 제한)"]
+    Kafka --> Workers["워커 100개 병렬 처리"]
     Workers --> APNs["APNs: 초당 1만건"]
     Workers --> FCM["FCM: 초당 1만건"]
-
-    subgraph "타임라인"
-        T1["0분: 발송 시작"]
-        T2["10분: 전체의 6% 발송"]
-        T3["2시간 46분: 완료!"]
-    end
+    Note["예상 완료: 약 2시간 46분"]
 ```
 
-**대량 발송 스케줄러:**
-```python
-class BulkNotificationScheduler:
-    def __init__(self, kafka_producer, workers=100):
-        self.kafka = kafka_producer
-        self.workers = workers
-        self.rate_limit = 10000  # 초당 최대 1만건
-
-    async def send_bulk_campaign(
-        self,
-        campaign_id: str,
-        user_ids: list[str],
-        notification: dict
-    ):
-        total = len(user_ids)
-        batch_size = 1000
-
-        for i, batch in enumerate(chunks(user_ids, batch_size)):
-            for user_id in batch:
-                await self.kafka.send(
-                    'notifications-low',
-                    {
-                        'campaign_id': campaign_id,
-                        'user_id': user_id,
-                        **notification
-                    }
-                )
-
-            # 속도 제한: 초당 1만건
-            sent = (i + 1) * batch_size
-            elapsed = time.time() - start_time
-            expected = sent / self.rate_limit
-            if elapsed < expected:
-                await asyncio.sleep(expected - elapsed)
-
-            # 진행률 보고
-            if i % 100 == 0:
-                logger.info(f"캠페인 {campaign_id}: {sent}/{total} 발행 완료")
-```
-
----
-
-## 완성된 알림 시스템 아키텍처
-
-```mermaid
-graph TD
-    Services["마이크로서비스들"] --> APIGateway["알림 API 게이트웨이"]
-
-    APIGateway --> PrefCheck["사용자 설정 확인<br>Redis 캐시"]
-    APIGateway --> Dedup["중복 방지<br>Redis SET NX"]
-    APIGateway --> Validator["유효성 검사"]
-
-    Validator --> P0["Kafka: critical"]
-    Validator --> P1["Kafka: high"]
-    Validator --> P2["Kafka: normal"]
-    Validator --> P3["Kafka: low"]
-
-    P0 --> PushWorker["푸시 워커 10개"]
-    P1 --> PushWorker
-    P0 --> SMSWorker["SMS 워커 5개"]
-    P1 --> SMSWorker
-    P2 --> EmailWorker["이메일 워커 10개"]
-    P3 --> EmailWorker
-
-    PushWorker --> APNs
-    PushWorker --> FCM
-    SMSWorker --> Twilio
-    SMSWorker --> Nexmo
-    EmailWorker --> SendGrid
-    EmailWorker --> SES
-
-    PushWorker --> DLQ[Dead Letter Queue]
-    SMSWorker --> DLQ
-    EmailWorker --> DLQ
-
-    DLQ --> RetryWorker["재시도 워커"]
-    RetryWorker --> Alert["운영 알림"]
-
-    subgraph "저장 및 분석"
-        LogDB["("알림 로그 DB")"]
-        Analytics["분석 대시보드"]
-    end
-
-    PushWorker --> LogDB
-    SMSWorker --> LogDB
-    EmailWorker --> LogDB
-    LogDB --> Analytics
-```
+**왜 속도 제한이 필요한가?** APNs/FCM은 초당 처리 한도가 있다. 한도 초과 시 IP 차단 → 모든 푸시 불가. 초당 1만 건 이하로 제어해서 차단을 피한다.
 
 ---
 
 ## 핵심 설계 결정 요약
 
-| 결정 사항 | 선택 | 이유 |
-|----------|------|------|
-| 메시지 큐 | Kafka | 내구성 + 우선순위 토픽 분리 |
-| 중복 방지 | Redis SET NX | 원자적 중복 체크 |
-| 재시도 | 지수 백오프 + DLQ | 안정적 재처리 |
-| 전송 보장 | Outbox 패턴 | 비즈니스 로직과 원자적 처리 |
-| 우선순위 | 별도 Kafka 토픽 | 긴급 알림 병목 없음 |
-| 대량 발송 | 배치 + 속도제한 | APNs/FCM 차단 방지 |
+| 결정 | 선택 | 이유 |
+|------|------|------|
+| 메시지 큐 | Kafka 우선순위별 토픽 분리 | 긴급 알림이 마케팅 알림에 막히지 않도록 |
+| 중복 방지 | Redis SET NX (멱등성 키) | Kafka At-Least-Once의 부작용 제거 |
+| 재시도 | 지수 백오프 + DLQ | Thundering Herd 방지, 영구 실패 알림 |
+| 전송 보장 | Transactional Outbox 패턴 | DB 트랜잭션과 알림 발행의 원자성 |
+| 공급자 이중화 | Twilio → Nexmo fallback | 단일 공급자 장애 시 서비스 지속 |
+| 대량 발송 | 배치 분할 + 속도 제한 | APNs/FCM IP 차단 방지 |

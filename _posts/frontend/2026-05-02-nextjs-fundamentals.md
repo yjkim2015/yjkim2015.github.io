@@ -7,25 +7,27 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-## 음식점 메뉴 준비 방식
+## 음식점 준비 방식으로 이해하기
 
-같은 음식도 어떻게 준비하느냐에 따라 속도와 신선도가 다릅니다.
+같은 음식도 어떻게 준비하느냐에 따라 속도와 신선도가 달라집니다.
 
-- **CSR (Client-Side Rendering)**: 주문 후 주방에서 즉석 조리. 처음엔 느리지만 이후 빠름.
-- **SSR (Server-Side Rendering)**: 주문 들어오면 즉시 조리 후 제공. 항상 신선하지만 대기 시간 있음.
-- **SSG (Static Site Generation)**: 미리 대량 조리해 포장. 제공 즉시 빠르지만 메뉴 고정.
-- **ISR (Incremental Static Regeneration)**: 포장해두되, 일정 시간마다 재조리. 빠르면서 최신성 유지.
+- **CSR (Client-Side Rendering)**: 손님이 주문하면 그때 조리 시작. 첫 번째 접시가 나오는데 오래 걸리지만, 그 다음부터는 빠릅니다.
+- **SSR (Server-Side Rendering)**: 주문이 들어오면 즉시 조리해서 바로 제공. 항상 신선하지만 요리사(서버)가 바쁩니다.
+- **SSG (Static Site Generation)**: 미리 대량으로 만들어 포장해 둠. 손님이 오면 즉시 제공. 매우 빠르지만 메뉴가 고정됩니다.
+- **ISR (Incremental Static Regeneration)**: 포장해 두되, 일정 시간마다 새로 만들어 교체. 빠르면서도 메뉴가 주기적으로 업데이트됩니다.
+
+왜 Next.js가 이 네 가지를 다 지원할까요? 이유는 페이지마다 적합한 전략이 다르기 때문입니다. 블로그 글은 SSG가 좋고, 사용자별 대시보드는 SSR이 필요하고, 장바구니는 CSR이 어울립니다.
 
 ---
 
-## 1. 렌더링 전략 비교
+## 1번 다이어그램 - 렌더링 전략 비교
 
 ```mermaid
 graph TD
     subgraph "CSR"
         CSR1["서버: 빈 HTML + JS 전달"]
         CSR2["브라우저: JS로 DOM 생성"]
-        CSR3["초기 로딩 느림"]
+        CSR3["초기 로딩 느림 (흰 화면)"]
         CSR4["이후 인터랙션 빠름"]
     end
 
@@ -40,14 +42,14 @@ graph TD
         SSG1["빌드 시 HTML 생성"]
         SSG2["CDN에서 즉시 전달"]
         SSG3["매우 빠름"]
-        SSG4["데이터 고정"]
+        SSG4["데이터 빌드 시점에 고정"]
     end
 
     subgraph "ISR"
         ISR1["SSG + 주기적 재생성"]
         ISR2["빠른 초기 로드"]
         ISR3["일정 시간마다 최신화"]
-        ISR4["빠름 + 최신성 균형"]
+        ISR4["속도와 신선도 균형"]
     end
 
     style CSR3 fill:#e74c3c,color:#fff
@@ -64,18 +66,20 @@ graph TD
 
 ---
 
-## 2. Next.js App Router vs Pages Router
+## 2. App Router vs Pages Router
+
+Next.js 13에서 App Router가 도입되었습니다. Pages Router는 기존 방식으로, 현재도 동작하지만 App Router가 공식 권장 방식입니다.
 
 ```mermaid
 graph LR
-    subgraph "Pages Router (13 이전)"
+    subgraph "Pages Router 13 이전"
         PR["pages/"]
         PR --> PI["index.js → /"]
         PR --> PB["blog/[id].js → /blog/:id"]
         PR --> PA["api/users.js → /api/users"]
     end
 
-    subgraph "App Router (13+, 권장)"
+    subgraph "App Router 13+ 권장"
         AR["app/"]
         AR --> AI["page.tsx → /"]
         AR --> AB["blog/[id]/page.tsx → /blog/:id"]
@@ -88,14 +92,20 @@ graph LR
     style PR fill:#f39c12,color:#fff
 ```
 
+App Router의 가장 큰 변화는 **서버 컴포넌트**입니다. 모든 컴포넌트가 기본적으로 서버에서만 실행됩니다. 클라이언트에서 실행이 필요한 컴포넌트만 `'use client'`를 선언합니다.
+
 ---
 
-## 3. App Router - 서버 컴포넌트
+## 3. 서버 컴포넌트 vs 클라이언트 컴포넌트
+
+서버 컴포넌트가 중요한 이유가 있습니다. 왜냐하면 **자바스크립트 번들에 포함되지 않기 때문**입니다. DB 접근 라이브러리, 데이터 변환 로직이 아무리 무거워도 클라이언트로 전송되지 않습니다.
+
+> 비유: 식당에서 요리사(서버 컴포넌트)는 주방에만 있고, 서빙 직원(클라이언트 컴포넌트)만 손님 테이블에 나옵니다. 요리사가 어떤 도구를 쓰는지 손님은 알 필요가 없습니다.
 
 ```jsx
-// app/page.tsx - 기본적으로 서버 컴포넌트
+// app/page.tsx — 기본이 서버 컴포넌트
 async function HomePage() {
-  // 서버에서 직접 DB 접근 가능
+  // 서버에서 직접 DB에 접근할 수 있습니다 — 이 코드는 브라우저로 전달되지 않음
   const posts = await db.post.findMany({ take: 10 });
 
   return (
@@ -108,7 +118,7 @@ async function HomePage() {
   );
 }
 
-// 클라이언트 컴포넌트 명시 (인터랙션 필요 시)
+// 클라이언트 컴포넌트 — 인터랙션이 필요할 때만 선언
 'use client';
 
 import { useState } from 'react';
@@ -125,131 +135,94 @@ function LikeButton({ postId, initialCount }) {
 
   return (
     <button onClick={handleLike}>
-      {liked ? '❤️' : '🤍'} {count}
+      {liked ? '좋아요 취소' : '좋아요'} {count}
     </button>
   );
 }
 ```
 
-### 서버 컴포넌트 vs 클라이언트 컴포넌트
-
 ```mermaid
 graph TD
-    subgraph "서버 컴포넌트 (기본)"
-        SC1["DB 직접 접근"]
-        SC2["API 키 안전"]
-        SC3["번들 크기 0"]
-        SC4["useState/useEffect 불가"]
-        SC5["이벤트 핸들러 불가"]
+    subgraph "서버 컴포넌트 기본값"
+        SC1["DB 직접 접근 가능"]
+        SC2["API 키 안전 (브라우저 노출 없음)"]
+        SC3["번들 크기 0 — 클라이언트에 전송 안 됨"]
+        SC4["useState useEffect 사용 불가"]
+        SC5["이벤트 핸들러 사용 불가"]
     end
 
-    subgraph "클라이언트 컴포넌트 ('use client')
-"
-        CC1["useState, useEffect 사용"]
-        CC2["이벤트 핸들러"]
-        CC3["브라우저 API"]
-        CC4["번들에 포함"]
+    subgraph "클라이언트 컴포넌트 use client"
+        CC1["useState useEffect 사용 가능"]
+        CC2["이벤트 핸들러 사용 가능"]
+        CC3["브라우저 API 사용 가능"]
+        CC4["번들에 포함됨"]
     end
 
-    SC1 --> DECIDE{"어느 것을 쓸까?"}
-    CC1 --> DECIDE
-
-    DECIDE -->|"인터랙션 없음"| USE_SC["서버 컴포넌트 사용"]
-    DECIDE -->|"인터랙션 필요"| USE_CC["클라이언트 컴포넌트 사용"]
-
-    style USE_SC fill:#2ecc71,color:#fff
-    style USE_CC fill:#3498db,color:#fff
+    style SC3 fill:#2ecc71,color:#fff
+    style CC4 fill:#f39c12,color:#fff
 ```
 
 ---
 
-## 4. 데이터 페칭 패턴
+## 4. 데이터 페칭 패턴 — fetch 옵션 하나로 전략이 결정된다
 
-### App Router에서의 데이터 페칭
+App Router에서는 `fetch` 함수의 옵션 하나로 SSG, SSR, ISR 중 무엇을 쓸지 결정합니다.
 
 ```typescript
-// app/products/page.tsx
-
-// SSG: 빌드 시 데이터 가져오기 (기본)
+// SSG: 빌드 시 한 번 가져와서 영구 캐시 (기본값)
 async function ProductsPage() {
   const products = await fetch('https://api.example.com/products', {
-    cache: 'force-cache' // 캐시 사용 (SSG 동작)
+    cache: 'force-cache' // 빌드 시점의 데이터를 계속 사용
   }).then(r => r.json());
 
   return <ProductList products={products} />;
 }
 
-// SSR: 매 요청마다 새 데이터
+// SSR: 매 요청마다 새 데이터 (캐시 없음)
 async function DynamicPage() {
   const data = await fetch('https://api.example.com/data', {
-    cache: 'no-store' // 캐시 안 함 (SSR 동작)
+    cache: 'no-store' // 캐시하지 않음 → 매 요청마다 서버에서 실행
   }).then(r => r.json());
 
   return <DataDisplay data={data} />;
 }
 
-// ISR: 주기적 재검증
+// ISR: 1시간마다 백그라운드에서 재검증
 async function NewsPage() {
   const news = await fetch('https://api.example.com/news', {
-    next: { revalidate: 3600 } // 1시간마다 재검증
+    next: { revalidate: 3600 } // 3600초 = 1시간마다 재검증
   }).then(r => r.json());
 
   return <NewsList news={news} />;
 }
 
-// 동적 params로 SSG
+// 동적 경로의 SSG — 인기 글 1000개만 미리 생성, 나머지는 요청 시 생성
 export async function generateStaticParams() {
-  const posts = await fetch('https://api.example.com/posts').then(r => r.json());
-
-  return posts.map(post => ({ id: String(post.id) }));
-}
-
-async function PostPage({ params }: { params: { id: string } }) {
-  const post = await fetch(`https://api.example.com/posts/${params.id}`, {
-    next: { revalidate: 60 }
-  }).then(r => r.json());
-
-  return <Post post={post} />;
+  const popularPosts = await db.post.findMany({
+    orderBy: { views: 'desc' },
+    take: 1000,
+    select: { id: true }
+  });
+  return popularPosts.map(post => ({ id: String(post.id) }));
 }
 ```
 
 ---
 
-## 5. 라우팅 시스템
-
-### App Router 파일 컨벤션
-
-```
-app/
-├── layout.tsx          # 루트 레이아웃 (필수)
-├── page.tsx            # / 페이지
-├── loading.tsx         # 로딩 UI
-├── error.tsx           # 에러 UI
-├── not-found.tsx       # 404 페이지
-├── blog/
-│   ├── page.tsx        # /blog 페이지
-│   └── [slug]/
-│       ├── page.tsx    # /blog/:slug
-│       └── loading.tsx # /blog/:slug 로딩
-├── (marketing)/        # 그룹 (URL에 포함 안 됨)
-│   ├── about/page.tsx  # /about
-│   └── contact/page.tsx # /contact
-└── @modal/             # 병렬 라우트
-    └── (.)photo/[id]/page.tsx # 인터셉트 라우트
-```
+## 5번 다이어그램 - App Router 파일 컨벤션
 
 ```mermaid
 graph TD
-    ROOT["app/layout.tsx<br>("항상 렌더링")"]
-    ROOT --> HOME["app/page.tsx ("/")"]
+    ROOT["app/layout.tsx<br>항상 렌더링 루트 레이아웃"]
+    ROOT --> HOME["app/page.tsx /"]
     ROOT --> BLOG["app/blog/layout.tsx"]
-    BLOG --> BLOG_PAGE["app/blog/page.tsx ("/blog")"]
-    BLOG --> BLOG_DETAIL["app/blog/[slug]/page.tsx ("/blog/:slug")"]
+    BLOG --> BLOG_PAGE["app/blog/page.tsx /blog"]
+    BLOG --> BLOG_DETAIL["app/blog/slug/page.tsx /blog/:slug"]
 
     subgraph "특수 파일"
-        LOADING["loading.tsx → Suspense fallback"]
-        ERROR["error.tsx → Error Boundary"]
-        NOT_FOUND["not-found.tsx → 404"]
+        LOADING["loading.tsx Suspense fallback"]
+        ERROR["error.tsx Error Boundary"]
+        NOT_FOUND["not-found.tsx 404"]
     end
 
     style ROOT fill:#e74c3c,color:#fff
@@ -257,15 +230,32 @@ graph TD
     style ERROR fill:#e74c3c,color:#fff
 ```
 
+```
+app/
+├── layout.tsx          # 루트 레이아웃 (필수, 모든 페이지에 적용)
+├── page.tsx            # / 페이지
+├── loading.tsx         # 로딩 UI — Suspense fallback 자동 처리
+├── error.tsx           # 에러 UI — Error Boundary 자동 처리
+├── not-found.tsx       # 404 페이지
+├── blog/
+│   ├── page.tsx        # /blog 페이지
+│   └── [slug]/
+│       └── page.tsx    # /blog/:slug
+├── (marketing)/        # 그룹 — URL에 포함되지 않음
+│   ├── about/page.tsx  # /about
+│   └── contact/page.tsx
+└── api/
+    └── users/route.ts  # /api/users API Route
+```
+
 ---
 
-## 6. API Routes
+## 6. API Routes — 풀스택 프레임워크의 핵심
+
+Next.js는 API 서버도 됩니다. `app/api/` 아래에 `route.ts` 파일을 만들면 됩니다.
 
 ```typescript
 // app/api/users/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-
-// GET /api/users
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const page = Number(searchParams.get('page') ?? '1');
@@ -278,11 +268,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ users, page });
 }
 
-// POST /api/users
 export async function POST(request: NextRequest) {
   const body = await request.json();
 
-  // 유효성 검사
   if (!body.name || !body.email) {
     return NextResponse.json(
       { error: '이름과 이메일은 필수입니다' },
@@ -291,60 +279,31 @@ export async function POST(request: NextRequest) {
   }
 
   const user = await db.user.create({ data: body });
-
   return NextResponse.json(user, { status: 201 });
-}
-
-// app/api/users/[id]/route.ts
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const user = await db.user.findUnique({
-    where: { id: params.id }
-  });
-
-  if (!user) {
-    return NextResponse.json({ error: '사용자를 찾을 수 없습니다' }, { status: 404 });
-  }
-
-  return NextResponse.json(user);
 }
 ```
 
 ---
 
-## 7. 미들웨어
+## 7. 미들웨어 — 요청이 페이지에 닿기 전에
+
+미들웨어는 모든 요청에 대해 실행됩니다. 인증, A/B 테스트, 국제화처럼 모든 페이지에 공통으로 적용할 로직을 여기에 둡니다.
 
 ```typescript
 // middleware.ts (루트 레벨)
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. 인증 확인
+  // 인증이 필요한 페이지 보호
   const token = request.cookies.get('token')?.value;
-
   if (pathname.startsWith('/dashboard') && !token) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // 2. A/B 테스트
-  const bucket = request.cookies.get('ab-test')?.value ?? 'a';
-  const response = NextResponse.next();
-  response.headers.set('x-ab-test', bucket);
-
-  // 3. 국제화
-  if (!pathname.startsWith('/ko') && !pathname.startsWith('/en')) {
-    return NextResponse.redirect(new URL(`/ko${pathname}`, request.url));
-  }
-
-  return response;
+  return NextResponse.next();
 }
 
-// 미들웨어 적용 경로 설정
+// 미들웨어가 실행될 경로 설정
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)']
 };
@@ -352,13 +311,15 @@ export const config = {
 
 ---
 
-## 8. Hydration
+## 8. Hydration — 서버에서 만든 HTML에 생명 불어넣기
+
+SSR/SSG 페이지는 서버에서 완성된 HTML을 보내지만, 클릭이나 입력 같은 인터랙션은 자바스크립트가 붙어야 가능합니다. 이 과정을 Hydration이라고 합니다.
 
 ```mermaid
 sequenceDiagram
     participant CLIENT as 브라우저
     participant SERVER as Next.js 서버
-    participant REACT as React (클라이언트)
+    participant REACT as React 클라이언트
 
     CLIENT->>SERVER: 페이지 요청
     SERVER->>SERVER: 서버 컴포넌트 실행
@@ -367,22 +328,21 @@ sequenceDiagram
     CLIENT->>CLIENT: HTML 즉시 표시 (빠름!)
     CLIENT->>REACT: JS 번들 파싱 및 실행
     REACT->>REACT: 클라이언트 컴포넌트 초기화
-    REACT->>CLIENT: 이벤트 핸들러 연결 (hydration)
+    REACT->>CLIENT: 이벤트 핸들러 연결 (Hydration)
     Note over CLIENT: 이제 인터랙션 가능
 ```
 
 ### Hydration 불일치 문제
 
-```jsx
-// 서버와 클라이언트 렌더링이 다른 경우 Hydration Error
+서버에서 렌더링한 HTML과 클라이언트에서 렌더링한 결과가 다르면 Hydration Error가 발생합니다.
 
-// 잘못된 예
+```jsx
+// 잘못된 예 — 서버와 클라이언트의 시간이 다름
 function CurrentTime() {
   return <p>{new Date().toLocaleString()}</p>;
-  // 서버와 클라이언트의 시간이 다름 → 불일치!
 }
 
-// 올바른 예
+// 올바른 예 — useEffect로 클라이언트에서만 시간 설정
 function CurrentTime() {
   const [time, setTime] = useState('');
 
@@ -392,83 +352,21 @@ function CurrentTime() {
 
   return <p>{time || '로딩 중...'}</p>;
 }
-
-// 또는 suppressHydrationWarning 사용 (주의해서)
-function CurrentTime() {
-  return <p suppressHydrationWarning>{new Date().toLocaleString()}</p>;
-}
 ```
+
+왜 이런 문제가 생길까요? 이유는 서버에서 HTML을 만들 때와 브라우저에서 React가 실행될 때의 시간이 다르기 때문입니다. React는 두 결과가 같아야 한다고 기대합니다.
 
 ---
 
-## 9. 최적화 기능들
+## 9. 서버 액션 — API Route 없이 서버 코드 호출
 
-### Image 컴포넌트
+서버 액션은 클라이언트 컴포넌트에서 직접 서버 함수를 호출할 수 있게 합니다. API Route를 만들 필요가 없어집니다.
 
-```jsx
-import Image from 'next/image';
-
-// 자동 최적화: WebP 변환, lazy loading, CLS 방지
-function OptimizedImages() {
-  return (
-    <div>
-      {/* 로컬 이미지 */}
-      <Image
-        src="/hero.jpg"
-        alt="히어로"
-        width={1200}
-        height={600}
-        priority // LCP 이미지
-        quality={85}
-      />
-
-      {/* 원격 이미지 */}
-      <Image
-        src="https://example.com/photo.jpg"
-        alt="원격 이미지"
-        fill // 부모 컨테이너 채우기
-        style={{ objectFit: 'cover' }}
-      />
-    </div>
-  );
-}
-```
-
-### Font 최적화
-
-```javascript
-// app/layout.tsx
-import { Inter, Noto_Sans_KR } from 'next/font/google';
-
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter'
-});
-
-const notoSansKr = Noto_Sans_KR({
-  subsets: ['latin'],
-  weight: ['400', '700'],
-  display: 'swap',
-  variable: '--font-noto'
-});
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="ko" className={`${inter.variable} ${notoSansKr.variable}`}>
-      <body>{children}</body>
-    </html>
-  );
-}
-```
-
----
-
-## 10. 서버 액션 (Server Actions)
+> 비유: 예전에는 손님(클라이언트)이 주문을 메모해서 서빙 직원(API Route)을 통해 주방(서버)에 전달했습니다. 서버 액션은 손님이 직통 전화(Server Action)로 주방에 직접 주문하는 것과 같습니다.
 
 ```typescript
 // app/actions.ts
-'use server';
+'use server'; // 이 파일의 함수는 서버에서만 실행됩니다
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -477,13 +375,12 @@ export async function createPost(formData: FormData) {
   const title = formData.get('title') as string;
   const content = formData.get('content') as string;
 
-  // 서버에서 직접 DB 쓰기
+  // 서버에서 직접 DB 쓰기 — API Route 없이
   await db.post.create({ data: { title, content } });
 
-  // 캐시 재검증
+  // 관련 캐시 무효화
   revalidatePath('/blog');
 
-  // 리다이렉트
   redirect('/blog');
 }
 
@@ -501,58 +398,19 @@ function CreatePostForm() {
 
 ---
 
-## 11. 극한 시나리오 - 대규모 SSG
-
-```typescript
-// 10만 개 페이지를 SSG로 생성해야 할 때
-
-// 문제: 빌드 시간이 너무 길어짐
-export async function generateStaticParams() {
-  const allPosts = await db.post.findMany({ select: { id: true } });
-  return allPosts.map(post => ({ id: String(post.id) }));
-  // 10만개 → 빌드에 수 시간
-}
-
-// 해결: 인기 있는 것만 SSG, 나머지는 ISR 또는 SSR
-export async function generateStaticParams() {
-  // 상위 1000개만 미리 생성
-  const popularPosts = await db.post.findMany({
-    orderBy: { views: 'desc' },
-    take: 1000,
-    select: { id: true }
-  });
-  return popularPosts.map(post => ({ id: String(post.id) }));
-}
-
-// 나머지는 요청 시 생성 (ISR)
-export const dynamicParams = true; // 기본값, 없는 경우 생성
-
-async function PostPage({ params }) {
-  const post = await db.post.findUnique({
-    where: { id: params.id }
-  });
-
-  if (!post) notFound();
-
-  return <Post post={post} />;
-}
-```
-
----
-
-## 12. 정리
+## 3번 다이어그램 - Next.js 정리
 
 ```mermaid
 mindmap
   root((Next.js))
     렌더링 전략
-      SSG: 정적 사이트
-      SSR: 동적 페이지
-      ISR: 균형
-      CSR: 인터랙션
+      SSG 정적 사이트
+      SSR 동적 페이지
+      ISR 균형
+      CSR 인터랙션
     App Router
-      서버 컴포넌트
-      클라이언트 컴포넌트
+      서버 컴포넌트 기본
+      클라이언트 컴포넌트 use client
       레이아웃 중첩
     최적화
       Image 자동 최적화
@@ -564,4 +422,4 @@ mindmap
       미들웨어
 ```
 
-Next.js는 단순한 React 프레임워크가 아니라, **풀스택 프레임워크**입니다. 서버 컴포넌트로 번들 크기를 줄이고, 다양한 렌더링 전략으로 최적의 사용자 경험을 제공할 수 있습니다.
+Next.js는 단순한 React 프레임워크가 아니라 **풀스택 프레임워크**입니다. 렌더링 전략을 페이지별로 다르게 설정할 수 있다는 점이 가장 강력한 기능입니다. "이 페이지가 얼마나 자주 바뀌는가? 사용자별로 다른 데이터가 필요한가?"라는 질문으로 전략을 결정하세요. 대부분의 경우 SSG + ISR 조합이 성능과 신선도의 최선의 균형입니다.

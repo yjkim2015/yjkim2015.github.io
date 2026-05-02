@@ -1,5 +1,5 @@
 ---
-title: 표준 예외를 사용하라 - Effective Java[72]
+title: "표준 예외를 사용하라 — Effective Java[72]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,161 +7,88 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+숙련된 프로그래머는 이미 존재하는 것을 재사용합니다. 예외도 마찬가지입니다. 자바 라이브러리는 대부분 상황에 쓰기 충분한 표준 예외를 제공합니다.
 
+---
 
-##### 🔗 숙련된 프로그래머는 그렇지 못한 프로그래머보다 더 많은 코드를 재사용한다
+## 1. 표준 예외를 재사용해야 하는 이유
 
-* 예외도 마찬가지로 재사용하는 것이 좋으며, 자바 라이브러리는 대부분 API에서 쓰기에 충분한 수의 예외를 제공한다.
+비유하자면 **표준 도로 표지판을 사용하는 것**입니다. 직접 만든 표지판은 운전자를 혼란스럽게 하지만, 표준 표지판은 모두가 바로 이해합니다.
 
+- API가 다른 사람이 익히고 사용하기 쉬워집니다. 이미 익숙한 규약을 그대로 따르기 때문입니다.
+- API를 사용한 프로그램도 낯선 예외를 쓰지 않아 읽기 쉬워집니다.
+- 예외 클래스 수가 적을수록 메모리 사용량도 줄고 클래스 적재 시간도 줄어듭니다.
 
+---
 
-<hr>
+## 2. 자주 쓰는 표준 예외
 
+비유하자면 **공구함에 자주 쓰는 공구**입니다. 상황에 맞는 공구를 찾아 쓰는 것이 직접 만드는 것보다 낫습니다.
 
+| 예외 | 주요 쓰임 |
+|------|-----------|
+| `IllegalArgumentException` | 인수로 부적절한 값을 넘길 때 (음수 횟수 등) |
+| `IllegalStateException` | 객체 상태가 메서드 수행에 적합하지 않을 때 (초기화 안 된 객체) |
+| `NullPointerException` | null을 허용하지 않는 곳에 null을 건넬 때 |
+| `IndexOutOfBoundsException` | 시퀀스 허용 범위를 넘는 인덱스를 건넬 때 |
+| `ConcurrentModificationException` | 단일 스레드용 객체를 여러 스레드가 동시에 수정할 때 |
+| `UnsupportedOperationException` | 클라이언트가 요청한 동작을 객체가 지원하지 않을 때 |
 
-##### 💎 표준 언어를 재사용하면 얻는게 많다.
+```java
+// 좋은 예 — 표준 예외 사용
+void repeat(int times) {
+    if (times < 0)
+        throw new IllegalArgumentException("반복 횟수는 음수일 수 없습니다: " + times);
+    // ...
+}
 
-* 가장 최고는 우리의 API가 **다른 사람이 익히고 사용하기 쉬워진다는 것이다.**
-
-  * 많은 프로그래머에게 **이미 익숙해진 규약을 그대로 따르기 때문이다.**
-
-  
-
-* 우리의 API를 사용한 프로그램도 **낯선 예외를 사용하지 않게 되어 읽기 쉽게 된다는 장점도 크다.**
-
-
-
-* <span style="color:red;">예외 클래스 수가 적을 수록</span> **메모리 사용량도 줄고 클래스를 적재하는 시간도 적게 걸린다.**
-
-
-
-<hr>
-
-
-
-##### 🔗 가장 많이 재사용되는 예외는 IllegalArgumentException이다
-
-* <span style="color:red;">호출자가 인수로 부적절한 값을 넘길 때 던지는 예외</span>로, 예를 들어 반복 횟수를 지정하는 매개변수에 음수를 건넬 때 쓸 수 있다.
-
-
-
-<br>
-
-
-
-💎 **IllegalStateException도 자주 재사용된다.**
-
-* 이 예외는 **대상 객체의 상태가 호출된 메서드를 수행하기에 적합하지 않을 때** 주로 던진다.
-  * ex) 제대로 초기화 되지 않은 객체를 사용하려 할 때 던질 수 있다.
-
-
-
-<hr>
-
-
-
-##### 💎 메서드가 던지는 예외 중 특수한 일부는 따로 구분해 쓰는게 보통이다
-
-* **null 값을 허용하지 않는 메서드**에 **null**을 건네면 <span style="color:red;">관례상</span> **IllegalArgumentException**이 아닌 <span style="color:red;">NullPointerException을 던진다.</span>
-
-
-
-* 비슷하게, <span style="color:red;">어떤 시퀀스의 허용 범위를 넘는 값을 건넬 때도</span> **IllegalArgumentException** 보다는 <span style="color:red;">IndexOutOfBoundsException을 던진다.</span>
-
-
-
-<hr>
-
-
-
-##### 💎 ConcurrentModificationException은 단일 스레드에서 사용하려고 설계한 객체를 여러 스레드가 동시에 수령하려 할 때 던진다,
-
-* 외부 동기화 방식으로 사용하려고 설계한 객체도 마찬가지다.
-
-
-
-* 사실 동시 수정을 확실히 검출 할 수 있는 안정된 방법은 없으니, 이 예외는 문제가 생길 가능성을 알려주는 정도의 역할로 쓰인다.
-
-
-
-<hr>
-
-
-
-##### 💎 UnsupportedOperationException 예외는  클라이언트가 요청한 동작을 대상 객체가 지원하지 않을 때 던진다.
-
-* 대부분 객체는 자신이 정의한 메서드를 모두 지원하니 **흔히 쓰이는 예외는 아니다.**
-
-
-
-* 보통은 구현하려는 인터페이스의 메서드 일부를 구현할 수 없을 때 쓰는데, **예컨대 원소를 넣을 수만 있는 List 구현체에 대고 누군가 remove 메서드를 호출하면 이 예외를 던질 것이다.**
-
-
-
-<hr>
-
-
-
-##### 💎 Exception, RuntimeException, Throwable, Error는 직접 재사용하지 말자.
-
-* 위 클래스들은 추상 클래스라고 생각하길 바란다.
-  * 이 예외들은 다른 예외들의 상위 클래스이므로, <span style="color:red;">즉 여러 성격의 예외들을 포괄하는 클래스이므로 안정적으로 테스트할 수 없다.</span>
-
-
-
-<hr>
-
-
-
-##### 💎 상황에 부합한다면 항상 표준 예외를 재사용하자
-
-* 이때 API 문서를 참고해 **그 예외가 어떤 상황에서 던져지는지 꼭 확인해야 한다.**
-
-  * 예외의 이름뿐 아니라 예외가 던져지는 맥락도 부합할 때만 재사용한다.
-
-  
-
-* 예외의 이름뿐 아니라 **예외가 던져지는 맥락도 부합할 때만 재사용한다.**
-
-
-
-* 더 많은 정보를 제공하길 원한다면 **표준 예외를 확장해도 좋다.**
-
-  * <span style="color:red;">단, 예외는 직렬화할 수 있다는 사실을 기억하자.</span>
-
-  
-
-  * 이 사실만으로도 나만의 예외를 새로 만들지 않아야 할 근거로 충분할 수 있다.
-
-
-
-<hr>
-
-
-
-##### 💎 널리 사용되는 표준 예외의 주요 쓰임이 상호 배타적이지 않은 탓에, 종종 재사용할 예외를 선택하기가 어려울 때도 있다.
-
-* 예를 들어 카드 덱을 표현하는 객체가 있고, 인수로 건넨 수만큼의 카드를 뽑아 나눠주는 메서드를 제공한다고 가정해보자.
-
-  * 이때 덱에 남아 있는 카드 수보다 큰 값을 건네면 어떤 예외를 던져야 할까?
-
-    * 인수의 값이 너무 크다고 본다면 **IllegalArgumentException**
-
-    
-
-    * 덱에 남은 카드 수가 너무 적다고 본다면 **IllegalStateException**
-
-
-
-* **이런 상황에서의 일반적인 규칙은 이렇다.**
-  * <span style="color:red;">인수 값이 무엇이었든 어차피 실패했을거라면</span> **IllegalStateException**을, <span style="color:red;">그렇지 않으면</span> **IllegalArgumentException**을 던지자.
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크때
+void startEngine() {
+    if (!initialized)
+        throw new IllegalStateException("초기화가 완료되지 않았습니다");
+    // ...
+}
 ```
 
+---
+
+## 3. IllegalArgumentException vs IllegalStateException 구분
+
+비유하자면 **카드 덱에서 인수만큼 카드를 뽑는 메서드**입니다. 덱에 카드가 5장인데 10장을 뽑으라는 상황은 어떤 예외일까요?
+
+```mermaid
+graph TD
+    A["예외 선택 기준"] --> B{"인수 값에 상관없이\n항상 실패했을까?"}
+    B -- 예 --> C["IllegalStateException\n객체 상태 자체의 문제\n(덱에 카드가 부족)"]
+    B -- 아니오 --> D["IllegalArgumentException\n인수 값이 잘못됨\n(요청한 수가 너무 큼)"]
+    style C fill:#f39c12,color:#fff
+    style D fill:#51cf66,color:#fff
+```
+
+```java
+// 덱에 5장만 있을 때 10장 요청 → 인수가 문제 → IllegalArgumentException
+// 덱에 0장 있을 때 1장 요청 → 상태가 문제 → IllegalStateException
+void dealCards(int numCards) {
+    if (numCards > deck.size())
+        throw new IllegalArgumentException("덱에 카드가 부족합니다");
+    if (deck.isEmpty())
+        throw new IllegalStateException("덱이 비어있습니다");
+}
+```
+
+---
+
+## 4. 직접 만들면 안 되는 것
+
+`Exception`, `RuntimeException`, `Throwable`, `Error`는 직접 재사용하지 마세요. 이들은 여러 성격의 예외를 포괄하는 상위 클래스이므로 안정적으로 테스트할 수 없습니다.
+
+더 많은 정보를 제공해야 한다면 표준 예외를 확장(상속)하면 됩니다. 단, 예외는 직렬화될 수 있다는 점을 기억하세요. 직렬화 비용이 부담이 된다면 새 예외를 만들지 않아야 할 이유가 하나 더 늘어납니다.
+
+---
+
+## 5. 요약
+
+> 상황에 부합한다면 항상 표준 예외를 재사용하세요. 예외 이름뿐 아니라 예외가 던져지는 맥락도 일치할 때만 재사용합니다. 더 많은 정보가 필요하다면 표준 예외를 확장하세요.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

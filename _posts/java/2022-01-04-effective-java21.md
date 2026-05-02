@@ -1,5 +1,5 @@
 ---
-title: 인터페이스는 구현하는 쪽을 생각해 설계해라 - Effective Java[21]
+title: "인터페이스는 구현하는 쪽을 생각해 설계하라 — Effective Java[21]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,112 +7,159 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+Java 8에서 디폴트 메서드가 추가되면서 기존 인터페이스에 메서드를 추가할 수 있게 됐습니다. 하지만 이것이 "안전하다"는 뜻은 아닙니다. 디폴트 메서드는 기존 구현체에 몰래 삽입되는 코드입니다.
 
+---
 
-#### 🔗 디폴트 메소드 두둥 등장!!
+## 1. 디폴트 메서드가 등장하기 전의 세계
 
-자바 8 이전에는 기존 구현체를 깨뜨리지 않고는 인터페이스에 메소드를 추가 할 방법이 없었다.
+비유하자면 **건물 설계 확정 후 벽을 추가하는 것**입니다. 기존 인터페이스는 "계약서"이고, 이미 수많은 구현체가 그 계약서를 기반으로 작성됐습니다. Java 8 이전에는 인터페이스에 메서드를 추가하면 그 인터페이스를 구현한 모든 클래스가 컴파일 오류가 났습니다.
 
-**인터페이스에 메소드를 추가하면 보통은 컴파일 오류가 나는데, 추가된 메소드가 우연히 기존 구현체에 이미 존재할 가능성은 아주 낮기 때문이다.**
+```mermaid
+graph LR
+    A["Java 8 이전"] --> B["인터페이스에 메서드 추가"]
+    B --> C["기존 구현체 전부 컴파일 오류"]
+    D["Java 8 이후"] --> E["디폴트 메서드 추가"]
+    E --> F["기존 구현체는 디폴트 구현을 상속"]
+    F --> G{"모든 구현체가\n제대로 동작하나?"}
+    G -->|"대부분 Yes"| H["정상 동작"]
+    G -->|"일부 No"| I["런타임 오류 또는\n예기치 못한 동작"]
+    style I fill:#ff6b6b,color:#fff
+```
 
-자바 8에 와서 기존 인터페이스에 메소드를 추가할 수 있도록 **디폴트 메소드가 추가** 되었지만, 위험이 완전히 사라진 것은 아니다.
+디폴트 메서드는 **구현 클래스에 대해 아무것도 모른 채 합의 없이 무작정 삽입**됩니다. Java 7까지의 모든 구현체는 "현재 인터페이스에 새 메서드가 추가될 일은 영원히 없다"고 가정하고 작성됐습니다.
 
+---
 
+## 2. 실제 사례 — removeIf와 SynchronizedCollection의 충돌
 
-<hr>
-
-
-
-**💎 모든 상황에서 불변식을 해치지 않는 디폴트 메서드는 작성하기 어려워!**
-
-**디폴트 메소드**를 선언하면, 그 **인터페이스**를 구현한 후 **디폴트 메소드**를 정의하지 않은 모든 클래스에서 디폴트 구현이 쓰이게 된다.
-
-<span style="color:red;">하지만</span> 모든 기존 구현체들과 매끄럽게 연동되리라는 보장은 없다.
-
-<br>
-
-**자바 7까지의 세상**에서는 모든 클래스가 **"현재의 인터페이스에 새로운 메소드가 추가될 일은 영원히 없다"**고 가정하고 작성됐으니 말이다.
-
-**디폴트 메소드는 구현 클래스에 대해 아무것도 모른 채 합의 없이 무작정 '삽입'될 뿐이다.**
-
-
-
-<br>
-
-자바 8에서는 **주로 람다를 활용하기 위해서 핵심 컬렉션 인터페이스들에 다수의 디폴트 메소드가 추가**되었다.
-
-자바 라이브러리의 디폴트 메소드는 코드 품질이 높고 범용적이라 대부분 상황에서 잘 작동한다.
-
-<span style="color:red;">하지만</span> 생각 할 수 있는 **모든 상황에서 불변식을 해치지 않는 디폴트 메소드를 작성하기는 어렵다.**
-
-
-
-<hr>
-
-
-
-**💎 자바 8의 Collection 인터페이스에 추가된 removeIf 디폴트 메소드**
+Java 8에서 `Collection` 인터페이스에 추가된 `removeIf` 디폴트 메서드를 봅시다.
 
 ```java
-public interface Collection<E> extends Iterable<E> {
-    default boolean removeIf(Predicate<? super E> filter) {
-        Objects.requireNonNull(filter);
-        boolean removed = false;
-        final Iterator<E> each = iterator();
-        while (each.hasNext()) {
-            if (filter.test(each.next())) {
-                each.remove();
-                removed = true;
-            }
+// Java 8에서 Collection 인터페이스에 추가된 디폴트 메서드
+default boolean removeIf(Predicate<? super E> filter) {
+    Objects.requireNonNull(filter);
+    boolean removed = false;
+    final Iterator<E> each = iterator();
+    while (each.hasNext()) {
+        if (filter.test(each.next())) {
+            each.remove();
+            removed = true;
         }
-        return removed;
+    }
+    return removed;
+}
+```
+
+이 구현은 범용적으로 잘 작성됐습니다. 하지만 아파치 커먼즈의 `SynchronizedCollection`과 충돌합니다.
+
+```mermaid
+sequenceDiagram
+    participant Thread1 as 스레드 1
+    participant Thread2 as 스레드 2
+    participant SC as SynchronizedCollection
+    participant Lock as Lock 객체
+
+    Note over SC: 모든 메서드는 락 객체로 동기화
+    Thread1->>SC: add("A") → synchronized(lock)
+    Thread2->>SC: removeIf(pred) → ???
+    Note over SC: removeIf는 디폴트 구현 사용<br/>→ lock을 모름!<br/>동기화 없이 iterator 직접 호출
+    Thread1->>SC: add("B") (동시 진행)
+    SC-->>Thread2: ConcurrentModificationException!
+```
+
+`SynchronizedCollection`은 모든 메서드 호출을 락으로 동기화합니다. 하지만 `removeIf`의 디폴트 구현은 락에 대해 아무것도 모릅니다. 그래서 멀티스레드 환경에서 `removeIf`를 호출하면 `ConcurrentModificationException`이 발생하거나 데이터가 손상됩니다.
+
+**만약 이걸 모르고 쓰면?** 단일 스레드 테스트에서는 멀쩡히 동작하다가, 프로덕션 멀티스레드 환경에서만 간헐적으로 예외가 터집니다. 재현하기도 어렵고 디버깅하기도 어렵습니다.
+
+자바 플랫폼 라이브러리는 이 문제를 `Collections.synchronizedCollection()`에서 `removeIf`를 직접 재정의해서 해결했습니다.
+
+```java
+// java.util.Collections.SynchronizedCollection — 재정의로 문제 해결
+@Override
+public boolean removeIf(Predicate<? super E> filter) {
+    synchronized (mutex) {  // 락을 알고 있으므로 직접 동기화
+        return c.removeIf(filter);
     }
 }
 ```
 
-- 위는 자바 8의 **Collection** 인터페이스에 추가된 **removeIf** 메서드로, 주어진 **boolean** 함수(predicate; 프레디키트)가 **true**를 반환하는 모든 원소를 제거한다.
-- 범용적으로 잘 구현되었지만, 현존하는 모든 **Collection** 구현체와 잘 어우러지는 것은 아니므로 주의해야 한다.
-  - 대표적인 예가 **org.apache.commons.collections4.collection.SynchronizedCollection**이다. 
-    아파치 커먼즈 라이브러리의 **이 클래스는 모든 메소드에서 주어진 락 객체로 동기화한 후 내부 컬렉션 객체에 기능을 위임하는 래퍼클래스다.**
-  - 이 클래스를 자바 8과 함께 사용해서 <span style="color:red;">removeIf의 디폴트 구현을 물려받게 된다면</span>, **모든 메소드 호출을 알아서 동기화 해주지 못한다. removeIf의 구현은 동기화에 관해 아무것도 모르므로 락 객체를 사용할 수 없다.**
-  - 따라서 **SynchronizedCollection** 인스턴스를 여러 스레드가 공유하는 환경에서 한 스레드가 **removeIf**를 호출하면 **ConcurrentModificationException**이 발생하거나 다른 예기치 못한 결과로 이어질 수 있다.
-- 자바 플랫폼 라이브러리에서는 이런 문제를 예방하기 위해 다음과 같은 조치를 취했다.
-  - 구현한 인터페이스의 디폴트 메서드를 재정의하고, 다른 메서드에서는 디폴트 메서드를 호출하기 전에 필요한 작업을 수행하도록 했다.
+---
 
-<hr>
+## 3. 디폴트 메서드 사용 규칙
 
-
-
-#### **💎 디폴트 메소드 주의 사항!! **
-
-* 디폴트 메소드는 (컴파일에 성공하더라도) 기존 구현체에 런타임 오류를 일으킬 수 있다.
-
-* **기존 인터페이스에 디폴트 메소드로 새 메소드를 추가하는 일은 꼭 필요한 경우가 아니면 피해야 한다.**
-* 새로운 인터페이스를 만드는 경우라면 표준적인 메소드 구현을 제공하는 데 아주 유용한 수단이며, 그 인터페이스를 더 쉽게 구현해 활용할 수 있게끔 해준다.
-* **디폴트 메소드는 인터페이스로부터 메소드를 제거하거나 기존 메소드의 시그니처를 수정하는 용도가 아님을 명심해야 한다.**
-  * 이런 형태로 인터페이스를 변경하면 <span style="color:red;">반드시</span> 기존 클라이언트를 망가뜨리게 된다.
-
-
-
-<hr>
-
-
-
-
-
-> 디폴트 메소드라는 도구가 생겼더라도 인터페이스를 설계 할 때는 여전히 세심한 주의를 기울여야 한다.
->
-> 디폴트 메소드로 기존 인터페이스에 새로운 메소드를 추가하면 커다란 위험도 딸려 온다.
->
-> 새로운 인터페이스라면 릴리즈 전에 반드시 테스트를 거쳐야 한다.
->
-> 인터페이스를 릴리즈 한 후에라도 결함을 수정하는게 가능한 경우도 있겠지만, 
->
-> 절대 그 가능성에 기대서는 안 된다.
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+```mermaid
+graph TD
+    A["디폴트 메서드 사용 판단"] --> B{"새로운 인터페이스를\n만드는 경우인가?"}
+    B -->|"Yes"| C["디폴트 메서드로 편의 기능 제공\n→ 구현 부담 감소 → 적극 활용"]
+    B -->|"No (기존 인터페이스)"| D{"꼭 필요한 경우인가?"}
+    D -->|"No"| E["피하는 것이 최선"]
+    D -->|"Yes"| F["가능한 모든 구현체를\n검토하고 테스트"]
+    style C fill:#51cf66,color:#fff
+    style E fill:#ff6b6b,color:#fff
 ```
 
+**디폴트 메서드로 절대 하면 안 되는 것:**
+- 기존 메서드를 제거하거나 시그니처를 수정하는 용도
+  - 이런 변경은 기존 클라이언트를 반드시 망가뜨립니다
+
+**디폴트 메서드가 유용한 경우:**
+- 새 인터페이스에 표준적인 메서드 구현 제공 (구현자의 일감을 줄임)
+- 골격 구현 클래스와 함께 활용
+
+---
+
+## 4. 인터페이스 릴리즈 전 테스트가 중요한 이유
+
+```java
+// 예: 새 인터페이스를 릴리즈 전에 최소 3개의 구현체를 만들어 테스트
+public interface MyService {
+    void process(String input);
+
+    default String processAndReturn(String input) {
+        process(input);
+        return "done";  // 이 기본 구현이 모든 구현체에 맞는가?
+    }
+}
+
+// 구현체 1: 일반 구현
+class BasicService implements MyService { ... }
+
+// 구현체 2: 동기화가 필요한 구현
+class SynchronizedService implements MyService {
+    @Override
+    public String processAndReturn(String input) {
+        synchronized (this) {  // 디폴트 구현은 동기화를 모름 → 재정의 필요
+            process(input);
+            return "done";
+        }
+    }
+}
+
+// 구현체 3: 다른 제약이 있는 구현
+class ReadOnlyService implements MyService { ... }
+```
+
+**인터페이스를 릴리즈한 후에는 결함을 수정하기가 훨씬 어렵습니다.** 수정하면 기존 구현체가 깨질 수 있기 때문입니다.
+
+---
+
+## 5. 요약
+
+```mermaid
+graph TD
+    A["디폴트 메서드 핵심 교훈"] --> B["디폴트 메서드는\n'합의 없는 삽입'"]
+    A --> C["기존 구현체가 모두\n잘 동작한다는 보장 없음"]
+    A --> D["컴파일 성공 ≠ 런타임 안전"]
+    B --> E["새 인터페이스: 적극 활용"]
+    B --> F["기존 인터페이스: 신중히\n꼭 필요한 경우만"]
+    D --> G["릴리즈 전 반드시\n다양한 구현체로 테스트"]
+    style D fill:#ff6b6b,color:#fff
+    style G fill:#51cf66,color:#fff
+```
+
+> 디폴트 메서드라는 도구가 생겼더라도 인터페이스를 설계할 때는 세심한 주의가 필요합니다. 새로운 인터페이스라면 릴리즈 전에 반드시 최소 3개의 구현체로 테스트하세요. 릴리즈 후 결함 수정 가능성에 기대서는 안 됩니다.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

@@ -1,5 +1,5 @@
 ---
-title: 자원을 직접 명시하지말고 의존 객체 주입을 사용하라. - Effective Java[5]
+title: "자원을 직접 명시하지 말고 의존 객체 주입을 사용하라 — Effective Java[5]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,64 +7,212 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-많은 클래스가 하나 이상의 자원에 의존한다.
+클래스 내부에서 `new Engine()`처럼 의존 객체를 직접 생성하면 어떤 문제가 생길까요? 테스트가 어려워지고, 엔진 종류를 바꿀 때마다 소스 코드를 열어야 합니다. 의존 객체 주입(DI)이 이를 해결합니다.
 
-> 객체 지향 프로그래밍에서 클래스간에 **의존성**이 있다는 것은 클래스간에 **의존** 관계가 있다는 것을 뜻한다. 즉, 클래스 간에 **의존**(Dependency) 관계가 있다는 것은 한 클래스가 바뀔 때 다른 클래스가 영향을 받는다는 것을 뜻한다
+---
 
-아래의 예시를 보자.
+## 1. 문제: 의존 객체를 내부에서 직접 생성
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">class</span>&nbsp;Car&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#ff3399">final</span>&nbsp;Engine&nbsp;engine&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;<span style="color:#ff3399">new</span>&nbsp;Engine();</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">static</span>&nbsp;Car&nbsp;INSTANCE&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;<span style="color:#ff3399">new</span>&nbsp;Car();</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;Car()&nbsp;{}&nbsp;<span style="color:#999999">//객체&nbsp;생성&nbsp;방지용</span></div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">}</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+### 안티패턴 — 싱글톤에서 자원 직접 생성
 
-위 코드에서 Car 클래스는 Engine 클래스에 의존하고 있다.
+```java
+// 나쁜 예 — Car가 특정 Engine에 고착됨
+public class Car {
+    private final Engine engine = new Engine();  // 직접 생성!
 
-위 방식은 엔진을 단 하나만 사용한다고 가정한다는 점에서도 그리 훌륭해 보이지는 않는다. 
+    public static Car INSTANCE = new Car();
+    private Car() {}
 
-실전에서는 엔진의 종류는 셀 수 없이 많다. 엔진 하나로 모든 쓰임에 대응 할 수 있기를 바라는 건 너무 순진한 생각이다.
-
-<hr>
-
-Car 클래스가 여러 엔진을 사용할 수 있도록 변경해보자.
-
-간단하게 필드에서 final 한정자를 제거하고 다른 Engine으로 교체 하는 메서드를 추가할 수 있지만, 아쉽게도 이 방식은 어색하고 오류를 내기 쉬우며 멀티스레드 환경에서는 쓸 수 없다.
-
-
-
-***사용하는 자원에 따라 동작이 달라지는 클래스에는 정적 유틸리티 클래스나 싱글톤 방식이 적합 하지 않다.***
-
-<hr>
-
-그렇다면 어떤 방법을 사용해야 하는가? 
-
-클래스(Car)가 여러 자원 인스턴스를 지원해야 하며, 클라이언트가 원하는 자원(Engine)을 사용해야한다. 
-
-이 조건을 만족하는 패턴은 바로 <span style="color:red;">의존 객체 주입</span>의 한 형태인 **인스턴스를 생성할 때 생성자에 필요한 자원을 넘겨주는 방식**이다.
-
-
-
-## Step 1 : 자원을 직접 명시하지말고 의존 객체 주입을 사용하라.
-
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">class</span>&nbsp;Car&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#ff3399">final</span>&nbsp;Engine&nbsp;engine;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;Car(Engine&nbsp;engine)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.engine&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;Objects.requireNonNull(engine);&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
-
-위 예에서는 engine이라는 딱 하나의 자원만 사용 하지만, 자원이 몇 개든 의존 관계가 어떻든 상관없이 잘 작동한다.
-
-또한 불변을 보장하여 여러 클라이언트가 의존 객체들을 안심하고 공유 할 수 있기도 하다.
-
-의존 객체 주입은 생성자, 정적팩토리, 빌더 모두에 똑같이 응용할 수 있다.
-
-<hr>
-
-**의존 객체 주입이 유연성과 테스트 용이성을 개선해주기는 하지만, 의존성이 수천 개나 되는 큰 프로젝트에서는 코드를 어지럽게 만들기도 한다. 스프링(Spring) 같은 의존 객체 주입 프레임워크 등을 사용하면 이런 어질러짐을 해소 할 수 있다.**
-
-
-
-> 정리하자면, 클래스가 내부적으로 하나 이상의 자원에 의존하고, 그 자원이 클래스 동작에 영향을 준다면 싱글톤과 정적 유틸리티 클래스는 사용하지 않는 것이 좋다. 이 자원들을 클래스가 직접 만들게 해서도 안 된다.
->
-> 대신 필요한 작원을 생성자에 넘겨주자. 의존 객체 주입이라 하는 이 기법은 클래스의 유연성, 재사용성, 테스트 용이성을 기막히게 개선해준다.
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+    public void drive() {
+        engine.start();
+    }
+}
 ```
 
+**문제점:**
+
+```mermaid
+graph TD
+    A["Car (싱글톤)"] -->|"new Engine() 고착"| B["Engine (특정 구현)"]
+    C["테스트"] -->|"Engine을 Mock으로 교체 불가"| A
+    D["V8 엔진 사용하고 싶다면?"] -->|"Car 소스 코드 수정 필요!"| A
+    style B fill:#ff6b6b,color:#fff
+```
+
+- `Engine`을 `V8Engine`으로 바꾸려면 `Car` 코드를 열어 수정해야 합니다.
+- 테스트 시 실제 `Engine` 없이 `Car`를 테스트할 방법이 없습니다.
+- 멀티스레드 환경에서 `Engine`을 동적으로 교체하는 방법이 없습니다.
+
+---
+
+## 2. 해결: 의존 객체 주입 (Dependency Injection)
+
+### 동작 원리
+
+비유하자면 **레고 블록**입니다. 자동차 모델에 어떤 엔진 블록이든 끼울 수 있어야 합니다. 자동차가 직접 엔진을 만드는 게 아니라, 외부에서 엔진을 가져다 조립합니다.
+
+```java
+// 좋은 예 — 생성자로 의존 객체 주입
+public class Car {
+    private final Engine engine;  // 외부에서 받음
+
+    public Car(Engine engine) {
+        this.engine = Objects.requireNonNull(engine);  // null 방어
+    }
+
+    public void drive() {
+        engine.start();
+    }
+}
+
+// 다양한 Engine을 주입 가능
+Car gasCar     = new Car(new GasEngine());
+Car electricCar = new Car(new ElectricEngine());
+Car testCar    = new Car(new MockEngine());  // 테스트용 Mock
+```
+
+```mermaid
+sequenceDiagram
+    participant Client as 클라이언트
+    participant Car as Car
+    participant Engine as Engine (인터페이스)
+
+    Client->>Engine: 1️⃣ new GasEngine() 또는 new ElectricEngine()
+    Client->>Car: 2️⃣ new Car(engine) — 외부에서 주입
+    Car->>Engine: 3️⃣ engine.start() — 어떤 구현이든 동작
+```
+
+---
+
+## 3. 세 가지 주입 방식
+
+```java
+// 1. 생성자 주입 (권장 — 불변 보장)
+public class Car {
+    private final Engine engine;
+
+    public Car(Engine engine) {
+        this.engine = Objects.requireNonNull(engine);
+    }
+}
+
+// 2. 정적 팩토리 메서드 주입
+public class Car {
+    private final Engine engine;
+
+    private Car(Engine engine) { this.engine = engine; }
+
+    public static Car of(Engine engine) {
+        return new Car(Objects.requireNonNull(engine));
+    }
+}
+
+// 3. 빌더 주입
+public class Car {
+    private final Engine engine;
+
+    private Car(Builder builder) { this.engine = builder.engine; }
+
+    public static class Builder {
+        private Engine engine;
+        public Builder engine(Engine e) { this.engine = e; return this; }
+        public Car build() { return new Car(this); }
+    }
+}
+```
+
+---
+
+## 4. 팩토리 메서드 패턴 응용 — Supplier
+
+의존 객체 주입의 변형으로, 인스턴스를 만드는 **팩토리(Supplier)** 를 주입할 수 있습니다.
+
+```java
+// Supplier<T>를 받아 필요할 때마다 새 인스턴스 생성
+public class CarFactory {
+    private final Supplier<? extends Engine> engineFactory;
+
+    public CarFactory(Supplier<? extends Engine> engineFactory) {
+        this.engineFactory = Objects.requireNonNull(engineFactory);
+    }
+
+    public Car makeCar() {
+        return new Car(engineFactory.get());  // 매번 새 엔진 생성
+    }
+}
+
+// 사용
+CarFactory factory = new CarFactory(GasEngine::new);
+Car car1 = factory.makeCar();
+Car car2 = factory.makeCar();  // 각각 새 GasEngine 인스턴스
+```
+
+---
+
+## 5. 테스트 가능성 향상
+
+의존 객체 주입의 가장 큰 장점은 **테스트 시 Mock 주입**이 가능하다는 것입니다.
+
+```java
+// 테스트에서 Mock Engine 주입
+class CarTest {
+    @Test
+    void testDrive() {
+        Engine mockEngine = mock(Engine.class);
+        Car car = new Car(mockEngine);
+
+        car.drive();
+
+        verify(mockEngine).start();  // engine.start()가 호출됐는지 검증
+    }
+}
+```
+
+**만약 `new Engine()`으로 직접 생성했다면?** 테스트 시 실제 엔진(DB 연결, 네트워크 등)이 동작해야 하므로 단위 테스트가 불가능해집니다.
+
+---
+
+## 6. 대규모 프로젝트에서의 DI 프레임워크
+
+의존성이 수십~수백 개가 되면 생성자 주입 코드가 복잡해집니다. Spring 같은 DI 프레임워크가 이 어지러움을 해소합니다.
+
+```java
+// Spring의 의존 객체 주입 — @Autowired 또는 생성자 주입
+@Service
+public class CarService {
+    private final Engine engine;
+
+    // Spring이 자동으로 Engine 빈을 찾아 주입
+    public CarService(Engine engine) {
+        this.engine = engine;
+    }
+
+    public void drive() {
+        engine.start();
+    }
+}
+```
+
+---
+
+## 7. 요약
+
+```mermaid
+graph TD
+    A["의존 객체 주입 핵심"] --> B["직접 생성(new) 금지\n외부에서 주입받기"]
+    A --> C["장점"]
+    A --> D["주입 방식"]
+    C --> C1["유연성: 구현체 교체 용이"]
+    C --> C2["재사용성: 다양한 환경에서 사용"]
+    C --> C3["테스트 용이성: Mock 주입 가능"]
+    D --> D1["생성자 주입 (권장)"]
+    D --> D2["정적 팩토리 주입"]
+    D --> D3["빌더 주입"]
+    D --> D4["Supplier 팩토리 주입"]
+```
+
+> 클래스가 하나 이상의 자원에 의존하고 그 자원이 동작에 영향을 준다면, 자원을 직접 생성하지 마세요. 생성자(또는 팩토리/빌더)에 자원을 넘겨받는 의존 객체 주입을 사용하면 유연성·재사용성·테스트 용이성이 크게 향상됩니다.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

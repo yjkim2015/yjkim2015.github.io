@@ -1,5 +1,5 @@
 ---
-title: 변경 가능성을 최소화하라 - Effective Java[17]
+title: "변경 가능성을 최소화하라 — Effective Java[17]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,93 +7,68 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+불변 클래스(immutable class)는 한번 만들어지면 상태가 절대 변하지 않는 클래스입니다. `String`, `Integer`, `BigDecimal`이 대표적입니다. 가변 클래스보다 설계·구현·사용이 쉽고 버그도 훨씬 적습니다.
 
+---
 
-<span style="color:red;">불변클래스</span>란 간단히 말해 그 인스턴스의 내부 값을 수정할 수 없는 클래스다.
+## 1. 불변 클래스를 만드는 5가지 규칙
 
-**불변 인스턴스에 저장된 정보는 고정되어 객체가 파괴되는 순간 까지 절대 달라지지 않는다.**
+비유하자면 **조각상**입니다. 한번 완성된 조각상은 절대 형태가 바뀌지 않습니다. 조각상을 "수정"하려면 새 조각상을 만들어야 합니다.
 
-불변 클래스는 가변 클래스보다 설계하고 구현하고 사용하기 쉬우며, 오류가 생기기도 적고 훨씬 안전하다.
+```mermaid
+graph TD
+    A["불변 클래스 5대 규칙"] --> B["1. 변경자 메서드 없음\n(setter 제공 안 함)"]
+    A --> C["2. 클래스 확장 금지\n(final 클래스 또는 private 생성자)"]
+    A --> D["3. 모든 필드 final"]
+    A --> E["4. 모든 필드 private"]
+    A --> F["5. 가변 컴포넌트 접근 차단\n(방어적 복사)"]
+```
 
-<hr>
+---
 
+## 2. 함수형 프로그래밍 방식 — 연산 결과를 새 객체로 반환
 
-
-
-#### 🔗 클래스를 불변으로 만드는 규칙
-
-* **객체의 상태를 변경하는 메소드(변경자)를 제공하지 않는다.**
-* **클래스를 확장할 수 없도록한다.**
-  * 하위 클래스에서 부주의하게 혹은 나쁜 의도로 객체의 상태를 변하게 만드는 사태를 막아준다. 
-  * 상속을 막는 대표적인 방법은 클래스를 final로 선언하는 것이다.
-
-* **모든 필드를 final로 선언한다.**
-
-  * 시스템이 강제하는 수단을 이용해 설계자의 의도를 명확히 드러내는 방법이다.
-
-    새로 생성된 인스턴스를 동기화 없이 다른 스레드로 건네도 문제없이 동작하게끔 보장하는 데도 필요하다.
-
-* **모든 필드를 private으로 선언한다.**
-
-  * 필드가 참조하는 가변 객체를 클라이언트에서 직접 접근해 수정하는 일을 막아준다.
-
-    기술적으로는 기본 타입 필드나 불변 객체를 참조하는 필드를 public final로만 선언해도 불변 객체가 되지만, 이렇게 하면 다음 릴리스에서 내부 표현을 바꾸지 못하므로 권하지는 않는다.
-
-* **자신 외에는 내부의 가변 컴포넌트에 접근할 수 없도록 한다.**
-  * 클래스에 가변객체를 참조하는 필드가 하나라도 있다면 클라이언트에서 그 객체의 참조를 얻을 수 없도록 해야 한다. 
-  * 이런 필드는 절대 클라이언트가 제공한 객체 참조를 가리키게 해서는 안 되며, 접근자 메소드가 그 필드를 그대로 반환해서도 안 된다. <span style="color:red;">생성자 , 접근자, readObject 메소드 모두에서 방어적 복사를 수행해야한다.</span>
-
-<hr>
-
-
-
-#### 🔗 함수형 프로그래밍
-
-아래의 불변 복소수 클래스 예시를 보며 함수형 프로그래밍에 대해 알아보자.
-
-이 클래스는 복소수(실수부와 허수부로 구성된 수)를 표현하며 생성자와 사칙연산 메소드들을 정의했다.
+불변 복소수 클래스를 통해 함수형 프로그래밍 방식을 살펴봅니다.
 
 ```java
 public final class Complex {
-	private final double re;
-    private final double im;
-    
+    private final double re;  // 실수부
+    private final double im;  // 허수부
+
     public Complex(double re, double im) {
         this.re = re;
         this.im = im;
     }
-    
-    public double realPart() { return re; }
+
+    public double realPart()      { return re; }
     public double imaginaryPart() { return im; }
-    
+
+    // 핵심: 자신을 수정하지 않고 새 인스턴스를 반환 — 함수형 프로그래밍
     public Complex plus(Complex c) {
         return new Complex(re + c.re, im + c.im);
     }
     public Complex minus(Complex c) {
         return new Complex(re - c.re, im - c.im);
     }
-   	
-    //...
-    
+    public Complex times(Complex c) {
+        return new Complex(re * c.re - im * c.im,
+                          re * c.im + im * c.re);
+    }
+
     @Override
     public boolean equals(Object o) {
-        if ( o == this ) {
-            return true;
-        }
-        if ( !(o instanceof Complex) ) {
-            return false;
-        }
+        if (o == this) return true;
+        if (!(o instanceof Complex)) return false;
         Complex c = (Complex) o;
-        
-        //== 대신 compare를 사용하는 이유는 double,float엔 부동소수점 있기 때문
+        // double, float 비교에는 == 대신 compare 사용 (부동소수점 오차)
         return Double.compare(c.re, re) == 0 && Double.compare(c.im, im) == 0;
     }
-   
+
     @Override
     public int hashCode() {
         return 31 * Double.hashCode(re) + Double.hashCode(im);
     }
-    
+
     @Override
     public String toString() {
         return "(" + re + " + " + im + "i)";
@@ -101,148 +76,154 @@ public final class Complex {
 }
 ```
 
-**보다가 재미있는 점을 발견했을 것이다.** 
+**메서드 이름에 주목하세요.** `add`, `subtract`(동사) 대신 `plus`, `minus`(전치사)를 사용했습니다. 이는 "이 메서드가 객체를 변경하지 않는다"는 의도를 이름으로 강조합니다.
 
-**사칙 연산 메소드들은 인터턴스 자신은 수정하지 않고 새로운 Complex 인스턴스를 만들어 반환한다는 점이다.**
+```mermaid
+sequenceDiagram
+    participant Client as 클라이언트
+    participant C1 as Complex(3, 4)
+    participant C2 as Complex(1, 2)
+    participant Result as Complex(4, 6)
 
-이처럼 피연산자에 함수를 적용해 그 결과를 반환하지만, 피연산자 자체는 그대로인 프로그래밍 패턴을 <span style="color:red;">함수형 프로그래밍</span>이라 한다.
+    Client->>C1: plus(c2)
+    C1->>Result: new Complex(3+1, 4+2) 생성
+    Result-->>Client: 새 객체 반환
+    Note over C1: 원본 불변! 여전히 (3+4i)
+```
 
-<br>
+---
 
-또한 메소드 이름으로 (add) 같은 동사 대신 (plus) 같은 전치사를 사용한 점에도 주목해야 한다.
+## 3. 불변 객체의 5가지 장점
 
-**이는 해당 메소드가 객체의 값을 변경하지 않는다는 사실을 강조하려는 의도이다.**
+### 장점 1: 단순함
 
-<br>
+불변 객체는 생성 시점의 상태를 파괴될 때까지 그대로 유지합니다. 상태 변화를 추적할 필요가 없어 이해하기 쉽습니다.
 
-***<span style="color:red;">함수형 프로그래밍 방식은 코드에서 불변이 되는 영역의 비율이 높아지는 장점을 누릴 수 있다.</span>***
+### 장점 2: 스레드 안전 — 동기화 불필요
 
+```java
+// 불변 객체는 멀티스레드 환경에서 자유롭게 공유 가능
+// 아무 스레드도 다른 스레드의 상태를 변경할 수 없음
+Complex c = new Complex(3, 4);
+// 수백 개의 스레드가 동시에 c를 읽어도 안전
+```
 
+불변 클래스는 자주 사용되는 인스턴스를 캐시하는 정적 팩토리를 제공할 수 있습니다:
 
-<hr>
+```java
+// Boolean의 캐싱 예시 (실제 구현)
+public static final Boolean TRUE  = new Boolean(true);
+public static final Boolean FALSE = new Boolean(false);
 
+public static Boolean valueOf(boolean b) {
+    return b ? TRUE : FALSE;  // 재사용!
+}
+```
 
+### 장점 3: 방어적 복사 불필요
 
-#### 🔗 불변 객체의 장점
+불변 객체는 복사해봐야 원본과 같으므로 `clone()`이나 복사 생성자를 제공할 필요가 없습니다.
 
-* **불변 객체는 단순하다.**
-  * 불변 객체는 생성된 시점의 상태를 파괴될 때까지 그대로 간직한다.
-* **불변 객체는 근본적으로 스레드 안전하여 따로 동기화할 필요가 없다.**
-  * 불변 객체에 대해서는 그 어떤 스레드도 다른 스레드에 영향을 줄 수 없으니 
-    안심하고 공유할 수 있다.
-  * 따라서 불변 클래스라면 한번 만든 인스턴스를 최대한 재활용하길 권한다. [정적 팩토리]
-  * 방어적 복사도 필요없다. 그렇기 때문에 불변 클래스는 clone 메소드나 복사 생성자를 제공하지 않는게 좋다. String 클래스의 복사 생성자는 이 사실을 잘 이해하지 못한 자바 초창기 때 만들어진 것으로, 되도록이면 사용하지 말아야 한다.
-* **불변 객체는 자유롭게 공유할 수 있음은 물론, 불변 객체끼리는 내부 데이터를 공유할 수 있다.**
-  * BigInteger 클래스는 내부에서 값의 부호와 크기를 따로 표현한다. 부호에는 int 변수를, 크기에는 int 배열을 사용하는 것이다. 한편 negate 메소드는 크기가 같고 부호만 반대인 새로운 BIgInteger를 생성하는데, 이때 배열은 비록 가변이지만 복사하지않고 원본 인스턴스와 공유해도 된다. 그 결과 새로 만든 BigInteger 인스턴스도 원본 인스턴스가 가리키는 내부 배열을 그대로 가리킨다.
+### 장점 4: 내부 데이터 공유 가능
 
-* **객체를 만들 때 다른 불변 객체들을 구성요소로 사용하면 이점이 많다.**
-  * 값이 바뀌지 않는 구성요소들로 이루어진 객체라면 그 구조가 아무리 복잡하더라도 불변식을 유지하기 훨씬 수월하기 때문이다.
-* **불변 객체는 그 자체로 실패 원자성을 제공한다.**
-  * 실패 원자성이란 메소드에서 예외가 발생한 후에도 그 객체는 여전히 (메소드 호출 전과 똑같은) 유효한 상태여야 한다는 성질이다.
-  * 상태가 절대 변하지 않으니 잠깐이라도 불일치 상태에 빠질 가능성이 없다.
+```java
+// BigInteger의 negate 구현 개념
+// 부호만 다른 새 BigInteger를 만들 때
+// 크기(magnitude) 배열은 복사 없이 공유해도 됨 (불변이므로)
+BigInteger a = BigInteger.valueOf(1234567890);
+BigInteger b = a.negate();  // 배열 공유 — 메모리 절약
+```
 
+### 장점 5: 실패 원자성 (Failure Atomicity)
 
+메서드에서 예외가 발생해도 객체 상태가 이미 불변이므로 불일치 상태가 될 수 없습니다.
 
-<hr>
+---
 
+## 4. 불변 객체의 단점 — 그리고 해결책
 
+**유일한 단점:** 값이 다르면 반드시 새 객체를 만들어야 합니다.
 
-#### 🔗 불변 객체의 단점
+```java
+BigInteger moby = ...; // 100만 비트짜리 BigInteger
+moby = moby.flipBit(0);
+// → 단 1비트 차이인 새 BigInteger 생성 — O(n) 비용
+```
 
-* **값이 다르면 반드시 독립된 객체로 만들어야 한다.**
+**해결책: 가변 동반 클래스(companion class)**
 
-  * **값의 가짓수가 많다면 이들을 모두 만드는데 큰 비용을 치러야한다.**
-    예를들어 백만비트 짜리 BigInteger에서 비트 하나를 바꿔야 한다고 가정해보자.
+```java
+// 불변 String의 가변 동반 클래스 → StringBuilder
+String result = "";
+for (int i = 0; i < 10000; i++) {
+    result += i;  // 매번 새 String 생성 — O(n²)
+}
 
-    ```java
-    BigInteger moby = ...;
-    moby = moby.flipBit(0);
-    ```
+// StringBuilder 사용
+StringBuilder sb = new StringBuilder();
+for (int i = 0; i < 10000; i++) {
+    sb.append(i);  // 내부에서 가변 배열 수정 — O(n)
+}
+String result = sb.toString();
+```
 
-    flipBit 메소드는 새로운 BigInteger 인스턴스를 생성한다. 원본과 단지 한 비트만 다른 백만 비트짜리 인스턴스를 말이다. 이 연산은 BigInteger의 크기에 비례해 시간과 공간을 잡아먹는다.
+- `String` ↔ `StringBuilder` / `StringBuffer`
+- `BigInteger` ↔ `BitSet` (다단계 연산용)
 
-    BitSet도 BigInteger처럼 임의 길이의 비트 순열을 표현하지만, BigInteger와는 달리 '가변'이다. 즉, BItSet 클래스는 원하는 비트 하나만 상수 시간 안에 바꿔주는 메소드를 제공한다.
+---
 
-    <br>
+## 5. 불변 클래스를 만드는 더 유연한 방법
 
-    **<span style="color:red;">이를 대처하는 방법 중 하나는 흔히 쓰일 다단계 연산들을 예측하여 기본기능으로 제공하는 방법이다.</span>**
-
-    <br>
-
-    이러한 다단계 연산을 기본으로 제공한다면 더 이상 각 단계마다 객체를 생성하지 않아도 된다. 불변 객체는 내부적으로 아주 영리한 방식으로 구현할 수 있기 때문이다.
-
-    <br>
-
-    클라이언트가 원하는 복잡한 연산들을 정확히 예측할 수 있다면 이러한 다단계 연산속도를 높여주는 package-private인 가변 동반 클래스만으로 충분하다.
-
-    <br>
-
-    예측이 불가능 하다면 가변 동반 클래스를 public으로 제공하는게 최선이다.
-
-    대표적인 예로 StringBuilder, StringBuffer가 있다.
-
-    
-
-<hr>
-
-
-
-**💎 불변 객체를 만드는 또다른 설계 방법**
-
-앞서 클래스가 불변임을 보장하려면 자신을 상속하지 못하게 해야한다고 했다.
-
-가장 쉬운 방법은 final클래스로 선언하는 것이지만, <span style="color:red;">더 유연한 방법이 있다.</span>
-
-
-
-***모든 생성자를 private 혹은 package-private으로 만들고 public 정적 팩토리를 제공하는 방법이다.***
-
-다음의 예시를보자
+`final` 클래스 대신, 모든 생성자를 `private`/`package-private`으로 만들고 정적 팩토리를 제공하면 더 유연합니다.
 
 ```java
 public class Complex {
     private final double re;
     private final double im;
-    
+
+    // 생성자를 private으로
     private Complex(double re, double im) {
         this.re = re;
         this.im = im;
     }
-    
+
+    // 정적 팩토리 — 캐싱, 하위 타입 반환 등 유연성 확보
     public static Complex valueOf(double re, double im) {
+        // 0+0i는 자주 쓰이므로 캐시 가능
+        if (re == 0 && im == 0) return ZERO;
         return new Complex(re, im);
     }
+
+    public static final Complex ZERO = new Complex(0, 0);
+    public static final Complex ONE  = new Complex(1, 0);
 }
 ```
 
-* 이 방식은 바깥에서 볼 수 없는 package-private 구현 클래스를 원하는 만큼 만들어 활용할 수 있으니 훨씬 유용하다.
+바깥에서 보면 이 클래스는 사실상 `final`입니다. `public`/`protected` 생성자가 없으므로 외부에서 상속할 수 없습니다.
 
-* 패키지 바깥의 클라이언트에서 바라본 이 불변 객체는 사실상 final이다. 
-  public이나 protected 생성자가 없으니 다른 패키지에서는 이 클래스를 확장하는게 불가능하기 때문이다.
-* 정적 팩토리 방식은 다수의 구현 클래스를 활용한 유연성을 제공하고, 이에 더해 다음 릴리즈에서 객체 캐싱 기능을 추가해 성능을 끌어 올릴 수 있다.
-* 어떤 불변 클래스는 계산 비용이 큰 값을 나중에 (처음 쓰일 때) 계산하여 final이 아닌 필드에 캐싱하여 사용함으로써 계산 비용을 절감한다. 객체가 불변이기 떄문에 가능한 방법이다.
+---
 
+## 6. 요약
 
-
-<hr>
-
-
-
-> * 클래스는 꼭 필요한 경우가 아니라면 불변이어야 한다.
-> * 단순한 값 객체는 불변으로 만들자.
-> * 불변으로 만들 수 없는 클래스라도 변경할 수 있는 부분을 최소한으로 줄이자.
-> * 특별한 이유가 없다면 모든 필드는 private final이어야 한다.
-> * 생성자는 불변식 설정이 모두 완료된, 초기화가 완벽히 끝난 상태의 개체를 생성해야 한다.
->   * 확실한 이유가 없다면 생성자와 정적 팩토리 외에는 그 어떤 초기화 메소드도 public 으로 제공해서는 안된다.
->   * 객체를 재활용할 목적으로 상태를 다시 초기화하는 메소드도 안 된다.
-
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+```mermaid
+graph TD
+    A["클래스 설계 원칙"] --> B["기본: 불변으로 만들기"]
+    B --> C["모든 필드 private final\n변경자 메서드 없음\nfinal 클래스"]
+    A --> D["불변 불가능하면\n변경 부분 최소화"]
+    D --> E["가변 필드 최소화\n나머지는 final"]
+    C --> F["장점"]
+    F --> F1["스레드 안전 (동기화 불필요)"]
+    F --> F2["단순함, 버그 감소"]
+    F --> F3["자유로운 공유"]
+    F --> F4["실패 원자성"]
 ```
 
+**핵심 규칙:**
+1. 클래스는 꼭 필요한 경우가 아니라면 불변으로 만들 것
+2. 불변으로 만들 수 없다면 변경 가능한 부분을 최소화
+3. 특별한 이유가 없다면 모든 필드를 `private final`로 선언
+4. 생성자는 완전히 초기화된 객체를 생성해야 하며, 재초기화 메서드를 제공하지 말 것
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

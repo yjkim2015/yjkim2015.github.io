@@ -1,5 +1,5 @@
 ---
-title: 추상 클래스보다는 인터페이스를 우선하라 - Effective Java[20]
+title: "추상 클래스보다는 인터페이스를 우선하라 — Effective Java[20]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,158 +7,184 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+자바에서 다중 구현을 제공하는 방법은 인터페이스와 추상 클래스, 두 가지입니다. 둘 다 기능이 있는데 왜 인터페이스가 더 나을까요? 그리고 둘의 장점을 모두 취하는 방법은 없을까요?
 
+---
 
-#### 🔗 인터페이스 (interface) , 추상 클래스 (abstract class)
+## 1. 추상 클래스 vs 인터페이스 — 결정적 차이
 
-자바가 제공하는 다중 구현 메커니즘은 인터페이스와 추상 클래스, 이렇게 두가지이다. 자바 8부터는 인터페이스도 디폴트 메소드를 제공할 수 있게 되어, 이제는 두 메커니즘 모두 인스턴스 메소드를 구현 형태로 제공할 수 있다.
+비유하자면 **추상 클래스는 혈통, 인터페이스는 자격증**입니다. 혈통(추상 클래스)을 가지려면 그 가문(상속 계층)에 속해야 합니다. 자격증(인터페이스)은 어느 가문 출신이든 따로 취득할 수 있습니다.
 
-<hr>
+```mermaid
+graph TD
+    A["다중 구현 메커니즘"] --> B["추상 클래스\n(Abstract Class)"]
+    A --> C["인터페이스\n(Interface)"]
+    B --> B1["단일 상속만 허용\n→ 반드시 그 클래스의 하위 클래스가 되어야 함"]
+    B --> B2["기존 클래스에 끼워 넣기\n매우 어려움"]
+    C --> C1["다중 구현 가능\n→ 어떤 클래스든 implements로 추가 가능"]
+    C --> C2["기존 클래스에도\n손쉽게 추가 가능"]
+    style C fill:#51cf66,color:#fff
+    style B fill:#ffd43b
+```
 
+자바는 단일 상속만 지원하기 때문에, 추상 클래스 방식으로는 이미 다른 클래스를 상속한 클래스에 새 타입을 추가할 수 없습니다.
 
+---
 
-##### 💎 그럼 둘의 차이가 뭐야?
+## 2. 인터페이스의 세 가지 강점
 
-**둘의 가장 큰 차이는** <span style="color:red;">추상 클래스</span>가 정의한 타입을 구현하는 클래스는 **반드시** 추상 클래스의 하위 클래스가 되어야 한다는 점이다.
+### 강점 1: 기존 클래스에도 손쉽게 추가
 
-**자바는 단일 상속만 지원하니**, 추상 클래스 방식은 새로운 타입을 정의하는 데 
-**커다란 제약**을 안게 되는 셈이다. 
-
-<span style="color:red;">반면 인터페이스</span>가 선언한 메소드를 모두 정의하고 그 일반 규약을 잘 지킨 클래스라면 다른 어떤 클래스를 상속했든 같은 타입으로 취급 된다.
-
-
-
-<hr>
-
-
-
-#### 🔗 인터페이스 (interface)의 장점
-
-* **기존 클래스에도 손쉽게 새로운 인터페이스를 구현해 넣을 수 있다.**
-
-  * 인터페이스가 요구하는 메소드를 추가하고, 클래스 선언에 **implements** 구문만 추가하면 끝이다. 자바 플랫폼에서도 Comparable, Iterable, AutoCloseable 인터페이스가 새로 추가됐을 때 표준 라이브러리의 수많은 기존 클래스가 이 인터페이스들을 구현한채 릴리즈 됐다.
-
-* **믹스인(mixin) 정의에 안성맞춤이다.**
-
-  * **믹스인이란 클래스가 구현할 수 있는 타입으로, 믹스인을 구현한 클래스에 원래의 '주된 타입' 외에도 특정 선택적 행위를 제공한다고 선언하는 효과를 준다.**
-  * **Comparable**은 자신을 구현한 클래스의 인스턴스들끼리는 순서를 정할 수 있다고 선언하는 믹스인 인터페이스이다.
-  * 이처럼 대상 타입의 주된 기능에 선택적 기능을 '**혼합 (mixed in)**' 한다고 해서 믹스인이라 부른다. 
-    추상 클래스로는 믹스인을 정의할 수 없다. 이유는 기존 클래스에 덧씌울 수 없기 때문이다.
-
-* **계층구조가 없는 타임 프레임워크를 만들 수 있다.**
-
-  * **타입을 계층적으로 정의하면 수많은 개념을 구조적으로 잘 표현할 수 있지만, 현실에는 계층을 엄격히 구분하기 어려운 개념도 있다.**
-    에를 들어 가수 (Singer) 인터페이스와 작곡가(Songwriter) 인터페이스가 있다고 해보자.
-
-    ```java
-    public interface Singer {
-        AudioClip sing(Song s);
-    }
-    public interface Songwriter {
-        Song compose(int chartPosition);
-    }
-    ```
-
-    우리 주변엔 작곡도 하는 가수가 제법 있다. 
-    이 코드처럼 타입을 인터페이스로 정의하면 가수 클래스가 Singer와 Songwriter 모두를 구현해도 전혀 문제 되지 않는다. 
-
-    <br>
-
-    심지어 Singer와 Songwriter 모두를 확장하고 새로운 메소드까지 
-    추가 한 제 3의 인터페이스를 정의 할 수도 있다.
-
-    ```java
-    public interface SingerSongwriter extends Singer, SongWriter {
-        AudioClip strum();
-        void actSensitive();
-    }
-    ```
-
-    <span style="color:red;">반면에</span> 같은 구조를 클래스로 만들려면 가능한 조합 전부를 각각의 클래스로 정의한 고도비만 계층구조가 만들어 질 것이다.
-
-<hr>
-
-
-
-#### 💎 래퍼 클래스 관용구와 함께라면!! 기능 향상! 안전하고 강력한 수단
-
-* 타입을 추상 클래스로 정해두면 그타입에 기능을 추가하는 방법은 상속뿐이다.
-
-* 상속해서 만든 클래스는 래퍼 클래스보다 활용도가 떨어지고 깨지기는 더 쉽다.
-
-
-
-<hr>
-
-
-
-#### 💎 나는야 이름하여 디폴트(default) 메소드
-
-자바 8부터 인터페이스는 디폴트 메소드를 갖게 되었다. 
-
-디폴트 메소드는 body, 즉 구현을 가진 메소드라고 보면 된다.
-
-**인터페이스의 메소드 중 구현 방법이 명백한 것이 있다면,** 그 구현을 디폴트 메소드로 제공해 프로그래머들의 일감을 덜어줄 수 있다.
-
-디폴트 메소드를 제공할 때는 앞에서 배운 <span style="color:red;">@implSpec</span> 자바 독 태그를 붙여 상속하려는 사람을 위한 설명을 문서화 해야한다.
-
-<hr>
-
-
-
-##### 💎 디폴트 메소드의 제약
-
-* 많은 인터페이스가 eqauls와 hashCode와 같은 Object의 메소드를 정의하고 있지만, 이들은 디폴트 메소드로 제공해서는 안 된다.
-* 인터페이스는 인스턴스 필드를 가질 수 없고 public이 아닌 정적 멤버도 가질 수 없다.(단, private 정적 메소드는 예외)
-* 직접 만들지 않은 인터페이에는 디폴트 메소드를 추가할 수 없다.
-
-
-
-<hr>
-
-
-
-#### 🔗 인터페이스와 추상 클래스의 장점을 모두 취하는 방법이 있다고?
-
-인터페이스와 추상 골격 구현(skeletal implementation) 클래스를 함께 제공하는  방법이다.
-
-* **인터페이스로는 타입을 정의하고**, 필요하면 디폴트 메소드 몇 개도 함께 제공한다.
-* **골격 구현 클래스는 나머지 메소드들까지 구현한다.**
-* 이렇게하면 단순히 골격 구현을 확장하는 것만으로 이 인터페이스를 구현하는 데 필요한 일이 대부분 완료된다.
-* 이를 <span style="color:red;">템플릿 메소드 패턴</span>이라 부른다.
-
-* 관례상 인터페이스 이름이 ***Interface***라면 그 골격 구현 클래스의 이름은 ***AbstractInterface***로 짓는다. 
-  좋은 예로, 컬렉션 프레임워크의 AbstractCollection, AbstractSet, AbstractList, AbstractMap 각각이 바로 핵심 컬렉션 인터페이스의 골격 구현이다.
-
-* 제대로 설계 했다면 골격 구현은 (**독립된 추상 클래스든 디폴트 메소드로 이루어진 인터페이스든**) 그 인퍼테이스로 나름의 구현을 만들려는 프로그래머의 일을 상당히 덜어준다.
-
-
-
-<hr>
-
-예시를 보자.
-
-**💎 골격 구현을 사용해 완성한 구체 클래스**
+인터페이스는 기존 클래스에 아무 영향 없이 끼워 넣을 수 있습니다.
 
 ```java
+// 기존 클래스에 인터페이스 추가 — 간단!
+class MyValue implements Comparable<MyValue>, Serializable {
+    // Comparable 요구 메서드만 구현하면 됨
+    @Override
+    public int compareTo(MyValue other) { ... }
+}
+```
+
+반면 추상 클래스는 이미 다른 클래스를 상속한 클래스에 끼워 넣을 수 없습니다.
+
+```java
+// 이미 Base를 상속 중인 클래스에 추상 클래스를 추가할 방법이 없음
+class MyValue extends Base /*, AbstractMyValue — 불가! */ {
+}
+```
+
+Java 표준 라이브러리도 `Comparable`, `Iterable`, `AutoCloseable`이 추가되었을 때 기존 수많은 클래스가 이 인터페이스들을 구현한 채 릴리즈될 수 있었던 이유가 이 덕분입니다.
+
+### 강점 2: 믹스인(Mixin) 정의에 최적
+
+믹스인이란 주된 타입 외에 선택적 기능을 선언하는 타입입니다.
+
+```java
+// Singer는 주된 타입
+public interface Singer {
+    AudioClip sing(Song s);
+}
+
+// Comparable은 믹스인 — "나는 순서 비교가 가능합니다" 선언
+public class Musician implements Singer, Comparable<Musician> {
+    @Override public AudioClip sing(Song s) { ... }
+    @Override public int compareTo(Musician other) { ... }
+}
+```
+
+추상 클래스로는 믹스인을 정의할 수 없습니다. 이미 상속 계층에 속해 있어야 하는데, 클래스는 두 부모를 가질 수 없기 때문입니다.
+
+### 강점 3: 계층 구조 없는 타입 프레임워크
+
+현실에는 계층을 엄격히 구분하기 어려운 개념들이 있습니다.
+
+```java
+public interface Singer {
+    AudioClip sing(Song s);
+}
+
+public interface Songwriter {
+    Song compose(int chartPosition);
+}
+
+// 싱어송라이터 — Singer이기도 하고 Songwriter이기도 함
+public interface SingerSongwriter extends Singer, Songwriter {
+    AudioClip strum();
+    void actSensitive();
+}
+```
+
+```mermaid
+graph TD
+    A["Singer"] --> C["SingerSongwriter"]
+    B["Songwriter"] --> C
+    C --> D["실제 구현 클래스"]
+    style C fill:#51cf66,color:#fff
+```
+
+추상 클래스로 같은 구조를 만들려면 조합마다 별도 클래스가 필요합니다.
+
+```
+Singer, Songwriter, SingerSongwriter
+→ 속성이 n개라면 2ⁿ개의 조합 클래스가 필요한 "조합 폭발" 발생
+```
+
+---
+
+## 3. 디폴트 메서드 — 인터페이스에서 구현 제공하기
+
+Java 8부터 인터페이스도 구현을 가진 메서드를 제공할 수 있습니다.
+
+```java
+public interface Collection<E> {
+    // 추상 메서드
+    int size();
+    boolean contains(Object o);
+
+    // 디폴트 메서드 — 구현 제공
+    default boolean isEmpty() {
+        return size() == 0;  // size()를 이용해 기본 구현 제공
+    }
+
+    default void forEach(Consumer<? super E> action) {
+        Objects.requireNonNull(action);
+        for (E e : this) {
+            action.accept(e);
+        }
+    }
+}
+```
+
+구현 방법이 명백한 메서드는 디폴트 메서드로 제공해 구현 클래스의 부담을 줄일 수 있습니다. 디폴트 메서드를 제공할 때는 `@implSpec`으로 문서화해야 합니다.
+
+**디폴트 메서드의 제약:**
+- `equals`, `hashCode`, `toString` 같은 `Object` 메서드는 디폴트로 제공 불가
+- 인스턴스 필드를 가질 수 없음
+- `public`이 아닌 정적 멤버 불가 (단, `private` 정적 메서드는 Java 9부터 허용)
+- 직접 만들지 않은 인터페이스에는 디폴트 메서드 추가 불가
+
+---
+
+## 4. 골격 구현 클래스(Skeletal Implementation) — 인터페이스 + 추상 클래스의 장점 결합
+
+비유하자면 **IKEA 가구**입니다. 인터페이스는 완성품의 명세(조립 방법), 골격 구현 클래스는 반조립 상태의 부품입니다. 골격 구현을 상속하면 남은 작업이 최소화됩니다.
+
+```mermaid
+graph TD
+    A["인터페이스\n(타입 정의 + 일부 디폴트 메서드)"] --> C["골격 구현 클래스\nAbstractXxx\n(나머지 메서드 구현)"]
+    C --> D["구체 구현 클래스\n(핵심 메서드만 구현하면 완성)"]
+    style A fill:#4a9eff,color:#fff
+    style C fill:#51cf66,color:#fff
+```
+
+관례상 인터페이스 이름이 `Interface`라면 골격 구현 클래스는 `AbstractInterface`로 짓습니다.
+
+- `Collection` → `AbstractCollection`
+- `List` → `AbstractList`
+- `Set` → `AbstractSet`
+- `Map` → `AbstractMap`
+
+**골격 구현을 활용한 List 어댑터 예시:**
+
+```java
+// int 배열을 List<Integer>로 감싸기
 static List<Integer> intArrayAsList(int[] a) {
     Objects.requireNonNull(a);
-    
-   	//다이아몬드 연산자를 이렇게 사용하는 건 자바 9부터 가능하다.
-    //더 낮은 버전을 사용한다면 <Integer>로 수정하자.
+
     return new AbstractList<>() {
-		@Override
+        @Override
         public Integer get(int i) {
-            return a[i]; //오토박싱
+            return a[i];  // 오토박싱
         }
-        
+
         @Override
         public Integer set(int i, Integer val) {
             int oldVal = a[i];
-            a[i] = val;
+            a[i] = val;  // 오토언박싱
             return oldVal;
         }
-        
+
         @Override
         public int size() {
             return a.length;
@@ -167,62 +193,46 @@ static List<Integer> intArrayAsList(int[] a) {
 }
 ```
 
-- **골격 구현 클래스는 추상 클래스처럼 구현을 도와주는 동시에**, 추상 클래스로 타입을 정의할 때 따라오는 심각한 제약에서는 자유롭다.
-- 골격 구현을 확장하는 것으로 인터페이스 구현이 거의 끝나지만, 반드시 이렇게 해야하는 것은 아니다.
-- 구조상 골격 구현을 확장하지 못한다면 인터페이스를 직접 구현해야 한다. 그래도 여전히 디폴트 메서드의 이점을 누릴 수 있다.
-- 골격 구현 클래스를 우회적으로 이용할 수도 있다.
-  - 인터페이스를 구현한 클래스에서 해당 골격 구현을 확장한 private 내부 클래스를 정의하고, 각 메서드 호출을 내부 클래스의 인스턴스에 전달하면 된다.
-  - 래퍼 클래스와 비슷한 이 방식을 **시뮬레이트한 다중 상속(simulated multiple inheritance)**이라 하며, 다중 상속의 많은 장점을 제공하면서 단점은 피하게 해준다.
+`AbstractList`가 이미 `iterator()`, `contains()`, `indexOf()`, `subList()` 등 수십 개의 메서드를 구현해 두었기 때문에, 위 코드는 `get()`과 `size()` (그리고 선택적으로 `set()`)만 구현하면 완전한 `List`가 됩니다.
 
-<hr>
+---
 
-#### 💎 골격 구현의 작성법
+## 5. 골격 구현 클래스 작성법
 
-1. **인터페이스를 잘 살펴 다른 메소드들의 구현에 사용되는 기반 메소드들을 선정한다.** 
-   이 기반 메소드들은 골격 구현에서는 추상 메소드가 될 것이다.
-2.  **기반 메소드들을 사용해 직접 구현할 수 있는 메소드를 모두 디폴트 메소드로 제공한다.**
-   <span style="color:red;">단, equals와 hashCode 와 같은 Object의 메소드는 디폴트 메소드로 제공하면 안된다.</span>
+```mermaid
+graph TD
+    A["1단계: 기반 메서드 선정\n다른 메서드들이 이 메서드로 구현될 수 있는 것들\n→ 추상 메서드가 됨"] --> B["2단계: 기반 메서드로 구현 가능한\n메서드는 디폴트 메서드로 제공\n(equals, hashCode, toString 제외)"]
+    B --> C["3단계: 남은 메서드는\n골격 구현 클래스(AbstractXxx)에 구현\n필드가 필요하면 여기에 선언"]
+    style A fill:#4a9eff,color:#fff
+    style B fill:#51cf66,color:#fff
+    style C fill:#ffd43b
+```
 
-<br>
-
-만약 인터페이스의 메소드 모두가 **기반 메소드와 디폴트 메소드**가 된다면 골격 구현 클래스를 별도로 만들 이유는 없다.
-
-기반 메소드나 디폴트 메소드로 만들지 못한 메소드가 남아 있다면, 
-이 인터페이스를 구현하는 골격 구현 클래스를 하나 만들어 남은 메소드들을 작성해 넣는다.
-
-골격 구현 클래스에는 필요하면 public이 아닌 필드와 메소드를 추가해도 된다.
-
-
-
-<hr>
-
-예시를 보자.
-
-##### 💎 골격 구현 클래스 - Map.Entry 인터페이스
+**Map.Entry 골격 구현 예시:**
 
 ```java
 public abstract class AbstractMapEntry<K, V> implements Map.Entry<K, V> {
 
-    // 변경 가능한 엔트리는 이 메서드를 반드시 재정의해야 한다.
+    // 기반 메서드 — 반드시 하위 클래스가 구현
+    @Override public abstract K getKey();
+    @Override public abstract V getValue();
+
+    // 변경 가능 엔트리는 재정의 필요 (선택적 기반 메서드)
     @Override
     public V setValue(V value) {
         throw new UnsupportedOperationException();
     }
 
-    // Map.Entry.equals의 일반 규약을 구현한다.
+    // Object 메서드는 디폴트로 제공 불가 → 골격 구현 클래스에서 직접 구현
     @Override
     public boolean equals(Object obj) {
-        if (obj == this) {
-            return true;
-        }
-        if (!(obj instanceof Map.Entry)) {
-            return false;
-        }
-        Map.Entry<?, ?> e = (Map.Entry) obj;
-        return Objects.equals(e.getKey(), getKey()) && Objects.equals(e.getValue(), getValue());
+        if (obj == this) return true;
+        if (!(obj instanceof Map.Entry)) return false;
+        Map.Entry<?, ?> e = (Map.Entry<?, ?>) obj;
+        return Objects.equals(e.getKey(), getKey())
+            && Objects.equals(e.getValue(), getValue());
     }
 
-    // Map.Entry.hashCode의 일반 규약을 구현한다.
     @Override
     public int hashCode() {
         return Objects.hashCode(getKey()) ^ Objects.hashCode(getValue());
@@ -235,179 +245,54 @@ public abstract class AbstractMapEntry<K, V> implements Map.Entry<K, V> {
 }
 ```
 
-**getKey**, **getValue**는 확실히 기반 메소드이며, 선택적으로 **setValue**도 포함할 수 있다.
+`getKey()`와 `getValue()`가 기반 메서드이고, `equals`/`hashCode`/`toString`은 `Object` 메서드이므로 디폴트로 제공할 수 없어 골격 구현 클래스에 작성했습니다.
 
-이 인터페이스는 **equals**와 **hashCode**의 동작 방식도 정의해놨다.
+---
 
-<span style="color:red;">Object 메소드들은 디폴트 메소드로 제공해서는 안 되므로</span>, 해당 메소드들은 모두 골격 구현 클래스에 구현한다. **toString**도 기반 메소드를 사용해 구현해놨다.
+## 6. 시뮬레이트한 다중 상속
 
-<hr>
-
-
-
-> Map.Entry 인터페이스나 그 하위 인터페이스로는 이 골격 구현을 제공할 수 없다. 디폴트 메소드는 equals, hashCode, toString 같은 Object 메소드를 재정의 할 수 없기 때문이다.
-
-
-
-<hr>
-
-
-
-***💎골격 구현은 반드시 그 동작 방식을 잘 정리해 문서로 남겨야한다.***
-
-
-
-<hr>
-
-
-
-**💎 단순 구현(simple implementation)?**
-
-**단순 구현**은 골격 구현의 작은 변종으로, **AbstractMap.SimpleEntry**가 좋은 예다. **단순 구현도 골격 구현과 같이 상속을 위해 인터페이스를 구현한 것이지만**, 
-<span style="color:red;">추상클래스가 아니란 점</span>이 다르다.
-
-쉽게 말해 동작하는 가장 단순한 구현이다. 이러한 단순 구현은 그대로 써도 되고 필요에 맞게 확장해도 된다.
+골격 구현을 직접 상속할 수 없는 상황(이미 다른 클래스를 상속 중)에서도 우회할 수 있습니다.
 
 ```java
-public static class SimpleEntry<K, V> implements Entry<K, V>, java.io.Serializable {
-    private static final long serialVersionUID = -8499721149061103585L;
+// 이미 OtherBase를 상속 중이어서 골격 구현을 직접 상속 불가
+public class MyList extends OtherBase implements List<Integer> {
 
-    private final K key;
-    private V value;
-
-    /**
-     * Creates an entry representing a mapping from the specified
-     * key to the specified value.
-     *
-     * @param key the key represented by this entry
-     * @param value the value represented by this entry
-     */
-    public SimpleEntry(K key, V value) {
-        this.key = key;
-        this.value = value;
+    // 골격 구현을 private 내부 클래스로 우회 활용
+    private class InnerAbstractList extends AbstractList<Integer> {
+        @Override public Integer get(int i) { return MyList.this.get(i); }
+        @Override public int size() { return MyList.this.size(); }
     }
 
-    /**
-     * Creates an entry representing the same mapping as the
-     * specified entry.
-     *
-     * @param entry the entry to copy
-     */
-    public SimpleEntry(Entry<? extends K, ? extends V> entry) {
-        this.key = entry.getKey();
-        this.value = entry.getValue();
-    }
+    private final InnerAbstractList delegate = new InnerAbstractList();
 
-    /**
-     * Returns the key corresponding to this entry.
-     *
-     * @return the key corresponding to this entry
-     */
-    public K getKey() {
-        return key;
-    }
-
-    /**
-     * Returns the value corresponding to this entry.
-     *
-     * @return the value corresponding to this entry
-     */
-    public V getValue() {
-        return value;
-    }
-
-    /**
-     * Replaces the value corresponding to this entry with the specified
-     * value.
-     *
-     * @param value new value to be stored in this entry
-     * @return the old value corresponding to the entry
-     */
-    public V setValue(V value) {
-        V oldValue = this.value;
-        this.value = value;
-        return oldValue;
-    }
-
-    /**
-     * Compares the specified object with this entry for equality.
-     * Returns {@code true} if the given object is also a map entry and
-     * the two entries represent the same mapping.  More formally, two
-     * entries {@code e1} and {@code e2} represent the same mapping
-     * if<pre>
-     *   (e1.getKey()==null ?
-     *    e2.getKey()==null :
-     *    e1.getKey().equals(e2.getKey()))
-     *   &amp;&amp;
-     *   (e1.getValue()==null ?
-     *    e2.getValue()==null :
-     *    e1.getValue().equals(e2.getValue()))</pre>
-     * This ensures that the {@code equals} method works properly across
-     * different implementations of the {@code Map.Entry} interface.
-     *
-     * @param o object to be compared for equality with this map entry
-     * @return {@code true} if the specified object is equal to this map
-     *         entry
-     * @see    #hashCode
-     */
-    public boolean equals(Object o) {
-        if (!(o instanceof Map.Entry))
-            return false;
-        Map.Entry<?, ?> e = (Map.Entry<?, ?>) o;
-        return eq(key, e.getKey()) && eq(value, e.getValue());
-    }
-
-    /**
-     * Returns the hash code value for this map entry.  The hash code
-     * of a map entry {@code e} is defined to be: <pre>
-     *   (e.getKey()==null   ? 0 : e.getKey().hashCode()) ^
-     *   (e.getValue()==null ? 0 : e.getValue().hashCode())</pre>
-     * This ensures that {@code e1.equals(e2)} implies that
-     * {@code e1.hashCode()==e2.hashCode()} for any two Entries
-     * {@code e1} and {@code e2}, as required by the general
-     * contract of {@link Object#hashCode}.
-     *
-     * @return the hash code value for this map entry
-     * @see    #equals
-     */
-    public int hashCode() {
-        return (key == null ? 0 : key.hashCode()) ^
-                (value == null ? 0 : value.hashCode());
-    }
-
-    /**
-     * Returns a String representation of this map entry.  This
-     * implementation returns the string representation of this
-     * entry's key followed by the equals character ("{@code =}")
-     * followed by the string representation of this entry's value.
-     *
-     * @return a String representation of this map entry
-     */
-    public String toString() {
-        return key + "=" + value;
-    }
-
+    // List 메서드들은 delegate에 전달
+    @Override public Iterator<Integer> iterator() { return delegate.iterator(); }
+    @Override public boolean contains(Object o) { return delegate.contains(o); }
+    // ...
 }
 ```
 
+이를 **시뮬레이트한 다중 상속(simulated multiple inheritance)**이라 합니다. 다중 상속의 장점을 누리면서 단점(복잡성, 다이아몬드 문제)은 피할 수 있습니다.
 
+---
 
-<hr>
+## 7. 요약
 
-
-
-
-
-> 일반적으로 다중 구현용 타입으로는 인터페이스가 가장 적합하다.
-> 복잡한 인터페이스라면 구현하는 수고를 덜어주는 골격 구현을 함께 제공하는 방법을 꼭 고려해보자.
->
-> 골격 구현은 '가능한 한' 인터페이스의 디폴트 메소드로 제공하여 그 인터페이스를 구현한 곳에서 활용하도록 하는것이 좋다. 
->
-> '가능한 한'이라고 한 이유는 인터페이스에 걸려 있는 구현상의 제약 때문에 골격 구현을 추상 클래스로 제공하는 경우가 더 흔하기 때문이다.
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+```mermaid
+graph TD
+    A["다중 구현 타입 선택"] --> B{"기존 클래스에 추가\n가능해야 하나?"}
+    B -->|"Yes"| C["인터페이스 필수"]
+    B -->|"No"| D{"구현 코드를\n함께 제공해야 하나?"}
+    D -->|"No"| C
+    D -->|"Yes"| E["인터페이스 + 골격 구현 클래스\nAbstractXxx 패턴"]
+    E --> F["인터페이스: 타입 정의\n+ 명백한 디폴트 메서드"]
+    E --> G["골격 구현: 나머지 구현\n+ equals/hashCode/toString"]
+    style C fill:#51cf66,color:#fff
+    style E fill:#4a9eff,color:#fff
 ```
 
+> 일반적으로 다중 구현용 타입에는 인터페이스가 가장 적합합니다. 복잡한 인터페이스라면 `AbstractXxx` 형태의 골격 구현 클래스를 함께 제공해 구현 부담을 줄여주세요. 골격 구현은 가능한 한 인터페이스의 디폴트 메서드로 제공하되, 인터페이스 제약상 불가능하다면 추상 클래스로 제공하세요.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

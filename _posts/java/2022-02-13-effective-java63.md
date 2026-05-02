@@ -1,5 +1,5 @@
 ---
-title: 문자열 연결은 느리니 주의하라 - Effective Java[63]
+title: "문자열 연결은 느리니 주의하라 — Effective Java[63]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,77 +7,85 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+문자열 연결 연산자(+)는 편리하지만, 문자열 n개를 잇는 시간은 n²에 비례합니다. 많은 문자열을 이어야 한다면 StringBuilder를 쓰세요.
 
+---
 
-##### 🔗  문자열 연결 연산자로 문자열 n개를 잇는 시간은 n^2에 비례한다.
+## 1. 왜 +가 느릴까
 
-* 문자열 연결 **연산자(+)**는 여러 문자열을 하나로 합쳐주는 편리한 수단이다.
+비유하자면 **편지를 이어 붙일 때마다 지금까지 쓴 편지 전체를 새 종이에 다시 베껴 쓰는 것**입니다. 편지가 길어질수록 복사 비용이 기하급수적으로 늘어납니다.
 
-  * <span style="color:red;">그런데</span> 한 줄짜리 출력값 혹은 작고 크기가 고정된 객체의 문자열 표현을 만들때라면 괜찮지만, **본격적으로 사용하기 시작하면 성능 저하를 감내하기 어렵다.**
-
-  
-
-  * <span style="color:red;">문자열은 불변</span>이라서 **두 문자열을 연결할 경우 양쪽의 내용을 모두 복사해야 하므로 성능 저하는 피할 수 없는 결과다.**
-    * ex) 다음의 메서드는 청구서의 품목(item)을 전부 하나의 문자열로 연결해준다.
-
-<br>
-
-💎 **문자열 연결을 잘못 사용한 예 - 느리다!**
+String은 불변이므로 두 문자열을 `+`로 연결하면 양쪽 내용을 모두 복사한 새 String을 만듭니다. n번 연결하면 총 복사 횟수는 1 + 2 + 3 + … + n = n(n+1)/2, 즉 O(n²)입니다.
 
 ```java
+// 나쁜 예 — O(n²) 성능
 public String statement() {
     String result = "";
     for (int i = 0; i < numItems(); i++) {
-        result += lineForItem(i); // 문자열 연결
+        result += lineForItem(i);  // 매 반복마다 result 전체를 복사
     }
     return result;
 }
 ```
 
-* 품목이 많을 경우 메서드는 심각하게 느려질 수 있다.
+품목이 100개면 수천 번의 문자 복사, 품목이 10만 개면 수십억 번의 복사가 일어납니다.
 
+---
 
+## 2. StringBuilder로 해결
 
-<hr>
-
-
-
-##### 💎 성능을 포기하고 싶지 않다면 String 대신 StringBuilder를 사용하자.
-
-* **StringBuilder**를 사용하면 문자열 연결 성능이 크게 개선된다.
+비유하자면 **편지를 길이를 넉넉히 잡아둔 두루마리에 계속 이어 쓰는 것**입니다. 새 종이에 복사할 필요 없이 끝에 추가만 하면 됩니다.
 
 ```java
-public String statement2() {
-    StringBuilder b = new StringBuilder(numItems() * LINE_WIDTH);
+// 좋은 예 — O(n) 성능
+public String statement() {
+    StringBuilder b = new StringBuilder(numItems() * LINE_WIDTH);  // 미리 크기 추정
     for (int i = 0; i < numItems(); i++) {
-        b.append(lineForItem(i));
+        b.append(lineForItem(i));  // 끝에 추가만 함, 복사 없음
     }
     return b.toString();
 }
 ```
 
-* **StringBuilder**를 전체 결과를 담기에 충분한 크기로 초기화 한점을 기억하라.
+예상 크기로 초기화하면 내부 배열 재할당 횟수도 최소화됩니다.
 
-
-
-<hr>
-
-
-
->원칙은 간단하다. 
->
->**성능에 신경 써야 한다면 많은 문자열을 연결할 때는 문자열 연결 연산자(+)를 피하자.**
->
->대신 StringBuilder의 append 메서드를 사용하라.
->
->문자 배열을 사용하거나, 문자열을 (연결하지 않고) 하나씩 처리하는 방법도 있다.
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크때
+```mermaid
+graph TD
+    A["문자열 연결 방법 비교"] --> B["String + 연산\n매 연결마다 전체 복사\nO(n²) 시간\n짧은 문자열에만 적합"]
+    A --> C["StringBuilder.append()\n끝에 추가만 함\nO(n) 시간\n루프·대량 연결에 사용"]
+    A --> D["String.join() / Collectors.joining()\n스트림·배열 조합에 간편\n내부적으로 StringBuilder 사용"]
+    style B fill:#ff6b6b,color:#fff
+    style C fill:#51cf66,color:#fff
+    style D fill:#51cf66,color:#fff
 ```
 
+---
+
+## 3. 언제 +를 써도 되나
+
+비유하자면 **편지 한 장짜리라면 그냥 쓰는 것**입니다. 딱 한 줄, 또는 고정된 적은 개수라면 + 연산이 충분히 빠릅니다.
+
+```java
+// 이 정도는 + 사용해도 무방
+String greeting = "안녕하세요, " + name + "님!";
+String header = "[" + code + "] " + message;
+```
+
+```java
+// 루프나 항목 수가 많다면 반드시 StringBuilder 사용
+StringBuilder sb = new StringBuilder();
+for (String item : largeList) {
+    sb.append(item).append(", ");
+}
+String result = sb.toString();
+```
+
+---
+
+## 4. 요약
+
+> 성능에 신경 써야 한다면 많은 문자열을 연결할 때는 + 연산자를 피하세요. 대신 StringBuilder의 append 메서드를 사용하세요. 단순한 한두 줄 연결이라면 + 연산자도 충분합니다.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

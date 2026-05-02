@@ -1,5 +1,5 @@
 ---
-title: 태그 달린 클래스보다는 클래스 계층구조를 활용하라 - Effective Java[23]
+title: "태그 달린 클래스보다는 클래스 계층구조를 활용하라 — Effective Java[23]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,113 +7,95 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+하나의 클래스가 switch 문과 태그 필드를 이용해 여러 종류의 동작을 구분한다면, 그건 클래스 계층구조를 어설프게 흉내 낸 것입니다. 훨씬 더 나은 방법이 있습니다.
 
+---
 
-#### 🔗 태그 달린 클래스란?
+## 1. 태그 달린 클래스란?
 
-**<span style="color:red;">태그</span>란 해당 클래스가 어떠한 타입인지에 대한 정보를 담고있는 멤버 변수를 의미한다.**
-
-**두 가지 이상의 의미를 표현할 수 있으며, 그 중 현재 표현하는 의미를 태그 값으로 알려주는 클래스**를 본 적이 있을 것이다.
-
-<hr>
-
-
-
-**💎 태그 달린 클래스** 
+비유하자면 **하나의 서랍에 각기 다른 물건을 레이블을 붙여 넣어두는 것**입니다. 서랍을 열 때마다 레이블을 확인해서 어떤 물건인지 파악해야 하고, 물건 종류가 늘어날수록 서랍도 복잡해집니다. 각 물건을 별도 서랍(클래스)에 나눠 넣는 것이 훨씬 명확합니다.
 
 ```java
+// 태그 달린 클래스 — 두 종류의 도형을 하나의 클래스로 처리
 public class Figure {
-    enum Shape {RECTANGLE, CIRCLE}
+    enum Shape { RECTANGLE, CIRCLE }
 
-    //태그 필드 - 현재 모양을 나타낸다.
+    // 태그 필드 — 현재 어떤 도형인지 나타냄
     private Shape shape;
 
-    // 다음 필드들은 모양이 사각형일 때만 쓰인다.
+    // 사각형일 때만 사용
     private double length;
     private double width;
 
-    // 다음 필드들은 모양이 원일 때만 쓰인다.
+    // 원일 때만 사용
     private double radius;
 
-    //원용 생성자
-    public Figure(double radius) {
+    public Figure(double radius) {          // 원용 생성자
         shape = Shape.CIRCLE;
         this.radius = radius;
     }
 
-    //사각형용 생성자
-    public Figure(double length, double width) {
+    public Figure(double length, double width) {  // 사각형용 생성자
         shape = Shape.RECTANGLE;
         this.length = length;
         this.width = width;
     }
 
-    private double area() {
+    public double area() {
         switch (shape) {
-            case RECTANGLE:
-                return length + width;
-            case CIRCLE:
-                return Math.PI * (radius * radius);
-            default:
-                throw new AssertionError(shape);
+            case RECTANGLE: return length * width;
+            case CIRCLE:    return Math.PI * (radius * radius);
+            default:        throw new AssertionError(shape);
         }
     }
 }
 ```
 
+---
 
+## 2. 태그 달린 클래스의 문제점
 
-<hr>
+```mermaid
+graph TD
+    A["태그 달린 클래스의 문제"] --> B["쓸데없는 코드 범람\n(열거 타입, switch, 태그 필드)"]
+    A --> C["여러 구현이 뒤섞여\n가독성 하락"]
+    A --> D["사용하지 않는 필드가\n항상 메모리 낭비"]
+    A --> E["final 필드 사용 불가\n(미사용 필드도 초기화 강제)"]
+    A --> F["새 타입 추가 시\nswitch 문 전부 수정 필요"]
+    A --> G["인스턴스 타입만으로는\n현재 의미를 알 수 없음"]
+    A --> H["컴파일러 도움 최소\n→ 런타임에야 오류 발견"]
+    style A fill:#ff6b6b,color:#fff
+```
 
-
-
-#### 🔗 태그 달린 클래스의 단점
-
-* 열거 타입 선언, 태그 필드, switch 문 등 쓸데없는 코드가 많다.
-
-* 여러 구현이 한 클래스에 혼합돼 있어서 가독성도 나쁘다.
-* 다른 의미를 위한 코드도 언제나 함께 하니 메모리도 많이 사용한다.
-* 필드들을 final로 선언하려면 해당 의미에 쓰이지 않는 필드들까지 생성자에서 초기화 해야 한다.
-  (쓰지 않는 필드를 초기화하는 불피요한 코드가 늘어난다.)
-* 생성자가 태그 필드를 설정하고 해당 의미에 쓰이는 데이터 필드들을 초기화하는 데 컴파일러가 도와줄 수 있는건 별로 없다.
-  엉뚱한 필드를 초기화해도 런타임에야 문제가 드러날 뿐이다.
-* 또 다른 의미를 추가하려면 코드를 수정해야 한다.
-* 인스턴스의 타입만으로는 현재 나타내는 의미를 알 길이 전혀 없다.
-
-
-
-**태그 달린 클래스는 장황하고, 오류를 내기 쉽고, 비효율적이다.**
-
-**태그 달린 클래스는 <span style="color:red;">클래스 계층구조</span>를 어설프게 흉내낸 아류일 뿐이다.**
-
-
-
-<hr>
-
-#### 🔗궁금해 ! 태그 달린 클래스를 클래스 계층 구조로 바꾸는 방법!
-
-1. 가장 먼저 **계층구조의 루트(root)**가 될 추상 클래스를 정의하고, **태그 값에 따라 동작이 달라지는 메소드**들을 루트 클래스의 추상 메소드로 선언한다.
-2. 위 **Figure** 클래스에서는 **area가 이러한 메소드**에 해당한다.
-
-3. 그 다음 태그 값에 상관없이 **동작이 일정한 메소드들을 루트 클래스에 일반 메소드로 추가**한다.
-
-4. **모든 하위 클래스에서 공통으로 사용하는 데이터 필드들도 전부 루트 클래스로 올린다.**
-
-5. Figure 클래스에서는 태그 값에 상관없는 메소드가 하나도 없고, 모든 하위 클래스에서 사용하는 공통 데이터 필드도 없다.
-
-   그 결과 루트 클래스에서는 추상 메소드인 **area** 하나만 남게 된다.
-
-6. 다음으로, 루트 클래스를 확장한 구체 클래스를 의미별로 하나씩 정의한다.
-
-<br>
-
-**💎 태그 달린 클래스를 클래스 계층구조로 변환**
+예를 들어 삼각형 타입을 추가한다면?
 
 ```java
+// 삼각형 추가 — 모든 switch 문을 찾아다니며 수정해야 함
+enum Shape { RECTANGLE, CIRCLE, TRIANGLE }  // 추가
+
+// area() switch에도 추가
+case TRIANGLE: return 0.5 * base * height;
+// 실수로 한 곳이라도 빠뜨리면? → 런타임에 AssertionError!
+```
+
+---
+
+## 3. 클래스 계층구조로 변환하는 방법
+
+```mermaid
+graph TD
+    A["1단계: 루트 추상 클래스 정의\n태그 값에 따라 달라지는 메서드 → 추상 메서드"] --> B["2단계: 공통 동작/필드는\n루트 클래스로 올림"]
+    B --> C["3단계: 각 의미(타입)마다\n별도 구체 클래스 작성"]
+    C --> D["4단계: 각 구체 클래스에서\n자신에게 필요한 필드만 선언"]
+```
+
+```java
+// 루트 추상 클래스 — 공통 추상 메서드만 선언
 public abstract class Figure {
     abstract double area();
 }
 
+// 원 — 자신에게 필요한 필드(radius)만 가짐
 public class Circle extends Figure {
     final double radius;
 
@@ -127,6 +109,7 @@ public class Circle extends Figure {
     }
 }
 
+// 사각형 — 자신에게 필요한 필드(length, width)만 가짐
 public class Rectangle extends Figure {
     final double length;
     final double width;
@@ -143,47 +126,73 @@ public class Rectangle extends Figure {
 }
 ```
 
+삼각형 추가도 간단합니다:
 
+```java
+// 새 타입 추가 — 기존 코드 수정 없음!
+public class Triangle extends Figure {
+    final double base;
+    final double height;
 
+    public Triangle(double base, double height) {
+        this.base = base;
+        this.height = height;
+    }
 
-
-<hr>
-
-
-
-#### 🔗태그달린 클래스 -> 클래스 계층구조 변환의 장점
-
-* 태그 달린 클래스의 단점을 모두 날려버린다.
-* 쓸데 없는 코드도 모두 사라진다.
-* 각 의미를 독립된 클래스에 담아 관련 없던 데이터 필드를 모두 제거한다.
-  * 살아남은 필드들은 모두 final이다.
-* 각 클래스의 생성자가 모든 필드를 남김없이 초기화하고 
-  추상 메소드를 모두 구현했는지 컴파일러가 확인해준다.
-* 실수로 빼먹은 case 문 때문에 런타임 오류가 발생할 일도 없다.
-* 루트 클래스의 코드를 건드리지 않고도 다른 프로그래머들이
-  독립적으로 계층구조를 확장하고 함께 사용할 수 있다.
-* 타입이 의미별로 존재하니 변수의 의미를 명시하거나 제한할 수 있고,
-  또 특정 의미만 매개변수로 받을 수 있다.
-* 타입 사이의 자연스러운 계층 관계를 반영할 수 있어서 유연성은 물론 컴파일타임에 타입 검사 능력을 높여준다는 장점도 있다.
-
-
-
-<hr>
-
-> 태그 달린 클래쓰를 써야 하는 상황은 거의 없다.
-> 새로운 클래스를 작성하는 데 태그 필드가 등장한다면 태그를 없애고 계층구조로 대체하는 방법을 생각해보자.
->
-> 기존 클래스가 태그 필드를 사용하고 있다면 계층구조로 리팩토링하는걸 고민해보자.
-
-
-
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+    @Override
+    double area() {
+        return 0.5 * base * height;
+    }
+}
 ```
 
+---
+
+## 4. 계층구조의 장점
+
+```mermaid
+graph TD
+    A["클래스 계층구조의 장점"] --> B["각 필드가 final\n→ 컴파일러가 초기화 강제"]
+    A --> C["관련 없는 필드 없음\n→ 메모리 낭비 없음"]
+    A --> D["switch 문 없음\n→ case 누락 런타임 오류 없음"]
+    A --> E["새 타입 추가 시\n기존 코드 수정 불필요"]
+    A --> F["타입으로 의미 표현\n→ 변수 타입을 Circle, Rectangle로 선언 가능"]
+    A --> G["자연스러운 계층 관계 표현\n예: Square extends Rectangle"]
+    style A fill:#51cf66,color:#fff
+```
+
+```java
+// 타입으로 의미를 명확히 표현 가능
+Figure f1 = new Circle(5.0);
+Figure f2 = new Rectangle(3.0, 4.0);
+
+// 특정 의미만 매개변수로 받을 수 있음
+void drawCircle(Circle c) { ... }  // Circle만 받음
+void drawShape(Figure f) { ... }   // 모든 도형 받음
+
+// 계층 확장도 자연스러움
+public class Square extends Rectangle {
+    public Square(double side) {
+        super(side, side);
+    }
+}
+```
+
+---
+
+## 5. 요약
+
+```mermaid
+graph TD
+    A["클래스에 태그 필드가\n등장한다면"] --> B{"리팩토링 가능한가?"}
+    B -->|"Yes"| C["계층구조로 변환\n→ 추상 클래스 + 구체 하위 클래스"]
+    B -->|"No (외부 라이브러리 등)"| D["최소한 래퍼 클래스로 감싸기"]
+    C --> E["모든 필드 final 가능\n컴파일러 도움 최대화\n새 타입 추가 용이"]
+    style C fill:#51cf66,color:#fff
+```
+
+> 태그 달린 클래스를 써야 할 상황은 거의 없습니다. 새로운 클래스를 작성하는 데 태그 필드가 등장한다면, 태그를 없애고 계층구조로 대체하는 방법을 먼저 생각하세요. 기존 클래스가 태그 필드를 사용하고 있다면 계층구조로 리팩토링하는 것을 고민해보세요.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

@@ -28,11 +28,17 @@ console.log(vault.check('wrongpass')); // false
 // console.log(password); // ReferenceError!
 ```
 
+이 예제 하나가 클로저의 핵심을 모두 담고 있습니다. 이제 왜 이게 가능한지부터 파헤쳐봅시다.
+
 ---
 
-## 1. 렉시컬 스코프 - 클로저의 기반
+## 1. 렉시컬 스코프 — 클로저의 기반
 
-클로저를 이해하려면 먼저 **렉시컬 스코프**를 알아야 합니다.
+클로저를 이해하려면 먼저 **렉시컬 스코프(Lexical Scope)**를 알아야 합니다.
+
+렉시컬 스코프란 **함수가 어디서 정의됐느냐**에 따라 스코프가 결정되는 방식입니다. 어디서 호출됐느냐가 아닙니다. 이 차이가 핵심입니다.
+
+> 비유: 학교 교칙을 생각해보세요. 학생은 어느 학교에 소속됐느냐에 따라 그 학교 규칙을 따릅니다. 외출해서 다른 학교 앞에 서 있어도, 본인 학교 규칙이 적용됩니다. 함수도 마찬가지입니다. 어디서 호출되든, 정의된 곳의 스코프 규칙을 따릅니다.
 
 ```mermaid
 graph TD
@@ -42,10 +48,10 @@ graph TD
             O[y = 2]
             subgraph "inner() 스코프"
                 I[z = 3]
-                I_ACCESS["x 접근 가능 ✓<br>y 접근 가능 ✓<br>z 접근 가능 ✓"]
+                I_ACCESS["x 접근 가능<br>y 접근 가능<br>z 접근 가능"]
             end
         end
-        G_ACCESS["y 접근 불가 ✗<br>z 접근 불가 ✗"]
+        G_ACCESS["y 접근 불가<br>z 접근 불가"]
     end
 
     style I_ACCESS fill:#2ecc71,color:#fff
@@ -60,7 +66,7 @@ function outer() {
 
   function inner() {
     const z = 3;
-    console.log(x, y, z); // 1, 2, 3 - 상위 스코프 모두 접근 가능
+    console.log(x, y, z); // 1, 2, 3 — 상위 스코프 모두 접근 가능
   }
 
   inner();
@@ -69,7 +75,7 @@ function outer() {
 outer();
 ```
 
-**렉시컬 스코프**: 함수가 **어디서 정의됐느냐**에 따라 스코프가 결정됩니다. 어디서 호출됐느냐가 아닙니다.
+`inner` 함수는 `x`, `y`, `z` 모두에 접근할 수 있습니다. 왜냐하면 자신이 정의된 위치를 기준으로 스코프 체인을 따라 올라가기 때문입니다.
 
 ---
 
@@ -77,13 +83,17 @@ outer();
 
 클로저는 **함수 + 그 함수가 선언된 렉시컬 환경**의 조합입니다.
 
+보통 함수가 실행을 마치면 그 함수의 지역 변수는 메모리에서 사라집니다. 하지만 내부 함수가 외부 함수의 변수를 참조하고 있으면, 외부 함수가 끝나도 그 변수가 사라지지 않습니다. 내부 함수가 변수를 "붙잡고" 있기 때문입니다.
+
+> 비유: 부모님이 이사를 가셨는데, 당신이 부모님 집 열쇠를 아직 가지고 있는 상황입니다. 부모님(외부 함수)은 이미 그 집에 살지 않지만, 열쇠(참조)를 가진 당신(내부 함수)은 여전히 그 집(변수)에 접근할 수 있습니다.
+
 ```mermaid
 flowchart LR
     subgraph "outer() 실행 완료 후"
         subgraph "클로저"
             FN["inner 함수"]
-            ENV["렉시컬 환경<br>count = 0 ("유지!")"]
-            FN -.-->|"참조"| ENV
+            ENV["렉시컬 환경<br>count = 0 (유지!)"]
+            FN -.->|"참조"| ENV
         end
     end
 
@@ -110,7 +120,7 @@ function makeCounter() {
 const counter = makeCounter(); // makeCounter 실행 완료
 // 보통이라면 count는 사라져야 하지만...
 
-console.log(counter()); // 1 - count가 살아있음!
+console.log(counter()); // 1 — count가 살아있음!
 console.log(counter()); // 2
 console.log(counter()); // 3
 ```
@@ -140,9 +150,11 @@ sequenceDiagram
 
 ---
 
-## 3. 클로저 활용 패턴 1 - 데이터 은닉 (캡슐화)
+## 3. 클로저 활용 패턴 1 — 데이터 은닉 (캡슐화)
 
-클로저를 사용하면 private 변수를 구현할 수 있습니다.
+클로저를 활용하면 JavaScript에서 private 변수를 구현할 수 있습니다. 만약 이걸 안 하면? 외부에서 잔액을 직접 조작하거나, 거래 내역을 마음대로 수정할 수 있게 됩니다.
+
+> 비유: 은행 계좌를 생각해보세요. 잔액을 직접 수정할 수 없고, 반드시 입금/출금 함수를 통해서만 바꿀 수 있습니다. 클로저가 바로 이 창구 직원 역할을 합니다.
 
 ```javascript
 function createBankAccount(initialBalance) {
@@ -179,32 +191,17 @@ account.deposit(5000);
 account.withdraw(3000);
 
 console.log(account.getBalance()); // 12000
-console.log(account.getHistory());
-// [{ type: 'deposit', amount: 5000, balance: 15000 }, ...]
-
 // 직접 접근 불가
 console.log(account.balance); // undefined
 ```
 
-```mermaid
-classDiagram
-    class BankAccount {
-        -balance: number
-        -transactionHistory: Array
-        +deposit(amount)
-        +withdraw(amount)
-        +getBalance()
-        +getHistory()
-    }
-
-    note for BankAccount "클로저로 private 구현\nbalance는 외부 접근 불가"
-```
+`balance`에 직접 접근이 불가능하기 때문에, 누군가 `account.balance = 999999999`로 잔액을 조작하려 해도 통하지 않습니다.
 
 ---
 
-## 4. 클로저 활용 패턴 2 - 모듈 패턴
+## 4. 클로저 활용 패턴 2 — 모듈 패턴
 
-IIFE(즉시 실행 함수)와 클로저를 결합한 모듈 패턴입니다.
+IIFE(즉시 실행 함수)와 클로저를 결합하면 완전한 모듈을 만들 수 있습니다. ES6 모듈 시스템이 나오기 전, 자바스크립트의 유일한 모듈화 수단이었습니다.
 
 ```javascript
 const TodoModule = (function() {
@@ -282,12 +279,13 @@ graph TD
 
 ---
 
-## 5. 클로저 활용 패턴 3 - 함수 팩토리
+## 5. 클로저 활용 패턴 3 — 함수 팩토리
 
-비슷하지만 약간씩 다른 함수들을 동적으로 만들 때 유용합니다.
+비슷하지만 약간씩 다른 함수들을 동적으로 만들 때 유용합니다. 반복 코드를 줄이고, 설정값을 함수 안에 "굳혀" 놓을 수 있습니다.
+
+> 비유: 도장 찍기를 생각해보세요. 도장 틀(팩토리 함수)은 하나지만, 도장을 찍을 때마다 다른 글자(설정)를 넣어서 다른 도장(함수)을 만들 수 있습니다.
 
 ```javascript
-// 할인율을 매개변수로 받아 할인 함수를 반환
 function createDiscount(discountRate) {
   return function(price) {
     return price * (1 - discountRate);
@@ -302,6 +300,8 @@ console.log(student10(10000)); // 9000
 console.log(vip20(10000));     // 8000
 console.log(staff30(10000));   // 7000
 ```
+
+각 함수는 자신이 만들어질 때의 `discountRate`를 클로저로 기억합니다. 이후 어디서 호출하든 그 값을 사용합니다.
 
 ### 더 실용적인 예: API 클라이언트 팩토리
 
@@ -330,10 +330,6 @@ function createApiClient(baseUrl, defaultHeaders = {}) {
       method: 'POST',
       body: JSON.stringify(data)
     }),
-    put: (endpoint, data) => request(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(data)
-    }),
     delete: (endpoint) => request(endpoint, { method: 'DELETE' })
   };
 }
@@ -352,9 +348,11 @@ await userApi.get('/users/1');
 
 ---
 
-## 6. 클로저 활용 패턴 4 - 메모이제이션
+## 6. 클로저 활용 패턴 4 — 메모이제이션
 
-비용이 큰 계산의 결과를 캐싱합니다.
+비용이 큰 계산의 결과를 캐싱합니다. 함수가 호출될 때마다 같은 계산을 반복하지 않고, 처음 계산한 결과를 클로저 안에 저장해 재사용합니다.
+
+> 비유: 수학 시험에서 같은 문제가 두 번 나왔을 때, 처음에 풀어둔 답안지를 다시 쓰는 것과 같습니다. 매번 처음부터 풀 필요가 없죠.
 
 ```javascript
 function memoize(fn) {
@@ -374,7 +372,6 @@ function memoize(fn) {
   };
 }
 
-// 피보나치 수열 (재귀, 느림)
 const fibonacci = memoize(function(n) {
   if (n <= 1) return n;
   return fibonacci(n - 1) + fibonacci(n - 2);
@@ -382,11 +379,11 @@ const fibonacci = memoize(function(n) {
 
 console.time('첫 번째 계산');
 console.log(fibonacci(40)); // 102334155
-console.timeEnd('첫 번째 계산');
+console.timeEnd('첫 번째 계산'); // 수십 ms
 
 console.time('두 번째 계산');
-console.log(fibonacci(40)); // 102334155 - 즉시!
-console.timeEnd('두 번째 계산');
+console.log(fibonacci(40)); // 102334155
+console.timeEnd('두 번째 계산'); // 거의 0ms — 캐시 히트!
 ```
 
 ```mermaid
@@ -411,45 +408,14 @@ flowchart TD
 
 ---
 
-## 7. 클로저 활용 패턴 5 - 이벤트 핸들러와 상태 관리
+## 7. 메모리 누수 — 클로저의 부작용
 
-```javascript
-function createToggle(element) {
-  let isActive = false; // private 상태
-
-  function toggle() {
-    isActive = !isActive;
-    element.classList.toggle('active', isActive);
-    element.textContent = isActive ? '켜짐' : '꺼짐';
-  }
-
-  function getState() {
-    return isActive;
-  }
-
-  element.addEventListener('click', toggle);
-
-  return { getState, toggle };
-}
-
-const btn1 = createToggle(document.getElementById('btn1'));
-const btn2 = createToggle(document.getElementById('btn2'));
-
-// 각 버튼은 독립적인 isActive 상태를 클로저로 유지
-btn1.toggle(); // btn1만 토글
-console.log(btn2.getState()); // false - btn2는 영향 없음
-```
-
----
-
-## 8. 메모리 누수 - 클로저의 부작용
-
-클로저는 참조를 유지하므로 잘못 사용하면 메모리 누수가 발생합니다.
+클로저는 참조를 유지하므로 잘못 사용하면 메모리 누수가 발생합니다. 이 부분을 모르면 앱이 시간이 지날수록 점점 느려지는 원인을 찾지 못합니다.
 
 ```javascript
 // 메모리 누수 예시
 function createHeavyResource() {
-  const largeData = new Array(1000000).fill('*'); // 4MB 데이터
+  const largeData = new Array(1000000).fill('*'); // 약 4MB 데이터
 
   return function() {
     // largeData 중 딱 하나만 사용하지만
@@ -459,7 +425,7 @@ function createHeavyResource() {
 }
 
 const getFirst = createHeavyResource();
-// largeData 전체가 GC되지 않음
+// largeData 전체가 GC되지 않음 — 4MB가 계속 메모리 점유
 ```
 
 ```mermaid
@@ -484,7 +450,7 @@ graph TD
 function createHeavyResource_Fixed() {
   const largeData = new Array(1000000).fill('*');
   const first = largeData[0]; // 필요한 값만 추출
-  // largeData는 함수 종료 시 GC 가능 (아래 함수가 참조 안 함)
+  // largeData는 이 함수 종료 시 GC 가능 (아래 함수가 참조 안 함)
 
   return function() {
     return first; // largeData 전체가 아닌 first만 참조
@@ -503,10 +469,10 @@ function attachHandler(element) {
     process(data); // element와 data 모두 클로저에 포함
   });
   // element가 DOM에서 제거되어도 이벤트 리스너가 element를 참조
-  // element도 리스너를 참조 → 순환 참조
+  // element도 리스너를 참조 → 순환 참조 → GC 불가
 }
 
-// 해결: removeEventListener 또는 AbortController
+// 해결: AbortController로 명시적 클린업
 function attachHandlerSafe(element) {
   const controller = new AbortController();
 
@@ -518,15 +484,15 @@ function attachHandlerSafe(element) {
 }
 
 const cleanup = attachHandlerSafe(element);
-// 나중에
+// 나중에 컴포넌트 언마운트 시
 cleanup(); // 리스너 제거, 메모리 해제
 ```
 
 ---
 
-## 9. 클래식 버그 - for 루프와 클로저
+## 8. 클래식 버그 — for 루프와 클로저
 
-자바스크립트에서 가장 유명한 클로저 버그입니다.
+자바스크립트에서 가장 유명한 클로저 버그입니다. 모르면 반드시 한 번은 당합니다.
 
 ```javascript
 // 버그 코드
@@ -539,13 +505,14 @@ for (var i = 0; i < 5; i++) {
 
 buttons[0](); // 5
 buttons[1](); // 5
-buttons[2](); // 5
 ```
+
+왜 이럴까요? `var i`는 함수 스코프이기 때문에 루프 전체에서 **단 하나의 i**만 존재합니다. 루프가 끝나면 `i = 5`가 됩니다. 모든 함수가 같은 `i`를 참조하기 때문에 모두 5를 출력합니다.
 
 ```mermaid
 graph TD
     subgraph "for 루프 종료 후"
-        I["var i = 5 ("하나의 변수")"]
+        I["var i = 5 (하나의 변수)"]
         B0["buttons[0]"] -->|"참조"| I
         B1["buttons[1]"] -->|"참조"| I
         B2["buttons[2]"] -->|"참조"| I
@@ -567,11 +534,11 @@ for (var i = 0; i < 5; i++) {
   })(i);
 }
 
-// 해결 방법 2: let 사용 (권장)
+// 해결 방법 2: let 사용 (권장 — 가장 깔끔)
 const buttons2 = [];
 for (let i = 0; i < 5; i++) {
   buttons2[i] = function() {
-    console.log(i); // let은 블록 스코프, 각 반복마다 새 바인딩
+    console.log(i); // let은 각 반복마다 새 바인딩
   };
 }
 
@@ -582,25 +549,7 @@ buttons2[2](); // 2
 
 ---
 
-## 10. 클로저와 가비지 컬렉션
-
-```mermaid
-flowchart TD
-    A["변수 생성"] --> B{"참조하는 것이 있나?"}
-    B -->|"예"| C["메모리 유지"]
-    B -->|"아니오"| D["GC 대상"]
-
-    subgraph "클로저 참조 관계"
-        E["외부 함수 실행 완료"] --> F{"내부 함수가<br>외부 변수 참조?"}
-        F -->|"예"| G["외부 변수 메모리 유지"]
-        F -->|"아니오"| H["외부 변수 GC 가능"]
-    end
-
-    style C fill:#f39c12,color:#fff
-    style D fill:#2ecc71,color:#fff
-    style G fill:#f39c12,color:#fff
-    style H fill:#2ecc71,color:#fff
-```
+## 9. 클로저와 가비지 컬렉션 — 언제 메모리가 해제되나
 
 ```javascript
 function outer() {
@@ -614,63 +563,21 @@ function outer() {
 }
 
 const fn = outer();
-// big은 이제 참조 없음 → GC
+// big은 이제 참조 없음 → GC 가능
 // small은 fn이 참조 중 → 유지
 
 fn = null; // fn도 제거하면 small도 GC 가능
 ```
 
----
-
-## 11. 실전 예제 - React의 useState 구현
-
-React의 `useState`가 클로저 기반으로 동작합니다.
-
-```javascript
-// useState의 원리
-function useState(initialValue) {
-  let state = initialValue; // 클로저로 상태 보존
-
-  function getState() {
-    return state;
-  }
-
-  function setState(newValue) {
-    state = newValue;
-    render(); // 리렌더링 트리거
-  }
-
-  return [getState, setState];
-}
-
-// 실제 React useState 흉내내기
-function createReactState() {
-  let states = [];
-  let cursor = 0;
-
-  function useState(initialValue) {
-    const currentCursor = cursor;
-
-    if (states[currentCursor] === undefined) {
-      states[currentCursor] = initialValue;
-    }
-
-    function setState(newValue) {
-      states[currentCursor] = newValue;
-      cursor = 0; // 리셋 후 리렌더링
-    }
-
-    cursor++;
-    return [states[currentCursor], setState];
-  }
-
-  return { useState, reset: () => { cursor = 0; } };
-}
-```
+클로저가 참조하는 변수만 메모리에 남습니다. 클로저가 필요 없어지면 변수에 `null`을 할당해 명시적으로 참조를 끊어주세요.
 
 ---
 
-## 12. 고급 패턴 - 부분 적용 함수
+## 10. 고급 패턴 — 부분 적용 함수와 커링
+
+클로저를 활용한 함수형 프로그래밍 패턴입니다. 함수의 인자를 분리해서 재사용성을 높입니다.
+
+> 비유: 스탬프 카드를 생각해보세요. "10번 방문"이라는 조건(첫 번째 인자)을 미리 설정해두고, 실제 방문할 때마다(두 번째 인자) 스탬프를 찍습니다.
 
 ```javascript
 // 부분 적용(Partial Application)
@@ -717,52 +624,7 @@ console.log(curriedAdd(1, 2, 3));   // 6
 
 ---
 
-## 13. 극한 시나리오 - 클로저 중첩
-
-```javascript
-function level1(a) {
-  return function level2(b) {
-    return function level3(c) {
-      return function level4(d) {
-        // 모든 상위 스코프의 변수에 접근 가능
-        return a + b + c + d;
-      };
-    };
-  };
-}
-
-const fn = level1(1)(2)(3);
-console.log(fn(4)); // 10
-
-// 성능 주의: 깊은 클로저는 스코프 체인 탐색 비용 증가
-// 너무 깊은 중첩은 피하는 것이 좋음
-```
-
----
-
-## 14. 클로저 vs 클래스 비교
-
-```mermaid
-graph LR
-    subgraph "클로저 방식"
-        CF["function createCounter()"]
-        CF --> CP["private: count"]
-        CF --> CI["increment()"]
-        CF --> CD["decrement()"]
-        CF --> CG["getCount()"]
-    end
-
-    subgraph "클래스 방식"
-        CC["class Counter"]
-        CC --> CCF["#count ("private 필드")"]
-        CC --> CCI["increment()"]
-        CC --> CCD["decrement()"]
-        CC --> CCG["getCount()"]
-    end
-
-    style CP fill:#e74c3c,color:#fff
-    style CCF fill:#e74c3c,color:#fff
-```
+## 11. 클로저 vs 클래스 비교 — 어느 것을 선택할까
 
 ```javascript
 // 클로저 방식
@@ -794,24 +656,28 @@ class Counter {
 }
 ```
 
+어떤 걸 써야 할까요? 상황에 따라 다릅니다.
+
 | 비교 항목 | 클로저 | 클래스 |
 |----------|--------|-------|
 | 문법 | 함수 반환 | class 키워드 |
-| private | 클로저 자연스럽게 지원 | # 키워드 (ES2022) |
+| private | 클로저로 자연스럽게 지원 | # 키워드 (ES2022) |
 | 상속 | 수동 구현 복잡 | extends로 쉬움 |
 | 메모리 | 인스턴스마다 함수 복사 | prototype 공유 |
 | 직관성 | OOP 배경 없이 이해 가능 | OOP 개념 필요 |
 
+여러 인스턴스를 만들고 상속이 필요하면 클래스, 단순히 상태를 캡슐화하고 싶으면 클로저가 더 간단합니다.
+
 ---
 
-## 15. 정리: 클로저 체크리스트
+## 12. 정리: 클로저 체크리스트
 
 ```mermaid
 mindmap
   root((클로저))
     정의
       함수 + 렉시컬 환경
-      외부 변수를 "기억"
+      외부 변수를 기억
     활용
       데이터 은닉
       모듈 패턴
@@ -828,4 +694,4 @@ mindmap
       명시적 null 처리
 ```
 
-클로저는 단순히 "외부 변수에 접근하는 함수"가 아닙니다. 자바스크립트의 함수형 프로그래밍, 모듈 시스템, 상태 관리의 근간이 되는 핵심 개념입니다. React Hooks, Redux, 모든 JavaScript 라이브러리가 클로저를 기반으로 동작합니다.
+클로저는 단순히 "외부 변수에 접근하는 함수"가 아닙니다. 자바스크립트의 함수형 프로그래밍, 모듈 시스템, 상태 관리의 근간이 되는 핵심 개념입니다. React Hooks, Redux, 모든 JavaScript 라이브러리가 클로저를 기반으로 동작합니다. 클로저를 이해하면 이 모든 것의 동작 원리가 보이기 시작합니다.

@@ -1,5 +1,5 @@
 ---
-title: 멤버 클래스는 되도록 static으로 만들라 - Effective Java[24]
+title: "멤버 클래스는 되도록 static으로 만들라 — Effective Java[24]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,194 +7,206 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+클래스 안에 클래스를 정의하는 중첩 클래스는 네 종류가 있습니다. 그 중 가장 흔하게 실수하는 부분이 비정적 멤버 클래스입니다. `static`을 붙이지 않으면 조용히 메모리 누수가 생깁니다.
 
+---
 
-#### 🔗 중첩 클래스
+## 1. 중첩 클래스의 네 종류
 
-**중첩 클래스(nested class)란 다른 클래스 안에 정의된 클래스를 말한다.**
+비유하자면 **회사 내 부서**입니다. 어떤 부서는 회사 자원에 완전히 독립적으로 일하고(정적 멤버 클래스), 어떤 부서는 본사 자원을 항상 참조하며 일합니다(비정적 멤버 클래스). 독립적으로 일할 수 있는 부서가 본사 자원을 불필요하게 붙들고 있으면 낭비입니다.
 
-중첩 클래스는 자신을 감싼 바깥 클래스에서만 쓰여야 하며, 그 외의 쓰임새가 있따면 톱레벨 클래스로 만들어야 한다. 
+```mermaid
+graph TD
+    A["중첩 클래스 4종류"] --> B["정적 멤버 클래스\n(static)"]
+    A --> C["비정적 멤버 클래스\n(inner class)"]
+    A --> D["익명 클래스\n(anonymous)"]
+    A --> E["지역 클래스\n(local)"]
+    B --> B1["바깥 인스턴스 참조 없음\n독립적으로 존재 가능"]
+    C --> C1["바깥 인스턴스 참조 보유\n바깥 없이 생성 불가"]
+    D --> D1["이름 없음\n선언 시점에 인스턴스화"]
+    E --> E1["메서드 내부에서만 사용"]
+```
 
-중첩 클래스의 종류로는 **정적 멤버 클래스, (비정적) 멤버 클래스, 익명 클래스, 지역 클래스, 이렇게 네 가지이다.**
+---
 
+## 2. 정적 멤버 클래스 vs 비정적 멤버 클래스
 
+문법 차이는 딱 `static` 한 단어지만, 의미 차이는 큽니다.
 
-<hr>
+```java
+public class Outer {
 
-
-
-#### 🔗 정적 (static) 멤버 클래스
-
-* 다른 클래스 안에 선언되고, 바깥 클래스의 **private** 멤버에도 접근할 수 있다는 점만 제외하고는 일반 클래스와 똑같다.
-* 다른 정적 멤버와 똑같은 접근 규칙을 적용받는다. 
-  * Ex) **private**으로 선언 시 바깥클래스에서만 접근할 수 있는 식
-* **흔히 바깥 클래스와 함께 쓰일 때만 유용한 public 도우미 클래스로 쓰인다.**
-
-
-
-<hr>
-
-
-
-#### 🔗(비정적) 멤버 클래스 (inner class)
-
-* 정적 멤버 클래스와 비정적 멤버 클래스의 구문상 차이는 단지 **static**이 붙어 있고 없고 뿐이지만, **의미상 차이는 의외로 꽤 크다.**
-
-* 비정적 멤버 클래스의 인스턴스는 바깥 클래스의 인스턴스와 **암묵적으로 연결**된다. 
-
-* 비정적 멤버 클래스의 인스턴스 메소드에서 **정규화된 this**를 사용해 바깥 인스턴스의 메소드를 호출하거나 바깥 인스턴스의 참조를 가져올 수 있다.
-
-  * <span style="color:red;">정규화된 this란</span> **클래스명.this** 형태로 바깥 클래스의 이름을 명시하는 용법을 말한다.
-  * 개념상 중첩 클래스의 인스턴스가 바깥 인스턴스와 독립적으로 존재할 수 있다면 정적 멤버 클래스로 만들어야 한다.
-    **비정적 멤버 클래스는 바깥 인스턴스 없이는 생성할 수 없기 떄문이다.**
-
-* 비정적 멤버 클래스의 인스턴스와 바깥 인스턴스 사이의 관계는 <span style="color:red;">멤버 클래스가 인스턴스화될 때</span> 확립되며, 더 이상 변경할 수 없다.
-
-  * **이 관계 정보는 비정적 멤버 클래스의 인스턴스 안에 만들어져 메모리 공간을 차지하며 생성 시간도 더 걸린다.**
-
-* **비정적 멤버 클래스는 어댑터를 정의할 때 자주 쓰인다.**
-
-  * 즉, 어떤 클래스의 인스턴스를 감싸 마치 다른 클래스의 인스턴스처럼 보이게 하는 <span style="color:red;">뷰</span>로 사용하는 것이다.
-
-  * ex) Map, Set, List 과 같은 인터페이스의 구현체
-
-    ```java
-    public class MySet<E> extends AbstractSet<E> {
-        // ...
-    
-        @Override
-        public Iterator<E> iterator() {
-            return new MyIterator();
-        }
-    
-        private class MyIterator implements Iterator<E> 	{
-            // ...
+    // 정적 멤버 클래스 — 바깥 인스턴스 참조 없음
+    public static class StaticInner {
+        void doSomething() {
+            // Outer 인스턴스 없이 독립적으로 동작
         }
     }
-    ```
 
-* **멤버 클래스에서 바깥 인스턴스에 접근할 일이 없다면 <span style="color:red;">무조건 static을 붙여서 정적 멤버 클래스로 만들자.</span>**
-
-  * **static을 생략하면** 바깥 인스턴스로의 숨은 외부 참조를 갖게 된다.
-
-    이 참조를 저장하려면 시간과 공간이 소비된다.
-
-  * 더 심각한 문제는 **가비지 컬렉션이 바깥 클래스의 인스턴스를 수거하지 못하는 메모리 누수**가 생길 수 있다는 점이다.
-
-  * 참조가 눈에 보이지 않으니 문제의 원인을 찾기 어려워 때떄로 심각한 상황을 초래하기도 한다.
-
-
-
-<hr>
-
-
-
-##### 💎 private 정적 멤버 클래스
-
-**private 정적 멤버 클래스는 흔히 바깥 클래스가 표현하는 객체의 한 부분(구성요소)를 나타낼 때 쓴다.**
-
-키와 값을 매핑시키는 **Map** 인스턴스를 생각해보자.
-
-많은 **Map** 구현체는 각각의 키-값 쌍을 표현하는 엔트리(**Entry**) 객체들을 가지고 있지만 엔트리의 메소드들(**getKey, getValue, setValue**)은 맵을 직접 사용하지는 않는다.
-
-![image-20220104192351093](C:\Users\yoonoa\Documents\yjkim2015.github.io\assets\images\2022-01-04-effective-java24\image-20220104192351093.png)
-
-따라서 엔트리를 비정적 멤버 클래스로 표현하는 것은 낭비이고,
-private 정적 멤버 클래스가 가장 알맞다. 
-
-엔트리를 선언할 때 실수로 **static**을 빠뜨려도 맵은 여전히 동작하겠지만,
-
-모든 엔트리가 바깥 맵으로의 참조를 갖게 되어 공간과 시간을 낭비할 것이다.
-
-<br>
-
-
-
-멤버 클래스가 공개된 클래스의 **public이나 protected 멤버라면 정적이냐 아니냐는 <span style="color:red;">두배로 중요해진다.</span>**
-
-멤버 클래스 역시 **공개 API**가 되니, 혹시라도 **향후 릴리즈에서 static을 붙이면 하위 호환성이 깨진다.**
-
-
-
-
-
-<hr>
-
-
-
-#### 🔗 익명 클래스 (inner class)
-
-* 익명 클래스에는 당연히 이름이 없다. 
-* 익명 클래스는 바깥 클랫의 멤버도 아니다.
-
-* 멤버와 달리, 쓰이는 시점에 선언과 동시에 인스턴스가 만들어진다.
-* 코드의 어디서든 만들 수 있다.
-* 오직 비정적인 문맥에서 사용될 때만 바깥 클래스의 인스턴스를 참조할 수 있다.
-* 정적 문맥에서라도 상수 변수 이외의 정적 멤버는 가질 수 없다.
-  즉, 상수표현을 위해 초기화된 final 기본 타입과 문자열 필드만 가질 수 있다.
-
-
-
-<hr>
-
-**💎 익명클래스 응용 제약**
-
-* 선언한 지점에서만 인스턴스를 만들 수 있다.
-* instanceof 검사나 클래스의 이름이 필요한 작업은 수행 할 수 없다.
-* 여러 인터페이스를 구현할 수 없고, 인터페이스를 구현하는 동시에 다른 클래스를 상속 할 수도 없다.
-* 표현식 중간에 등장하므로 짧지 않으면 가독성이 떨어진다.
-
-
-
-**자바가 람다를 지원하기 전에는** 즉석에서 작은 함수 객체나 처리 객체를 만드는 데 익명 클래스를 주로 사용했다.
-
-**물론 이제는 그 자리를 물려줬다.**
-
-익명 클래스의 또 다른 주 쓰임은 정적 팩토리 메소드를 구현할 때이다.
-
-
-
-<hr>
-
-
-
-#### 🔗지역 클래스(inner class)
-
-* **지역 클래스**는 네가지 중첩 클래스 중 가장 드물게 사용된다.
-
-* 지역 클래스는 지역변수를 선언할 수 있는 곳이면 실질적으로 어디서든 선언할 수 있고 **유효 범위도 지역변수와 같다.**
-
-* 멤버 클래스처럼 이름이 있고 반복해서 사용할 수 있다.
-
-* 비정적 문맥에서 사용될 때만 바깥 인스턴스를 참조할 수 있다.
-
-* 정적 멤버는 가질 수 없으며, 가독성을 위해 짧게 작성해야 한다.
-
-  
-
-<hr>
-
-
-
-> 중첩 클래스에는 네 가지가 있으며, 각각의 쓰임이 다르다.
->
-> 메소드 밖에서도 사용해야 하거나 메소드 안에 정의하기엔 너무 길다면
->
-> 멤버 클래스로 만든다.
->
-> 멤버 클래스의 인스턴스 각각이 바깥 인스턴스를 참조한다면 비정적으로,
->
-> 그렇지 않으면 정적으로 만들자.
->
-> 중첩 클래스가 한 메소드 안에서만 쓰이면서 그 인스턴스를 생성하는 지점이 단 한 곳이고 해당 타입으로 쓰기에 적합한 클래스나 인터페이스가 이미 있다면 익명 클래스로 만들고, 그렇지 않으면 지역 클래스로 만들자.
-
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+    // 비정적 멤버 클래스 — 바깥 인스턴스에 암묵적으로 연결됨
+    public class NonStaticInner {
+        void doSomething() {
+            // Outer.this 로 바깥 인스턴스에 접근 가능
+            Outer.this.someMethod();
+        }
+    }
+}
+
+// 생성 방법도 다름
+Outer outer = new Outer();
+Outer.StaticInner si = new Outer.StaticInner();  // 바깥 인스턴스 불필요
+Outer.NonStaticInner ni = outer.new NonStaticInner();  // 바깥 인스턴스 필요
 ```
 
+---
+
+## 3. 비정적 멤버 클래스의 숨은 참조 — 메모리 누수의 원인
+
+비정적 멤버 클래스의 인스턴스는 **바깥 클래스 인스턴스로의 숨은 외부 참조**를 항상 보유합니다.
+
+```mermaid
+graph LR
+    A["NonStaticInner 인스턴스"] -->|"숨은 참조 (자동 생성)"| B["Outer 인스턴스"]
+    B -->|"GC가 수거할 수 없음"| C["메모리 누수!"]
+    D["StaticInner 인스턴스"] -->|"참조 없음"| E["Outer 인스턴스\n(독립적)"]
+    E -->|"GC 수거 가능"| F["정상"]
+    style C fill:#ff6b6b,color:#fff
+    style F fill:#51cf66,color:#fff
+```
+
+**만약 static을 빠뜨리면?**
+
+```java
+// 문제 있는 코드 — static을 빠뜨림
+public class Cache {
+    private Map<String, Entry> map = new HashMap<>();
+
+    // static이 없으면 Entry 인스턴스가 Cache 인스턴스를 참조함!
+    class Entry {  // static class Entry 가 되어야 함
+        String key;
+        Object value;
+    }
+}
+
+// Cache 객체를 더 이상 쓰지 않아도
+// Entry가 살아있는 한 Cache도 GC되지 않음
+// → 메모리 누수
+```
+
+이 참조는 코드에 명시적으로 보이지 않기 때문에 찾기 어렵고, 심각한 메모리 누수를 유발할 수 있습니다.
+
+---
+
+## 4. 비정적 멤버 클래스의 올바른 용도 — 어댑터 패턴
+
+비정적 멤버 클래스는 바깥 클래스의 인스턴스를 **다른 클래스의 인스턴스처럼 보이게 하는 뷰(view)** 역할을 할 때 씁니다.
+
+```java
+public class MySet<E> extends AbstractSet<E> {
+
+    @Override
+    public Iterator<E> iterator() {
+        return new MyIterator();  // 바깥 인스턴스(MySet)를 참조해야 함
+    }
+
+    // 바깥 MySet 인스턴스를 사용하므로 비정적이 맞음
+    private class MyIterator implements Iterator<E> {
+        private int cursor = 0;
+
+        @Override
+        public boolean hasNext() {
+            return cursor < MySet.this.size();  // 바깥 인스턴스 참조
+        }
+
+        @Override
+        public E next() {
+            return MySet.this.get(cursor++);  // 바깥 인스턴스 참조
+        }
+    }
+}
+```
+
+`Map`의 `keySet()`, `values()`, `entrySet()`이 반환하는 컬렉션 뷰들도 이 방식으로 구현됩니다.
+
+---
+
+## 5. private 정적 멤버 클래스 — 구성 요소를 표현할 때
+
+Map의 Entry가 대표적인 예입니다.
+
+```java
+public class HashMap<K, V> {
+
+    // Entry는 Map 내부의 키-값 쌍을 나타내는 구성 요소
+    // getKey(), getValue(), setValue()는 바깥 Map을 직접 사용하지 않음
+    // → 정적 멤버 클래스가 적합
+    static class Node<K, V> implements Map.Entry<K, V> {
+        final K key;
+        V value;
+        Node<K, V> next;
+
+        Node(K key, V value, Node<K, V> next) {
+            this.key = key;
+            this.value = value;
+            this.next = next;
+        }
+
+        @Override public K getKey()   { return key; }
+        @Override public V getValue() { return value; }
+        // ...
+    }
+}
+```
+
+`Node`에서 `static`을 빠뜨리면 모든 엔트리가 `HashMap` 인스턴스로의 참조를 갖게 되어 공간과 시간을 낭비합니다.
+
+---
+
+## 6. 익명 클래스와 지역 클래스
+
+```java
+// 익명 클래스 — Java 8 이전에 주로 사용, 이제는 람다로 대체
+Comparator<String> comp = new Comparator<String>() {
+    @Override
+    public int compare(String a, String b) {
+        return a.length() - b.length();
+    }
+};
+
+// 람다로 대체 (Java 8+)
+Comparator<String> comp = (a, b) -> a.length() - b.length();
+```
+
+```java
+// 지역 클래스 — 가장 드물게 사용
+void processData() {
+    class DataProcessor {  // 메서드 내에서만 사용
+        void process() { ... }
+    }
+    new DataProcessor().process();
+}
+```
+
+---
+
+## 7. 중첩 클래스 선택 기준
+
+```mermaid
+graph TD
+    A["중첩 클래스 필요"] --> B{"메서드 밖에서도\n사용하나?"}
+    B -->|"No + 단 한 곳에서 인스턴스화\n+ 적합한 타입 이미 있음"| C["익명 클래스"]
+    B -->|"No + 위 조건 미해당"| D["지역 클래스"]
+    B -->|"Yes"| E{"바깥 인스턴스를\n참조하나?"}
+    E -->|"Yes"| F["비정적 멤버 클래스\n(어댑터/뷰 패턴)"]
+    E -->|"No"| G["정적 멤버 클래스\n(기본 선택)"]
+    style G fill:#51cf66,color:#fff
+    style F fill:#ffd43b
+```
+
+**핵심 규칙: 멤버 클래스에서 바깥 인스턴스를 참조할 일이 없다면 무조건 `static`을 붙이세요.**
+
+멤버 클래스가 `public`이나 `protected`라면 더욱 중요합니다. 향후 릴리즈에서 `static`을 추가하거나 제거하면 하위 호환성이 깨집니다.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

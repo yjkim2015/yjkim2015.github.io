@@ -1,5 +1,5 @@
 ---
-title: Override 애너테이션을 일관되게 사용하라 - Effective Java[40]
+title: "@Override 애너테이션을 일관되게 사용하라 — Effective Java[40]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,215 +7,132 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+`@Override`는 상위 타입 메서드를 재정의했음을 컴파일러에게 알리는 선언입니다. 이 애너테이션 하나로 잡기 어려운 버그를 컴파일 시점에 잡아낼 수 있습니다.
 
+---
 
-#### 🔗 보통의 프로그래머에게 가장 중요한 애너테이션 @Override 메소드 
+## 1. @Override가 없으면 생기는 버그
 
-* **Override**는 메소드 선언에만 달 수 있으며, 이 애너테이션이 달렸다는 것은 상위 타입의 메소드를 재정의했음을 뜻한다.
-
-
-
-* 이 애너테이션을 일관되게 사용하면 다음과 같이  여러 가지 악명 높은 버그들을 예방해준다.
-
-<br>
-
-
-
-💎 **영어 알파벳 2개로 구성된 문자열을 표현하는 클래스**
+비유하자면 **새 직원이 기존 업무 절차를 수정한다고 생각했는데 사실 새 절차를 만들어버린 것**입니다. 기존 절차는 여전히 살아있고 새 절차는 아무도 호출하지 않습니다.
 
 ```java
+// 영어 알파벳 2개로 구성된 바이그램 클래스
 public class Bigram {
     private final char first;
     private final char second;
-    
+
     public Bigram(char first, char second) {
         this.first = first;
         this.second = second;
     }
-    
-    public boolean equals(Bigram b) {
+
+    public boolean equals(Bigram b) {   // 버그: Object.equals 재정의 아님
         return b.first == first && b.second == second;
     }
-    
+
     public int hashCode() {
         return 31 * first + second;
     }
-    
+
     public static void main(String[] args) {
-        Set<Bigram> s = new HashMap<>();
-        for (int i = 0; i < 10; i++) {
-            for (char ch = 'a'; ch <= 'z'; ch++) {
+        Set<Bigram> s = new HashSet<>();
+        for (int i = 0; i < 10; i++)
+            for (char ch = 'a'; ch <= 'z'; ch++)
                 s.add(new Bigram(ch, ch));
-            }
-        }
-        System.out.println(s.size());
+        System.out.println(s.size());  // 26을 기대했지만 260 출력!
     }
 }
 ```
 
-* main 메소드를 보면 똑같은 소문자 2개로 구성된 바이그램 26개를 10번 반복해 집합에 추가한 다음, 그 집합의 크기를 출력한다.
+`equals(Bigram b)`는 `Object.equals(Object o)`를 **재정의(override)** 한 것이 아니라 **다중정의(overload)** 한 것입니다. `Object.equals`는 여전히 `==` 동일성 비교를 수행하므로, 같은 문자 쌍의 `Bigram` 인스턴스 10개가 각각 별개의 객체로 인식되어 260이 출력됩니다.
 
+---
 
-
-* Set은 중복을 허용하지 않으니 26이 출력될 거 같지만, 실제로는 260이 출력된다. ????
-  * eqauls 메소드도 재정의 한 것으로 보이고 hashCode도 재정의 한 것 처럼 보인다.
-
-
-
-* **안타깝게도** <span style="color:red;">equals를 '재정의(Overriding)'</span> 한 게 아니라 <span style="color:red;">'다중정의 (overloading)'</span> 해버린 것이다.
-
-  * **Object**의 **equals**를 재정의하려면 매개변수 타입을 **Object**로 해야만 하는데, 그렇게 하지 않은 것이다.
-
-  
-
-  * 그래서 **Object**의 **equals**는 **==** 연산자와 똑같이 **객체 식별성(identity)**만을 확인한다.
-
-  
-
-  * <span style="color:red;">따라서</span> 같은 소문잔를 소유한 바이그램이 10개 각각이 서로 다른 객체로 인식되고, 결국 260을 출력한 것이다.
-
-  * 다행히 이 오류는 컴파일러가 찾아낼 수 있지만, 그러려면 아래와 같이 **Object.equals를 재정의한다는 의도**를 <span style="color:red;">명시</span>해야 한다.
-
-
-<br>
+## 2. @Override로 즉시 발견
 
 ```java
-@Override 
-public boolean eqauls(Bigram b) {
-	return b.first == first && b.second == second;    
+@Override  // 추가
+public boolean equals(Bigram b) {
+    return b.first == first && b.second == second;
 }
 ```
 
-* 위처럼 **@Override** 애너테이션을 달고 다시 컴파일하면 다음의 <span style="color:red;">컴파일 오류</span>가 발생한다.
+이렇게 하면 컴파일러가 즉시 오류를 냅니다.
 
-
-
-<br>
-
-```java
-Bigram.java:10: method does not override or implement a method
-from a supertype
-	@Override public boolean equals(Bigram b) {
+```
+Bigram.java: method does not override or implement a method from a supertype
+    @Override public boolean equals(Bigram b) {
 ```
 
-* 잘못한 부분을 명확히 알려주므로 곧장 올바르게 수정할 수 있다.
-
-
-
-<br>
+올바르게 수정하면 됩니다.
 
 ```java
 @Override
 public boolean equals(Object o) {
-    if ( !(o instanceof Bigram) ) {
-        return false;
-    }
+    if (!(o instanceof Bigram)) return false;
     Bigram b = (Bigram) o;
-    return b.first = first && b.seond = second;
+    return b.first == first && b.second == second;
 }
 ```
 
+```mermaid
+sequenceDiagram
+    participant Dev as 개발자
+    participant Compiler as 컴파일러
+    participant Runtime as 런타임
 
+    Dev->>Compiler: equals(Bigram b) 작성 (@Override 없음)
+    Compiler->>Runtime: 컴파일 통과 (다중정의로 인식)
+    Runtime-->>Dev: Set.size() = 260 (버그 발견 — 늦음)
 
-
-
-<hr>
-
-
-
-##### 💎 상위 클래스의 메소드를 재정의하려는 모든 메소드에 @Override 애너테이션을 달자
-
-* <span style="color:red;">예외는 한 가지뿐이다.</span>
-
-  * 구체 클래스에서 <span style="color:red;">상위 클래스의 추상메소드를 재정의할 때는</span> 굳이 **@Override**를 달지 않아도 된다.
-
-  
-
-  * 구체 클래스인데 아직 구현하지 않은 추상 메소드가 남아 있다면 그 사실을 바로 알려주기 때문이다.
-
-  
-
-  * 물론 재정의 메소드 모두에 **@Override**를 일괄로 붙여두는게 좋아 보인다면 그래도 상관없다.
-
-
-
-* **IDE**는 **@Override**를 일관되게 사용하도록 부추기기도 한다.
-
-  * **IDE**에서 관련 설정을 활성화해놓으면 **@Override**가 달려있지 않은 메소드가 실제로는 재정의를 했다면 경고를 준다.
-
-  
-
-  * **@Override**를 일관되게 사용한다면 이처럼 실수로 재정의했을 때 경고해 줄것이다
-
-  
-
-  * 재정의할 의도였으나 실수로 새로운 메소드를 추가했을 때 알려주는 **컴파일 오류의 보완재 역할**로 보면 되겠다.
-
-  
-
-  * **IDE**와 **컴파일러** 덕분에 우리는 의도한 재정의만 정확하게 해낼 수 있는 것이다.
-
-
-
-
-
-<hr>
-
-##### 💎 @Override는 클래스뿐 아니라 인터페이스의 메소드를 재정의할 때도 사용할 수 있다.
-
-* **자바 8부터 디폴트 메소드를 지원**하기 시작하면서, 인터페이스 메소드를 구현한 메소드에도 **@Override를 다는 습관**을 들이면 시그니처가 올바른지 재차 확신 할 수 있다.
-
-
-
-* 구현하려는 인터페이스에 디폴트 메소드가 없음을 안다면 이를 구현한 메소드에서는 @Override를 생략해 코드를 조금 더 깔끔히 유지해도 좋다.
-
-
-
-* <span style="color:red;">하지만</span> 추상 클래스나 인터페이스에서는 상위 클래스나 상위 인터페이스의 메소드를 재정의하는 **모든 메소드에 @Override를 다는 것이 좋다.**
-
-  * 상위 클래스가 구체 클래스든 추상 클래스든 마찬가지다.
-
-  
-
-  * ex) Set 인터페이스는 Collection 인터페이스를 확장했지만 새로 추가한 메소드는 없다.
-
-  
-
-  * 따라서 모든 메소드 선언에 @Override를 달아 실수로 추가한 메소드가 없음을 보장했다.
-
-
-
-<hr>
-
-
-
-> 재정의한 모든 메소드에 @Override 애너테이션을 의식적으로 달면 실수했을 때
->
-> 컴파일러가 바로 알려줄 것이다.
->
-> 
->
-> **예외는 한 가지 뿐이다.**
->
-> 
->
-> 구체 클래스에서 상위 클래스의 **추상 메소드를 재정의한 경우엔** 이 애너테이션을 달지 않아도 된다
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+    Dev->>Compiler: @Override 추가 후 재컴파일
+    Compiler-->>Dev: 즉시 오류 — supertype 메서드 없음
+    Dev->>Compiler: equals(Object o)로 수정
+    Compiler->>Runtime: 컴파일 통과
+    Runtime-->>Dev: Set.size() = 26 (정상)
 ```
 
+---
+
+## 3. 언제 @Override를 달아야 하나
+
+**원칙: 상위 타입의 메서드를 재정의하는 모든 메서드에 달아라.**
+
+예외가 하나 있습니다. 구체 클래스에서 상위 추상 클래스의 추상 메서드를 구현할 때는 생략해도 됩니다. 구현하지 않으면 컴파일러가 알려주기 때문입니다. 물론 달아도 나쁠 건 없습니다.
+
+```mermaid
+graph TD
+    A["@Override 사용 시점"] --> B["클래스의 상위 클래스 메서드 재정의\n→ 반드시 달 것"]
+    A --> C["인터페이스 메서드 구현\n→ 달면 시그니처 오류 조기 발견"]
+    A --> D["구체 클래스의 추상 메서드 구현\n→ 생략 가능 (컴파일러가 강제)"]
+    style B fill:#51cf66,color:#fff
+    style C fill:#51cf66,color:#fff
+    style D fill:#4a9eff,color:#fff
+```
+
+---
+
+## 4. 인터페이스에서도 @Override를 달아라
+
+Java 8부터 인터페이스에 디폴트 메서드가 추가될 수 있습니다. 인터페이스 메서드를 구현할 때도 `@Override`를 달면 시그니처가 올바른지 컴파일러가 검증해줍니다.
+
+```java
+// Set은 Collection을 확장하면서 새 메서드를 추가하지 않음
+// 모든 메서드 선언에 @Override를 달아 실수로 메서드를 추가하지 않았음을 보장
+public interface Set<E> extends Collection<E> {
+    @Override int size();
+    @Override boolean isEmpty();
+    @Override boolean contains(Object o);
+    // ...
+}
+```
+
+---
+
+## 5. 요약
+
+> 재정의한 모든 메서드에 `@Override` 애너테이션을 의식적으로 달면, 실수했을 때 컴파일러가 즉시 알려줍니다. 예외는 단 하나, 구체 클래스에서 상위 클래스의 추상 메서드를 구현하는 경우에만 생략할 수 있습니다.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

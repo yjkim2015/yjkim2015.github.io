@@ -1,5 +1,5 @@
 ---
-title: toString을 항상 재정의하라 - Effective Java[12]
+title: "toString을 항상 재정의하라 — Effective Java[12]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,59 +7,189 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-#### 🔗 모든 하위 클래스에서 toString 메소드를 항상 재정의하라.
+객체를 로그로 출력하거나 디버깅할 때 `PhoneNumber@1f6a7b9`가 찍힌다면 아무 의미가 없습니다. `toString`을 재정의하면 로그가 읽기 쉬워지고, 버그를 훨씬 빨리 찾을 수 있습니다.
 
-Object의 기본 toString 메소드는 우리가 작성한 클래스에 적합한 문자열을 반환하는 경우는 거의 없다.
+---
 
-이 메소드는 단순히 **클래스_이름@16진수로_표시한_해시코드**를 반환할 뿐이다.
+## 1. 기본 toString이 왜 쓸모없는가?
 
-**toString의 일반 규약에 따르면 '간결하면서 사람이 읽기 쉬운 형태의 유익한 정보'를 반환해야 한다.**
+`Object`의 기본 `toString` 구현은 `클래스이름@16진수해시코드`를 반환합니다.
 
-**또한 toString의 규약은 "모든 하위 클래스에서 이 메소드를 재정의하라"고 한다.**
-
-
-
-***toString을 잘 구현한 클래스는 사용하기에 훨씬 즐겁고, 그 클래스를 사용한 시스템은 디버깅하기 쉽다.***
-
-<hr>
-
-#### 💎toString 작성 시 주의 할 점
-
-* **toString은 그 객체가 가진 주요 정보 모두를 반환하는게 좋다.**
-  * 하지만 객체가 거대하거나 객체의 상태가 문자열로 표현하기에 적합하지 않다면 무리가 있다.
-    **이런 상황이라면 "맨해튼 거주자 전화번호부 (총 1487536개)"나 Thread[main,5,main]"과 같은 요약 정보를 담아야 한다.**
-    **이상적으로는 스스로를 완벽히 설명하는 문자열이어야한다.**
-* **반환 값의 포맷을 문서화할지 정해야 한다.** 전화번호나 행렬 같은 값 클래스라면 문서화하기를 권한다. 포맷을 명시하면 그 객체는 표준적이고, 명확하고, 사람이 읽을 수 있게 된다.
-  따라서 그 값 그대로 입출력에 사용하거나 CSV 파일처럼 사람이 읽을 수 있는 데이터 객체로 저장할 수 도 있다.
-
-* **포맷을 명시하든 아니든 개발자의 의도는 명확히 밝혀야 한다.**
-
-  포맷을 명시하려면 아주 정확하게 해야한다. 다음의 toString 메소드를 보자.
-
-  <div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div><div style="line-height:130%">15</div><div style="line-height:130%">16</div><div style="line-height:130%">17</div><div style="line-height:130%">18</div><div style="line-height:130%">19</div><div style="line-height:130%">20</div><div style="line-height:130%">21</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;<span style="color:#999999">//&nbsp;포맷을&nbsp;명시하기로&nbsp;한&nbsp;경우</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;<span style="color:#999999">/**</span></div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*&nbsp;이&nbsp;전화번호의&nbsp;문자열&nbsp;표현을&nbsp;반환한다.</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*&nbsp;이&nbsp;문자열은&nbsp;"XXX-YYY-ZZZZ"&nbsp;형태의&nbsp;12글자로&nbsp;구성된다.</span></div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*&nbsp;XXX는&nbsp;지역&nbsp;코드,&nbsp;YYY는&nbsp;프리픽스,&nbsp;ZZZZ는&nbsp;가입자&nbsp;번호다.</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*&nbsp;각각의&nbsp;대문자는&nbsp;10진수&nbsp;숫자&nbsp;하나를&nbsp;나타낸다.</span></div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*&nbsp;전화번호의&nbsp;각&nbsp;부분의&nbsp;값이&nbsp;너무&nbsp;작아서&nbsp;자릿수를&nbsp;채울&nbsp;수&nbsp;없다면,</span></div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*&nbsp;앞에서부터&nbsp;0으로&nbsp;채워나간다.&nbsp;예컨대&nbsp;가입자&nbsp;번호가&nbsp;123이라면</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*&nbsp;전화번호의&nbsp;마지막&nbsp;네&nbsp;문자는&nbsp;"0123"이&nbsp;된다.</span></div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*/</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;@Override&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;<span style="color:#0099cc">toString</span>()&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;<span style="color:#0099cc">String</span>.<span style="color:#0099cc">format</span>(<span style="color:#993333">"%03d-%03d-%04d"</span>,</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;areaCode,&nbsp;prefix,&nbsp;lineNum);</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;<span style="color:#999999">//&nbsp;포맷을&nbsp;명시하지&nbsp;않기로&nbsp;한&nbsp;경우</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;<span style="color:#999999">/**</span></div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*&nbsp;상세형식은&nbsp;정해지지&nbsp;않았으며&nbsp;향후&nbsp;변경될&nbsp;수&nbsp;있다.&nbsp;</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%"><span style="color:#999999">&nbsp;&nbsp;&nbsp;*/</span></div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;@Override&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;<span style="color:#0099cc">toString</span>()&nbsp;{...}</div></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
-
-​		만약 이러한 설명을 읽고도 이 포맷에 맞춰 코딩하거나 특정 값을 빼내어 영구 저장한 프로그래머		는 나중에 포맷이 바뀌어 피해를 입어도 자기 자신을 탓할 수 밖에 없을 것이다.
-
-
-
-* **toString이 반환한 값에 포함된 정보를 얻어올 수 있는 API를 제공하자.**
-
-  * 예를들어 PhoneNumber 클래스는 areaCode, prefix, lineNum 접근자를 제공해야 한다.
-
-    그렇지 않으면 이 정보가 필요한 프로그래머는 toString의 반환 값을 파싱할 수 밖에 없다.
-
-    성능이나빠지고, 필요하지도 않은 작업이다.
-
-
-
-
-
-> 모든 구체 클래스에서 Object의 toString을 재정의하자. 상위 클래스에서 이미 알맞게 재정의한 경우는 예외다. toString을 재정의한 클래스는 사용하기도 즐겁고 그 클래스를 사용한 시스템을 디버깅하기 쉽게 해준다. toString은 해당 객체에 관한 명확하고 유용한 정보를 읽기 좋은 형태로 반환해야한다.
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+```java
+PhoneNumber p = new PhoneNumber(707, 867, 5309);
+System.out.println(p);
+// 출력: PhoneNumber@1f6a7b9
+// 이게 무슨 전화번호인지 알 수 없음
 ```
 
+비유하자면 **이름표 없는 택배 박스**입니다. 안에 뭐가 들었는지 열어보지 않으면 알 수 없습니다. `toString`을 재정의하면 박스 겉면에 내용물 설명이 적히는 것과 같습니다.
+
+**toString이 자동 호출되는 상황:**
+- `System.out.println(obj)` — 명시적 출력
+- `"값: " + obj` — 문자열 연결
+- `logger.info("연결: {}", obj)` — 로깅
+- 디버거의 변수 표시
+- `assert` 실패 메시지
+
+**만약 toString을 재정의하지 않으면?** 프로덕션 버그를 추적할 때 로그에 `PhoneNumber@1f6a7b9`만 남습니다. 어떤 전화번호가 문제였는지 알 방법이 없습니다.
+
+---
+
+## 2. 좋은 toString이 갖춰야 할 것
+
+### 조건 1: 객체가 가진 주요 정보 모두 포함
+
+```java
+// 나쁜 toString — 정보 부족
+@Override
+public String toString() {
+    return "PhoneNumber 객체";  // 쓸모없음
+}
+
+// 좋은 toString — 핵심 정보 모두 포함
+@Override
+public String toString() {
+    return String.format("%03d-%03d-%04d", areaCode, prefix, lineNum);
+    // 출력: "707-867-5309"
+}
+```
+
+**객체가 너무 크거나 문자열로 표현하기 어렵다면** 요약 정보를 담으세요:
+
+```java
+// 요약 정보 예시
+"맨해튼 거주자 전화번호부 (총 1,487,536개)"
+"Thread[main, 5, main]"
+"Person{name='김철수', age=30, address=(요약됨)}"
+```
+
+### 조건 2: 반환 값의 포맷을 명확히 결정하고 문서화
+
+```java
+/**
+ * 이 전화번호의 문자열 표현을 반환한다.
+ * 이 문자열은 "XXX-YYY-ZZZZ" 형태의 12글자로 구성된다.
+ * XXX는 지역 코드, YYY는 프리픽스, ZZZZ는 가입자 번호다.
+ * 각 부분의 값이 너무 작아 자릿수를 채울 수 없다면 앞에서부터 0으로 채운다.
+ * 예: 가입자 번호가 123이면 "0123"이 된다.
+ */
+@Override
+public String toString() {
+    return String.format("%03d-%03d-%04d", areaCode, prefix, lineNum);
+}
+```
+
+**포맷을 명시하지 않을 때도 의도를 명확히 밝혀야 합니다:**
+
+```java
+/**
+ * 이 약물에 관한 대략적인 설명을 반환한다.
+ * 상세 형식은 정해지지 않았으며 향후 변경될 수 있다.
+ * "[약물 #9: 유형=아스피린, 성분=...]" 형태일 수 있다.
+ */
+@Override
+public String toString() { ... }
+```
+
+### 조건 3: toString에 포함된 정보를 직접 가져올 수 있는 접근자 제공
+
+```java
+// 나쁜 설계 — 접근자가 없어 파싱을 강요함
+PhoneNumber p = new PhoneNumber(707, 867, 5309);
+String s = p.toString();  // "707-867-5309"
+// 지역 코드를 얻으려면: s.split("-")[0] → 문자열 파싱 필요 (비효율, 취약)
+
+// 좋은 설계 — 접근자 제공
+public short getAreaCode() { return areaCode; }
+public short getPrefix()   { return prefix; }
+public short getLineNum()  { return lineNum; }
+```
+
+---
+
+## 3. toString 재정의의 실제 효과
+
+```mermaid
+graph TD
+    A["toString 재정의 여부"] --> B["재정의 안 함"]
+    A --> C["재정의 함"]
+    B --> B1["로그: PhoneNumber@1f6a7b9\n→ 디버깅 불가"]
+    B --> B2["예외 메시지: 의미없는 해시코드"]
+    B --> B3["테스트 실패 메시지 이해 불가"]
+    C --> C1["로그: 707-867-5309\n→ 즉시 이해 가능"]
+    C --> C2["예외 메시지: 명확한 값 표시"]
+    C --> C3["테스트 실패 시 원인 즉시 파악"]
+    style B fill:#ff6b6b,color:#fff
+    style C fill:#51cf66,color:#fff
+```
+
+**실제 비교:**
+
+```java
+// toString 재정의 전 — 로그
+logger.error("전화번호 처리 실패: {}", phoneNumber);
+// 출력: 전화번호 처리 실패: PhoneNumber@1f6a7b9
+
+// toString 재정의 후 — 로그
+logger.error("전화번호 처리 실패: {}", phoneNumber);
+// 출력: 전화번호 처리 실패: 707-867-5309
+```
+
+---
+
+## 4. toString을 재정의할 필요가 없는 경우
+
+모든 클래스에 재정의가 필요한 건 아닙니다.
+
+- **정적 유틸리티 클래스:** 인스턴스를 만들 수 없으므로 불필요
+- **대부분의 열거 타입(Enum):** Java가 이미 의미있는 문자열을 반환
+- **상위 클래스에서 이미 적절히 재정의한 경우:** `AbstractList`, `AbstractMap` 등
+
+```java
+// Enum은 toString이 이미 완벽
+DayOfWeek.MONDAY.toString()  // → "MONDAY"
+Color.RED.toString()         // → "RED"
+```
+
+---
+
+## 5. 현대적 접근: 자동 생성
+
+직접 작성하기 번거롭다면:
+
+```java
+// 1. Java record — toString 자동 구현
+public record PhoneNumber(int areaCode, int prefix, int lineNum) {}
+// toString: "PhoneNumber[areaCode=707, prefix=867, lineNum=5309]"
+
+// 2. Lombok @ToString
+@ToString
+public class PhoneNumber {
+    private final int areaCode, prefix, lineNum;
+}
+// toString: "PhoneNumber(areaCode=707, prefix=867, lineNum=5309)"
+
+// 3. Lombok — 특정 필드 제외
+@ToString(exclude = "password")
+public class User {
+    private String name;
+    private String password;  // 보안상 출력 제외
+}
+```
+
+---
+
+## 6. 요약
+
+> 모든 구체 클래스에서 `Object`의 `toString`을 재정의하세요. 상위 클래스에서 이미 알맞게 재정의한 경우는 예외입니다. `toString`은 해당 객체에 관한 명확하고 유용한 정보를 읽기 좋은 형태로 반환해야 합니다.
+
+**체크리스트:**
+1. 주요 정보를 모두 포함했는가?
+2. 사람이 읽기 쉬운 형태인가?
+3. 포맷 문서화 여부를 명확히 결정했는가?
+4. toString에 포함된 정보를 얻어올 접근자를 제공했는가?
+5. 보안 민감 정보(비밀번호, 개인정보)는 제외했는가?
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

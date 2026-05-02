@@ -1,5 +1,5 @@
 ---
-title: "Redis Lua 스크립트 동작 원리와 활용"
+title: "Redis Lua 스크립트 — 두 명령어 사이의 틈을 없애는 법"
 categories:
 - REDIS
 toc: true
@@ -7,54 +7,41 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-재고 감소 로직을 생각해보자. `GET`으로 재고를 읽고, 0보다 크면 `DECR`로 줄인다. 두 명령 사이에 다른 요청이 끼어들면 재고가 -1이 되는 순간이 생긴다. 이 틈을 없애는 것이 Lua 스크립트다. 두 명령을 하나의 원자적 단위로 묶어 Redis 서버 안에서 실행한다.
+재고 감소 로직을 생각해보자. `GET`으로 재고를 읽고, 0보다 크면 `DECR`로 줄인다. 코드로 보면 아무 문제가 없다. 그런데 `GET`과 `DECR` 사이 **0.1밀리초의 틈**에 다른 요청이 끼어들면 재고가 -1이 된다. 초당 수천 건의 요청이 몰리는 플래시 세일에서는 이 틈이 수십 번 열린다. Lua 스크립트는 이 틈 자체를 없앤다.
 
-## Lua 스크립트란?
+## 왜 여러 명령어를 조합하면 위험한가
 
-> **비유**: Lua 스크립트는 은행 창구에서 "잔액 확인 후 출금" 절차를 직원이 한 자리에서 처리하는 것과 같다. 잔액 확인과 출금 사이에 다른 고객이 끼어들 수 없다. 고객(클라이언트)이 두 번 왔다 갔다 할 필요 없이 직원(Redis 서버)이 내부에서 한 번에 처리한다.
+> **비유**: Lua 스크립트는 은행 창구에서 "잔액 확인 후 출금"을 직원이 한 자리에서 처리하는 것과 같다. 고객(클라이언트)이 잔액 확인을 부탁하고 자리에 돌아갔다가 출금하러 다시 오는 사이에, 다른 고객이 먼저 돈을 빼갈 수 있다. 직원(Redis 서버)이 두 단계를 내부에서 한 번에 처리하면 끼어들 틈이 없다.
 
-Redis는 서버 측에서 **Lua 스크립트를 실행**하는 기능을 제공한다. Redis 2.6.0부터 내장되어 있으며, 별도 설치 없이 사용 가능하다.
-
----
-
-## Redis에서 Lua를 쓰는 이유
-
-### 원자성 보장
-
-Redis 명령어는 하나씩은 원자적이지만, **여러 명령어를 조합할 때**는 그 사이에 다른 클라이언트가 끼어들 수 있다.
+Redis의 **개별 명령어**는 원자적이다. `INCR`은 GET → 증가 → SET을 한 번에 처리한다. 문제는 **여러 명령어를 조합**할 때 발생한다:
 
 ```
 [Client A]  GET counter  →  값: 10
-[Client B]  GET counter  →  값: 10   ← 끼어듦
+[Client B]  GET counter  →  값: 10   ← 0.05ms 차이로 끼어듦
 [Client A]  SET counter 11
 [Client B]  SET counter 11           ← 둘 다 11로 설정, 하나 손실
 ```
 
-Lua 스크립트는 **Redis 서버에서 단일 명령어처럼 실행**되므로, 스크립트 전체가 원자적으로 처리된다.
+만약 이 문제를 무시하면? 재고 -1, 쿠폰 중복 발급, 중복 결제, 포인트 손실이 발생한다. 트래픽이 낮을 때는 발현 안 되다가 이벤트 날에 터진다.
 
-### 왜 원자적인가 — 싱글 스레드 모델
+### 원자성이 보장되는 이유 — 싱글 스레드 모델
 
-Redis는 **싱글 스레드**로 명령어를 처리한다. Lua 스크립트가 실행되는 동안 다른 클라이언트의 명령어는 큐에서 대기한다.
+Redis는 **싱글 스레드**로 명령어 큐를 처리한다. Lua 스크립트가 실행되는 동안 다른 모든 명령어는 큐에서 대기한다:
 
-```
-명령어 큐:
-[GET a] → [EVAL script] → [SET b] → [GET c]
-                ↑
-         이 스크립트 실행 중에는 다른 명령어 처리 없음
-```
+```mermaid
+sequenceDiagram
+    participant Q as "명령어 큐"
+    participant R as "Redis (싱글 스레드)"
 
-따라서 스크립트 내부 로직 전체가 **인터럽트 없이 실행**된다.
-
-### INCR이 원자적인 이유
-
-`INCR key`는 GET → 증가 → SET의 세 단계를 **하나의 명령어**로 실행한다. 싱글 스레드 모델에서 이 명령어 실행 중에 다른 명령어가 끼어들 수 없으므로 완전히 원자적이다.
-
-```
-INCR counter
-= (내부적으로) GET counter → +1 → SET counter (원자적)
+    Note over Q: [GET a] [EVAL script...] [SET b] [GET c]
+    Q->>R: GET a 실행
+    Q->>R: EVAL script 시작
+    Note over R: 스크립트 실행 중<br>다른 명령어 블로킹
+    Note over R: 스크립트 내부에서<br>GET → 비교 → SET 완료
+    Q->>R: SET b 실행 (이제 차례)
 ```
 
-직접 GET → SET으로 구현하면 race condition이 생기지만, 단일 명령어 INCR은 안전하다.
+스크립트 전체가 **인터럽트 없이 실행**된다. Race condition이 발생할 틈이 없다.
 
 ---
 
@@ -68,18 +55,18 @@ EVAL script numkeys [key [key ...]] [arg [arg ...]]
 |---------|------|
 | `script` | Lua 스크립트 문자열 |
 | `numkeys` | KEYS 배열에 전달할 키 개수 |
-| `key` | Redis 키 목록 (KEYS 배열) |
-| `arg` | 추가 인자 (ARGV 배열) |
-
-### 기본 예시
+| `key` | Redis 키 목록 → `KEYS[1]`, `KEYS[2]`... |
+| `arg` | 추가 인자 (값, 옵션 등) → `ARGV[1]`, `ARGV[2]`... |
 
 ```bash
-# Redis CLI에서 실행
+# 기본 예시
 EVAL "return 'hello'" 0
 
-EVAL "return redis.call('set', KEYS[1], ARGV[1])" 1 mykey myvalue
-
+# GET을 스크립트로
 EVAL "return redis.call('get', KEYS[1])" 1 mykey
+
+# SET을 스크립트로
+EVAL "return redis.call('set', KEYS[1], ARGV[1])" 1 mykey myvalue
 ```
 
 ### Java (Spring Data Redis)에서 EVAL
@@ -89,322 +76,229 @@ String script = "return redis.call('set', KEYS[1], ARGV[1])";
 
 redisTemplate.execute(
     new DefaultRedisScript<>(script, String.class),
-    List.of("mykey"),   // KEYS
-    "myvalue"           // ARGV
+    List.of("mykey"),   // KEYS[1]
+    "myvalue"           // ARGV[1]
 );
 ```
 
 ---
 
-## EVALSHA 명령어
+## EVALSHA — 스크립트를 서버에 캐싱하기
 
-스크립트를 매번 전송하면 네트워크 오버헤드가 발생한다. **EVALSHA**는 스크립트를 서버에 캐싱하고 SHA1 해시로 호출한다.
+`EVAL`은 매 호출마다 스크립트 전문(全文)을 네트워크로 전송한다. 스크립트가 수백 바이트라면 초당 수만 번 호출 시 네트워크 낭비가 크다. `EVALSHA`는 스크립트를 서버에 저장하고 SHA1 해시로만 호출한다.
 
-```
-EVALSHA sha1 numkeys [key [key ...]] [arg [arg ...]]
-```
+```mermaid
+sequenceDiagram
+    participant C as "Client"
+    participant R as "Redis Server"
 
-### 스크립트 캐싱 흐름
+    Note over C,R: 1단계. 스크립트 등록
+    C->>R: SCRIPT LOAD "스크립트 전문..."
+    R-->>C: "abc123..." (SHA1 해시 반환)
 
-```
-1. SCRIPT LOAD "return redis.call('get', KEYS[1])"
-   → "e0e1f9fabfa9d353e4... " (SHA1 반환)
-
-2. EVALSHA e0e1f9fabfa9d353e4... 1 mykey
-   → 캐시된 스크립트 실행
-
-3. SCRIPT EXISTS sha1  → [1] (존재) / [0] (없음)
-4. SCRIPT FLUSH        → 모든 캐시 삭제
+    Note over C,R: 2단계. 이후 호출은 SHA1만 전송
+    C->>R: EVALSHA abc123... 1 mykey
+    R-->>C: 실행 결과
 ```
 
-### Java에서 EVALSHA 패턴
+`DefaultRedisScript`는 이 과정을 자동으로 처리한다:
+- 최초 호출: `EVALSHA` 시도 → NOSCRIPT 에러 → 자동으로 `EVAL` 폴백 (스크립트 서버에 캐시됨)
+- 이후 호출: `EVALSHA`로 캐시 히트
 
 ```java
-@Component
-public class LuaScriptCache {
-
-    private final StringRedisTemplate redisTemplate;
-    private String scriptSha;
-
-    // 애플리케이션 시작 시 스크립트 등록
-    @PostConstruct
-    public void loadScript() {
-        String script = "return redis.call('get', KEYS[1])";
-        scriptSha = redisTemplate.execute(
-            (RedisCallback<String>) conn ->
-                conn.scriptingCommands().scriptLoad(script.getBytes())
-        );
-    }
-
-    public String get(String key) {
-        return redisTemplate.execute(
-            new DefaultRedisScript<>(/* sha 기반 */)
-        );
-    }
-}
+// DefaultRedisScript — SHA 캐싱이 내장되어 있어서 그냥 쓰면 된다
+DefaultRedisScript<Long> script = new DefaultRedisScript<>(scriptText, Long.class);
+// 첫 번째 실행에서 자동으로 EVALSHA + EVAL 폴백 처리
+// 두 번째부터는 EVALSHA만 사용
+redisTemplate.execute(script, List.of(key), arg1, arg2);
 ```
 
-**실제로는 `DefaultRedisScript`가 SHA 캐싱을 내부적으로 처리한다.**
-
-```java
-// DefaultRedisScript는 최초 실행 시 EVALSHA를 시도하고,
-// NOSCRIPT 에러 발생 시 자동으로 EVAL로 폴백한다
-DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>(scriptText, Long.class);
-// 이후 호출부터는 자동으로 EVALSHA 사용
-```
+**서버 재시작 주의**: Redis 재시작 시 스크립트 캐시가 초기화된다. `DefaultRedisScript`는 NOSCRIPT 에러 시 자동 EVAL 폴백이 있으므로 실용적으로는 문제없다.
 
 ---
 
-## Lua 문법 기초 (Redis 관점)
+## Lua 문법 핵심 (Redis에서 필요한 것만)
 
 ### 변수와 타입
 
 ```lua
--- 지역 변수 (local 필수 — 전역 변수 사용 금지)
-local key = KEYS[1]
+-- local 필수 — 전역 변수 쓰면 다음 스크립트 실행에 영향을 준다
+local key   = KEYS[1]
 local value = ARGV[1]
-local count = tonumber(ARGV[2])
+local count = tonumber(ARGV[2])  -- Redis는 모든 값을 string 반환 → 숫자 변환 필수
 
--- 타입: nil, boolean, number, string, table
 local flag = true
-local arr = {1, 2, 3}        -- table (배열처럼 사용)
-local obj = {a = 1, b = 2}  -- table (맵처럼 사용)
+local arr  = {1, 2, 3}        -- table (배열로 사용)
 ```
 
-### 조건문
+### 조건과 반복
 
 ```lua
+-- nil 비교: Redis에서 키가 없으면 false 반환
 local val = redis.call('get', KEYS[1])
-
-if val == false then          -- nil은 false로 처리
+if val == false then     -- nil은 false로 처리
     return 0
 elseif tonumber(val) > 100 then
     return 1
 else
     return -1
 end
-```
 
-### 반복문
-
-```lua
--- 숫자 기반 반복
+-- 배열 순회
 for i = 1, #KEYS do
     redis.call('del', KEYS[i])
 end
-
--- 일반 while
-local i = 0
-while i < 10 do
-    i = i + 1
-end
 ```
 
-### 함수 정의
+### redis.call vs redis.pcall
+
+| 선택 | 에러 발생 시 | 언제 쓰나 |
+|------|-----------|---------|
+| `redis.call` | 스크립트 전체 중단 | 에러 시 모두 롤백해야 할 때 |
+| `redis.pcall` | 에러를 값으로 반환, 계속 실행 | 일부 실패 허용하고 처리할 때 |
 
 ```lua
-local function increment(key, amount)
-    local current = tonumber(redis.call('get', key)) or 0
-    local new_value = current + amount
-    redis.call('set', key, new_value)
-    return new_value
-end
-
-return increment(KEYS[1], tonumber(ARGV[1]))
-```
-
-### 타입 변환
-
-```lua
--- Redis는 모든 값을 string으로 반환
-local count = tonumber(redis.call('get', KEYS[1]))  -- string → number
-local str   = tostring(count + 1)                   -- number → string
-```
-
----
-
-## redis.call vs redis.pcall
-
-### redis.call
-
-명령어 실행 중 에러가 발생하면 **스크립트 전체가 중단**되고 에러를 반환한다.
-
-```lua
--- WRONGTYPE 에러 시 스크립트 중단
-local val = redis.call('incr', KEYS[1])  -- 키가 string이 아니면 에러
-return val
-```
-
-### redis.pcall
-
-에러를 **잡아서 처리**할 수 있다 (protected call).
-
-```lua
-local ok, err = pcall(function()
-    return redis.pcall('incr', KEYS[1])
-end)
-
--- 또는 직접 에러 테이블 확인
+-- redis.pcall로 에러 처리
 local result = redis.pcall('incr', KEYS[1])
 if type(result) == 'table' and result.err then
-    -- 에러 처리
-    return {err = "increment failed: " .. result.err}
+    return redis.error_reply("증가 실패: " .. result.err)
 end
 return result
 ```
 
-**선택 기준:**
-
-| 상황 | 권장 |
-|------|------|
-| 에러가 나면 모두 롤백해야 할 때 | `redis.call` |
-| 일부 실패를 허용하고 계속 진행해야 할 때 | `redis.pcall` |
-| 에러 메시지를 로깅하고 싶을 때 | `redis.pcall` |
-
 ---
 
-## KEYS vs ARGV
+## 실무 패턴 4가지
 
-| 항목 | KEYS | ARGV |
-|------|------|------|
-| **목적** | Redis 키 이름 | 추가 인자 (값, 옵션 등) |
-| **접근** | `KEYS[1]`, `KEYS[2]` ... | `ARGV[1]`, `ARGV[2]` ... |
-| **인덱스** | 1부터 시작 (Lua 관례) | 1부터 시작 |
-| **클러스터** | 키 슬롯 결정에 사용 | 라우팅에 미사용 |
+### 1. 분산 락 해제 — 내 락만 해제하기
 
-**클러스터 환경에서 중요:** Redis Cluster는 KEYS의 키들이 모두 **같은 슬롯**에 있어야 한다. 다른 슬롯의 키에 접근하면 에러가 발생한다.
+가장 많이 쓰이는 패턴이다. 락을 설정한 쪽에서만 해제해야 한다. GET → 비교 → DEL 세 단계를 원자적으로 처리해야 "내 락이 아니면 DEL 안 함"이 보장된다.
 
 ```lua
--- 올바른 사용
--- EVAL script 2 key1 key2 arg1 arg2
-local key1 = KEYS[1]  -- "order:1"
-local key2 = KEYS[2]  -- "stock:1"
-local amount = ARGV[1]
-local ttl = ARGV[2]
-```
-
----
-
-## 실무 패턴
-
-### 1. 분산 락 해제
-
-```lua
--- GET → 비교 → DEL 원자 실행
--- KEYS[1] = 락 키, ARGV[1] = 락 값(UUID)
+-- KEYS[1] = 락 키, ARGV[1] = 내 UUID (락 설정 시 저장한 값)
+-- 내 UUID와 일치할 때만 삭제 → 타인의 락을 실수로 해제하지 않음
 if redis.call('get', KEYS[1]) == ARGV[1] then
-    return redis.call('del', KEYS[1])
+    return redis.call('del', KEYS[1])  -- 성공: 1 반환
 else
-    return 0
+    return 0  -- 내 락이 아님 (이미 만료되었거나 다른 락)
 end
 ```
 
 ```java
-private static final DefaultRedisScript<Long> RELEASE_LOCK_SCRIPT;
-
-static {
-    RELEASE_LOCK_SCRIPT = new DefaultRedisScript<>();
-    RELEASE_LOCK_SCRIPT.setScriptText(
+private static final DefaultRedisScript<Long> RELEASE_LOCK_SCRIPT =
+    new DefaultRedisScript<>(
         "if redis.call('get', KEYS[1]) == ARGV[1] then " +
         "  return redis.call('del', KEYS[1]) " +
         "else " +
         "  return 0 " +
-        "end"
+        "end",
+        Long.class
     );
-    RELEASE_LOCK_SCRIPT.setResultType(Long.class);
-}
 
-public boolean releaseLock(String key, String value) {
-    Long result = redisTemplate.execute(RELEASE_LOCK_SCRIPT, List.of(key), value);
+public boolean releaseLock(String key, String myUuid) {
+    Long result = redisTemplate.execute(RELEASE_LOCK_SCRIPT, List.of(key), myUuid);
     return Long.valueOf(1L).equals(result);
 }
 ```
 
----
+### 2. 원자적 재고 차감
 
-### 2. Rate Limiting (슬라이딩 윈도우)
+"재고 있으면 차감, 없으면 거절"을 원자적으로 처리해야 초과 판매를 막는다.
 
 ```lua
--- KEYS[1] = rate_limit:{userId}
--- ARGV[1] = 현재 timestamp(ms), ARGV[2] = 윈도우 크기(ms), ARGV[3] = 최대 요청 수
-local key = KEYS[1]
-local now = tonumber(ARGV[1])
-local window = tonumber(ARGV[2])
-local limit = tonumber(ARGV[3])
+-- KEYS[1] = stock:productId, ARGV[1] = 차감 수량
+local stock = tonumber(redis.call('get', KEYS[1]))
 
--- 윈도우 밖의 요청 제거
+if stock == nil then
+    return -1  -- 상품 없음
+end
+
+if stock < tonumber(ARGV[1]) then
+    return -2  -- 재고 부족
+end
+
+-- 위 조건 통과 후에만 차감 → GET과 DECRBY 사이에 끼어들 틈 없음
+return redis.call('decrby', KEYS[1], ARGV[1])
+```
+
+```java
+public int decrementStock(Long productId, int quantity) {
+    String script =
+        "local stock = tonumber(redis.call('get', KEYS[1]))\n" +
+        "if stock == nil then return -1 end\n" +
+        "if stock < tonumber(ARGV[1]) then return -2 end\n" +
+        "return redis.call('decrby', KEYS[1], ARGV[1])";
+
+    Long result = redisTemplate.execute(
+        new DefaultRedisScript<>(script, Long.class),
+        List.of("stock:" + productId),
+        String.valueOf(quantity)
+    );
+
+    if (result == null || result == -1) throw new ProductNotFoundException();
+    if (result == -2) throw new InsufficientStockException();
+    return result.intValue();  // 남은 재고 반환
+}
+```
+
+### 3. 슬라이딩 윈도우 Rate Limiting
+
+"1분 안에 최대 100번" 제한을 Sorted Set으로 구현한다. 여러 명령어를 원자적으로 실행해야 정확한 카운팅이 된다.
+
+```lua
+-- KEYS[1] = ratelimit:{userId}
+-- ARGV[1] = 현재 timestamp(ms), ARGV[2] = 윈도우 크기(ms), ARGV[3] = 최대 요청 수
+local key    = KEYS[1]
+local now    = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])  -- 예: 60000 (1분)
+local limit  = tonumber(ARGV[3])  -- 예: 100
+
+-- 1. 윈도우 바깥의 오래된 기록 제거
 redis.call('zremrangebyscore', key, 0, now - window)
 
--- 현재 요청 수 확인
+-- 2. 현재 윈도우 내 요청 수 확인
 local count = redis.call('zcard', key)
 
 if count < limit then
-    -- 현재 요청 추가
+    -- 3. 현재 요청 기록 (timestamp를 score와 member로 모두 사용)
     redis.call('zadd', key, now, now)
-    redis.call('pexpire', key, window)
-    return 1  -- 허용
+    redis.call('pexpire', key, window)  -- 윈도우 만큼만 키 유지
+    return 1   -- 허용
 else
-    return 0  -- 거부
+    return 0   -- 거부
 end
 ```
 
 ```java
-@Service
-public class RateLimiter {
+public boolean isAllowed(String userId) {
+    String key = "ratelimit:" + userId;
+    long now    = System.currentTimeMillis();
+    long window = 60_000L;  // 1분
+    long limit  = 100L;
 
-    private static final DefaultRedisScript<Long> RATE_LIMIT_SCRIPT;
-
-    static {
-        RATE_LIMIT_SCRIPT = new DefaultRedisScript<>();
-        RATE_LIMIT_SCRIPT.setScriptText(
-            "local key = KEYS[1]\n" +
-            "local now = tonumber(ARGV[1])\n" +
-            "local window = tonumber(ARGV[2])\n" +
-            "local limit = tonumber(ARGV[3])\n" +
-            "redis.call('zremrangebyscore', key, 0, now - window)\n" +
-            "local count = redis.call('zcard', key)\n" +
-            "if count < limit then\n" +
-            "  redis.call('zadd', key, now, now)\n" +
-            "  redis.call('pexpire', key, window)\n" +
-            "  return 1\n" +
-            "else\n" +
-            "  return 0\n" +
-            "end"
-        );
-        RATE_LIMIT_SCRIPT.setResultType(Long.class);
-    }
-
-    public boolean isAllowed(String userId) {
-        String key = "rate_limit:" + userId;
-        long now = System.currentTimeMillis();
-        long window = 60_000L;  // 1분
-        long limit = 100L;      // 최대 100회
-
-        Long result = redisTemplate.execute(
-            RATE_LIMIT_SCRIPT,
-            List.of(key),
-            String.valueOf(now),
-            String.valueOf(window),
-            String.valueOf(limit)
-        );
-        return Long.valueOf(1L).equals(result);
-    }
+    Long result = redisTemplate.execute(
+        RATE_LIMIT_SCRIPT,
+        List.of(key),
+        String.valueOf(now),
+        String.valueOf(window),
+        String.valueOf(limit)
+    );
+    return Long.valueOf(1L).equals(result);
 }
 ```
 
----
+### 4. Compare-And-Swap (조건부 업데이트)
 
-### 3. 조건부 업데이트
+"내가 마지막으로 읽은 값과 현재 값이 같을 때만 업데이트"하는 낙관적 락 패턴이다.
 
 ```lua
--- 현재 값이 예상 값과 일치할 때만 업데이트 (Compare-And-Swap)
--- KEYS[1] = 키, ARGV[1] = 예상 값, ARGV[2] = 새 값
+-- KEYS[1] = 키, ARGV[1] = 예상 현재 값, ARGV[2] = 새 값
 local current = redis.call('get', KEYS[1])
 if current == ARGV[1] then
     redis.call('set', KEYS[1], ARGV[2])
-    return 1  -- 성공
+    return 1   -- 성공
 else
-    return 0  -- 실패 (값이 다름)
+    return 0   -- 실패 (값이 이미 변경됨)
 end
 ```
 
@@ -429,173 +323,41 @@ public boolean compareAndSet(String key, String expected, String newValue) {
 
 ---
 
-### 4. 원자적 재고 차감
+## KEYS vs ARGV — 왜 구분하는가
 
 ```lua
--- KEYS[1] = stock:productId
--- ARGV[1] = 차감 수량
-local stock = tonumber(redis.call('get', KEYS[1]))
+-- EVAL script 2 key1 key2 arg1 arg2
+--              ↑numkeys ↑KEYS   ↑ARGV
 
-if stock == nil then
-    return -1  -- 상품 없음
-end
-
-if stock < tonumber(ARGV[1]) then
-    return -2  -- 재고 부족
-end
-
-local remaining = redis.call('decrby', KEYS[1], ARGV[1])
-return remaining  -- 남은 재고 반환
+local key1   = KEYS[1]   -- Redis 키 이름 (슬롯 결정에 사용)
+local key2   = KEYS[2]
+local value  = ARGV[1]   -- 일반 인자 (값, 옵션 등)
+local ttl    = ARGV[2]
 ```
 
-```java
-public int decrementStock(Long productId, int quantity) {
-    String script =
-        "local stock = tonumber(redis.call('get', KEYS[1]))\n" +
-        "if stock == nil then return -1 end\n" +
-        "if stock < tonumber(ARGV[1]) then return -2 end\n" +
-        "return redis.call('decrby', KEYS[1], ARGV[1])";
-
-    Long result = redisTemplate.execute(
-        new DefaultRedisScript<>(script, Long.class),
-        List.of("stock:" + productId),
-        String.valueOf(quantity)
-    );
-
-    if (result == null || result == -1) throw new ProductNotFoundException();
-    if (result == -2) throw new InsufficientStockException();
-    return result.intValue();
-}
-```
-
----
-
-### 5. 복합 카운터 (일별 + 총계 동시 업데이트)
-
-```lua
--- KEYS[1] = daily:count:{date}:{userId}
--- KEYS[2] = total:count:{userId}
--- ARGV[1] = TTL(초)
-local daily = redis.call('incr', KEYS[1])
-redis.call('expire', KEYS[1], tonumber(ARGV[1]))
-local total = redis.call('incr', KEYS[2])
-return {daily, total}
-```
-
-```java
-public long[] incrementCounters(String userId, String date) {
-    String script =
-        "local daily = redis.call('incr', KEYS[1])\n" +
-        "redis.call('expire', KEYS[1], tonumber(ARGV[1]))\n" +
-        "local total = redis.call('incr', KEYS[2])\n" +
-        "return {daily, total}";
-
-    List<Long> result = redisTemplate.execute(
-        new DefaultRedisScript<>(script, List.class),
-        List.of("daily:" + date + ":" + userId, "total:" + userId),
-        "86400"  // 1일 TTL
-    );
-    return new long[]{result.get(0), result.get(1)};
-}
-```
-
----
-
-## 스크립트 캐싱
-
-### 동작 흐름
-
-```
-최초 호출:
-  Client → EVALSHA sha1 → NOSCRIPT 에러
-         → EVAL script   → 실행 + 서버에 캐시
-
-이후 호출:
-  Client → EVALSHA sha1 → 캐시 hit → 실행
-```
-
-`DefaultRedisScript`는 이 과정을 자동으로 처리한다.
-
-### 서버 재시작 시 주의
-
-Redis 서버가 재시작되면 **스크립트 캐시가 초기화**된다. `DefaultRedisScript`는 NOSCRIPT 에러 시 자동으로 EVAL로 폴백하므로 실용적으로는 문제가 없다.
-
-**Redis Cluster에서** 스크립트는 명령어를 받은 노드에만 캐시된다. 다른 노드에서 EVALSHA를 호출하면 NOSCRIPT 에러가 발생할 수 있다.
-
----
-
-## 디버깅
-
-### redis-cli에서 테스트
-
-```bash
-# 직접 실행
-redis-cli EVAL "return redis.call('get', KEYS[1])" 1 mykey
-
-# 파일로 실행
-redis-cli --eval /path/to/script.lua key1 key2 , arg1 arg2
-# 쉼표(,) 앞이 KEYS, 뒤가 ARGV
-```
-
-### 로깅
-
-```lua
--- redis.log로 서버 로그에 출력
-redis.log(redis.LOG_WARNING, "처리 중: " .. KEYS[1])
-redis.log(redis.LOG_NOTICE, "값: " .. tostring(ARGV[1]))
-
--- 로그 레벨: LOG_DEBUG, LOG_VERBOSE, LOG_NOTICE, LOG_WARNING
-```
-
-### 에러 메시지 반환
-
-```lua
-local result = redis.pcall('get', KEYS[1])
-if type(result) == 'table' and result.err then
-    return redis.error_reply("custom error: " .. result.err)
-end
-```
+**클러스터에서 중요**: Redis Cluster는 `KEYS` 배열의 키들로 어느 노드로 라우팅할지 결정한다. 키를 `ARGV`에 넣으면 클러스터가 잘못된 노드로 요청을 보낸다. 접근하는 모든 키는 반드시 `KEYS`에 선언해야 한다.
 
 ---
 
 ## 주의사항
 
-| 항목 | 주의 내용 |
-|------|----------|
-| **실행 시간** | 스크립트 실행 중 Redis가 블로킹됨 — 빠르게 끝나야 함 |
-| **전역 변수 금지** | 항상 `local` 사용. 전역 변수는 다음 스크립트에 영향 |
-| **랜덤 함수 주의** | `math.random`은 복제 시 마스터/레플리카 결과 불일치 발생 가능 → `redis.call('time')` 사용 권장 |
-| **무한 루프 금지** | `lua-time-limit`(기본 5000ms) 초과 시 스크립트 강제 종료 |
-| **클러스터 제약** | KEYS 배열의 키가 모두 같은 슬롯에 있어야 함 (해시 태그 활용) |
-| **KEYS 명시적 선언** | 클러스터 라우팅을 위해 접근하는 모든 키를 KEYS에 전달해야 함 |
-
-### 클러스터에서 해시 태그 활용
-
-```lua
--- {user:1} 해시 태그로 같은 슬롯에 배치
--- KEYS[1] = {user:1}:profile
--- KEYS[2] = {user:1}:session
--- → 같은 슬롯에 있으므로 클러스터에서 사용 가능
-```
-
-```java
-// 해시 태그를 사용한 키 설계
-String profileKey  = "{user:" + userId + "}:profile";
-String sessionKey  = "{user:" + userId + "}:session";
-// 두 키 모두 {user:userId} 부분으로 슬롯 결정 → 같은 노드에 배치
-```
+| 항목 | 이유 | 해결책 |
+|------|------|--------|
+| 실행 시간 최소화 | 스크립트 실행 중 Redis 전체 블로킹 | 로직을 단순하게, 루프 최소화 |
+| `local` 변수 필수 | 전역 변수는 다음 스크립트까지 오염 | 모든 변수 앞에 `local` |
+| `math.random` 금지 | 복제 시 마스터/레플리카 결과 불일치 | `redis.call('time')` 사용 |
+| 무한 루프 금지 | `lua-time-limit`(기본 5초) 초과 시 강제 종료 | 반복 횟수에 상한 설정 |
+| 클러스터 해시 태그 | 여러 키가 다른 슬롯에 있으면 에러 | `{tag}:key` 패턴으로 동일 슬롯 배치 |
 
 ---
 
 ## 정리
 
-| 항목 | 내용 |
+| 항목 | 핵심 |
 |------|------|
-| **원자성 근거** | Redis 싱글 스레드 모델 — 스크립트 실행 중 다른 명령어 없음 |
-| **EVAL** | 스크립트 텍스트를 매번 전송 |
-| **EVALSHA** | SHA1 해시로 캐시된 스크립트 호출 — 네트워크 절감 |
-| **redis.call** | 에러 시 스크립트 전체 중단 |
-| **redis.pcall** | 에러를 잡아 처리 가능 |
-| **KEYS** | Redis 키 (클러스터 라우팅에 사용) |
-| **ARGV** | 부가 인자 (값, 옵션 등) |
-| **주요 사용처** | 분산 락 해제, Rate Limiting, 조건부 업데이트, 재고 차감 |
+| 원자성 근거 | Redis 싱글 스레드 — 스크립트 실행 중 다른 명령어 없음 |
+| `EVAL` | 스크립트 전문을 매번 전송 |
+| `EVALSHA` | SHA1 해시로 캐시 호출 — `DefaultRedisScript`가 자동 처리 |
+| `redis.call` | 에러 시 스크립트 전체 중단 (롤백 효과) |
+| `redis.pcall` | 에러를 값으로 받아 처리 계속 |
+| 주요 사용처 | 분산 락 해제, 재고 차감, Rate Limiting, CAS |

@@ -1,5 +1,5 @@
 ---
-title: 스레드보다는 실행자, 태스크, 스트림을 애용하라- Effective Java[80]
+title: "스레드보다는 실행자, 태스크, 스트림을 애용하라 — Effective Java[80]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,160 +7,148 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+스레드를 직접 다루면 작업 정의와 실행 방법이 뒤엉킵니다. 실행자 프레임워크는 이 둘을 분리해 유연하고 안전한 동시성 프로그래밍을 가능하게 합니다.
 
+---
 
-##### 🔗  java.util.concurrent 패키지는 실행자 프레임워크(Executor Framework)라고 하는 인터페이스 기반의 유연한 태스트 실행 기능을 담고 있다.
+## 1. 실행자 프레임워크란
 
-* 기존의 작업 큐보다 모든 면에서 뛰어난 작업 큐를 아래와 같이 단 한 줄로 생성할 수 있게 되었다.
+비유하자면 **직접 배달하는 대신 배달 대행 서비스를 이용하는 것**입니다. 무엇을 배달할지(태스크)와 어떻게 배달할지(실행 메커니즘)를 분리하면, 물량이 늘어나도 배달 방식만 바꾸면 됩니다.
 
 ```java
+// 단 한 줄로 작업 큐 생성
 ExecutorService exec = Executors.newSingleThreadExecutor();
 
-//이 실행자에 실행할 태스크(task; 작업)를 넘기는 방법
+// 태스크 제출
 exec.execute(runnable);
 
-//실행자를 우에하게 종료시키는 방법(이 작업이 실패하면 VM 자체가 종료되지 않을 것이다)
+// 우아한 종료 — 이 작업이 실패하면 VM이 종료되지 않을 수 있음
+exec.shutdown();
 ```
 
+---
 
+## 2. 실행자 서비스의 주요 기능
 
-<hr>
+비유하자면 **배달 대행 앱의 다양한 옵션**입니다. 즉시 배달, 예약 배달, 배달 완료 알림, 여러 건 한꺼번에 등 요구에 맞게 선택할 수 있습니다.
 
+```java
+// 특정 태스크 완료 대기
+exec.submit(callable).get();
 
+// 태스크 여러 개 중 하나라도 완료되면 반환
+exec.invokeAny(tasks);
 
-##### 💎 실행자 서비스의 주요 기능들
+// 모든 태스크 완료 대기
+exec.invokeAll(tasks);
 
-* 특정 태스크가 완료되기를 기다린다
+// 서비스 종료 완료 대기
+exec.awaitTermination(10, TimeUnit.SECONDS);
 
-
-
-* 태스크 모음 중 아무것 하나(**invokeAny** 메서드) 혹은 모든 태스크(**invoke All** 메서드)가 완료되기를 기다린다.
-
-
-
-* 실행자 서비스가 종료하기를 기다린다(**awaitTermination** 메서드).
-
-
-
-* 완료된 태스크들의 결과를 차례로 받는다(**ExecutorCompletionService** 이용).
-
-
-
-* 태스크를 특정 시간에 혹은 주기적으로 실행하게 된다(**ScheduledThread** **PoolExecutor** 이용)
-
-
-
-
-
-<hr>
-
-
-
-##### 💎 큐를 둘 이상의 스레드가 처리하게 하고 싶다면 간단히 다른 정적 팩터리를 이용하여 다른 종류의 실행자 서비스(스레드 풀)를 생성하면 된다.
-
-* 스레드 풀의 스레드 개수는 고정할 수도 있고 필요에 따라 늘어나거나 줄어들게 설정할 수도 있다.
-
-
-
-* 필요한 실행자 대부분은 **java.util.concurrent.Executors의 정적 팩터리들을 이용해 생성할 수 있을 것이다.**
-
-
-
-* 평범하지 않은 실행자를 원한다면 **ThreadPoolExecutor** 클래스를 직접 사용해도 된다.
-  * 이 클래스로는 스레드 풀 동작을 결정하는 거의 모든 속성을 설정할 수 있다.
-
-
-
-<hr>
-
-
-
-##### 💎 실행자 서비스를 사용하기에 까다로운 애플리케이션도 있다.
-
-* 작은 프로그램이나 가벼운 서버라면 **Executors.newCachedThreadPoo**l이 일반적으로 좋은 선택일 것이다.
-  * 특별히 설정할 게 없고 일반적인 용도에 적합하게 동작한다.
-
-
-
-* <span style="color:red;">하지만</span> **CachedThreadPool은 무거운 프로덕션 서버에는 좋지 못하다!**
-
-  * **CachedThreadPool**에서는 요청받은 태스크들이 큐에 쌓이지 않고 즉시 스레드에 위임돼 실행된다.
-
-  
-
-  * 가용한 스레드가 없다면 새로 하나를 생성한다.
-
-  
-
-  * 서버가 아주 무겁다면 CPU 이용률이 100%로 치닫고, 새로운 태스크가 도착하는 족족 또 다른 스레드를 생성하며 상황을 더욱 악화시킨다.
-
-  
-
-  * <span style="color:red;">따라서 무거운 프로덕션 서버에서는</span> **스레드 개수를 고정한 Executors.newFixedThreadPool**을 선택하거나 **완전히 통제할 수 있는 ThreadPoolExecutor를 직접 사용하는 편이 훨씬 낫다.**
-
-
-
-<hr>
-
-
-
-##### 💎 작업 큐를 손수 만드는 일은 삼가야 하고, 스레드를 직접 다루는 것도 일반적으로 삼가야 한다.
-
-* 스레드를 직접 다루면 **Thread**가 작업 단위와 수행 메커니즘 역할을 모두 수행하게 된다.
-
-
-
-* <span style="color:red;">반면</span> 실행자 프레임워크에서는 **작업 단위와 실행 메커니즘이 분리**된다.
-
-  * **작업 단위**를 나타내는 **핵심 추상 개념이 태스크다**.
-
-  
-
-  * 태스크에는 두 가지가 있다.
-
-    * **Runnable**
-
-    
-
-    * **Callable** (Runnable과 비슷하지만 **값을 반환하고 임의의 예외를 던질 수 있다**)
-
-    
-
-  * **태스크를 수행하는 일반적인 메커니즘이 바로 실행자 서비스다.**
-
-    * 태스크 수행을 실행자 서비스에 맡기면 원하는 태스크 수행 정책을 선택할 수 있고, 생각이 바뀌면 언제든 변경할 수 있다.
-
-    
-
-    * **핵심은 (컬렉션 프레임워크가 데이터 모음을 담당하듯) 실행자 프레임워크가 작업 수행을 담당해준다는 것이다.**
-
-
-
-<hr>
-
-
-
-##### 💎 자바 7이 되면서 실행자 프레임워크는 포크-조인(fork-join) 태스크를 지원하도록 확장되었다.
-
-* **포크-조인 태스크**는 **포크-조인 풀**이라는 **특별한 실행자 서비스가 실행해준다.**
-
-  * 포크-조인 태스크, 즉 **ForkJoinTask**의 **인스턴스는 작은 하위 태스크로 나뉠 수 있고**, **ForkJoinPool**을 구성하는 스레드들이 이 태스크들을 처리하며, **일을 먼저 끝낸 쓰레드는 다른 쓰레드의 남은 태스크를 가져와 대신 처리할 수도 있다.**
-
-  
-
-  * 이렇게 하여 **모든 쓰레드가 바쁘게 움직여 CPU를 최대한 활용하면서 높은 처리량과 낮은 지연시간을 달성한다.**
-
-  
-
-  * **이러한 포크-조인 테스크를 직접 작성하고 튜닝하기란 어려운 일이지만**, <span style="color:red;">포크-조인 풀을 이용해 만든 병렬 스트림을 이용하면 적은 노력으로 그 이점을 얻을 수 있다.</span>
-    * 물론 포크-조인에 적합한 형태의 작업이어야 한다.
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크때
+// 주기적 실행
+ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+scheduler.scheduleAtFixedRate(task, 0, 1, TimeUnit.SECONDS);
 ```
 
+---
+
+## 3. 스레드 풀 종류 선택
+
+비유하자면 **배달 직원 수를 결정하는 방식**입니다. 항상 1명(단일 스레드), 고정 인원(고정 풀), 상황에 따라 유동적(캐시 풀) 중 서버 규모에 맞게 골라야 합니다.
+
+```java
+// 1. 단일 스레드 — 순서 보장이 필요할 때
+ExecutorService single = Executors.newSingleThreadExecutor();
+
+// 2. 고정 스레드 풀 — 무거운 프로덕션 서버에 적합
+ExecutorService fixed = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
+// 3. 캐시 스레드 풀 — 소규모 프로그램에만 사용, 프로덕션 서버에는 위험
+ExecutorService cached = Executors.newCachedThreadPool();
+// 경고: 요청이 폭주하면 스레드를 무한히 생성 → CPU 100% → 서버 다운
+```
+
+`CachedThreadPool`을 무거운 서버에서 쓰면 태스크가 큐에 쌓이지 않고 즉시 새 스레드를 생성하므로, 트래픽 폭주 시 스레드 수가 폭발적으로 늘어납니다. 프로덕션 서버에는 `newFixedThreadPool` 또는 `ThreadPoolExecutor`를 직접 설정해 사용하세요.
+
+---
+
+## 4. 태스크: Runnable vs Callable
+
+비유하자면 **결과 보고서 없이 작업만 하는 직원(Runnable)**과 **작업 후 보고서를 제출하는 직원(Callable)**의 차이입니다.
+
+```java
+// Runnable — 반환값 없음, 검사 예외 던질 수 없음
+Runnable task = () -> System.out.println("작업 수행");
+
+// Callable — 값 반환 가능, 검사 예외 던질 수 있음
+Callable<Integer> callableTask = () -> {
+    // 계산 후 결과 반환
+    return 42;
+};
+
+Future<Integer> future = exec.submit(callableTask);
+Integer result = future.get();  // 완료될 때까지 대기 후 결과 수령
+```
+
+```mermaid
+graph TD
+    A["태스크 추상화"] --> B["Runnable\n반환값 없음\n검사 예외 불가"]
+    A --> C["Callable\n반환값 있음\n검사 예외 가능\nFuture로 결과 수령"]
+    D["실행 메커니즘"] --> E["ExecutorService\n태스크 수행 정책 선택 가능\n언제든 정책 변경 가능"]
+    B --> E
+    C --> E
+    style B fill:#f39c12,color:#fff
+    style C fill:#51cf66,color:#fff
+    style E fill:#51cf66,color:#fff
+```
+
+---
+
+## 5. 포크-조인 풀 — 병렬 분할 정복
+
+비유하자면 **큰 프로젝트를 여러 팀이 나눠 맡고, 먼저 끝난 팀이 다른 팀 일을 가져와 돕는 것**입니다. 모든 팀이 쉬지 않고 일해 CPU를 최대한 활용합니다.
+
+```java
+// ForkJoinPool — 작업 훔치기(work-stealing) 방식
+ForkJoinPool pool = new ForkJoinPool();
+
+// ForkJoinTask: 큰 작업을 작은 하위 태스크로 분할
+class SumTask extends RecursiveTask<Long> {
+    private final long[] array;
+    private final int start, end;
+
+    @Override
+    protected Long compute() {
+        if (end - start <= THRESHOLD) {
+            // 작은 작업은 직접 처리
+            long sum = 0;
+            for (int i = start; i < end; i++) sum += array[i];
+            return sum;
+        }
+        int mid = (start + end) / 2;
+        SumTask left = new SumTask(array, start, mid);
+        SumTask right = new SumTask(array, mid, end);
+        left.fork();          // 왼쪽 하위 태스크를 다른 스레드에 위임
+        return right.compute() + left.join();  // 오른쪽 직접 처리 후 합산
+    }
+}
+```
+
+포크-조인 태스크를 직접 작성하기는 어렵지만, **병렬 스트림을 사용하면 포크-조인의 이점을 쉽게 얻을 수 있습니다.** 병렬 스트림은 내부적으로 `ForkJoinPool.commonPool()`을 사용합니다.
+
+```java
+// 병렬 스트림 — 포크-조인 풀 위에서 동작
+long sum = LongStream.rangeClosed(1, 1_000_000)
+    .parallel()
+    .sum();
+```
+
+---
+
+## 6. 요약
+
+> 스레드를 직접 다루지 말고 실행자 프레임워크를 사용하세요. 태스크(Runnable/Callable)와 실행 메커니즘(ExecutorService)을 분리하면 실행 정책을 언제든 바꿀 수 있습니다. 프로덕션 서버에는 `CachedThreadPool` 대신 `FixedThreadPool`이나 `ThreadPoolExecutor`를 사용하세요. 병렬 분할 정복은 포크-조인 풀을, 간단한 경우는 병렬 스트림을 활용하세요.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

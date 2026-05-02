@@ -1,5 +1,5 @@
 ---
-title: 불필요한 객체 생성을 피해라 - Effective Java[6]
+title: "불필요한 객체 생성을 피하라 — Effective Java[6]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,117 +7,191 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+"객체는 가비지 컬렉터가 처리해주니까 마음대로 만들어도 되지 않나?" — 맞기도 하고 틀리기도 합니다. 불필요한 객체 생성이 성능을 얼마나 갉아먹는지, 세 가지 함정을 통해 확인합니다.
 
+---
 
-**똑같은 기능의 객체를 매번 생성하기보다는 객체 하나를 재사용하는 편이 나을때가 많다.**
+## 1. 함정 1: String 리터럴 대신 new String()
 
-**재사용은 빠르고 세련되다. 특히 불변 객체는 언제든지 재사용할 수 있다.**
+### 동작 원리
 
-<hr>
+Java의 String은 **String Pool(문자열 풀)** 이라는 특별한 영역에서 관리됩니다. 리터럴로 생성하면 풀에서 같은 문자열을 재사용하지만, `new String()`은 매번 힙에 새 객체를 만듭니다.
 
-다음 코드는 절대 하지말아야 할 극단 적인 예이니 예를 통해 유심히 살펴보자.
+```java
+// 나쁜 예 — 매번 새 객체 생성
+String s1 = new String("kimchi");  // 힙에 새 객체
+String s2 = new String("kimchi");  // 또 다른 새 객체
+System.out.println(s1 == s2);  // false — 서로 다른 객체!
 
-```
-String str = new String("kimchi");
-```
-
-위 코드의 문제를 찾았는가? 위 문장은 실행 될 때마다 String 인스턴스를 새로 만드는게 문제이다.
-
-이러한 문장이 반복문이나 빈번히 호출되는 메소드 안에 있다면 쓸데 없는 String 인스턴스가 수백만 개 만들어 질 수도 있다.
-
-<hr>
-
-아래의 개선된 코드를 보자.
-
-```
-String str = "kimchi";
+// 좋은 예 — String Pool 재사용
+String s3 = "kimchi";  // String Pool에 저장
+String s4 = "kimchi";  // Pool에서 같은 객체 반환
+System.out.println(s3 == s4);  // true — 동일 객체!
 ```
 
-위 코드는 새로운 인스턴스를 매번 만드는 방식 대신 하나의 String 인스턴스를 사용한다. 
-
-이 방식을 사용한다면 같은 가상 머신 안에서 이와 같은 똑같은 문자열 리터럴을 사용하는 모든 코드가 같은 객체를 재사용함이 보장된다.(String pool)
-
-
-
-## Step 1 : 생성자 대신 정적 팩토리 메소드를 제공하는 불변 클래스에서는 정적 팩토리 메소드를 사용해 불필요한 객체 생성을 피할 수 있다.
-
-Boolean(String) 생성자 대신 Boolean.valueOf(String) 정적 팩토리 메소드를 사용하는 것이 좋다.
-
-생성자는 호출할 때마다 새로운 객체를 만들지만, 정적 팩토리 메소드는 그렇지 않다.
-
-불변 객체만이 아니라 가변 객체라 해도 사용 중에 변경 되지 않을 것임을 안다면 재사용 할 수 있다.
-
-
-
-## Step 2 : 생성 비용이 '비싼 객체'가 반복해서 필요하다면 캐싱하여 재사용하라.
-
-생성 비용이 비싼 객체도 종종 있다. 이런 비싼 객체가 반복해서 필요하다면 캐싱하여 재사용하길 권한다.
-
-아래는 유효한 핸드폰 번호인지 확인하는 정규표현식 예제이다
-
-이를 통해 무슨 말인지 살펴보자.
-
+```mermaid
+graph TD
+    A["String Pool"] --> B["'kimchi' 인스턴스 1개"]
+    B -->|"참조"| C["s3"]
+    B -->|"참조"| D["s4"]
+    E["힙(Heap)"] --> F["new String('kimchi') #1"]
+    E --> G["new String('kimchi') #2"]
+    style F fill:#ff6b6b,color:#fff
+    style G fill:#ff6b6b,color:#fff
 ```
+
+**만약 루프에서 `new String()`을 쓴다면?** 10만 번 반복하면 10만 개의 String 객체가 생성되고, GC 압력이 폭발적으로 증가합니다.
+
+---
+
+## 2. 함정 2: 비싼 객체의 반복 생성 — Pattern 예시
+
+### 동작 원리
+
+정규표현식 `Pattern` 객체는 내부적으로 **유한 상태 머신(Finite State Machine)** 을 빌드하는 무거운 작업을 수행합니다. `String.matches()`는 호출할 때마다 `Pattern`을 새로 생성하고 곧바로 버립니다.
+
+```java
+// 나쁜 예 — 매 호출마다 Pattern 인스턴스 새로 생성 (비쌈!)
 static boolean isPhoneNumber(String s) {
-	return s.matches("^01(?:0|1|[6-9])-(?:\d{3}|\d{4})-\d{4}$");
+    return s.matches("^01(?:0|1|[6-9])-(?:\\d{3}|\\d{4})-\\d{4}$");
+    //       ↑ 내부적으로 Pattern.compile() 호출 → FSM 빌드 → 사용 → GC
 }
+
+// isPhoneNumber가 10만 번 호출되면 Pattern이 10만 번 생성!
 ```
 
-위 방식의 문제는 String.matches 메소드를 사용한다는 데 있다. **String.matches는 정규 표현식으로 문자열 형태를 확인하는 가장 쉬운 방법이지만, 성능이 중요한 상황에서 반복해 사용하기엔 적합하지 않다.**
-
-**왜!? 적합하지 않냐..** 그 이유는 matches 메소드가 내부에서 만드는 정규표현식용 Pattern 인스턴스는, 한 번 쓰고 버려져서 곧바로 가지비 컬렉션 대상이 된다.
-
-Pattern은 입력받은 정규표현식에 해당하는 유한 상태머신을 만들기 때문에 인스턴스 생성 비용이 높다.
-
-<hr>
-
-위 코드의 성능을 개선하려면 필요한 정규식을 표현하는 (불변)Pattern 인스턴스를 클래스 초기화(정적 초기화) 과정에서 직접 생성해 캐싱해두고, 나중에 isPhoneNumber 메소드가 호출될 때마다 이 인스턴스를 재사용한다.
-
-~~;; 예시가 조금 별로인것 같다.. 이름이 맘에안드네..~~
-
-```
+```java
+// 좋은 예 — static final로 한 번만 생성, 이후 재사용
 public class PhoneUtils {
-	private static final Pattern PhonePattern  = Pattern.compile("^01(?:0|1|[6-9])-(?:\d{3}|\d{4})-\d{4}$");
-	static boolean isPhoneNumber(String s) {
-		return PhonePattern.matcher(s).matches();
-	}
+    // 클래스 로딩 시 딱 한 번만 컴파일
+    private static final Pattern PHONE_PATTERN =
+        Pattern.compile("^01(?:0|1|[6-9])-(?:\\d{3}|\\d{4})-\\d{4}$");
+
+    static boolean isPhoneNumber(String s) {
+        return PHONE_PATTERN.matcher(s).matches();  // 재사용!
+    }
 }
 ```
 
-이런식으로 개선 하였을 때 isPhoneNumber가 빈번히 호출되는 상황에서 성능을 상당히 끌어올릴 수 있다.
+**성능 비교:**
 
+| 방식 | 10만 회 호출 | Pattern 생성 수 |
+|------|------------|----------------|
+| `String.matches()` | 느림 | 10만 개 |
+| `static final Pattern` | 빠름 | 1개 |
 
+실제로 Effective Java 저자의 측정에서 약 **6.5배** 빠른 결과가 나왔습니다.
 
-## Step 3 : 오토박싱은 기본 타입과 그에 대응하는 박싱된 기본 타입의 구분을 흐려주지만, 완전히 없애주는 것은 아니다.
+---
 
-불필요한 객체를 만들어내는 또 다른 예로는 오토박싱이 있다.
+## 3. 함정 3: 오토박싱 — 박싱 타입의 함정
 
-오토박싱이란 프로그래머가 기본 타입과 박싱된 기본 타입을 섞어 쓸 때 자동으로 상호 변환해주는 기술이다.
+### 동작 원리
 
-다음의 오토박싱 예제를 통해 무엇이 문제인지를 확인해보자.
+오토박싱은 기본 타입(`long`)을 박싱 타입(`Long`)으로 자동 변환해주는 편의 기능입니다. 그런데 이 변환 시 **새 객체가 생성**됩니다. 반복문 안에서 오토박싱이 일어나면 엄청난 수의 불필요한 객체가 만들어집니다.
 
-```
+```java
+// 나쁜 예 — Long(대문자!) 타입 사용
 private static long sum() {
-	Long sum = 0L;
-	for ( long i = 0; i <= Integer.MAX_VALUE; i++ ) {
-		sum += i;	
-	}
-	return sum;
+    Long sum = 0L;  // ← Long(박싱 타입)!
+
+    for (long i = 0; i <= Integer.MAX_VALUE; i++) {
+        sum += i;
+        // sum += i는 다음과 같이 동작:
+        // 1. sum을 long으로 언박싱
+        // 2. i를 더함
+        // 3. 결과를 다시 Long으로 오토박싱 → 새 Long 객체 생성!
+    }
+    return sum;
+}
+// Integer.MAX_VALUE ≈ 21억 번 → Long 객체 21억 개 생성!
+```
+
+```java
+// 좋은 예 — long(소문자!) 기본 타입 사용
+private static long sum() {
+    long sum = 0L;  // ← long(기본 타입)!
+
+    for (long i = 0; i <= Integer.MAX_VALUE; i++) {
+        sum += i;  // 오토박싱 없음, 기본 타입 연산
+    }
+    return sum;
+}
+// 성능 차이: 수 배~수십 배
+```
+
+```mermaid
+graph LR
+    A["long i = 1"] -->|"오토박싱"| B["Long sum에 더할 때\n새 Long 객체 생성"]
+    B -->|"루프 21억 회"| C["Long 객체 21억 개\nGC 부담"]
+    style C fill:#ff6b6b,color:#fff
+```
+
+**주의:** 오토박싱/언박싱 자체는 문제가 아닙니다. **성능이 중요한 루프 안에서** 의도치 않게 일어나는 것이 문제입니다.
+
+---
+
+## 4. 불변 객체 캐싱 패턴
+
+비싼 객체를 `static final`로 캐싱해두면 매 호출마다 생성하는 비용을 아낄 수 있습니다.
+
+```java
+// Boolean — 미리 만든 인스턴스 재사용
+// new Boolean(true) 대신:
+Boolean t = Boolean.valueOf(true);   // 캐시된 Boolean.TRUE 반환
+Boolean f = Boolean.valueOf(false);  // 캐시된 Boolean.FALSE 반환
+
+// Integer — -128 ~ 127 범위 캐싱
+Integer a = Integer.valueOf(100);
+Integer b = Integer.valueOf(100);
+System.out.println(a == b);  // true — 캐시 재사용
+
+Integer c = Integer.valueOf(200);
+Integer d = Integer.valueOf(200);
+System.out.println(c == d);  // false — 범위 초과, 새 객체 생성
+```
+
+---
+
+## 5. 방어적 복사와의 균형
+
+> "객체를 재사용하면 안 되는 경우도 있다."
+
+보안이 중요한 경우 **방어적 복사(defensive copy)** 가 필요합니다. 객체를 공유했다가 외부에서 변경되면 버그가 생기기 때문입니다. 성능을 위한 재사용과 안전을 위한 방어적 복사는 상황에 따라 선택해야 합니다.
+
+```java
+// 방어적 복사가 필요한 경우 (Item 50)
+public class Period {
+    private final Date start;
+    private final Date end;
+
+    public Period(Date start, Date end) {
+        this.start = new Date(start.getTime());  // 방어적 복사 — 재사용 안 함
+        this.end   = new Date(end.getTime());
+    }
 }
 ```
 
-위 코드는 정상 동작하지만,  제대로 구현했을 때보다 훨씬 속도가 느리다. 
+---
 
-이유가 무엇일까? 바로 Long에 대한 오토박싱 때문이다.
+## 6. 요약
 
-sum변수를 long이 아닌 Long으로 선언해서 불필요한 Long 인스턴스가 Integer.MAX_VALUE 만큼 만들어 진것이다.
-
-***박싱된 기본 타입보다는 기본 타입을 사용하고, 의도치 않은 오토박싱이 숨어들지 않도록 주의해야한다.***
-
-
-
-
+```mermaid
+graph TD
+    A["불필요한 객체 생성 패턴 3가지"] --> B["String 리터럴 대신\nnew String() 사용"]
+    A --> C["비싼 객체 반복 생성\nPattern.compile()"]
+    A --> D["박싱 타입으로 인한\n오토박싱 반복"]
+    B --> B1["해결: 리터럴 사용\nString Pool 활용"]
+    C --> C1["해결: static final로\n한 번만 생성 후 캐싱"]
+    D --> D1["해결: 기본 타입 우선 사용\nlong > Long"]
 ```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
-```
 
+**핵심 규칙:**
+1. `new String("리터럴")` 대신 `"리터럴"` 사용
+2. 자주 쓰이는 비싼 객체는 `static final`로 캐싱
+3. 반복 연산에서 박싱 타입(`Long`, `Integer`) 대신 기본 타입(`long`, `int`) 사용
+4. 정적 팩토리 메서드 (`Boolean.valueOf()`) 활용 — 캐싱 내장
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

@@ -1,5 +1,5 @@
 ---
-title: 직렬화된 인스턴스 대신 직렬화 프록시 사용을 검토하라 - Effective Java[90]
+title: "직렬화된 인스턴스 대신 직렬화 프록시 사용을 검토하라 — Effective Java[90]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,269 +7,116 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+직렬화 프록시 패턴은 역직렬화를 공개 API를 통한 정상적인 객체 생성과 동일하게 만들어, 불변식 위반과 내부 참조 탈취 공격을 근본적으로 차단합니다.
 
+---
 
-##### 🔗 직렬화 프록시 패턴을 이용하면 Serialziable 구현의 위험을 크게 줄여줄 수 있다.
+## 1. 직렬화 프록시 패턴이란
 
-* **Serialziable**을 구현하기로 결정한 순간 언어의 정상 메커니즘인 생성자 이외의 방법으로 인스턴스를 생성할 수 있게 된다.
+비유하자면 **통관 절차**입니다. 짐을 직접 반입하는 대신 공식 통관 창구(프록시)를 거치게 합니다. 창구에서는 신고 내용만 기록하고, 반출 시 신고 내용을 바탕으로 정품을 새로 준비합니다. 조작된 짐이 들어올 방법이 없습니다.
 
-  * 버그와 보안 문제가 일어날 가능성이 커진다는 뜻이다.
+패턴의 구조는 세 단계입니다.
 
-  
+1. 바깥 클래스의 논리적 상태를 표현하는 `private static` 중첩 클래스(직렬화 프록시)를 만들고 `Serializable`을 구현합니다.
+2. 바깥 클래스에 `writeReplace`를 추가해 직렬화 시 프록시로 대체합니다.
+3. 프록시에 `readResolve`를 추가해 역직렬화 시 바깥 클래스 인스턴스를 생성합니다.
 
-* <span style="color:red;">하지만</span> 직렬화 프록시 패턴을 이용하면 이 위험을 크게 줄여 줄 수 있다.
+---
 
+## 2. Period 클래스에 적용하는 예
 
-
-<hr>
-
-
-
-
-##### 💎 직렬화 프록시 패턴
-
-* 직렬화 프록시 패턴은 그리 복잡하지 않다.
-
-  * 먼저, **바깥 클래스의 논리적 상태를 정밀하게 표현하는 중첩 클래스를 설계**해 **private static**으로 선언한다.
-
-  
-
-  * **이 중첩 클래스가 바로 바깥 클래스의 직렬화 프록시다.**
-
-  
-
-  * <span style="color:red;">중첩 클래스의 생성자는 단 하나여야 하며, 바깥 클래스를 매개변수로 받아야 한다.</span>
-
-    * **이 생성자는 단순히 인수로 넘어온 인스턴스의 데이터를 복사한다.**
-
-      
-
-    * **일관성 검사나 방어적 복사도 필요 없다.**
-
-    
-
-    * 설계상, 직렬화 프록시의 기본 직렬화 형태는 바깥 클래스의 직렬화 형태로 쓰기에 이상적이다.
-
-    
-
-    * 그리고 바깥 클래스와 직렬화 프록시 모두 **Serialziable**을 구현한다고 선언해야 한다.
-
-<hr>
-
-
-
-💎 **Period 클래스용 직렬화 프록시**
-
-* 다음은 아이템 88에서 직렬화한 **Period** 클래스의 직렬화 프록시이다.
-  * **Period**는 아주 간단하여 직렬화 프록시도 바깥 클래스와 완전히 같은 필드로 구성되었다.
+비유하자면 **계약서를 공증하는 과정**입니다. 원본 문서 대신 공증된 사본을 보내고, 받는 쪽에서는 공증 내용으로 새 원본을 생성합니다.
 
 ```java
-private static class SerializationProxy implements Serialziable {
+public final class Period implements Serializable {
     private final Date start;
     private final Date end;
-    
-    SerializationProxy(Period p) {
-        this.start = p.start;
-        this.end = p.end;
+
+    public Period(Date start, Date end) {
+        this.start = new Date(start.getTime());
+        this.end   = new Date(end.getTime());
+        if (this.start.compareTo(this.end) > 0)
+            throw new IllegalArgumentException(start + "가 " + end + "보다 늦다.");
     }
-    
-    private static final long serialVersionUID = 234098243823485285L; //아무 값이나 상관없다.  
-}
-```
 
-* 다음으로 바깥 클래스에 다음의 writeReplace 메서드를 추가한다.
-  * 이 메서드는 범용적이니 직렬화 프록시를 사용하는 모든 클래스에 그대로 복사해 쓰면 된다.
-
-```java
-// 직렬화 프록시 패턴용 writeReplace 메서드
-private Object writeReplace() {
-    return new SerializationProxy(this);
-}
-```
-
-* 이 메서드는 **자바의 직렬화 시스템이 바깥 클래스의 인스턴스 대신 SerializationProxy의 인스턴스를 반환하게 하는 역할을 한다.**
-  * 달리 말해, <span style="color:red;">직렬화가 이루어지기 전에 바깥 클래스의 인스턴스를 직렬화 프록시로 변환해준다.</span>
-
-
-
-* **writeReplace** 덕분에 직렬화 시스템은 결코 바깥 클래스의 직렬화된 인스턴스를 생성해낼 수 없다.
-
-  * 하지만 공격자는 불변식을 훼손하고자 이런  시도를 해볼 수 있다.
-
-  
-
-  * 다음의 **readObject** 메서드를 바깥 클래스에 추가하면 이 공격을 가볍게 막아낼 수 있다.
-
-```java
-// 직렬화 프록시 패턴용 readObject 메서드
-private void readObject(ObjectInputStream stream) throws InvalidObjectException {
-    throw new InvalidObjectException("프록시가 필요합니다");
-}
-```
-
-* 마지막으로 바깥 클래스와 논리적으로 동일한 인스턴스를 반환하는 **readResolve** 메서드를 **SerializationProxy** 클래스에 추가한다.
-  * **이 메서드는 역직렬화 시에 직렬화 시스템이 직렬화 프록시를 다시 바깥 클래스의 인스턴스로 변환하게 해준다**.
-
-
-
-<hr>
-
-
-
-💎 **직렬화 프록시 패턴과 readResolve 메소드 사용이 아름다운 이유**
-
-* **readResolve** 메서드는 공개된 API만을 사용해 바깥 크래스의 인스턴스를 생성한다.
-
-
-
-* **직렬화는 생성자를 이용하지 않고도 인스턴스를 생성하는 기능을 제공하는데**, <span style="color:red;">이 패턴은 직렬화의 이런 언어도단적 특성을 상당 부분 제거한다.</span>
-
-  * 즉, 일반 인스턴스를 만들 때와 똑같은 생성자, 정적 팩터리, 혹은 다른 메서드를 사용해 역직렬화된 인스턴스를 생성하는 것이다.
-
-  
-
-  * **따라서 역직렬화된 인스턴스가 해당 클래스의 불변식을 만족하는지 검사할 또 다른 수단을 강고하지 않아도 된다.**
-
-  
-
-  * 그 클래스의 정적 팩터리나 생성자가 불변식을 확인해주고 인스턴스 메서드들이 불변식을 잘 지켜준다면, 따로 더 해줘야 할 일이 없는 것이다.
-
-
-
-* 앞서의 **Period.SerializationProxy**용 **readResolve** 메서드는 아래와 같이 생겼다.
-
-```java
-// Period.SerializationProxy용 readResolve 메서드
-private Object readResolve() {
-    return new Period(start, end); //public 생성자를 사용한다.
-}
-```
-
-
-
-<hr>
-
-
-
-💎 **방어적 복사처럼, 직렬화 프록시 패턴은 가짜 바이트 스트림 공격과 내부 필드 탈취 공격을 프록시 수준에서 차단해준다.**
-
-* 직렬화 프록시는 Period의 필드를 final로 선언해도 되므로 Period 클래스를 진정한 불변으로 만들 수 도 있다.
-
-
-
-* 어떤 필드가 기만적인 직렬화 공격의 목표가 될지 고민하지 않아도 되며, 역직렬화 때 유효성 검사를 수행하지 않아도 된다.
-
-
-
-<hr>
-
-
-
-💎  **직렬화 프록시 패턴이 readObject에서의 방어적 복사보다 강력한 경우가 하나 더 있다.**
-
-* 직렬화 프록시 패턴은 역직렬화한 인스턴스와 원래의 직렬화된 인스턴스의 클래스가 **달라도 정상 작동한다.**
-
-
-
-* **EnumSet**의 사례를 보자.
-
-  * 이 클래스는 **public** 생성자 없이 정적 팩토리들만 제공한다.
-
-  
-
-  * 클라이언트 입장에서는 이 팩터리들이 **EnumSet** 인스턴스를 반환하는 걸로 보이지만, 현재의 **OpenJDK**를 보면 열거 타입의 크기에 따라 두 하위 클래스 중 하나의 인스턴스를 반환한다.
-
-    * 열거 타입의 원소가 64개 이하면 **RegularEnumSet**
-
-    
-
-    * 그보다 크면 **JumboEnumSet**
-
-    
-
-  * 원소 64개짜리 열거 타입을 가진 **EnumSet**을 직렬화한 다음 원소 5개를 추가하고 역직렬화하면 어떤 일이 벌어질지 알아보자.
-
-    * 처음 직렬화 된것은 **RegularEnumSet** 인스턴스다.
-
-    
-
-    * 하지만 역직렬화는 **JumboEnumSet** 인스턴스로 하면 좋을 것이다.
-
-    
-
-    * 그리고 **EnumSet**은 직렬화 프록시 패턴을 사용해서 실제로도 이렇게 동작한다.
-
-
-
-<hr>
-
-
-
-💎 **실제 EnumSet의 직렬화 프록시**
-
-```java
-private static class SerializationProxy <E extends Enum<E>> implements Serializable {
-    // 이 EnumSet의 원소 타입
-    private final Class<E> elementType;
-    
-    // 이 EnumSet 안의 원소들
-    private final Enum<?>[] elements;
-    
-    SerializationProxy(EnumSet<E> set) {
-        EnumSet<E> result = EnumSet.noneOf(elementType);
-        for (Enum<?> e : elements) {
-            result.add((E)e);
+    // Step 1: 직렬화 프록시 — 논리적 상태만 기록
+    private static class SerializationProxy implements Serializable {
+        private final Date start;
+        private final Date end;
+
+        SerializationProxy(Period p) {
+            this.start = p.start;  // 단순 복사, 유효성 검사 불필요
+            this.end   = p.end;
         }
-        return result;
+
+        // Step 3: 역직렬화 시 공개 API로 바깥 클래스 인스턴스 생성
+        private Object readResolve() {
+            return new Period(start, end);  // 생성자의 불변식 검사가 자동 수행됨
+        }
+
+        private static final long serialVersionUID = 1L;
     }
-    
-    private static final long serialVersionUID = 362491234563181265L;
+
+    // Step 2: 직렬화 시 프록시로 대체
+    private Object writeReplace() {
+        return new SerializationProxy(this);
+    }
+
+    // 직접 역직렬화 시도를 차단 (공격 방어)
+    private void readObject(ObjectInputStream stream) throws InvalidObjectException {
+        throw new InvalidObjectException("프록시가 필요합니다");
+    }
 }
 ```
 
+`readResolve`가 `new Period(start, end)`를 호출하므로 생성자의 불변식 검사가 자동으로 수행됩니다. `readObject`에서 별도의 유효성 검사나 방어적 복사를 작성할 필요가 없습니다.
 
+---
 
-<hr>
+## 3. 직렬화 프록시의 장점
 
+비유하자면 **청사진으로 집을 짓는 것**입니다. 기존 집을 그대로 복사하는 대신, 청사진(프록시)을 전송하고 받는 쪽에서 청사진으로 새 집을 짓습니다. 새 집은 모든 건축 기준(불변식)을 자동으로 만족합니다.
 
-
-##### 💎 직렬화 프록시 패턴의 한계 
-
-* **첫 번째**, 클라이언트가 멋대로 확장할 수 있는 클래스에는 적용할 수 없다.
-
-
-
-* **두 번째**, 객체 그래프에 순환이 있는 클래스에도 적용할 수 없다.
-
-  * 이런 객체의 메서드를 직렬화 프록시의 **readResolve** 안에서 호출하려 하면 **ClassCastException**이 발생할 것이다.
-
-  
-
-  * 직렬화 프록시만 가졌을 뿐 실제 객체는 아직 만들어진 것이 아니기 때문이다.
-
-
-
-* **세 번째**, 직렬화 프록시 패턴이 주는 강력함과 안전성에도 대가는 따른다.
-  * **Period** 예를 실행해보니 방어적 복사 때보다 14%가 느렸다.
-
-
-
-<hr>
-
-
-
-> 제3자가 확장할 수 없는 클래스라면 가능한 한 직렬화 프록시 패턴을 사용하자.
->
-> 
->
-> 이 패턴이 아마도 중요한 불변식을 안정적으로 직렬화해주는 가장 쉬운 방법일 것이다.
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크때
+```mermaid
+graph TD
+    A["직렬화"] --> B["writeReplace\n바깥 클래스 → 프록시로 교체"]
+    B --> C["프록시 직렬화\n논리적 상태만 전송"]
+    C --> D["역직렬화\n프록시 인스턴스 생성"]
+    D --> E["readResolve\n공개 API로 바깥 클래스 생성\n불변식 자동 검사"]
+    F["직접 역직렬화 시도"] --> G["readObject\nInvalidObjectException\n공격 차단"]
+    style E fill:#51cf66,color:#fff
+    style G fill:#ff6b6b,color:#fff
 ```
 
+item 88의 `readObject`에서 직접 방어적 복사를 하는 방식과 비교하면:
+- `final` 필드를 제거하지 않아도 됩니다. 프록시 패턴은 `final` 필드를 그대로 유지할 수 있습니다.
+- 가짜 바이트 스트림 공격과 내부 참조 탈취 공격을 모두 막습니다.
+- 불변식 검사 코드의 중복이 없습니다.
+
+---
+
+## 4. 다른 구현체로 역직렬화 — EnumSet 사례
+
+비유하자면 **보관 방식이 다른 창고로 옮겨 받는 것**입니다. 64개짜리 박스에서 보냈지만, 내용물이 65개 이상이 됐다면 큰 창고로 옮겨 받습니다.
+
+`EnumSet`은 원소 수에 따라 `RegularEnumSet`(64개 이하) 또는 `JumboEnumSet`(65개 초과)을 반환합니다. 직렬화 프록시 패턴 덕분에 64개짜리로 직렬화했다가 5개를 추가한 뒤 역직렬화하면 자동으로 `JumboEnumSet`으로 생성됩니다. 직렬화된 인스턴스와 역직렬화된 인스턴스의 클래스가 달라도 정상 동작합니다.
+
+---
+
+## 5. 직렬화 프록시의 한계
+
+비유하자면 **통관 창구가 일부 상황을 처리하지 못하는 것**입니다.
+
+- 클라이언트가 확장할 수 있는 클래스에는 적용할 수 없습니다.
+- 순환 참조가 있는 클래스에는 적용할 수 없습니다. `readResolve` 안에서 바깥 클래스 메서드를 호출하려 하면 아직 실제 객체가 완성되지 않았으므로 `ClassCastException`이 발생합니다.
+- `readObject`에서 방어적 복사를 하는 방식보다 약 14% 느립니다.
+
+---
+
+## 6. 요약
+
+> 제3자가 확장할 수 없는 직렬화 가능 클래스라면 직렬화 프록시 패턴을 사용하세요. `writeReplace`로 직렬화 시 프록시로 대체하고, 프록시의 `readResolve`에서 공개 생성자로 인스턴스를 생성하면 불변식 검사가 자동으로 수행됩니다. 이것이 불변식을 안정적으로 직렬화하는 가장 안전하고 간단한 방법입니다.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

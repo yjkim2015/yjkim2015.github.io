@@ -1,5 +1,5 @@
 ---
-title: 톱 레벨 클래스는 한 파일에 하나만 담으라 - Effective Java[25]
+title: "톱레벨 클래스는 한 파일에 하나만 담으라 — Effective Java[25]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,32 +7,27 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+소스 파일 하나에 톱레벨 클래스를 여러 개 넣어도 컴파일러는 불평하지 않습니다. 하지만 이건 조용한 시한폭탄입니다. 컴파일 순서에 따라 프로그램 동작이 달라집니다.
 
+---
 
-#### 🔗 소스 파일 하나에 톱 레벨 클래스 여러 개 두기
+## 1. 문제 상황 — 같은 클래스가 두 파일에 정의되면
 
-**톱 레벨 클래스란** 중첩 클래스가 아닌 클래스이다.
+비유하자면 **같은 이름의 직원이 두 부서에 등록된 상황**입니다. 어느 부서 직원을 호출하느냐에 따라 결과가 달라집니다. 전화하는 순서(컴파일 순서)에 따라 어느 직원이 응답할지 결정됩니다.
 
-소스 파일 하나에 톱 레벨 클래스를 여러 개 선언하더라도 자바 컴파일러는 불평하지 않는다.
-
-<span style="color:red;">하지만</span> 아무런 득이 없을 뿐더러 **심각한 위험을 감수해야 하는 행위다**.
-
-**그 중 어느 것을 사용할지는 <span style="color:red;">어느 소스 파일을 먼저 컴파일 하느냐에 따라 달라지기 때문이다.</span>**
-
-
-
-<br>
-
-
-##### 💎 두 클래스가 한 파일(Utensil.java)에 정의 됨 
+다음 파일 구조를 보겠습니다.
 
 ```java
+// Main.java
 public class Main {
     public static void main(String[] args) {
         System.out.println(Utensil.NAME + Dessert.NAME);
     }
 }
+```
 
+```java
+// Utensil.java — Utensil과 Dessert 두 클래스를 한 파일에 정의
 class Utensil {
     static final String NAME = "pan";
 }
@@ -40,60 +35,69 @@ class Utensil {
 class Dessert {
     static final String NAME = "cake";
 }
+// 출력 결과: pancake
 ```
 
-집기(Utensil)와 디저트(Dessert) 클래스는 Utensil.java라는 한 파일에 정의 되어있다.
-Main의 실행 결과 값은 pancake로서 지금까지는 문제가 없다.
-
-<br>
-
-다시 똑같은 두 클래스를 담은 Dessert.java라는 파일을 만들어보자.
-
-##### 💎 두 클래스가 한 파일(Dessert.java)에 정의 됨 
-
 ```java
+// Dessert.java — 같은 이름의 클래스를 또 다른 파일에 정의
 class Utensil {
-    static final String NAME = "pan";
+    static final String NAME = "pot";  // pan이 아니라 pot!
 }
 
 class Dessert {
-    static final String NAME = "cake";
+    static final String NAME = "pie";  // cake가 아니라 pie!
 }
+// 이 파일이 먼저 컴파일되면: potpie 출력
 ```
 
-- 운 좋게 **javac Main.java Dessert.java** 명령으로 컴파일한다면 컴파일 오류가 나고 Utensil과 Dessert 클래스를 중복 정의했다고 알려줄 것이다.
-  - **컴파일러는 가장 먼저 Main.java를 컴파일하고, 그 안에서 (Dessert 참조보다 먼저 나오는) Utensil 참조를 만나면 Utensil.java 파일을 살펴 Utensil과 Dessert를 모두 찾아낸다.**
-  - 다음으로 컴파일러가 두 번째 명령줄 인수로 넘어온 **Dessert.java**를 처리하려 할 때 같은 클래스의 정의가 이미 있음을 알게 된다.
-- <span style="color:red;">한편</span>, **javac Main.java나 javac Main.java Utensil.java 명령으로 컴파일하면 Dessert.java 파일을 작성하기 전처럼 pancake를 출력한다.**
-- <span style="color:red;">그러나</span>, javac Dessert.java Main.java 명령으로 컴파일하면 potpie를 출력한다.
-- **즉, 컴파일러에 어느 소스 파일을 먼저 건네느냐에 따라 동작이 달라지는 문제가 발생한다.**
+---
 
+## 2. 컴파일 순서에 따른 동작 차이
 
+```mermaid
+sequenceDiagram
+    participant Dev as 개발자
+    participant Javac as 컴파일러
+    participant Result as 결과
 
-<hr>
+    Dev->>Javac: javac Main.java Utensil.java
+    Javac->>Javac: Main.java 처리 → Utensil 참조 발견
+    Javac->>Javac: Utensil.java 로드 (pan, cake)
+    Javac-->>Result: 출력: pancake
 
+    Dev->>Javac: javac Dessert.java Main.java
+    Javac->>Javac: Dessert.java 처리 → pot, pie 로드
+    Javac->>Javac: Main.java 처리
+    Javac-->>Result: 출력: potpie ← 같은 코드, 다른 결과!
+```
 
+**만약 이 상태에서 계속 개발하면?** 로컬에서는 `pancake`가 나오고, CI 서버에서는 `potpie`가 나오는 상황이 생깁니다. 원인을 찾기가 매우 어렵습니다.
 
-#### 🔗 해결책 : 톱 레벨 클래스들을 서로 다른 소스 파일로 분리
+`javac Main.java Dessert.java`처럼 컴파일하면 운 좋게 중복 정의 오류가 납니다. 하지만 특정 순서로만 컴파일하면 오류 없이 조용히 잘못된 클래스를 사용합니다.
 
-**해결책으로는 톱레벨 클래스들(Utensil과 Dessert)을 서로 다른 소스 파일로 분리하면 된다.**
+---
 
-- 굳이 여러 톱레벨 클래스를 한 파일에 담고 싶다면 **정적 멤버 클래스**를 사용하는 방법을 고려해볼 수 있다.
-  - 다른 클래스에 딸린 부차적인 클래스라면 정적 멤버 클래스로 만드는 쪽이 일반적으로 더 나을 것이다.
-  - 읽기 좋고, private로 선언하면 접근 범위도 최소로 관리할 수 있기 때문이다.
+## 3. 해결책 — 하나의 파일에 하나의 톱레벨 클래스
 
-<br>
+**해결책 1: 파일을 분리 (가장 간단)**
 
+```
+Utensil.java  →  class Utensil { ... }
+Dessert.java  →  class Dessert { ... }
+```
 
+각 클래스를 별도 파일에 넣으면 끝입니다. 컴파일 순서에 상관없이 항상 같은 결과가 나옵니다.
 
-**💎 톱 레벨 클래스들을 정적 멤버 클래스로 바꿔본 모습**
+**해결책 2: 정적 멤버 클래스로 변환 (한 파일에 묶고 싶다면)**
 
 ```java
+// Test.java — 정적 멤버 클래스로 묶기
 public class Test {
     public static void main(String[] args) {
         System.out.println(Utensil.NAME + Dessert.NAME);
     }
 
+    // private으로 접근 범위 최소화 가능
     private static class Utensil {
         static final String NAME = "pan";
     }
@@ -104,21 +108,23 @@ public class Test {
 }
 ```
 
-<br>
+정적 멤버 클래스로 만들면 관련 클래스를 논리적으로 묶으면서도, `private`으로 접근 범위를 제한할 수 있습니다.
 
+---
 
+## 4. 요약
 
-> 교훈은 명확하다. 
->
-> **소스 파일 하나에는 반드시 톱레벨 클래스(혹은 톱레벨 인터페이스)를 하나만 담자.**
->
-> 이 규칙만 따른다면 컴파일러가 한 클래스에 대한 정의를 여러 개 만들어 내는 일은 사라진다. 
->
-> 소스 파일을 어떤 순서로 컴파일하든 바이너리 파일이나 프로그램의 동작이 달라지는 일은 결코 일어나지 않을 것이다.
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크
+```mermaid
+graph TD
+    A["톱레벨 클래스 관리"] --> B["소스 파일 하나에\n톱레벨 클래스는 하나만"]
+    B --> C["컴파일 순서 무관\n항상 동일한 동작 보장"]
+    D["한 파일에 여러 클래스\n필요하다면?"] --> E["정적 멤버 클래스로\n변환 (private으로 접근 제한)"]
+    style B fill:#51cf66,color:#fff
+    style E fill:#51cf66,color:#fff
 ```
 
+> 소스 파일 하나에는 반드시 톱레벨 클래스를 하나만 담으세요. 이 규칙을 지키면 컴파일러가 같은 클래스에 대한 정의를 여러 개 만들어내는 일이 없어지고, 소스 파일을 어떤 순서로 컴파일하든 프로그램 동작이 달라지는 일도 없어집니다.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크

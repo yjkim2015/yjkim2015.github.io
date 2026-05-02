@@ -1,5 +1,5 @@
 ---
-title: 전통적인 for 문보다는 for-each 문을 사용하라 - Effective Java[58]
+title: "전통적인 for 문보다는 for-each 문을 사용하라 — Effective Java[58]"
 categories:
 - EFFECTIVE_JAVA
 toc: true
@@ -7,179 +7,71 @@ toc_sticky: true
 toc_label: 목차
 ---
 
+전통적인 for 문은 반복자나 인덱스 변수를 다루느라 코드가 지저분해지고 실수할 여지도 많습니다. for-each 문은 이 모든 문제를 깔끔하게 해결합니다.
 
+---
 
-##### 🔗  while 문 보다는 낫지만 가장 좋은 방법이이 아닌 관용구들
+## 1. 전통적인 for 문의 문제
 
-
-* 다음은 전통적인 for문으로 컬렉션을 순회하는 코드다.
-
-<br>
-
-
-
-💎 **컬렉션 순회하기 - 더 나은 방법이 있다.**
+비유하자면 **도서관에서 책을 찾으러 갈 때 서가 번호, 층수, 열 번호를 모두 직접 관리하는 것**입니다. 진짜 필요한 건 책인데, 관리해야 할 변수가 너무 많습니다.
 
 ```java
-for (Iterator<Element> i = c.iterator(); i.hasNext();) {
+// 컬렉션 순회 — 반복자가 세 번 등장
+for (Iterator<Element> i = c.iterator(); i.hasNext(); ) {
     Element e = i.next();
-    ... // e로 무언가를 한다.
+    // e 사용
 }
-```
 
-*  다음은 전통적인 for문으로 배열을 순회하는 코드이다.
-
-<br>
-
-
-
-💎 **배열 순회하기 - 더 나은 방법이 있다.**
-
-```java
+// 배열 순회 — 인덱스가 네 번 등장
 for (int i = 0; i < a.length; i++) {
-    ... // a[i]로 무언가를 한다.
+    // a[i] 사용
 }
 ```
 
-* 반복자와 인덱스 변수는 모두 코드를 지저분하게 할 뿐 **우리가 진짜 필요한 건 원소들 뿐이다.**
+반복자나 인덱스 변수를 잘못 쓰더라도 컴파일러가 잡아주리라는 보장이 없습니다. 컬렉션이냐 배열이냐에 따라 코드 형태도 달라집니다.
 
-  * 더군다나 이처럼 쓰이는 **요소 종류가 늘어나면 오류가 생길 가능성이 높아진다.**
+---
 
-  
+## 2. for-each 문으로 해결
 
-  * 1회 반복에서 반복자는 세 번 등장하며, 인덱스는 네 번이나 등장하여 **변수를 잘못 사용할 틈새가 넓어진다.**
-
-  
-
-  * 혹시라도 잘못된 변수를 사용했을 때 **컴파일러가 잡아주리라는 보장도 없다.**
-
-  
-
-  * 마지막으로 **컬렉션이나 배열이냐에 따라 코드 형태가 상당히 달라지므로 주의**해야 한다.
-
-
-
-<hr>
-
-
-
-##### 💎 이상의 문제는 for-each 문을 사용하면 모두 해결된다.
-
-* 참고로 **for-each** 문의 정식 이름은 '**향상된 for 문(enhanced for statement)**'이다.
-
-
-
-* **반복자와 인덱스 변수를 사용하지 않으니** <span style="color:red;">코드가 깔끔해지고 오류가 날 일도 없다.</span>
-  * 하나의 관용구로 컬렉션과 배열을 모두 처리할 수 있어서 어떤 컨테이너를 다루는지는 신경 쓰지 않아도 된다.
-
-<br>
-
-
-
-💎 **컬렉션과 배열을 순회하는 올바른 관용구**
+비유하자면 **사서가 책을 하나씩 직접 꺼내서 건네주는 것**입니다. 서가 위치 같은 내부 사정은 신경 쓰지 않아도 됩니다.
 
 ```java
+// 컬렉션이든 배열이든 같은 형태로 순회
 for (Element e : elements) {
-    ... // e로 무언가를 한다.
+    // e 사용
 }
 ```
 
-* 반복 대상이 컬렉션이든 배열이든, **for-each** 문을 사용해도 속도는 그대로다.
-  * **for-each** 문이 만들어내는 코드는 사람이 손으로 최적화한것과 사실상 같기 때문이다.
+for-each 문이 만들어내는 바이트코드는 손으로 최적화한 전통적인 for 문과 사실상 동일합니다. 성능 손실 없이 가독성만 높아집니다.
 
+---
 
+## 3. 중첩 반복에서 더욱 빛나는 for-each
 
-* **컬렉션을 중첩해 순회해야 한다면** <span style="color:red;">for-each 문의 이점이 더욱 커진다.</span>
-  * 다음 코드는 반복문을 중첩할 때 **흔히 저주르는 실수가 담겨있다.**
-
-
+비유하자면 **카드 덱을 만들 때 "무늬마다 숫자를 모두 조합"하는 작업**입니다. 반복자를 직접 쓰면 실수할 여지가 커집니다.
 
 ```java
-enum Suit { CLUB, DIAMOND, HEART, SPADE }
-enum RANK { AEC, DEUCE, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT,
-          NINE, TEN, JACK, QUEEN, KING }
-...
-   
-static Collection<Suit> = Arrays.asList(Suit.values());
-static Collection<Rank> = Arrays.asList(Rank.values());
-
-List<Card> deck = new ArrayList<>();
+// 잘못된 코드 — i.next()가 안쪽 루프에서 호출되어 너무 많이 소비됨
 for (Iterator<Suit> i = suits.iterator(); i.hasNext(); ) {
-    for (Iterator<Rank> j = ranks.iterator(); j.hasNext();) {
-        deck.add(new Card(i.next(), j.next()));
+    for (Iterator<Rank> j = ranks.iterator(); j.hasNext(); ) {
+        deck.add(new Card(i.next(), j.next()));  // i.next()가 Rank마다 한 번씩 호출!
     }
 }
+// 결과: suits 원소가 바닥나면 NoSuchElementException 발생
+// 운 나쁘면 예외도 없이 잘못된 결과 (suits.size() == ranks.size()인 경우)
 ```
 
-* 위 코드의 문제는 바깥 컬렉션(**suits**)의 반복자에서 **next** 메서드가 너무 많이 불린다는 것이다.
-
-  * 마지막 줄의 i.next()를 보면 '숫자(Suit) 하나당' 한번 씩만 불려야 하는데, 안쪽 반복문에서 호출되는 바람에 '카드(Rank) 하나당' 한 번씩 불리고 있다.
-
-  
-
-  * 그래서 숫자가 바닥나면 반복문에서 **NoSuchElementException**을 던진다.
-
-
-
-* 정말 운이 나빠서 바깥 컬렉션의 크기가 안쪽 컬렉션 크기의 배수라면 이 반복문은 예외를 던지지 않고 종료한다.
-
-  * 물론 우리가 원하는 일을 수행하지 않은 채 말이다.
-
-  
-
-  * ex) 다음의 주사위를 두 번 굴렸을 때 나올 수 있는 모든 경우의 수를 출력하는 코드를 살펴보자.
-
-<br>
-
-
-
-💎 **같은 버그, 다른 증상!**
-
 ```java
-enum Face { ONE, TWO, THREE, FOUR, FIVE, SIX }
-...
-Collection<Face> faces = EnumSet.allOf(Face.class);
-
-for (Iterator<Face> i = faces.iterator(); i.hasNext();) {
-    for (Iterator<Face> j = faces.iterator(); j.hasNext();) {
-        System.out.println(i.next() + " " + j.next(););
+// 임시방편 수정 — suit 변수를 바깥 루프에서 저장
+for (Iterator<Suit> i = suits.iterator(); i.hasNext(); ) {
+    Suit suit = i.next();  // 저장
+    for (Iterator<Rank> j = ranks.iterator(); j.hasNext(); ) {
+        deck.add(new Card(suit, j.next()));
     }
 }
-```
 
-* 위 프로그램은 예외를 던지진 않지만, 가능한 조합을 단 여섯 쌍만 출력하고 끝나버린다. 
-
-  * 36개 조합이 나와야 한다.
-
-  
-
-  * 이 문제를 해결하려면 아래와 같이 바깥 반복문에서 바깥 원소를 저장하는 변수를 하나 추가해야 한다.
-
-<br>
-
-
-
-💎 **문제는 고쳤지만 보기 좋진 않다. 더 나은 방법이 있다!**
-
-```java
-for (Iterator<Suit> i = suits.iterator(); i.hasNext();) {
-    Suit suit = i.next();
-    for (Iterator<Rank> j = ranks.iterator(); j.hasNext();) {
-        deck.add(new Card(suit, j.next());
-    }
-}
-```
-
-* 위 코드의 문제점은 아래와 같이 for-each 문을 중첩하는 것으로 간단히 해결된다.
-  * 코드도 간결해진다.
-
-<br>
-
-
-
-💎 **컬렉션이나 배열의 중첩 반복을 위한 권장 관용구**
-
-```java
+// for-each — 처음부터 올바르고 간결
 for (Suit suit : suits) {
     for (Rank rank : ranks) {
         deck.add(new Card(suit, rank));
@@ -187,74 +79,61 @@ for (Suit suit : suits) {
 }
 ```
 
+```mermaid
+graph TD
+    A["중첩 반복 버그"] --> B["i.next()가 안쪽 루프에서 호출\nRank마다 Suit를 소비함"]
+    B --> C["suits.size() != ranks.size()\n→ NoSuchElementException"]
+    B --> D["suits.size() == ranks.size()\n→ 예외 없이 잘못된 결과\n36개 대신 6개 출력"]
+    E["for-each 사용"] --> F["바깥 원소를 자동으로 보존\n저장 변수 불필요"]
+    style C fill:#ff6b6b,color:#fff
+    style D fill:#ff6b6b,color:#fff
+    style F fill:#51cf66,color:#fff
+```
 
+---
 
-<hr>
+## 4. for-each를 쓸 수 없는 세 가지 상황
 
-
-
-##### 💎 for-each 문을 <span style="color:red;">사용할 수 없는 상황 세 가지</span>
-
-* **파괴적인 필터링(destructive filtering)** 
-
-  * **컬렉션을 순회하면서 선택된 원소를 제거해야 한다면** 반복자의 **remove** 메서드를 호출해야 한다.
-
-  
-
-  * 자바 8부터는 **Collection**의 **removeIf** 메서드를 사용해 컬렉션을 명시적으로 순회하는 일을 피할 수 있다.
-
-
-
-* **변형(transforming)**
-  * **리스트나 배열을 순회하면서 그 원소의 값 일부 혹은 전체를 교체해야 한다면** <span style="color:red;">리스트의 반복자나 배열의 인덱스를 사용해야 한다.</span>
-
-
-
-* **병렬 반복(parallel iteration)** 
-  * **여러 컬렉션을 병렬로 순회해야 한다면** <span style="color:red;">각각의 반복자와 인덱스 변수를 사용해 엄격하고 명시적으로 제어해야 한다</span>
-
-
-
-<hr>
-
-
-
-💎 **for-each 문은 컬렉션과 배열은 물론 Iterable 인터페이스를 구현한 객체라면 무엇이든 순회 가능**
-
-* **Iterable** 인터페이스는 다음과 같이 메서드가 단 하나 뿐이다.
+비유하자면 **사서가 책을 건네는 도중 책을 제거하거나, 내용을 수정하거나, 두 서가를 동시에 봐야 하는 경우**입니다. 이럴 때는 직접 관리해야 합니다.
 
 ```java
-public interface Iterable<E> {
-    // 이 객체의 원소들을 순회하는 반복자를 반환한다.
-    Iterator<E> iterator();
+// 1. 파괴적인 필터링 — 순회 중 원소 제거
+// Java 8+ : removeIf 사용
+list.removeIf(e -> e.isExpired());
+// 또는 반복자의 remove() 직접 사용
+
+// 2. 변형 — 순회 중 원소 값 교체
+for (int i = 0; i < list.size(); i++) {
+    list.set(i, transform(list.get(i)));
+}
+
+// 3. 병렬 반복 — 두 컬렉션을 같은 위치씩 동시에 순회
+for (Iterator<A> ia = as.iterator(), Iterator<B> ib = bs.iterator();
+     ia.hasNext() && ib.hasNext(); ) {
+    process(ia.next(), ib.next());
 }
 ```
 
-* **Iterable**을 처음부터 직접 구현하기는 까다롭지만, 원소들의 묶음을 표현하는 타입을 작성해야 한다면 **Iterable**을 구현하는 쪽으로 고민해봐야 한다.
-  * 해당 타입에서 **Collection** 인터페이스는 구현하지 않기로 했더라도 말이다.
+---
 
+## 5. Iterable을 구현한 타입이라면 모두 for-each 가능
 
+비유하자면 **"순서대로 꺼낼 수 있는 것"이면 무엇이든 for-each로 순회할 수 있는 것**입니다.
 
-* **Iterable**을 구현해두면 그 타입을 사용하는 프로그래머가 **for-each** 문을 사용 할 때마다 편리할 것이다.
-
-
-
-<hr>
-
-
-> 전통적인 for 문과 비교했을 때 for-each 문은 명료하고, 유연하고, 버그를 예방해준다.
->
-> 성능 저하도 없다.
->
-> 가능한 모든 곳에서 for 문이 아닌 for-each문을 사용하되 위의 3가지 상황에서는 피하자.
-
-
-
-
-
-
-
-```
-참조 - 이펙티브 자바 3/E - 조슈아 블로크때
+```java
+public interface Iterable<E> {
+    Iterator<E> iterator();  // 메서드 하나뿐인 인터페이스
+}
 ```
 
+원소들의 묶음을 표현하는 타입을 작성한다면 `Collection`을 구현하지 않더라도 `Iterable`만 구현해두면 for-each를 지원할 수 있습니다.
+
+---
+
+## 6. 요약
+
+> for-each 문은 전통적인 for 문보다 명료하고, 유연하고, 버그를 예방하며 성능 저하도 없습니다. 가능한 모든 곳에서 for-each를 사용하되, 파괴적 필터링·변형·병렬 반복의 세 경우에만 전통적인 for 문을 쓰세요.
+
+---
+
+> 참조: 이펙티브 자바 3/E — 조슈아 블로크
