@@ -945,6 +945,183 @@ long elapsed = System.nanoTime() - start;
 
 ---
 
+## 실무에서 자주 하는 실수
+
+### 실수 1: synchronized 블록 안에서 블로킹 I/O 호출
+
+Virtual Thread의 가장 흔한 함정입니다. `synchronized` 키워드는 Virtual Thread를 캐리어 스레드에 고정(pinning)시키므로, 블로킹 I/O와 함께 사용하면 플랫폼 스레드와 다를 바 없어집니다.
+
+```java
+// 나쁜 예: synchronized + 블로킹 I/O → 피닝 발생
+public synchronized String fetchData() {
+    return httpClient.get("https://api.example.com/data"); // 피닝!
+}
+
+// 좋은 예: ReentrantLock으로 교체
+private final ReentrantLock lock = new ReentrantLock();
+
+public String fetchData() {
+    lock.lock();
+    try {
+        return httpClient.get("https://api.example.com/data"); // 피닝 없음
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+피닝 발생 여부는 `-Djdk.tracePinnedThreads=full` JVM 옵션으로 진단할 수 있습니다.
+
+### 실수 2: CPU 바운드 작업에 Virtual Thread 적용
+
+Virtual Thread는 I/O 대기 시간을 다른 Virtual Thread에게 양보하는 구조입니다. CPU를 쉬지 않고 사용하는 연산(암호화, 이미지 처리, 머신러닝 추론)에는 양보 기회가 없으므로 효과가 없습니다.
+
+```java
+// CPU 바운드 작업 → ForkJoinPool 또는 고정 크기 스레드풀 사용
+ExecutorService cpuPool = Executors.newFixedThreadPool(
+    Runtime.getRuntime().availableProcessors()
+);
+
+// I/O 바운드 작업 → Virtual Thread 사용
+ExecutorService ioPool = Executors.newVirtualThreadPerTaskExecutor();
+```
+
+### 실수 3: DB 커넥션 풀 크기를 늘리지 않음
+
+Virtual Thread를 도입하면 동시 요청 수가 수십 배 늘어납니다. 커넥션 풀 크기를 그대로 두면 풀 고갈로 오히려 성능이 저하됩니다.
+
+```yaml
+# application.yml - Virtual Thread 적용 시 커넥션 풀 재조정
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 50   # 기존 10 → 50으로 증가
+      connection-timeout: 3000
+```
+
+### 실수 4: ThreadLocal을 Virtual Thread마다 무거운 객체로 채움
+
+Virtual Thread는 수백만 개가 동시에 존재할 수 있습니다. 각 Virtual Thread의 ThreadLocal에 큰 객체를 저장하면 메모리가 폭발합니다. Java 21+에서는 `ScopedValue`로 교체를 검토하세요.
+
+```java
+// 위험: Virtual Thread가 수백만 개라면 수백만 개의 UserContext 객체 생성
+static ThreadLocal<UserContext> context = new ThreadLocal<>();
+
+// 개선: ScopedValue 사용 (Java 21+)
+static final ScopedValue<UserContext> CONTEXT = ScopedValue.newInstance();
+
+ScopedValue.where(CONTEXT, userCtx).run(() -> {
+    processRequest(); // 자동으로 스코프 종료 시 해제
+});
+```
+
+### 실수 5: Thread.sleep()을 루프 안에서 호출하면 안 된다는 잘못된 믿음
+
+기존 플랫폼 스레드에서 `Thread.sleep()`은 OS 스레드를 점유하는 낭비였습니다. Virtual Thread에서는 `sleep()` 호출 시 캐리어 스레드를 반납하고 대기하므로 자유롭게 사용해도 됩니다.
+
+```java
+// Virtual Thread에서는 sleep이 비싸지 않음
+try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    for (int i = 0; i < 10_000; i++) {
+        executor.submit(() -> {
+            Thread.sleep(1000); // 캐리어 스레드 반납, 다른 VThread 실행
+            process();
+        });
+    }
+}
+```
+
+---
+
+## 극한 시나리오
+
+### 100 TPS — 기존 방식으로 충분
+
+초당 100건의 요청은 기존 플랫폼 스레드 풀(50~100개)로 처리 가능합니다. 이 단계에서 Virtual Thread를 도입하면 오히려 디버깅 복잡도만 늘어납니다.
+
+```java
+// 100 TPS: 기존 방식 유지
+@Bean
+public ExecutorService taskExecutor() {
+    return Executors.newFixedThreadPool(50);
+}
+```
+
+### 10,000 TPS — Virtual Thread 전환 효과 극대화
+
+초당 10,000건 이상에서 각 요청이 외부 API를 2~3회 호출한다면, 동시 I/O 대기 수가 수만 건에 달합니다. 플랫폼 스레드로는 OOM 또는 스레드 기아가 발생합니다.
+
+```java
+// Spring Boot 3.2+ 한 줄 설정
+// application.yml
+spring:
+  threads:
+    virtual:
+      enabled: true
+
+// 또는 직접 설정
+@Bean
+public TomcatProtocolHandlerCustomizer<?> virtualThreadCustomizer() {
+    return handler -> handler.setExecutor(
+        Executors.newVirtualThreadPerTaskExecutor()
+    );
+}
+```
+
+이 설정만으로 동시 처리 스레드가 사실상 무제한이 되며, 각 요청의 I/O 대기 중에 캐리어 스레드를 반납하여 다른 요청을 처리합니다.
+
+### 100,000 TPS — 구조적 병목 해소
+
+Virtual Thread를 도입해도 초당 100,000건에서는 DB, 캐시, 외부 API가 병목이 됩니다. 각 레이어의 동시성 한계를 명확히 해야 합니다.
+
+```java
+// 100K TPS 구조: Virtual Thread + 세마포어로 하위 서비스 보호
+public class RateLimitedService {
+    // DB 커넥션 풀 한계를 세마포어로 반영
+    private final Semaphore dbSemaphore = new Semaphore(200);
+    // 외부 API rate limit 반영
+    private final Semaphore apiSemaphore = new Semaphore(500);
+
+    public Response process(Request req) throws InterruptedException {
+        dbSemaphore.acquire();
+        try {
+            String dbResult = database.query(req.id()); // Virtual Thread가 대기 중 캐리어 반납
+            apiSemaphore.acquire();
+            try {
+                String apiResult = externalApi.call(dbResult);
+                return new Response(apiResult);
+            } finally {
+                apiSemaphore.release();
+            }
+        } finally {
+            dbSemaphore.release();
+        }
+    }
+}
+```
+
+<div class="mermaid">
+graph TD
+    subgraph "100K TPS Virtual Thread 아키텍처"
+        VT["Virtual Thread\n(수십만 개 동시 존재)"]
+        CT["캐리어 스레드\n(CPU 코어 수만큼)"]
+        SEM["Semaphore\n(하위 서비스 보호)"]
+        DB["DB 커넥션 풀\n(200개)"]
+        API["외부 API\n(500 동시)"]
+        CACHE["Redis 캐시\n(커넥션 풀 100개)"]
+    end
+
+    VT -->|"I/O 대기 시 반납"| CT
+    VT --> SEM
+    SEM --> DB
+    SEM --> API
+    VT --> CACHE
+</div>
+
+Virtual Thread 자체는 무제한에 가깝게 생성할 수 있지만, 실제 처리량은 가장 느린 하위 서비스의 처리 능력에 의해 결정됩니다. 세마포어로 역압력(back-pressure)을 구현하면 하위 서비스를 보호하면서 최대 처리량을 유지할 수 있습니다.
+
+---
+
 ## 정리
 
 Virtual Thread는 Java 생태계에서 동시성 프로그래밍의 패러다임을 바꾸는 기술입니다.

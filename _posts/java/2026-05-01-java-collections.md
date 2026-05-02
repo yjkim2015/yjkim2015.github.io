@@ -379,22 +379,25 @@ class GoodKey {
 
 #### 해시 충돌 처리 — 체이닝 → 트리화 (Java 8+)
 
-```
-Java 7 이하: 체이닝 (Linked List)
+Java 7까지는 같은 버킷에 충돌이 많아지면 연결 리스트가 길어져 탐색이 O(n)으로 악화됩니다. 특히 `hashCode()`가 잘못 구현된 클래스를 키로 사용하면 모든 원소가 같은 버킷에 몰려 HashMap이 사실상 연결 리스트처럼 동작합니다. Java 8은 이 문제를 트리화(Treeify)로 해결했습니다.
 
-버킷[3]:  → [Node:"A"] → [Node:"X"] → [Node:"M"] → null
-                          해시 충돌 시 연결 리스트로 연결
-
-Java 8+: 충돌이 많으면 Red-Black Tree로 전환
-
-버킷[3]:  → TreeNode (TREEIFY_THRESHOLD=8 초과 시)
-                 ┌──────┴──────┐
-              [Node]        [Node]
-             ┌──┴──┐       ┌──┴──┐
-           [Node] [Node] [Node] [Node]
-
-장점: 최악의 경우 탐색 O(n) → O(log n)으로 개선
-```
+<div class="mermaid">
+graph TD
+  subgraph "Java 7 이하: 체이닝 (연결 리스트)"
+    B3A["버킷[3]"] --> NA["Node: A"] --> NX["Node: X"] --> NM["Node: M"] --> NULL1["null"]
+    NOTE1["탐색: O(n) — 충돌이 많을수록 악화"]
+  end
+  subgraph "Java 8+: TREEIFY_THRESHOLD=8 초과 시 트리 전환"
+    B3B["버킷[3]"] --> TREE["TreeNode (Red-Black Tree)"]
+    TREE --> L["왼쪽 서브트리"]
+    TREE --> R["오른쪽 서브트리"]
+    L --> LL["..."]
+    L --> LR["..."]
+    R --> RL["..."]
+    R --> RR["..."]
+    NOTE2["탐색: O(log n) — 충돌이 많아도 안전"]
+  end
+</div>
 
 ---
 
@@ -1220,6 +1223,165 @@ int count = map2.get("key"); // NullPointerException! (auto-unboxing)
 // 올바른 방법:
 int count2 = map2.getOrDefault("key", 0);
 ```
+
+---
+
+## 실무에서 자주 하는 실수
+
+### 실수 1: ArrayList를 무조건 기본 컬렉션으로 사용
+
+ArrayList는 인덱스 조회(O(1))에 강하지만 중간 삽입/삭제(O(n))가 느립니다. 큐나 덱(deque) 용도로 ArrayList를 사용하면 매 연산마다 배열 이동이 발생합니다.
+
+```java
+// 나쁜 예: ArrayList로 큐 구현
+List<Task> queue = new ArrayList<>();
+queue.add(task);           // 뒤에 추가 O(1)
+queue.remove(0);           // 앞에서 제거 O(n) — 전체 이동 발생!
+
+// 좋은 예: ArrayDeque 사용
+Deque<Task> queue = new ArrayDeque<>();
+queue.offer(task);         // O(1)
+queue.poll();              // O(1)
+```
+
+### 실수 2: HashMap의 초기 용량을 지정하지 않음
+
+HashMap은 기본 초기 용량이 16이고 load factor가 0.75입니다. 저장할 데이터 수를 미리 알고 있다면 초기 용량을 지정해 리해시(rehash)를 방지해야 합니다.
+
+```java
+// 나쁜 예: 1000개를 저장할 Map을 기본 용량으로 생성
+Map<String, User> users = new HashMap<>(); // 16 → 32 → 64 → ... 리해시 반복
+
+// 좋은 예: 예상 크기 / 0.75 + 1 로 초기 용량 지정
+Map<String, User> users = new HashMap<>(1334); // 1000 / 0.75 ≈ 1334
+```
+
+### 실수 3: 멀티스레드 환경에서 일반 HashMap 사용
+
+HashMap은 스레드 안전하지 않습니다. 동시 수정 시 무한 루프(Java 7)나 데이터 손실(Java 8+)이 발생할 수 있습니다.
+
+```java
+// 위험: 멀티스레드에서 공유 HashMap
+Map<String, Integer> counter = new HashMap<>();
+// 여러 스레드가 동시에 put() 호출 → 데이터 손실
+
+// 개선: ConcurrentHashMap + 원자적 업데이트
+Map<String, Integer> counter = new ConcurrentHashMap<>();
+counter.merge(key, 1, Integer::sum);
+
+// 단순 카운터는 LongAdder가 더 효율적
+ConcurrentHashMap<String, LongAdder> counter2 = new ConcurrentHashMap<>();
+counter2.computeIfAbsent(key, k -> new LongAdder()).increment();
+```
+
+### 실수 4: LinkedList를 랜덤 접근에 사용
+
+LinkedList는 순차 탐색(O(n))만 지원합니다. `get(index)` 호출 시 head부터 순서대로 탐색하므로 대용량 리스트에서 극도로 느립니다.
+
+```java
+// 나쁜 예: LinkedList에서 인덱스 접근
+List<String> list = new LinkedList<>();
+// 10만 건 추가 후
+String item = list.get(50000); // head부터 50000번 탐색 O(n)
+
+// 좋은 예: 인덱스 접근이 필요하면 ArrayList
+List<String> list2 = new ArrayList<>();
+String item2 = list2.get(50000); // 배열 인덱스 직접 접근 O(1)
+```
+
+### 실수 5: Collections.unmodifiableList()를 불변으로 착각
+
+`Collections.unmodifiableList()`는 뷰(view)를 반환합니다. 원본 리스트가 변경되면 뷰도 변경됩니다. 진정한 불변 컬렉션은 `List.copyOf()`를 사용해야 합니다.
+
+```java
+List<String> original = new ArrayList<>(Arrays.asList("a", "b", "c"));
+List<String> view = Collections.unmodifiableList(original);
+
+original.add("d");
+System.out.println(view.size()); // 4 — 뷰도 변경됨!
+
+// 진정한 불변 복사본 (Java 10+)
+List<String> immutable = List.copyOf(original);
+original.add("e");
+System.out.println(immutable.size()); // 4 — 변경 없음
+```
+
+---
+
+## 극한 시나리오: 트래픽 규모별 컬렉션 전략
+
+### 100 TPS (소규모 서비스)
+
+이 규모에서는 컬렉션 선택이 성능에 미치는 영향이 크지 않습니다. 코드 가독성과 안전성을 우선시하고, 기본 구현체(`ArrayList`, `HashMap`, `HashSet`)를 사용하면 충분합니다. 동시성 컬렉션도 필요 없습니다.
+
+```java
+// 100 TPS: 단순 HashMap으로 충분, 초기 capacity 지정으로 resize 비용 제거
+Map<String, UserSession> sessions = new HashMap<>(256); // 예상 동시 세션 수
+List<Order> pendingOrders = new ArrayList<>(64);
+Set<String> processedIds = new HashSet<>(128);
+```
+
+### 10,000 TPS (중규모 서비스)
+
+멀티스레드 환경에서 컬렉션이 공유되기 시작합니다. `HashMap` 대신 `ConcurrentHashMap`이 필요하며, 읽기/쓰기 패턴에 따라 `CopyOnWriteArrayList`를 검토합니다. 초기 capacity 설정이 resize 비용을 줄이는 데 중요해집니다.
+
+```java
+// 10K TPS: 동시성 컬렉션 + 초기 용량 최적화
+
+// 세션 저장소 — 스레드 안전 필수
+ConcurrentHashMap<String, Session> sessionStore =
+    new ConcurrentHashMap<>(4096); // 예상 동시 세션에 맞게 초기화
+
+// 원자적 집계 — 일반 Map은 race condition 발생
+sessionStore.merge(userId, newSession, (old, neu) -> neu); // 원자적 교체
+
+// 이벤트 리스너 — 읽기(이벤트 발행)가 쓰기(등록/해제)보다 압도적으로 많음
+CopyOnWriteArrayList<EventListener> listeners = new CopyOnWriteArrayList<>();
+// 이벤트 발행 시 락 없이 읽기 → 10K TPS에서도 병목 없음
+
+// 캐시 크기 제한 — LinkedHashMap LRU로 메모리 통제
+Map<Long, ProductInfo> productCache = Collections.synchronizedMap(
+    new LinkedHashMap<Long, ProductInfo>(1024, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Long, ProductInfo> eldest) {
+            return size() > 1000; // 최대 1000개 유지
+        }
+    }
+);
+```
+
+### 100,000 TPS (대규모 서비스)
+
+단일 JVM의 인메모리 컬렉션만으로는 상태를 관리하기 어렵습니다. `ConcurrentHashMap`의 세밀한 설정과 lock-free 연산이 필수이며, 대용량 집합 조회는 `BloomFilter` 같은 확률적 자료구조를 도입해야 합니다.
+
+```java
+// 100K TPS: 세밀한 동시성 제어
+
+// concurrencyLevel 힌트 제공 (Java 8+에서는 무시되지만 명시적 문서화 효과)
+ConcurrentHashMap<String, AtomicLong> counters =
+    new ConcurrentHashMap<>(1024, 0.75f, 64); // 64개 동시 쓰기 예상
+
+// compute()로 원자적 업데이트 — synchronized 없이 안전
+counters.compute("api.calls", (k, v) -> v == null ? new AtomicLong(1) : v);
+counters.get("api.calls").incrementAndGet(); // lock-free increment
+
+// 차단 목록 조회 (수백만 건) — HashSet은 메모리 사용量이 큼
+// Guava BloomFilter: 메모리 1/10, 오탐률 1% 허용 시
+// BloomFilter<String> blocklist = BloomFilter.create(
+//     Funnels.stringFunnel(StandardCharsets.UTF_8), 10_000_000, 0.01);
+
+// 핫 파티션 방지 — 키에 샤딩 적용
+int shardCount = 16;
+List<ConcurrentHashMap<String, Object>> shards = IntStream.range(0, shardCount)
+    .mapToObj(i -> new ConcurrentHashMap<String, Object>(256))
+    .collect(Collectors.toList());
+// 특정 키가 한 Map에 집중되지 않도록 분산
+ConcurrentHashMap<String, Object> getShard(String key) {
+    return shards.get(Math.abs(key.hashCode()) % shardCount);
+}
+```
+
+100K TPS를 넘으면 인메모리 컬렉션의 한계를 인식해야 합니다. 세션은 Redis, 메시지는 Kafka, 통계 집계는 별도 스트림 처리 플랫폼(Flink, Spark)으로 외부화하는 아키텍처가 필요합니다.
 
 ---
 

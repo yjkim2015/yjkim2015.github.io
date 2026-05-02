@@ -9,46 +9,52 @@ toc_label: 목차
 
 `kafkaTemplate.send("orders", event)` 한 줄이면 메시지가 전송된다고 생각하기 쉽다. 하지만 이 한 줄 뒤에는 직렬화, 파티셔닝, 배치 누적, 압축, 재시도, ACK 확인까지 수십 가지 동작이 숨어있다. acks 설정 하나 잘못 건드리면 메시지가 유실되거나 순서가 뒤집힌다.
 
-> **비유**: Producer는 택배 발송 창구 직원이다. 물건(메시지)을 받아 분류하고(파티셔닝), 박스에 담고(배치), 트럭에 싣는다(네트워크 전송). 물건이 제대로 도착했다는 확인서(ACK)를 받을 때까지 기록을 보관한다.
+## 왜 이게 중요한가?
+
+Producer 설정은 **처리량**, **지연**, **내구성** 세 가지 목표 사이의 트레이드오프다. acks=0이면 처리량은 최대지만 메시지가 유실될 수 있다. acks=all이면 내구성은 최대지만 지연이 늘어난다. 이 트레이드오프를 이해하지 못하면 장애 발생 시 원인도, 해결책도 찾을 수 없다.
+
+## 비유로 이해하기
+
+> Producer는 택배 발송 창구 직원이다. 물건(메시지)을 받아 분류하고(파티셔닝), 박스에 담고(배치), 트럭에 싣는다(네트워크 전송). 물건이 제대로 도착했다는 확인서(ACK)를 받을 때까지 기록을 보관한다. 확인서를 아예 안 받으면 빠르지만 배달 분실을 모른다. 모든 창고에서 확인서를 받으면 확실하지만 시간이 걸린다.
 
 ## Producer 내부 아키텍처
 
 ### 전체 흐름
 
-```
-Application
-    │
-    │ producer.send(record)
-    ▼
-┌─────────────────────────────────────────────────────┐
-│                  KafkaProducer                       │
-│                                                      │
-│  Serializer → Partitioner → RecordAccumulator        │
-│                                    │                 │
-│                              배치 누적                │
-│                                    │                 │
-│                             Sender Thread            │
-│                             (I/O 전담)               │
-└─────────────────────────────────────────────────────┘
-                                    │
-                             NetworkClient
-                                    │
-                             Kafka Broker
+Producer가 `send(record)`를 호출하면 메시지는 즉시 네트워크로 나가지 않는다. RecordAccumulator라는 버퍼에 누적된 후 백그라운드 Sender 스레드가 일괄 전송한다.
+
+```mermaid
+flowchart TD
+    APP["Application\nproducer.send(record) 호출"]
+    SER["Serializer\n키/값을 바이트 배열로 변환"]
+    PART["Partitioner\n어느 파티션으로 보낼지 결정"]
+    ACC["RecordAccumulator\n파티션별 ProducerBatch 버퍼에 누적\n(buffer.memory = 32MB 기본)"]
+    SEND["Sender Thread\n(백그라운드 I/O 전담)"]
+    NET["NetworkClient\n브로커와 TCP 연결 관리"]
+    BROKER["Kafka Broker\nLeader 파티션에 저장"]
+
+    APP --> SER --> PART --> ACC
+    ACC -->|"batch.size 도달 또는 linger.ms 경과"| SEND
+    SEND --> NET --> BROKER
+    BROKER -->|"ACK 반환"| SEND
+    SEND -->|"Future 완료"| APP
+
+    style APP fill:#3498db,color:#fff
+    style ACC fill:#e67e22,color:#fff
+    style BROKER fill:#2ecc71,color:#fff
 ```
 
 ### RecordAccumulator
 
 Producer 스레드와 Sender 스레드 사이의 버퍼 역할을 한다. 각 TopicPartition마다 `Deque<ProducerBatch>`를 유지하여 메시지를 배치로 묶는다.
 
+Producer 스레드는 배치에 메시지를 추가하고, Sender 스레드는 배치가 준비되면 꺼내서 전송한다. 이 분리 덕분에 애플리케이션 스레드가 네트워크 지연에 블로킹되지 않는다.
+
 ```
 RecordAccumulator 내부:
-┌─────────────────────────────────────────────┐
-│                                             │
-│  orders-P0: [batch1: msg0,msg1,msg2] [batch2: msg3] │
-│  orders-P1: [batch1: msg4,msg5]             │
-│  payments-P0: [batch1: msg6]                │
-│                                             │
-└─────────────────────────────────────────────┘
+orders-P0: [batch1: msg0,msg1,msg2] [batch2: msg3]
+orders-P1: [batch1: msg4,msg5]
+payments-P0: [batch1: msg6]
          ↑ Producer 스레드가 추가
          ↓ Sender 스레드가 가져가서 전송
 ```
@@ -84,21 +90,24 @@ max.in.flight.requests.per.connection=5  # 브로커당 동시 미확인 요청 
 
 ### 배치 전략
 
-```
-linger.ms=0 (기본):
-  메시지 도착 즉시 전송 → 지연 최소, 처리량 낮음
-  단일 메시지가 하나의 네트워크 요청 = 오버헤드 큼
+`linger.ms`와 `batch.size`는 처리량과 지연 사이의 핵심 튜닝 파라미터다.
 
-linger.ms=10:
-  10ms 대기 후 배치로 전송 → 지연 소폭 증가, 처리량 크게 향상
-  같은 시간 내 도착한 메시지들이 하나의 배치
+```mermaid
+graph LR
+    subgraph "linger.ms=0 (기본: 지연 최소화)"
+        L0["메시지 도착 즉시 전송\n단일 메시지 = 하나의 네트워크 요청\n→ 지연 최소, 처리량 낮음"]
+    end
+    subgraph "linger.ms=10 (처리량 최적화)"
+        L10["10ms 대기 후 배치로 전송\n같은 시간 내 도착한 메시지가 하나의 배치\n→ 지연 소폭 증가, 처리량 크게 향상"]
+    end
 
-batch.size=65536 (64KB):
-  배치가 64KB 차면 즉시 전송 (linger.ms 기다리지 않음)
+    style L0 fill:#3498db,color:#fff
+    style L10 fill:#2ecc71,color:#fff
 ```
 
-```
-처리량 최적화 설정:
+처리량 최적화를 위한 권장 설정:
+
+```properties
 linger.ms=20
 batch.size=131072       # 128KB
 compression.type=snappy
@@ -107,7 +116,7 @@ buffer.memory=67108864  # 64MB
 
 ### 압축
 
-Producer에서 압축하면 네트워크 전송량과 브로커 저장 공간을 줄일 수 있다. Broker는 압축 해제 없이 그대로 저장하고 Consumer가 해제한다.
+Producer에서 압축하면 네트워크 전송량과 브로커 저장 공간을 줄일 수 있다. Broker는 압축 해제 없이 그대로 저장하고 Consumer가 해제한다. CPU 사용량이 늘어나는 대신 I/O가 줄어드는 트레이드오프다.
 
 | 압축 알고리즘 | 압축률 | 속도 | CPU 사용 | 권장 상황 |
 |--------------|--------|------|---------|-----------|
@@ -127,6 +136,8 @@ compression.type=snappy   # Producer 설정
 
 ### 기본 파티셔닝 로직
 
+키가 있는 메시지는 murmur2 해시로 파티션을 결정하므로 같은 키는 항상 같은 파티션으로 라우팅된다. 이것이 순서 보장의 근거다.
+
 ```java
 // Kafka 2.4+ 기본 파티셔너: StickyPartitioner
 // 키가 없는 메시지: 배치가 찰 때까지 같은 파티션에 Sticky
@@ -139,6 +150,8 @@ ProducerRecord<String, String> record =
 ```
 
 ### 커스텀 파티셔너
+
+VIP 주문을 전담 파티션과 Consumer로 처리하는 등 비즈니스 요구사항에 맞는 라우팅이 필요할 때 사용한다.
 
 ```java
 public class OrderPriorityPartitioner implements Partitioner {
@@ -157,11 +170,8 @@ public class OrderPriorityPartitioner implements Partitioner {
         return (Utils.murmur2(keyBytes) & Integer.MAX_VALUE) % (numPartitions - 1) + 1;
     }
 
-    @Override
-    public void close() {}
-
-    @Override
-    public void configure(Map<String, ?> configs) {}
+    @Override public void close() {}
+    @Override public void configure(Map<String, ?> configs) {}
 }
 
 // 설정
@@ -175,18 +185,25 @@ props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG,
 
 ### 재시도로 인한 중복 문제
 
-```
-일반 Producer 재시도 시나리오:
-1. Producer → Broker: msg1 전송
-2. Broker: msg1 저장 성공
-3. 네트워크 장애로 ack 미전달
-4. Producer: timeout → 재시도
-5. Producer → Broker: msg1 재전송
-6. Broker: msg1 중복 저장
-→ 메시지 중복!
+네트워크 장애로 ACK가 전달되지 않으면 Producer는 성공한 메시지를 재전송한다. 이로 인해 브로커에 같은 메시지가 두 번 저장될 수 있다.
+
+```mermaid
+sequenceDiagram
+    participant P as "Producer"
+    participant B as "Broker"
+
+    P ->> B: "msg1 전송"
+    B ->> B: "msg1 저장 성공"
+    B --x P: "ACK 전달 실패 (네트워크 장애)"
+    P ->> P: "timeout → 재시도"
+    P ->> B: "msg1 재전송"
+    B ->> B: "msg1 중복 저장"
+    Note over B: "메시지 중복!"
 ```
 
 ### 멱등성 Producer 동작
+
+`enable.idempotence=true` 설정 하나로 브로커가 중복 시퀀스를 감지하고 자동으로 제거한다.
 
 ```properties
 enable.idempotence=true
@@ -210,12 +227,7 @@ Broker: seq=5 이미 처리됨 → 중복 무시, ack 반환
 → 중복 없이 exactly-once (파티션 내)
 ```
 
-```
-한계:
-- 단일 파티션 내에서만 exactly-once 보장
-- Producer 재시작 시 PID가 바뀌어 보장 범위 초기화
-- 크로스 파티션 또는 크로스 토픽 exactly-once는 트랜잭션 필요
-```
+한계: 단일 파티션 내에서만 exactly-once 보장된다. 크로스 파티션 또는 크로스 토픽 exactly-once는 트랜잭션 Producer가 필요하다.
 
 ---
 
@@ -223,7 +235,7 @@ Broker: seq=5 이미 처리됨 → 중복 무시, ack 반환
 
 ### 트랜잭션이란?
 
-여러 파티션 또는 여러 토픽에 걸쳐 원자적 쓰기를 보장한다. 모두 성공하거나 모두 실패한다.
+여러 파티션 또는 여러 토픽에 걸쳐 원자적 쓰기를 보장한다. 주문, 재고, 알림 세 토픽에 동시 발행할 때 모두 성공하거나 모두 실패해야 하는 경우에 사용한다.
 
 ```java
 // 트랜잭션 설정
@@ -249,10 +261,9 @@ try {
 
 ### Consumer-Producer 트랜잭션 (Read-Process-Write)
 
-```java
-// Kafka Streams가 내부적으로 사용하는 패턴
-// Consumer에서 읽고, 처리하고, Producer로 쓰는 과정을 원자적으로
+Consumer에서 읽고, 처리하고, Producer로 쓰는 과정을 원자적으로 처리한다. Kafka Streams가 내부적으로 사용하는 패턴이다.
 
+```java
 producer.beginTransaction();
 try {
     ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
@@ -274,23 +285,12 @@ try {
 
 ### Isolation Level
 
-트랜잭션 메시지를 Consumer에서 읽는 방법은 `isolation.level` 설정으로 제어한다.
-
 ```properties
 # Consumer 설정
 isolation.level=read_committed   # 커밋된 트랜잭션 메시지만 읽음 (기본: read_uncommitted)
 ```
 
-```
-read_uncommitted (기본):
-  진행 중인 트랜잭션 메시지도 즉시 읽음
-  → 나중에 abort되면 이미 처리한 메시지가 유효하지 않을 수 있음
-
-read_committed:
-  commitTransaction() 완료된 메시지만 읽음
-  → Last Stable Offset(LSO) 이하의 메시지만 노출
-  → 처리량 소폭 감소, 정확한 exactly-once 보장
-```
+`read_committed`를 사용하면 나중에 abort된 트랜잭션 메시지를 읽지 않는다. 처리량이 소폭 감소하지만 정확한 exactly-once 보장이 가능하다.
 
 ---
 
@@ -357,24 +357,25 @@ delivery.timeout.ms=120000          # 전체 전송 타임아웃 (기본 2분)
 
 ### 재시도 중복 방지 전략
 
+```mermaid
+graph TD
+    NEED["중복 방지 필요"]
+    Q1{"범위"}
+    Q2{"크로스 파티션/토픽?"}
+
+    S1["전략 1: 멱등성 Producer\nenable.idempotence=true\n→ 단일 파티션 내 exactly-once"]
+    S2["전략 2: 트랜잭션 Producer\ntransactional.id=unique-id\n→ 크로스 파티션/토픽 원자적 처리"]
+    S3["전략 3: 애플리케이션 멱등 키\n메시지에 고유 ID 포함\n→ Consumer가 중복 체크"]
+    S4["전략 4: Outbox 패턴\nDB 트랜잭션으로 발행 보장"]
+
+    NEED --> Q1
+    Q1 -->|"단일 파티션"| S1
+    Q1 -->|"여러 파티션/토픽"| S2
+    Q1 -->|"Kafka 설정 무관"| S3
+    Q1 -->|"DB 트랜잭션 필요"| S4
 ```
-전략 1: 멱등성 Producer (단순, 단일 파티션)
-  enable.idempotence=true
-  → Broker가 시퀀스 번호로 중복 감지
 
-전략 2: 트랜잭션 Producer (크로스 파티션/토픽)
-  transactional.id=unique-id
-  → 트랜잭션 단위로 원자적 처리
-
-전략 3: 애플리케이션 레벨 멱등 키
-  메시지에 고유 ID 포함 → Consumer가 중복 체크
-  → Kafka 설정 무관하게 항상 사용 가능
-
-전략 4: Outbox 패턴
-  DB 트랜잭션으로 발행 보장 → Relay가 중복 없이 전송
-```
-
-### 멱등성 + 트랜잭션 조합
+### 멱등성 + 트랜잭션 조합 설정
 
 ```java
 @Configuration
@@ -413,7 +414,7 @@ public class KafkaProducerConfig {
 
 ## 성능 튜닝 요약
 
-| 목표 | 설정 | 값 |
+| 목표 | 설정 | 권장 값 |
 |------|------|-----|
 | 처리량 최대화 | `linger.ms` | 20~50 |
 | 처리량 최대화 | `batch.size` | 65536~131072 |
@@ -425,12 +426,47 @@ public class KafkaProducerConfig {
 | 내구성 최대화 | `enable.idempotence` | true |
 | 내구성 최대화 | `min.insync.replicas` | 2 |
 
-```
-처리량 vs 지연 트레이드오프:
-linger.ms=0:  지연 낮음, 처리량 낮음
-linger.ms=50: 지연 높음, 처리량 높음
+처리량과 지연은 반비례 관계다. `linger.ms`를 늘리면 배치가 커져 처리량이 높아지지만 개별 메시지의 지연도 늘어난다.
 
-실무 권장:
-  - 실시간 처리 필요: linger.ms=0~5
-  - 대량 데이터 파이프라인: linger.ms=20~100
+---
+
+## 극한 시나리오
+
+### 시나리오 1: ACK=ALL인데 브로커 1대 장애 발생 중 메시지 전송
+
+ISR이 줄어들어 `min.insync.replicas` 조건을 충족하지 못하면 Producer에 `NotEnoughReplicasException`이 반환된다. 메시지가 손실되지는 않지만 전송이 거부된다.
+
+```
+상황: replication.factor=3, min.insync.replicas=2
+      브로커 2대 장애 → ISR = {Leader만 남음}
+
+결과: acks=all이면 min.insync.replicas=2 미충족
+      → Producer에 NotEnoughReplicasException
+      → 메시지 전송 실패 (유실 없음)
+
+대응:
+  retries 설정으로 자동 재시도
+  브로커 복구 또는 다른 브로커 투입 후 ISR 복구 대기
+```
+
+### 시나리오 2: 트랜잭션 Producer 인스턴스가 두 개 동시에 같은 transactional.id 사용
+
+새 인스턴스가 같은 `transactional.id`로 `initTransactions()`를 호출하면 이전 인스턴스의 트랜잭션이 강제 중단(Fence)된다. 이를 **Producer Fencing**이라 한다.
+
+```
+방어:
+transactional.id를 서비스 인스턴스마다 고유하게 설정
+(예: "order-svc-" + System.getenv("HOSTNAME"))
+중복 실행 방지 로직 추가
+```
+
+### 시나리오 3: buffer.memory 소진으로 전체 서비스 블로킹
+
+브로커 장애나 네트워크 지연이 길어지면 RecordAccumulator 버퍼가 가득 차 `producer.send()`가 `max.block.ms` 동안 블로킹된다. 서비스 스레드가 모두 Kafka 전송 대기 상태로 빠지면 서비스 전체가 멈출 수 있다.
+
+```
+방어:
+max.block.ms를 짧게 설정 (빠른 실패)
+비동기 전송 + 예외 처리로 Kafka 지연이 서비스를 블로킹하지 않도록 설계
+Circuit Breaker 패턴 적용 (Kafka 연결 실패 시 fallback)
 ```

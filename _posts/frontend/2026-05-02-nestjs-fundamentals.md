@@ -7,7 +7,11 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-## 대형 병원 시스템
+## 왜 이게 중요한가?
+
+Express로 규모가 커진 백엔드는 파일 구조와 의존성 관리가 개발자마다 달라 유지보수가 어려워진다. NestJS는 Angular에서 영감을 받아 **모듈-컨트롤러-서비스** 삼층 구조를 강제함으로써 팀 협업과 테스트 가능성을 높인다. 의존성 주입(DI) 컨테이너를 내장하고, 요청 처리 파이프라인(미들웨어 → 가드 → 인터셉터 → 파이프 → 컨트롤러)이 명확하게 정의되어 인증, 로깅, 유효성 검사 같은 횡단 관심사를 깔끔하게 분리할 수 있다.
+
+## 비유로 이해하기
 
 NestJS의 구조는 대형 병원과 비슷합니다.
 
@@ -638,7 +642,61 @@ sequenceDiagram
 
 ---
 
-## 12. 정리
+## 12. 극한 시나리오
+
+### 시나리오 1: 순환 의존성(Circular Dependency)
+
+모듈 A가 모듈 B를 임포트하고, 모듈 B가 다시 모듈 A를 임포트하면 NestJS가 DI 컨테이너를 초기화할 때 무한 루프에 빠진다.
+
+```typescript
+// 해결: forwardRef() 사용
+@Module({
+  imports: [forwardRef(() => OrdersModule)],
+})
+export class UsersModule {}
+
+// 서비스 레벨에서도 동일하게 처리
+@Injectable()
+export class UsersService {
+  constructor(
+    @Inject(forwardRef(() => OrdersService))
+    private ordersService: OrdersService,
+  ) {}
+}
+```
+
+순환 의존성이 자주 발생한다면 두 모듈이 공통 기능에 의존하는 구조로 리팩토링하는 것이 올바른 해결책이다.
+
+### 시나리오 2: 가드가 실행됐는데 인터셉터가 응답을 변환하지 못한다
+
+가드에서 예외를 던지면 인터셉터의 `next.handle()` 이후 파이프가 실행되지 않는다. 예외 필터(`ExceptionFilter`)가 대신 예외를 처리한다.
+
+```
+요청 흐름:
+미들웨어 → 가드(예외 발생) → ExceptionFilter가 처리
+                            ↑ 인터셉터 후처리, 파이프는 실행 안 됨
+```
+
+전역 예외 필터를 등록해 모든 예외를 일관된 형식으로 반환해야 한다.
+
+### 시나리오 3: ValidationPipe의 whitelist가 데이터를 삭제한다
+
+`whitelist: true`는 DTO에 정의되지 않은 속성을 자동으로 제거한다. 클라이언트가 보낸 필드가 사라져 버그처럼 보일 수 있다.
+
+```typescript
+// whitelist: true 설정 시
+// 클라이언트: { name: '홍길동', hackerField: 'inject' }
+// DTO 도달: { name: '홍길동' }  ← hackerField 제거됨 (보안상 올바른 동작)
+
+// forbidNonWhitelisted: true 추가 시
+// 알 수 없는 속성이 있으면 400 에러 반환 (더 엄격한 보안)
+```
+
+의도적으로 동적 필드를 허용해야 한다면 DTO에 `@IsObject()` + `additionalProperties` 방식으로 명시적으로 설계해야 한다.
+
+---
+
+## 13. 정리
 
 ```mermaid
 mindmap

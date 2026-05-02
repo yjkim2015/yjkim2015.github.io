@@ -7,7 +7,11 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-## 집안 살림 관리 방법
+## 왜 이게 중요한가?
+
+상태 관리는 React 애플리케이션의 복잡도와 직결된다. 상태를 어디에 두느냐에 따라 불필요한 리렌더링, prop drilling, 서버-클라이언트 데이터 불일치가 발생한다. useState로 충분한 곳에 Redux를 도입하면 과도한 보일러플레이트가 생기고, 반대로 전역 상태가 필요한 곳에 prop drilling을 방치하면 컴포넌트가 강하게 결합된다. 서버 상태(API 데이터)와 클라이언트 상태(UI 상태)를 구분하는 것이 현대 React 상태 관리의 핵심이다.
+
+## 비유로 이해하기
 
 가족의 가계부 관리를 생각해 봅시다.
 
@@ -687,7 +691,65 @@ function Parent() {
 
 ---
 
-## 12. 정리
+## 12. 극한 시나리오
+
+### 시나리오 1: Context 값이 바뀔 때마다 전체 트리가 리렌더링된다
+
+```jsx
+// 문제: user와 theme이 하나의 Context에 묶여 있어
+//       theme만 바뀌어도 user를 사용하는 컴포넌트까지 리렌더링
+const AppContext = createContext({ user, theme });
+
+// 해결 1: Context 분리
+const UserContext = createContext(user);
+const ThemeContext = createContext(theme);
+
+// 해결 2: useMemo로 value 안정화
+const value = useMemo(() => ({ user, updateUser }), [user]);
+<UserContext.Provider value={value}>
+```
+
+Context를 분리하면 각 Context 구독자가 관련 상태 변경 시에만 리렌더링된다.
+
+### 시나리오 2: Redux 상태는 바뀌는데 컴포넌트가 리렌더링되지 않는다
+
+```javascript
+// 문제: 객체 직접 변이
+const userSlice = createSlice({
+  reducers: {
+    updateName: (state, action) => {
+      state.data.name = action.payload; // Immer 사용 중이면 OK
+      // 하지만 Immer 없이 직접 변이하면 참조가 같아 리렌더링 안 됨
+    }
+  }
+});
+
+// Redux Toolkit은 Immer를 내장하므로 직접 변이처럼 보이는 코드가 안전하게 동작
+// 순수 Redux에서는 반드시 새 객체 반환 필요
+return { ...state, data: { ...state.data, name: action.payload } };
+```
+
+### 시나리오 3: React Query 캐시가 stale한 데이터를 보여준다
+
+```javascript
+// 증상: 다른 탭에서 데이터를 수정했는데
+//       이 탭은 여전히 오래된 데이터를 표시
+
+// 해결 1: staleTime을 0으로 설정 (매번 재검증)
+useQuery({ queryKey: ['users'], staleTime: 0 });
+
+// 해결 2: 윈도우 포커스 시 재요청 활성화
+useQuery({ queryKey: ['users'], refetchOnWindowFocus: true });
+
+// 해결 3: WebSocket이나 SSE로 서버 변경 시 invalidateQueries 호출
+queryClient.invalidateQueries({ queryKey: ['users'] });
+```
+
+staleTime과 refetchOnWindowFocus 설정은 데이터 신선도와 네트워크 요청 비용 사이의 트레이드오프다. 실시간성이 중요한 데이터는 staleTime을 낮게, 거의 변하지 않는 데이터는 높게 설정한다.
+
+---
+
+## 13. 정리
 
 상태 관리의 핵심은 **"이 상태를 어디에 두어야 하는가?"**를 결정하는 것입니다.
 

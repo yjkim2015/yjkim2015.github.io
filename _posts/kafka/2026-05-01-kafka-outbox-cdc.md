@@ -9,32 +9,50 @@ toc_label: 목차
 
 주문이 DB에 저장됐는데 Kafka 발행이 실패했다. 결제 서비스는 주문을 모른다. 반대로 Kafka 발행은 됐는데 DB 롤백이 됐다. 결제 서비스는 존재하지 않는 주문을 처리한다. 분산 트랜잭션 없이 이 문제를 해결하는 것이 Outbox 패턴이다.
 
-> **비유**: Outbox 패턴은 편지를 바로 우체통에 넣는 대신, 먼저 책상 서랍(Outbox 테이블)에 넣어두는 것이다. 우편배달부(Message Relay)가 주기적으로 서랍을 열어 편지를 가져가 우체통에 넣는다. 서랍에 넣는 행위와 비즈니스 처리는 한 번에 이루어지므로 둘 다 성공하거나 둘 다 실패한다.
+## 왜 이게 중요한가?
+
+마이크로서비스 환경에서 "DB 저장 성공 + 메시지 발행 성공"을 동시에 보장하는 것은 기본적으로 불가능하다. DB와 Kafka는 서로 다른 트랜잭션 경계를 갖기 때문이다. 이 문제를 무시하면 데이터 불일치가 발생하고, 2PC(분산 트랜잭션)로 해결하려 하면 성능 저하와 가용성 감소를 초래한다. Outbox 패턴은 단일 DB 트랜잭션만으로 이 문제를 해결하는 실용적인 방법이다.
+
+## 비유로 이해하기
+
+> Outbox 패턴은 편지를 바로 우체통에 넣는 대신, 먼저 책상 서랍(Outbox 테이블)에 넣어두는 것이다. 우편배달부(Message Relay)가 주기적으로 서랍을 열어 편지를 가져가 우체통에 넣는다. 서랍에 넣는 행위와 비즈니스 처리는 한 번에 이루어지므로 둘 다 성공하거나 둘 다 실패한다. 배달부가 잠깐 자리를 비워도 편지는 서랍에 안전하게 보관된다.
 
 ## 왜 Outbox 패턴이 필요한가
 
-마이크로서비스 환경에서 DB 저장과 메시지 발행을 동시에 보장하는 것은 어렵다. 아래 코드처럼 작성하면 언제든지 데이터 불일치가 발생할 수 있다.
+아래 코드처럼 작성하면 언제든지 데이터 불일치가 발생할 수 있다.
 
 ```java
 // 위험한 패턴 — DB 커밋 후 Kafka 발행 실패 가능
 @Transactional
 public void placeOrder(Order order) {
-    orderRepository.save(order);     // DB 저장 성공
+    orderRepository.save(order);         // DB 저장 성공
     kafkaTemplate.send("orders", order); // 발행 실패 시 불일치 발생
 }
 ```
 
-**두 가지 실패 시나리오:**
+이 코드에는 두 가지 실패 시나리오가 있다.
 
+```mermaid
+graph TD
+    subgraph "시나리오 1: DB 성공 + Kafka 실패"
+        S1A["DB에 주문 저장 성공"]
+        S1B["Kafka 발행 실패\n(네트워크 오류, 브로커 장애)"]
+        S1C["DB에는 주문 있음\n다른 서비스는 주문 모름\n→ 데이터 불일치"]
+        S1A --> S1B --> S1C
+    end
+
+    subgraph "시나리오 2: Kafka 성공 + DB 실패"
+        S2A["Kafka 발행 성공"]
+        S2B["DB 커밋 실패 (롤백)"]
+        S2C["DB에는 주문 없음\n다른 서비스는 주문 처리 시작\n→ 유령 이벤트"]
+        S2A --> S2B --> S2C
+    end
+
+    style S1C fill:#e74c3c,color:#fff
+    style S2C fill:#e74c3c,color:#fff
 ```
-시나리오 1: DB 저장 성공 → Kafka 발행 실패
-  결과: DB에는 주문 있음, 다른 서비스는 주문 모름 → 데이터 불일치
 
-시나리오 2: Kafka 발행 성공 → DB 커밋 실패 (rollback)
-  결과: DB에는 주문 없음, 다른 서비스는 주문 처리 시작 → 유령 이벤트
-```
-
-분산 트랜잭션(2PC)으로 해결하려 하면 성능 문제와 가용성 감소를 초래한다. Outbox 패턴은 이 문제를 **단일 DB 트랜잭션**으로 해결한다.
+분산 트랜잭션(2PC)으로 해결하려 하면 성능 문제와 가용성 감소를 초래한다. Kafka는 XA 트랜잭션을 지원하지 않으므로 2PC 자체가 적용 불가능하다.
 
 ---
 
@@ -44,32 +62,31 @@ public void placeOrder(Order order) {
 
 비즈니스 데이터와 발행할 이벤트를 **같은 DB 트랜잭션**으로 저장한다. 별도 프로세스가 Outbox 테이블을 읽어 Kafka로 발행한다.
 
-```
-┌─────────────────────────────────────────┐
-│              Application                │
-│                                         │
-│  @Transactional                         │
-│  ┌──────────────┐  ┌──────────────────┐ │
-│  │ orders 테이블 │  │ outbox 테이블    │ │
-│  │ INSERT order │  │ INSERT event     │ │
-│  └──────────────┘  └──────────────────┘ │
-│         ↑ 같은 트랜잭션 (원자적 보장)        │
-└─────────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────────┐
-│           Message Relay                 │
-│  outbox 테이블 폴링 또는 CDC             │
-│  → Kafka 발행 → outbox 레코드 삭제/마킹  │
-└─────────────────────────────────────────┘
-                 ↓
-         Kafka Topic
+```mermaid
+flowchart TD
+    subgraph "Application (단일 트랜잭션)"
+        APP["@Transactional\norderRepository.save(order)\noutboxRepository.save(event)"]
+        NOTE["두 INSERT가 같은 트랜잭션\n→ 둘 다 성공 또는 둘 다 실패"]
+    end
+    APP --> NOTE
+
+    subgraph "Message Relay (별도 프로세스)"
+        RELAY["outbox 테이블 폴링 또는 CDC\n→ Kafka 발행\n→ outbox 레코드 삭제/마킹"]
+    end
+
+    NOTE -->|"DB 커밋 완료"| RELAY
+    RELAY -->|"발행"| KAFKA["Kafka Topic"]
+
+    style APP fill:#3498db,color:#fff
+    style RELAY fill:#e67e22,color:#fff
+    style KAFKA fill:#2ecc71,color:#fff
 ```
 
 ### Outbox 테이블 스키마
 
 ```sql
 CREATE TABLE outbox (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     aggregate_type  VARCHAR(255) NOT NULL,  -- 'Order', 'Payment' 등
     aggregate_id    VARCHAR(255) NOT NULL,  -- 엔티티 ID
     event_type      VARCHAR(255) NOT NULL,  -- 'OrderPlaced', 'OrderCancelled'
@@ -84,22 +101,9 @@ CREATE INDEX idx_outbox_status_created ON outbox(status, created_at);
 
 ### Spring + JPA 구현
 
-```java
-@Entity
-@Table(name = "outbox")
-public class OutboxEvent {
-    @Id
-    private UUID id = UUID.randomUUID();
-    private String aggregateType;
-    private String aggregateId;
-    private String eventType;
-    @Column(columnDefinition = "jsonb")
-    private String payload;
-    private LocalDateTime createdAt = LocalDateTime.now();
-    private String status = "PENDING";
-    private LocalDateTime sentAt;
-}
+비즈니스 로직과 Outbox 저장을 같은 `@Transactional` 메서드 안에 작성한다. 트랜잭션이 커밋되면 두 레코드가 원자적으로 반영된다.
 
+```java
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -128,6 +132,8 @@ public class OrderService {
 ```
 
 ### Message Relay (폴링 방식)
+
+폴링 방식은 구현이 단순하지만 폴링 주기만큼 발행 지연이 발생한다.
 
 ```java
 @Component
@@ -178,16 +184,26 @@ public class OutboxMessageRelay {
 
 DB의 변경 이력(binlog, WAL 등)을 실시간으로 캡처하여 다른 시스템에 전달하는 기술이다. 애플리케이션 코드 변경 없이 DB 레벨에서 변경사항을 스트리밍한다.
 
-```
-┌──────────────┐    binlog/WAL    ┌──────────────┐    ┌───────────┐
-│  MySQL /     │ ─────────────→  │   Debezium   │ →  │   Kafka   │
-│  PostgreSQL  │                 │  Connector   │    │   Topic   │
-└──────────────┘                 └──────────────┘    └───────────┘
+폴링 방식이 "주기적으로 서랍을 확인하는 우편배달부"라면, CDC는 "서랍에 편지가 들어오는 순간 바로 알림을 받는 실시간 감시"다.
+
+```mermaid
+flowchart LR
+    DB["MySQL / PostgreSQL\n(binlog / WAL 생성)"]
+    DEB["Debezium Connector\n(binlog/WAL 실시간 읽기)"]
+    KAFKA["Kafka Topic\n(변경 이벤트 스트림)"]
+
+    DB -->|"binlog / WAL"| DEB
+    DEB -->|"이벤트 발행"| KAFKA
+
+    style DB fill:#3498db,color:#fff
+    style DEB fill:#e67e22,color:#fff
+    style KAFKA fill:#2ecc71,color:#fff
 ```
 
 ### DB별 CDC 메커니즘
 
 **MySQL — Binary Log (binlog)**
+
 ```
 binlog 활성화 필요:
 [mysqld]
@@ -198,13 +214,14 @@ server_id = 1
 ```
 
 **PostgreSQL — Write-Ahead Log (WAL)**
-```
-postgresql.conf:
-wal_level = logical         # logical replication 활성화
-max_replication_slots = 10
-max_wal_senders = 10
 
-논리적 복제 슬롯 생성:
+```sql
+-- postgresql.conf:
+-- wal_level = logical         (논리적 복제 활성화)
+-- max_replication_slots = 10
+-- max_wal_senders = 10
+
+-- 논리적 복제 슬롯 생성:
 SELECT pg_create_logical_replication_slot('debezium_slot', 'pgoutput');
 ```
 
@@ -214,21 +231,22 @@ SELECT pg_create_logical_replication_slot('debezium_slot', 'pgoutput');
 
 ### Debezium 아키텍처
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    Kafka Connect                         │
-│                                                          │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │              Debezium Connector                  │    │
-│  │                                                  │    │
-│  │  ┌──────────────┐    ┌────────────────────────┐ │    │
-│  │  │ binlog/WAL   │    │   Event Transformation  │ │    │
-│  │  │   Reader     │ →  │   (SMT 적용 가능)       │ │    │
-│  │  └──────────────┘    └────────────────────────┘ │    │
-│  └─────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────────┘
-           ↑                          ↓
-      MySQL/PostgreSQL           Kafka Topic
+Debezium은 Kafka Connect 위에서 동작하는 CDC 커넥터다. DB의 binlog/WAL을 읽어 Kafka 토픽으로 변환한다.
+
+```mermaid
+flowchart TD
+    subgraph "Kafka Connect"
+        subgraph "Debezium Connector"
+            READER["binlog/WAL Reader\n(DB 변경 감지)"]
+            SMT["Event Transformation\n(SMT 적용 가능)"]
+            READER --> SMT
+        end
+    end
+    DB["MySQL / PostgreSQL"] -->|"binlog / WAL"| READER
+    SMT -->|"이벤트 발행"| KAFKA["Kafka Topic"]
+
+    style DB fill:#3498db,color:#fff
+    style KAFKA fill:#2ecc71,color:#fff
 ```
 
 ### Debezium Connector 설정 (MySQL)
@@ -261,34 +279,9 @@ SELECT pg_create_logical_replication_slot('debezium_slot', 'pgoutput');
 }
 ```
 
-### Debezium이 생성하는 이벤트 구조
-
-```json
-{
-  "before": null,
-  "after": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "aggregate_type": "Order",
-    "aggregate_id": "12345",
-    "event_type": "OrderPlaced",
-    "payload": "{\"orderId\":\"12345\",\"amount\":50000}",
-    "created_at": "2026-05-01T10:00:00",
-    "status": "PENDING"
-  },
-  "op": "c",       // c=create, u=update, d=delete, r=read(snapshot)
-  "ts_ms": 1746097200000,
-  "source": {
-    "db": "orderservice",
-    "table": "outbox",
-    "server_id": 184054,
-    "pos": 123456789
-  }
-}
-```
-
 ### EventRouter SMT (Single Message Transformation)
 
-Debezium의 Outbox EventRouter SMT는 outbox 테이블의 INSERT 이벤트를 받아 `aggregate_type` 컬럼 값을 기반으로 자동으로 라우팅한다.
+Debezium의 Outbox EventRouter SMT는 outbox 테이블의 INSERT 이벤트를 받아 `aggregate_type` 컬럼 값을 기반으로 자동으로 토픽을 라우팅한다.
 
 ```
 outbox INSERT (aggregate_type='Order')
@@ -297,6 +290,8 @@ outbox INSERT (aggregate_type='Order')
 outbox INSERT (aggregate_type='Payment')
   → Kafka topic: outbox.Payment
 ```
+
+코드 변경 없이 새로운 aggregate_type을 추가하면 자동으로 새 토픽으로 라우팅된다.
 
 ---
 
@@ -310,20 +305,29 @@ outbox INSERT (aggregate_type='Payment')
 | **이벤트 스키마** | 명시적 설계 가능 | 명시적 설계 가능 | DB 스키마 의존 |
 | **멱등성** | 직접 구현 필요 | Kafka at-least-once | Kafka at-least-once |
 | **운영 복잡도** | 낮음 | 중간 (Kafka Connect 필요) | 중간 |
-| **장애 내성** | 폴링 실패 시 재시도 | Connector 재시작으로 복구 | 복구 가능 |
-| **구조적 결합도** | DB 테이블 의존 | DB 테이블 의존 | DB 스키마 강결합 |
 
 ### 언제 무엇을 선택할까
 
-```
-소규모 서비스, 낮은 처리량
-  → Outbox 폴링 방식 (단순하고 충분)
+```mermaid
+flowchart TD
+    START["Outbox 방식 선택"]
+    Q1{"서비스 규모 / 처리량"}
+    Q2{"레이턴시 요구"}
 
-대규모 서비스, 낮은 레이턴시 요구
-  → Outbox + Debezium CDC
+    POLL["Outbox 폴링 방식\n단순하고 충분\n소규모 서비스, 낮은 처리량"]
+    CDC["Outbox + Debezium CDC\n낮은 레이턴시, 높은 처리량\nKafka Connect 운영 필요"]
+    LEGACY["직접 CDC\n레거시 DB, 코드 변경 불가\n이벤트 스키마 통제 어려움 주의"]
 
-레거시 DB, 코드 변경 불가
-  → 직접 CDC (주의: 이벤트 스키마 통제 어려움)
+    START --> Q1
+    Q1 -->|"소규모"| POLL
+    Q1 -->|"대규모"| Q2
+    Q2 -->|"수백ms 허용"| POLL
+    Q2 -->|"수십ms 요구"| CDC
+    Q1 -->|"코드 변경 불가"| LEGACY
+
+    style POLL fill:#2ecc71,color:#fff
+    style CDC fill:#3498db,color:#fff
+    style LEGACY fill:#e67e22,color:#fff
 ```
 
 ---
@@ -331,6 +335,8 @@ outbox INSERT (aggregate_type='Payment')
 ## 분산 트랜잭션과의 관계
 
 ### 2PC (Two-Phase Commit) 문제
+
+2PC는 분산 시스템에서 원자적 커밋을 보장하지만 Kafka와는 사용할 수 없다.
 
 ```
 Phase 1 (Prepare):
@@ -351,17 +357,19 @@ Phase 2 (Commit):
 
 Outbox는 Saga 패턴과 자연스럽게 조합된다. 각 서비스가 자신의 트랜잭션을 완료하고 다음 서비스를 위한 이벤트를 Outbox에 저장한다.
 
-```
-주문 서비스                재고 서비스              결제 서비스
-     │                          │                       │
-     │ OrderPlaced 이벤트        │                       │
-     │ (Outbox→Kafka)           │                       │
-     │ ─────────────────────→   │                       │
-     │                          │ StockReserved 이벤트   │
-     │                          │ (Outbox→Kafka)        │
-     │                          │ ──────────────────→   │
-     │                          │                       │ PaymentCompleted
-     │                          │                       │ (Outbox→Kafka)
+```mermaid
+sequenceDiagram
+    participant OS as "주문 서비스"
+    participant IS as "재고 서비스"
+    participant PS as "결제 서비스"
+
+    OS ->> OS: "주문 저장 + OrderPlaced 이벤트 Outbox 저장"
+    OS ->> IS: "OrderPlaced (Kafka)"
+    IS ->> IS: "재고 예약 + StockReserved 이벤트 Outbox 저장"
+    IS ->> PS: "StockReserved (Kafka)"
+    PS ->> PS: "결제 처리 + PaymentCompleted 이벤트 Outbox 저장"
+
+    Note over OS,PS: 각 서비스는 자신의 DB 트랜잭션만 관리<br>보상 트랜잭션도 동일한 Outbox 패턴으로 발행
 ```
 
 보상 트랜잭션(Compensating Transaction)도 같은 방식으로 Outbox를 통해 발행한다.
@@ -396,7 +404,7 @@ public void cleanupOutbox() {
 
 ### 멱등성 처리
 
-Outbox 방식은 at-least-once 보장이다. 컨슈머는 반드시 멱등성을 구현해야 한다.
+Outbox 방식은 at-least-once 보장이다. 네트워크 오류로 같은 이벤트가 두 번 발행될 수 있으므로 Consumer는 반드시 멱등성을 구현해야 한다.
 
 ```java
 @KafkaListener(topics = "outbox.Order")
@@ -427,7 +435,7 @@ Outbox에서 같은 `aggregate_id`를 Kafka 메시지 키로 사용하면 같은
 ```java
 kafkaTemplate.send(
     topic,
-    event.getAggregateId(),  // 파티셔닝 키 = aggregate_id
+    event.getAggregateId(),  // 파티셔닝 키 = aggregate_id → 같은 파티션 보장
     event.getPayload()
 );
 ```
@@ -450,4 +458,41 @@ SELECT
     EXTRACT(EPOCH FROM (NOW() - MIN(created_at))) AS lag_seconds
 FROM outbox
 WHERE status = 'PENDING';
+```
+
+---
+
+## 극한 시나리오
+
+### 시나리오 1: Message Relay 프로세스 장기 중단
+
+Relay가 몇 시간 동안 멈추면 Outbox 테이블에 미발행 이벤트가 수천~수만 건 쌓인다.
+
+```
+방어:
+outbox_pending_count 지표 모니터링 → 임계값 초과 시 알람
+Relay 프로세스 재시작 후 순서 보장 확인
+(created_at ASC 순서로 처리하면 순서 유지)
+```
+
+### 시나리오 2: Debezium Connector 장애 후 재시작 시 중복 발행
+
+Debezium은 binlog 위치를 Kafka에 저장한다. 장애 후 재시작 시 마지막 저장된 위치부터 다시 읽으므로 일부 이벤트가 중복 발행될 수 있다.
+
+```
+방어:
+Consumer에 멱등성 구현 필수 (processedEventRepository 패턴)
+Debezium의 exactly-once 모드 활성화 (Kafka 트랜잭션 활용)
+```
+
+### 시나리오 3: Outbox 테이블 폭발적 증가로 DB 성능 저하
+
+트래픽 급증 시 PENDING 레코드가 수십만 건 쌓이면 인덱스 스캔이 느려져 Relay 처리가 더 지연되는 악순환이 발생한다.
+
+```
+방어:
+idx_outbox_status_created 인덱스 확인 (status, created_at 복합 인덱스)
+Relay 배치 크기 증가 (findTop100 → findTop1000)
+CDC 방식으로 전환 (폴링 DB 부하 제거)
+Outbox 파티셔닝 (PostgreSQL 파티션 테이블로 오래된 데이터 분리)
 ```

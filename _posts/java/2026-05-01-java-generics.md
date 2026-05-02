@@ -9,6 +9,8 @@ toc_label: 목차
 
 Java 제네릭(Generics)은 클래스, 인터페이스, 메서드를 정의할 때 타입을 파라미터로 사용할 수 있게 해주는 기능입니다. Java 5(2004)에 도입되어 타입 안전성과 코드 재사용성을 동시에 달성하는 핵심 언어 기능으로 자리잡았습니다.
 
+> **비유로 이해하기**: 제네릭은 규격화된 박스와 같습니다. "이 박스는 사과만 담는 박스입니다(`Box<Apple>`)"라고 라벨을 붙이면, 다른 물건을 넣으려 할 때 박스 자체가 거부합니다(컴파일 에러). 반면 라벨 없는 박스(Raw 타입 `Box`)는 무엇이든 들어가지만, 꺼낼 때 사과인지 확인하고 손질하는(캐스팅) 번거로움이 생기고, 잘못 확인하면 바나나를 사과로 착각하는 사고(ClassCastException)가 납니다. 제네릭은 이 런타임 사고를 컴파일 타임으로 앞당깁니다.
+
 ---
 
 ## 1. 제네릭이란? 왜 필요한가?
@@ -631,6 +633,24 @@ System.out.println(stringList.getClass()); // class java.util.ArrayList
 ```
 
 ### 소거 후 바이트코드 변환 규칙
+
+타입 소거가 왜 존재하는지 이해하면 제약사항이 더 자연스럽게 받아들여집니다. Java 5는 기존 코드(제네릭 없는 Java 1.4 이하)와의 하위 호환성을 유지하면서 제네릭을 도입해야 했습니다. 런타임 JVM은 그대로 두고, 컴파일러만 타입 검사를 추가하는 방식을 선택한 것입니다. 덕분에 제네릭 코드와 레거시 코드가 같은 JVM에서 실행됩니다.
+
+<div class="mermaid">
+graph LR
+  subgraph "컴파일 타임"
+    SRC["List&lt;String&gt; list\nlist.add('hello')\nString s = list.get(0)"]
+  end
+  subgraph "컴파일러 처리"
+    CHECK["1. 타입 검사\n(List&lt;String&gt;에 Integer 금지)"]
+    ERASE["2. 타입 소거\n(List&lt;String&gt; → List)"]
+    CAST["3. 캐스팅 삽입\n(list.get(0) → (String)list.get(0))"]
+  end
+  subgraph "런타임 바이트코드"
+    BC["List list\nlist.add('hello')\nString s = (String)list.get(0)"]
+  end
+  SRC --> CHECK --> ERASE --> CAST --> BC
+</div>
 
 컴파일러는 타입 소거 시 다음 규칙을 적용합니다.
 
@@ -1273,6 +1293,178 @@ public abstract class TypeToken<T> {
 TypeToken<List<String>> token = new TypeToken<List<String>>() {};
 System.out.println(token.getType()); // java.util.List<java.lang.String>
 ```
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: Raw 타입 사용으로 타입 안전성 포기**
+
+```java
+// 잘못된 코드 — Raw 타입 사용
+List list = new ArrayList();
+list.add("hello");
+list.add(123);          // 컴파일 통과 — 실수를 잡지 못함
+String s = (String) list.get(1); // 런타임 ClassCastException!
+
+// 올바른 코드
+List<String> list = new ArrayList<>();
+// list.add(123); // 컴파일 에러 — 즉시 발견
+```
+
+레거시 라이브러리와 연동할 때 어쩔 수 없이 Raw 타입을 다뤄야 한다면, `@SuppressWarnings("unchecked")`를 최소 범위로만 사용하고 반드시 주석으로 이유를 명시하세요.
+
+**실수 2: PECS 원칙 혼동으로 컴파일 에러**
+
+```java
+// 잘못된 코드 — 읽기용 컬렉션에 쓰기 시도
+public void addNumbers(List<? extends Number> list) {
+    list.add(1); // 컴파일 에러! — ? extends는 읽기 전용
+}
+
+// 잘못된 코드 — 쓰기용 컬렉션에서 타입 안전 읽기 시도
+public void processNumbers(List<? super Integer> list) {
+    Integer n = list.get(0); // 컴파일 에러! — ? super는 Object로만 읽힘
+}
+
+// 올바른 코드 — PECS 적용
+public double sum(List<? extends Number> src) { // 읽기: extends
+    return src.stream().mapToDouble(Number::doubleValue).sum();
+}
+
+public void fillDefaults(List<? super Integer> dest, int count) { // 쓰기: super
+    for (int i = 0; i < count; i++) dest.add(0);
+}
+```
+
+**실수 3: 제네릭 클래스에서 static 멤버에 타입 파라미터 사용**
+
+```java
+// 잘못된 코드
+public class Counter<T> {
+    private static int count = 0; // OK
+    // private static T defaultValue; // 컴파일 에러!
+    // static 필드는 모든 인스턴스가 공유 → T가 무엇인지 결정 불가
+}
+
+// 올바른 코드 — static 팩토리 메서드에서는 별도 타입 파라미터 선언
+public class Box<T> {
+    public static <E> Box<E> empty() { // 메서드 레벨 타입 파라미터
+        return new Box<>(null);
+    }
+}
+```
+
+**실수 4: 타입 소거 망각으로 instanceof 잘못 사용**
+
+```java
+// 잘못된 코드 — 컴파일 에러
+if (obj instanceof List<String>) { // 타입 소거로 런타임에 판별 불가
+    List<String> list = (List<String>) obj;
+}
+
+// 올바른 코드 1 — 소거된 타입으로 확인 후 안전하게 캐스팅
+if (obj instanceof List<?>) {
+    List<?> list = (List<?>) obj;
+    // 내부 원소를 하나씩 확인
+    if (!list.isEmpty() && list.get(0) instanceof String) {
+        @SuppressWarnings("unchecked")
+        List<String> stringList = (List<String>) list;
+    }
+}
+```
+
+**실수 5: 제네릭 배열 생성 시도**
+
+```java
+// 잘못된 코드 — 컴파일 에러
+public <T> T[] toArray(List<T> list) {
+    return new T[list.size()]; // 컴파일 에러!
+}
+
+// 올바른 코드 — Supplier나 Class<T> 활용
+public <T> T[] toArray(List<T> list, IntFunction<T[]> arrayFactory) {
+    return list.toArray(arrayFactory.apply(list.size()));
+}
+
+// 사용
+String[] arr = toArray(stringList, String[]::new); // 메서드 참조로 깔끔
+```
+
+---
+
+## 극한 시나리오: 제네릭 설계의 실제 트레이드오프
+
+### 타입 안전성 vs 유연성
+
+API 설계에서 제네릭의 경계가 성능과 사용성에 직접 영향을 미칩니다. 세 가지 설계 패턴의 트레이드오프를 비교합니다.
+
+**패턴 1: 엄격한 타입 파라미터 — 최대 타입 안전성**
+
+```java
+// 타입 관계가 명확히 드러남, 컴파일 타임 오류 보장
+public interface EventBus<E extends Event> {
+    void publish(E event);
+    void subscribe(Class<E> eventType, Consumer<E> handler);
+}
+
+// 장점: EventBus<OrderEvent>는 OrderEvent만 처리 — 실수 불가
+// 단점: 여러 이벤트 타입을 하나의 버스로 처리 불가
+```
+
+**패턴 2: 와일드카드 — 유연성 우선**
+
+```java
+// 다양한 타입을 하나의 컨테이너로 처리
+public class EventBus {
+    private final Map<Class<?>, List<Consumer<?>>> handlers = new ConcurrentHashMap<>();
+
+    @SuppressWarnings("unchecked")
+    public <E> void subscribe(Class<E> type, Consumer<E> handler) {
+        handlers.computeIfAbsent(type, k -> new CopyOnWriteArrayList<>())
+                .add(handler);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <E> void publish(E event) {
+        List<Consumer<?>> list = handlers.get(event.getClass());
+        if (list != null) {
+            list.forEach(h -> ((Consumer<E>) h).accept(event));
+        }
+    }
+}
+// 장점: 단일 버스로 모든 이벤트 처리
+// 단점: @SuppressWarnings 불가피, 잘못된 캐스팅 런타임 오류 가능
+```
+
+**패턴 3: 타입 토큰 — 타입 안전 이기종 컨테이너**
+
+```java
+// 100K TPS 이벤트 처리 시스템에서 타입 안전성과 유연성을 모두 달성
+public class TypeSafeEventBus {
+    private final ConcurrentHashMap<Class<?>, CopyOnWriteArrayList<Object>> handlers =
+        new ConcurrentHashMap<>();
+
+    public <E extends Event> void subscribe(Class<E> type, Consumer<E> handler) {
+        handlers.computeIfAbsent(type, k -> new CopyOnWriteArrayList<>()).add(handler);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <E extends Event> void publish(E event) {
+        Class<?> type = event.getClass();
+        // 현재 타입과 모든 슈퍼타입 핸들러 실행 (이벤트 계층 지원)
+        while (type != null && Event.class.isAssignableFrom(type)) {
+            CopyOnWriteArrayList<Object> list = handlers.get(type);
+            if (list != null) {
+                list.forEach(h -> ((Consumer<E>) h).accept(event));
+            }
+            type = type.getSuperclass();
+        }
+    }
+}
+```
+
+100K TPS 환경에서는 `CopyOnWriteArrayList`로 읽기(이벤트 발행)에 락을 걸지 않아 성능을 확보하고, `ConcurrentHashMap.computeIfAbsent`로 핸들러 등록의 원자성을 보장합니다.
 
 ---
 

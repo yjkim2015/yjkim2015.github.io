@@ -1064,21 +1064,18 @@ ref.compareAndSet("initial", "updated"); // 참조 비교는 ==
 
 ### CAS (Compare-And-Swap) 동작 원리
 
-```
-CAS(메모리 주소, 예상값, 새값):
-  1. 메모리[주소] == 예상값?
-     YES → 메모리[주소] = 새값, return true  (원자적 수행)
-     NO  → 아무것도 안 함, return false
+CAS는 "내가 마지막으로 읽은 값이 지금도 같다면 새 값으로 바꿔라"는 원자적 명령입니다. 락을 걸지 않고도 경쟁 조건을 해결하는 핵심 메커니즘으로, x86 CPU의 `CMPXCHG` 명령어로 하드웨어 레벨에서 보장됩니다.
 
-AtomicInteger.incrementAndGet() 내부 구조:
-  do {
-      현재값 = 메모리에서 읽기
-      새값 = 현재값 + 1
-  } while (!CAS(주소, 현재값, 새값)); // 실패하면 재시도
-  return 새값
+> **비유로 이해하기**: 공유 문서를 동시에 수정하는 상황과 같습니다. "내가 읽었을 때 버전이 5였다면, 버전을 6으로 올리고 내용을 저장해라. 만약 이미 누군가 버전을 바꿨다면(5가 아니라면) 실패로 처리하고 다시 읽어라." CAS는 이 낙관적 동시성 제어(Optimistic Concurrency Control)를 CPU 명령어 하나로 수행합니다.
 
-하드웨어 레벨: x86의 CMPXCHG 인스트럭션으로 구현
-```
+<div class="mermaid">
+flowchart TD
+  A["1. 현재값 읽기: val = memory[addr]"] --> B["2. 새값 계산: newVal = val + 1"]
+  B --> C{"3. CAS(addr, val, newVal)\nmemory[addr] == val?"}
+  C -->|"YES → 원자적으로 교체\nmemory[addr] = newVal"| D["성공 — return newVal"]
+  C -->|"NO → 다른 스레드가 먼저 변경"| A
+  D2["하드웨어: x86 CMPXCHG 명령어\n단일 CPU 사이클에서 원자적 실행"]
+</div>
 
 ```java
 // CAS를 사용한 lock-free 스택 구현
@@ -1115,13 +1112,19 @@ public class LockFreeStack<T> {
 
 ### ABA 문제
 
-CAS의 고전적인 취약점입니다.
+CAS의 고전적인 취약점입니다. 값이 A→B→A로 바뀌었지만 CAS는 현재값이 A인 것만 보고 "변경 없음"으로 판단하는 문제입니다. 단순 카운터에서는 무해하지만, 연결 리스트나 포인터 기반 자료구조에서는 심각한 버그를 유발합니다.
 
-```
-스레드 1: 메모리값 = A 읽음
-스레드 2: A → B → A 로 변경 (두 번 변경)
-스레드 1: CAS(A, newValue) 성공 → A가 변하지 않은 것처럼 보이지만 실제로 변경됨!
-```
+<div class="mermaid">
+sequenceDiagram
+  participant T1 as "스레드 1"
+  participant MEM as "메모리"
+  participant T2 as "스레드 2"
+  T1->>MEM: "1. 값 읽기: A"
+  T2->>MEM: "2. A → B 변경"
+  T2->>MEM: "3. B → A 재변경"
+  T1->>MEM: "4. CAS(A, newVal) — 값이 A이므로 성공!"
+  Note over T1,MEM: "T1은 변경이 없었다고 착각\n실제로는 A→B→A로 두 번 변경됨"
+</div>
 
 **해결책: `AtomicStampedReference`** (버전 번호 추가)
 
@@ -1182,22 +1185,23 @@ long reset = adder.sumThenReset(); // 합산 후 0으로 리셋
 
 ### ConcurrentHashMap 내부 구조 (Java 8)
 
-Java 8의 `ConcurrentHashMap`은 세그먼트 락(Java 7 방식)을 버리고 **CAS + 버킷 단위 synchronized**를 사용합니다.
+Java 8의 `ConcurrentHashMap`은 세그먼트 락(Java 7 방식)을 버리고 **CAS + 버킷 단위 synchronized**를 사용합니다. 이 설계가 중요한 이유는 락의 범위가 버킷 하나로 좁혀지기 때문입니다. 16개 버킷이 있다면 최대 16개의 스레드가 서로 다른 버킷에 동시에 쓸 수 있습니다. Java 7의 세그먼트 락(기본 16개 세그먼트)에 비해 훨씬 세밀한 동시성 제어가 가능합니다.
 
-```
-Java 8 ConcurrentHashMap 내부:
+> **비유로 이해하기**: Java 7 ConcurrentHashMap은 도서관을 16개 구역으로 나눠 각 구역마다 사서 한 명이 관리하는 구조였습니다. Java 8은 책 한 권(버킷 하나)마다 독립적인 잠금장치를 달아, 특정 책을 빌리는 동안 다른 책에는 전혀 영향을 주지 않도록 개선한 것입니다.
 
-버킷 배열 (Node[] table)
-┌────┬────┬────┬────┬────┬────┬────┬────┐
-│    │    │    │    │    │    │    │    │
-└────┴────┴────┴────┴────┴────┴────┴────┘
-  ↑                 ↑
-버킷 0            버킷 4
-(비어있음 → CAS)   (충돌 → synchronized(버킷) 사용)
-
-각 버킷은 독립적인 락 → 다른 버킷은 병렬 접근 가능
-연결 리스트 길이 > 8 → 트리(TreeNode)로 전환 (O(n)→O(log n))
-```
+<div class="mermaid">
+graph TD
+  subgraph "ConcurrentHashMap 버킷 배열 (Node[] table)"
+    B0["버킷 0\n비어있음\n→ CAS로 삽입"]
+    B1["버킷 1\n노드 존재\n→ synchronized(버킷)"]
+    B2["버킷 2\n비어있음\n→ CAS로 삽입"]
+    B3["버킷 3\n8개 이상 충돌\n→ TreeNode(Red-Black Tree)"]
+  end
+  T1["스레드 A\nput(k1)"] -->|"1. CAS 시도"| B0
+  T2["스레드 B\nput(k2)"] -->|"1. synchronized"| B1
+  T3["스레드 C\nput(k3)"] -->|"1. CAS 시도"| B2
+  NOTE["서로 다른 버킷 → 완전 병렬\n같은 버킷 → 버킷 단위 락"]
+</div>
 
 ```java
 ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
@@ -1819,21 +1823,29 @@ try {
 
 ### 메모리 누수 주의사항
 
-```
-ThreadLocalMap의 엔트리:
-┌─────────────────────────────────────────┐
-│  KEY: WeakReference<ThreadLocal>        │
-│  VALUE: Object (강한 참조)              │
-└─────────────────────────────────────────┘
+ThreadLocal의 메모리 누수는 스레드 풀 환경에서 특히 위험합니다. 스레드 풀의 스레드는 재사용되므로 `remove()`를 호출하지 않으면 이전 요청의 데이터가 다음 요청에서 그대로 보입니다. 이는 메모리 누수뿐만 아니라 **보안 취약점**이 됩니다(다른 사용자의 인증 정보가 노출될 수 있음).
 
-ThreadLocal 변수 = null로 설정 시:
-  KEY WeakRef → GC에 의해 null 처리됨
-  VALUE는 강한 참조이므로 GC 불가 → 메모리 누수!
+<div class="mermaid">
+graph TD
+  subgraph "ThreadLocalMap 엔트리 구조"
+    KEY["KEY: WeakReference&lt;ThreadLocal&gt;"]
+    VAL["VALUE: Object (강한 참조)"]
+    KEY --- VAL
+  end
+  subgraph "누수 발생 시나리오"
+    TL["ThreadLocal 변수 = null"]
+    TL -->|"WeakRef → GC가 KEY 수거"| GC["KEY = null"]
+    GC -->|"하지만 VALUE는 강한 참조"| LEAK["VALUE 메모리 누수!"]
+  end
+  subgraph "스레드 풀 보안 문제"
+    REQ1["요청 1: userId=kim, set()"]
+    POOL["스레드 재사용"]
+    REQ2["요청 2: remove() 없으면 userId=kim 그대로 노출!"]
+    REQ1 --> POOL --> REQ2
+  end
+</div>
 
-스레드 풀에서의 위험:
-  스레드 재사용 → ThreadLocalMap 계속 유지
-  remove() 호출 안 하면 이전 값이 다음 요청에서 보임 → 보안 문제!
-```
+스레드 풀에서의 올바른 패턴은 반드시 `try-finally`로 `remove()`를 보장하는 것입니다.
 
 ```java
 // 올바른 사용 패턴 (서블릿 필터 예)
@@ -1916,6 +1928,178 @@ boolean hasTransaction = TransactionSynchronizationManager
 // 같은 스레드 내에서만 트랜잭션 전파 가능한 이유
 // → 다른 스레드는 다른 ThreadLocal → 다른 커넥션/트랜잭션
 ```
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: run()을 직접 호출해 단일 스레드로 실행**
+
+```java
+// 잘못된 코드 — 새 스레드가 생성되지 않고 현재 스레드에서 실행됨
+Thread t = new Thread(() -> System.out.println("작업"));
+t.run(); // 새 스레드 없이 현재 스레드에서 실행!
+
+// 올바른 코드
+t.start(); // OS에게 새 스레드 생성 요청
+```
+
+`run()`은 단순히 `Runnable`의 메서드를 호출하는 것이고, `start()`가 OS에 커널 스레드 생성을 요청합니다. `run()`을 직접 호출하면 병렬 실행이 전혀 일어나지 않고 모든 작업이 순차적으로 실행됩니다.
+
+**실수 2: synchronized 없이 공유 변수 접근**
+
+```java
+// 위험한 코드 — 결과가 1000이 아닐 수 있음
+int count = 0;
+List<Thread> threads = new ArrayList<>();
+for (int i = 0; i < 1000; i++) {
+    threads.add(new Thread(() -> count++)); // count++은 원자적 연산이 아님!
+}
+threads.forEach(Thread::start);
+threads.forEach(t -> { try { t.join(); } catch (InterruptedException e) {} });
+System.out.println(count); // 1000보다 작은 값이 출력될 수 있음
+
+// 올바른 코드
+AtomicInteger count = new AtomicInteger(0);
+// 또는 synchronized 사용
+```
+
+`count++`은 읽기-수정-쓰기의 세 단계 연산입니다. 여러 스레드가 동시에 읽기 단계를 수행하면 같은 값을 두 번 증가시키는 경쟁 조건(race condition)이 발생합니다.
+
+**실수 3: Executors 팩토리의 무제한 큐/스레드 사용**
+
+```java
+// 위험! — 큐 크기가 Integer.MAX_VALUE로 무제한
+ExecutorService executor = Executors.newFixedThreadPool(10);
+// 작업이 계속 쌓이면 OutOfMemoryError 발생
+
+// 올바른 코드 — 명시적 유계 큐 설정
+ExecutorService executor = new ThreadPoolExecutor(
+    10, 20, 60L, TimeUnit.SECONDS,
+    new LinkedBlockingQueue<>(1000), // 최대 1000개
+    new ThreadPoolExecutor.CallerRunsPolicy() // 꽉 차면 호출자 스레드가 직접 실행
+);
+```
+
+**실수 4: InterruptedException 무시**
+
+```java
+// 잘못된 코드 — 인터럽트 신호 소멸
+try {
+    Thread.sleep(1000);
+} catch (InterruptedException e) {
+    // 아무것도 하지 않음 → 인터럽트 플래그가 사라짐
+}
+
+// 올바른 코드 1 — 인터럽트 플래그 복원
+try {
+    Thread.sleep(1000);
+} catch (InterruptedException e) {
+    Thread.currentThread().interrupt(); // 반드시 복원
+    return; // 또는 적절한 종료 처리
+}
+
+// 올바른 코드 2 — 예외를 상위로 전파
+public void task() throws InterruptedException {
+    Thread.sleep(1000);
+}
+```
+
+`InterruptedException`을 catch하면 인터럽트 플래그가 지워집니다. 복원하지 않으면 스레드 종료 요청을 감지하지 못해 스레드 풀 종료 시 무한 대기가 발생할 수 있습니다.
+
+**실수 5: synchronized와 ReentrantLock 혼용으로 데드락**
+
+```java
+// 위험한 코드 — synchronized와 ReentrantLock은 서로 모름
+Object syncLock = new Object();
+ReentrantLock reentrantLock = new ReentrantLock();
+
+// Thread A
+synchronized (syncLock) {
+    reentrantLock.lock(); // 데드락 가능
+}
+
+// Thread B
+reentrantLock.lock();
+synchronized (syncLock) { // 데드락 가능
+}
+
+// 올바른 코드 — 프로젝트에서 하나만 선택해 일관되게 사용
+```
+
+---
+
+## 극한 시나리오: 트래픽 규모별 동시성 전략
+
+### 100 TPS (소규모 서비스)
+
+단일 서버에서 `synchronized` 또는 `ReentrantLock`으로 충분합니다. 동시 요청이 적으므로 락 경쟁이 거의 없어 성능 문제가 발생하지 않습니다. 코드 단순성을 우선시하세요.
+
+```java
+// 100 TPS: 단순 synchronized로 충분
+public class OrderService {
+    private int pendingCount = 0;
+
+    public synchronized void addOrder(Order order) {
+        pendingCount++;
+        // 처리 로직
+    }
+}
+```
+
+### 10,000 TPS (중규모 서비스)
+
+락 경쟁이 시작되고 `synchronized`의 성능 한계가 보입니다. 읽기/쓰기 비율을 분석해 `ReadWriteLock` 또는 `StampedLock`을 도입하고, 카운터는 `LongAdder`로 교체하며, `ConcurrentHashMap`의 원자적 연산(`compute`, `merge`)을 활용해야 합니다.
+
+```java
+// 10K TPS: 읽기 많은 캐시에 StampedLock 적용
+public class ProductCache {
+    private final StampedLock lock = new StampedLock();
+    private final Map<Long, Product> cache = new HashMap<>();
+
+    public Product get(Long id) {
+        long stamp = lock.tryOptimisticRead(); // 낙관적 읽기: 락 없음
+        Product p = cache.get(id);
+        if (!lock.validate(stamp)) { // 쓰기 발생 여부 확인
+            stamp = lock.readLock();
+            try { p = cache.get(id); }
+            finally { lock.unlockRead(stamp); }
+        }
+        return p;
+    }
+}
+
+// 고경합 카운터: LongAdder가 AtomicLong보다 3~10배 빠름
+LongAdder requestCount = new LongAdder();
+requestCount.increment(); // 스레드별 독립 셀에 기록
+long total = requestCount.sum(); // 집계
+```
+
+### 100,000 TPS (대규모 서비스)
+
+이 규모에서는 단일 JVM의 락 기반 동기화가 병목이 됩니다. lock-free 알고리즘, Virtual Thread, 그리고 비동기 처리가 필수입니다.
+
+```java
+// 100K TPS: Virtual Thread + 비동기 파이프라인
+// Spring Boot 3.2+ application.properties:
+// spring.threads.virtual.enabled=true
+
+// 직접 구현 시 Virtual Thread per request
+try (ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor()) {
+    List<Future<Response>> futures = requests.stream()
+        .map(req -> exec.submit(() -> processRequest(req)))
+        .collect(Collectors.toList());
+    // I/O 대기 중 Virtual Thread가 Carrier 해제 → OS 스레드 낭비 없음
+}
+
+// lock-free 자료구조로 공유 상태 최소화
+ConcurrentHashMap<String, LongAdder> metrics = new ConcurrentHashMap<>();
+metrics.computeIfAbsent("api.calls", k -> new LongAdder()).increment();
+
+// 핵심 원칙: 공유 가변 상태를 최소화하고, 공유가 불가피하면 lock-free 연산 사용
+```
+
+100K TPS 이상에서는 단일 JVM의 한계를 넘어 **메시지 큐(Kafka, RabbitMQ)** 와 **분산 캐시(Redis)** 로 상태를 외부화하는 아키텍처가 필요합니다.
 
 ---
 

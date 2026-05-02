@@ -951,6 +951,205 @@ graph TD
 
 ---
 
+## 실무에서 자주 하는 실수
+
+### 실수 1: GC 로그 없이 튜닝 시도
+
+GC 문제를 추정으로 해결하려는 것이 가장 흔한 실수입니다. Full GC 발생 여부, STW 시간, Old Generation 증가 추세는 반드시 로그로 확인해야 합니다.
+
+```bash
+# GC 로그 활성화 (Java 9+)
+java -Xlog:gc*:file=gc.log:time,uptime:filecount=5,filesize=20m \
+     -XX:+HeapDumpOnOutOfMemoryError \
+     -XX:HeapDumpPath=/var/log/app/heap.hprof \
+     -jar app.jar
+```
+
+GCEasy(https://gceasy.io) 또는 GCViewer로 로그를 분석하면 Full GC 빈도, 평균 STW 시간, 힙 사용 패턴을 시각적으로 파악할 수 있습니다.
+
+### 실수 2: Xmx만 크게 설정하면 해결된다는 믿음
+
+힙을 크게 잡으면 GC 빈도는 줄지만, Full GC 한 번의 STW 시간이 길어집니다. 8GB 힙에서 Full GC가 발생하면 수 초~수십 초 STW가 발생할 수 있습니다.
+
+```bash
+# 나쁜 예: 무작정 힙만 크게
+java -Xmx16g -jar app.jar
+
+# 좋은 예: 힙 크기 + GC 알고리즘 함께 조정
+java -Xmx8g \
+     -XX:+UseZGC \          # 저지연 GC로 STW를 ms 수준으로 제한
+     -XX:MaxGCPauseMillis=50 \
+     -jar app.jar
+```
+
+### 실수 3: static 컬렉션에 객체를 넣고 빼지 않음
+
+static 필드에 저장된 컬렉션은 GC Root로부터 항상 도달 가능하므로 절대 수거되지 않습니다. 캐시처럼 사용하다가 메모리 누수의 주범이 됩니다.
+
+```java
+// 위험: static Map에 넣기만 하고 제거하지 않음
+public class SessionManager {
+    private static final Map<String, Session> sessions = new HashMap<>();
+
+    public void addSession(String id, Session session) {
+        sessions.put(id, session); // 세션이 만료돼도 Map에 남아있음
+    }
+    // remove() 없음 → 메모리 누수
+}
+
+// 개선: WeakHashMap 또는 만료 기반 캐시
+private static final Map<String, Session> sessions =
+    Collections.synchronizedMap(new WeakHashMap<>());
+// 또는 Caffeine 캐시로 TTL 설정
+```
+
+### 실수 4: finalize() 또는 Cleaner를 잘못 사용
+
+`finalize()`는 GC가 실행할 시점을 보장하지 않으며 성능 문제를 유발합니다. Java 9부터 deprecated이며, Java 18부터는 제거 예정입니다.
+
+```java
+// 나쁜 예: finalize() 사용
+@Override
+protected void finalize() throws Throwable {
+    connection.close(); // GC 타이밍 불확실, 성능 저하
+}
+
+// 좋은 예: try-with-resources 또는 Cleaner
+public class Resource implements AutoCloseable {
+    @Override
+    public void close() {
+        connection.close(); // 명시적 호출 보장
+    }
+}
+
+try (Resource r = new Resource()) {
+    r.use();
+} // 자동으로 close() 호출
+```
+
+### 실수 5: Young Generation 비율을 기본값에서 건드리지 않음
+
+단명 객체(요청 처리 중 생성되는 DTO, 임시 문자열)가 많은 서버 애플리케이션에서 Young Generation이 너무 작으면 Minor GC가 과도하게 발생합니다.
+
+```bash
+# Young Generation 비율 조정
+java -Xmx8g \
+     -XX:NewRatio=2 \        # Young:Old = 1:2 (Young = 약 2.7GB)
+     -XX:SurvivorRatio=8 \   # Eden:Survivor = 8:1:1
+     -XX:+UseG1GC \
+     -jar app.jar
+
+# G1GC에서는 Region 크기로 제어
+java -Xmx8g \
+     -XX:+UseG1GC \
+     -XX:G1HeapRegionSize=16m \  # 대형 객체(Humongous) 임계값 상향
+     -jar app.jar
+```
+
+---
+
+## 극한 시나리오
+
+### 100 TPS — G1GC 기본 설정으로 충분
+
+초당 100건의 요청은 기본 G1GC 설정으로 충분히 처리됩니다. 추가 튜닝보다 메모리 누수 여부 모니터링이 더 중요합니다.
+
+```bash
+# 100 TPS: 기본 설정 + 모니터링만 추가
+java -Xms2g -Xmx4g \
+     -XX:+UseG1GC \
+     -XX:+HeapDumpOnOutOfMemoryError \
+     -Xlog:gc*:file=gc.log:time,uptime \
+     -jar app.jar
+```
+
+Heap 사용량이 시간이 지나도 일정 수준에서 안정화되는지 확인합니다. 점진적으로 증가한다면 메모리 누수를 의심해야 합니다.
+
+### 10,000 TPS — STW 최소화가 핵심
+
+초당 10,000건에서 100ms STW가 발생하면 해당 시간 동안 1,000건의 요청이 지연됩니다. STW를 50ms 이하로 제한하는 것이 목표입니다.
+
+```bash
+# 10K TPS: G1GC + STW 목표 설정
+java -Xms8g -Xmx8g \          # Min=Max로 힙 크기 고정 (리사이징 STW 방지)
+     -XX:+UseG1GC \
+     -XX:MaxGCPauseMillis=50 \ # STW 목표 50ms
+     -XX:G1HeapOccupancyPercent=45 \ # Old GC 트리거 임계값 낮춤
+     -XX:G1NewSizePercent=20 \
+     -XX:G1MaxNewSizePercent=40 \
+     -jar app.jar
+```
+
+```java
+// 객체 생성 최소화: 요청당 임시 객체를 줄여 GC 압력 감소
+// 나쁜 예: 매 요청마다 새 StringBuilder
+public String buildResponse(List<Item> items) {
+    String result = "";
+    for (Item item : items) {
+        result += item.toString(); // 매 반복마다 String 객체 생성
+    }
+    return result;
+}
+
+// 좋은 예: StringBuilder 재사용 패턴 또는 ThreadLocal
+private static final ThreadLocal<StringBuilder> SB =
+    ThreadLocal.withInitial(StringBuilder::new);
+
+public String buildResponse(List<Item> items) {
+    StringBuilder sb = SB.get();
+    sb.setLength(0); // 재사용
+    items.forEach(item -> sb.append(item.toString()));
+    return sb.toString();
+}
+```
+
+### 100,000 TPS — ZGC + 힙 외 메모리 전략
+
+초당 100,000건에서는 GC STW가 수십 ms만 되어도 서비스에 영향을 줍니다. ZGC 또는 Shenandoah로 STW를 1~2ms 이하로 줄이고, Off-heap 메모리 활용을 검토합니다.
+
+```bash
+# 100K TPS: ZGC로 STW 최소화
+java -Xms32g -Xmx32g \
+     -XX:+UseZGC \
+     -XX:SoftMaxHeapSize=28g \     # 힙 28GB 초과 시 적극적 GC
+     -XX:ConcGCThreads=4 \        # 동시 GC 스레드 수
+     -XX:+ZGenerational \         # Java 21+: Generational ZGC
+     -jar app.jar
+```
+
+```java
+// Off-heap 캐시: DirectByteBuffer로 GC 대상 외 메모리 사용
+public class OffHeapCache {
+    // GC가 관리하지 않는 네이티브 메모리에 캐시 저장
+    private final ByteBuffer buffer = ByteBuffer.allocateDirect(1024 * 1024 * 512); // 512MB
+
+    public void put(int offset, byte[] data) {
+        buffer.position(offset);
+        buffer.put(data); // GC 압력 없음
+    }
+}
+```
+
+<div class="mermaid">
+graph TD
+    subgraph "100K TPS GC 전략"
+        Z["ZGC / Generational ZGC\n-XX:+UseZGC -XX:+ZGenerational"]
+        OH["Off-heap 캐시\nDirectByteBuffer / Chronicle Map"]
+        OBJ["객체 풀링\nApache Commons Pool"]
+        VAL["Value Objects 최소화\nrecord 대신 primitive"]
+        MON["실시간 모니터링\nJFR + Prometheus GC 메트릭"]
+    end
+
+    Z -->|"STW 1ms 이하"| MON
+    OH -->|"GC 압력 감소"| MON
+    OBJ -->|"할당 빈도 감소"| MON
+    VAL -->|"Young GC 감소"| MON
+</div>
+
+100K TPS에서는 GC 튜닝 이전에 애플리케이션 코드에서 불필요한 객체 생성을 줄이는 것이 선행되어야 합니다. JFR(Java Flight Recorder)로 어느 코드가 가장 많은 객체를 생성하는지 프로파일링한 후 최적화하는 순서가 효과적입니다.
+
+---
+
 ## 정리
 
 <div class="mermaid">

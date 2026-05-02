@@ -9,21 +9,28 @@ toc_label: 목차
 
 Java 8의 Stream API는 컬렉션 데이터를 선언적으로 처리하는 강력한 도구입니다. 단순히 for 루프를 대체하는 것이 아니라, 지연 연산(lazy evaluation), 병렬 처리, 함수 합성을 통해 데이터 파이프라인을 구성하는 새로운 패러다임입니다.
 
+> **비유로 이해하기**: 스트림은 공장의 컨베이어 벨트와 같습니다. 원재료(데이터)를 벨트에 올려놓으면 여러 가공 단계(중간 연산)를 차례로 거쳐 최종 제품(결과)으로 나옵니다. 컨베이어 벨트 자체는 제품을 보관하지 않고 흘려보낼 뿐입니다. 중요한 점은, 첫 번째 제품이 모든 단계를 통과한 뒤 두 번째 제품이 투입되는 것이 아니라, **모든 제품이 동시에 각자의 단계를 처리**합니다(수직 실행).
+
 ## 1. 스트림이란? 컬렉션과의 차이
 
 ### 스트림의 정의
 
 스트림(Stream)은 **데이터의 흐름**입니다. 컬렉션과 달리 데이터를 저장하지 않고, 소스(source)로부터 데이터를 끌어와 연산 파이프라인을 통과시킵니다.
 
-```
-컬렉션:                          스트림:
-┌──────────────────┐             소스 → [중간연산] → [중간연산] → 최종연산
-│ [1, 2, 3, 4, 5]  │                              ↑
-│  데이터 저장     │             데이터를 저장하지 않고 흘려보냄
-└──────────────────┘
-       ↓ 반복                    지연 연산 — 최종 연산이 호출될 때까지 실행 안 함
-    for (int x : list)           1회 사용 — 소비된 스트림은 재사용 불가
-```
+<div class="mermaid">
+graph LR
+  subgraph "컬렉션 (데이터 저장)"
+    D["[1, 2, 3, 4, 5]"]
+    D -->|"for 루프 — 외부 반복"| R1["결과"]
+  end
+  subgraph "스트림 (데이터 흐름)"
+    S["소스"] -->|"1. filter"| F["중간 연산"]
+    F -->|"2. map"| M["중간 연산"]
+    M -->|"3. collect 호출 시 실행"| R2["최종 연산"]
+  end
+</div>
+
+스트림의 세 가지 핵심 특성을 이해해야 합니다. 첫째, 스트림은 데이터를 저장하지 않습니다. filter나 map은 새 스트림을 반환할 뿐 어디에도 중간 결과를 저장하지 않습니다. 둘째, 지연 연산(lazy evaluation)으로 동작합니다. `filter()`를 호출해도 그 즉시 필터링이 일어나지 않고, `collect()`처럼 최종 연산이 호출될 때 비로소 파이프라인 전체가 실행됩니다. 셋째, 1회용입니다. 한 번 소비된 스트림은 재사용할 수 없습니다.
 
 ### 컬렉션 vs 스트림 비교
 
@@ -58,20 +65,22 @@ List<String> result2 = names.stream()
 
 스트림 파이프라인은 세 부분으로 구성됩니다.
 
-```
-┌─────────────┐     ┌─────────────────────────────────┐     ┌──────────────┐
-│    소스      │────▶│          중간 연산               │────▶│  최종 연산   │
-│  (Source)   │     │  (Intermediate Operations)       │     │  (Terminal)  │
-└─────────────┘     └─────────────────────────────────┘     └──────────────┘
-  Collection          filter, map, flatMap, sorted ...         collect, count,
-  Array               limit, skip, distinct, peek              forEach, reduce
-  Stream.of()                                                   findFirst ...
-  I/O 채널
+<div class="mermaid">
+graph LR
+  subgraph "1단계: 소스 (Source)"
+    A["Collection / Array\nStream.of() / I/O 채널"]
+  end
+  subgraph "2단계: 중간 연산 (Intermediate)"
+    B["filter → map → flatMap\nsorted → distinct → limit"]
+  end
+  subgraph "3단계: 최종 연산 (Terminal)"
+    C["collect / count\nforEach / reduce\nfindFirst / anyMatch"]
+  end
+  A -->|"Stream&lt;T&gt; 반환\n지연 실행 (lazy)\n체이닝 가능"| B
+  B -->|"스트림 아님\n즉시 실행 (eager)\n1회만 호출"| C
+</div>
 
-                      스트림 반환 (Stream<T>)                  스트림 아님
-                      지연 실행 (lazy)                          즉시 실행 (eager)
-                      여러 번 체이닝 가능                       1회만 호출 가능
-```
+중간 연산과 최종 연산의 차이는 핵심입니다. 중간 연산은 항상 `Stream<T>`를 반환하므로 계속 체이닝할 수 있고, 최종 연산이 호출되기 전까지는 아무것도 실행되지 않습니다. 반면 최종 연산은 스트림이 아닌 실제 결과(List, int, void 등)를 반환하며, 이 시점에 파이프라인 전체가 실행됩니다. 최종 연산이 없으면 파이프라인에 아무리 많은 중간 연산을 걸어도 실행 자체가 되지 않습니다.
 
 ```java
 // 파이프라인 예시
@@ -122,15 +131,22 @@ stream.forEach(System.out::println);
 
 중요한 점은 스트림이 요소를 하나씩 파이프라인 전체를 통과시키는 **수직 실행** 방식을 사용한다는 것입니다.
 
-```
-수평 처리 (일반적으로 오해하는 방식):
-  filter(A, B, C) → [A, B, C] → map(A, B, C) → [a, b, c] → forEach
+많은 개발자가 "filter가 모든 요소를 처리한 다음, map이 모든 요소를 처리한다"고 오해합니다. 실제 동작은 그 반대로, 요소 하나가 파이프라인의 끝까지 이동한 뒤 다음 요소가 처리됩니다. 이 방식 덕분에 `limit(1)`을 붙이면 첫 번째 요소가 최종 연산을 통과하는 즉시 나머지 요소의 처리가 완전히 중단됩니다.
 
-수직 처리 (실제 스트림 동작):
-  A → filter → map → forEach
-  B → filter → map → forEach
-  C → filter → map → forEach
-```
+<div class="mermaid">
+graph TD
+  subgraph "수평 처리 (오해)"
+    F1["filter(A,B,C)"] --> M1["map(A,B,C)"] --> R1["forEach"]
+  end
+  subgraph "수직 처리 (실제 동작)"
+    A["요소 A"] -->|"1. filter"| FA["통과"]
+    FA -->|"2. map"| MA["변환"]
+    MA -->|"3. forEach"| RA["출력"]
+    B["요소 B"] -->|"1. filter"| FB["통과"]
+    FB -->|"2. map"| MB["변환"]
+    MB -->|"3. forEach"| RB["출력"]
+  end
+</div>
 
 ```java
 // limit과 함께 단락(short-circuit) 최적화
@@ -686,22 +702,25 @@ Stream<Integer> sequential = numbers.parallelStream().sequential();
 
 ### ForkJoinPool 기반 동작
 
+병렬 스트림은 내부적으로 `ForkJoinPool.commonPool()`을 사용해 데이터를 분할하고 각 스레드가 독립적으로 처리한 뒤 결과를 합산합니다. 이 분할-처리-합산(Fork-Join) 구조가 병렬 스트림의 핵심입니다. 기본 스레드 수는 `Runtime.getRuntime().availableProcessors()`로 결정되며, 대부분의 경우 CPU 코어 수와 동일합니다.
+
+<div class="mermaid">
+graph TD
+  subgraph "ForkJoinPool.commonPool() 병렬 처리"
+    DATA["전체 데이터 [1..1,000,000]"]
+    DATA -->|"1. 분할"| T1["Thread 1\n[1..250k]"]
+    DATA -->|"1. 분할"| T2["Thread 2\n[250k..500k]"]
+    DATA -->|"1. 분할"| T3["Thread 3\n[500k..750k]"]
+    DATA -->|"1. 분할"| T4["Thread 4\n[750k..1M]"]
+    T1 -->|"2. 처리"| R1["부분합 1"]
+    T2 -->|"2. 처리"| R2["부분합 2"]
+    T3 -->|"2. 처리"| R3["부분합 3"]
+    T4 -->|"2. 처리"| R4["부분합 4"]
+    R1 & R2 & R3 & R4 -->|"3. 합산 (combine)"| FINAL["최종 결과"]
+  end
+</div>
+
 ```java
-/*
- 병렬 스트림 실행 구조:
-
- ForkJoinPool.commonPool()
- ┌────────────────────────────────────────┐
- │  Thread 1  │  Thread 2  │  Thread 3   │  Thread 4
- │   처리      │   처리      │   처리      │   처리
- │  [1..250k] │ [250k..500k]│[500k..750k]│[750k..1M]
- └────────────────────────────────────────┘
-         └─────────────┬────────────────┘
-                  결과 합산 (combine)
-
- 기본 스레드 수 = Runtime.getRuntime().availableProcessors()
-*/
-
 // 커스텀 ForkJoinPool 사용 (공통 풀 외부)
 ForkJoinPool customPool = new ForkJoinPool(4);
 long result = customPool.submit(() ->
@@ -915,6 +934,137 @@ stream.forEach(System.out::println);   // IllegalStateException: stream has alre
 Supplier<Stream<String>> streamSupplier = () -> Stream.of("a", "b", "c");
 streamSupplier.get().forEach(System.out::println);  // OK
 streamSupplier.get().count();                       // OK
+```
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 스트림을 두 번 사용하려는 시도**
+
+```java
+// 잘못된 코드
+Stream<String> stream = list.stream().filter(s -> s.length() > 3);
+long count = stream.count();
+List<String> result = stream.collect(Collectors.toList()); // IllegalStateException!
+
+// 올바른 코드 — 필요할 때마다 새 스트림 생성
+Supplier<Stream<String>> streamSupplier = () -> list.stream().filter(s -> s.length() > 3);
+long count = streamSupplier.get().count();
+List<String> result = streamSupplier.get().collect(Collectors.toList());
+```
+
+`collect()`, `count()`, `forEach()` 등 최종 연산을 호출하면 스트림은 닫힙니다. 같은 스트림 객체에 다시 연산을 걸면 `IllegalStateException`이 발생합니다. 이 오류는 스트림을 변수에 담아 재사용하려 할 때 자주 발생합니다.
+
+**실수 2: peek()을 데이터 수집에 사용**
+
+```java
+// 잘못된 코드 — peek은 디버깅 전용
+List<String> result = new ArrayList<>();
+stream.peek(result::add).count(); // count()가 최적화로 실행 안 될 수도 있음!
+
+// 올바른 코드
+List<String> result = stream.collect(Collectors.toList());
+```
+
+`peek()`은 중간 연산이므로 최종 연산의 실행 방식에 따라 생략될 수 있습니다. JVM 최적화로 인해 `count()` 앞의 `peek()`이 아예 실행되지 않는 경우도 있습니다. 데이터를 수집하려면 항상 최종 연산(`collect`, `forEach`)을 사용하세요.
+
+**실수 3: 병렬 스트림에서 공유 컬렉션에 직접 추가**
+
+```java
+// 위험한 코드 — ArrayList는 스레드 안전하지 않음
+List<Integer> result = new ArrayList<>();
+IntStream.range(0, 10000).parallel().forEach(result::add); // 결과 누락, ConcurrentModificationException 가능
+
+// 올바른 코드
+List<Integer> result = IntStream.range(0, 10000).parallel()
+    .boxed()
+    .collect(Collectors.toList()); // Collector가 내부적으로 스레드 안전하게 처리
+```
+
+**실수 4: 기본형 스트림을 쓰지 않아 발생하는 박싱 오버헤드**
+
+```java
+// 느린 코드 — Integer 박싱/언박싱 반복
+List<Integer> numbers = /* 100만 개 */;
+int sum = numbers.stream().reduce(0, Integer::sum); // 매 연산마다 언박싱
+
+// 빠른 코드 — 박싱 없이 int 연산
+int sum = numbers.stream().mapToInt(Integer::intValue).sum(); // IntStream 사용
+// 또는
+int sum = IntStream.rangeClosed(1, 1000000).sum(); // 처음부터 기본형 스트림
+```
+
+**실수 5: sorted() 후 limit() 순서 오류**
+
+```java
+// 잘못된 코드 — 3개만 필요한데 100만 개 전체 정렬
+Stream.of(/* 100만 개 */).limit(3).sorted(); // limit 먼저 → 3개만 정렬 (의도와 다를 수 있음)
+
+// 상위 3개를 정렬해서 가져오려면
+Stream.of(/* 100만 개 */).sorted(Comparator.reverseOrder()).limit(3); // 전체 정렬 후 3개
+// 성능이 중요하면 PriorityQueue를 직접 사용 고려
+```
+
+---
+
+## 극한 시나리오: 트래픽 규모별 스트림 전략
+
+### 100 TPS (소규모 서비스)
+
+데이터 처리 건수가 적으므로 스트림 API의 기본 사용으로 충분합니다. 코드 가독성을 최우선으로 하고, 병렬 스트림은 오히려 스레드 오버헤드가 발생할 수 있으므로 불필요합니다.
+
+```java
+// 단순 순차 스트림으로 충분
+List<OrderDto> result = orders.stream()
+    .filter(o -> o.getStatus() == OrderStatus.PENDING)
+    .map(OrderDto::from)
+    .collect(Collectors.toList());
+```
+
+### 10,000 TPS (중규모 서비스)
+
+요청당 처리 데이터가 늘어납니다. **기본형 스트림**을 적극 활용해 박싱 오버헤드를 제거하고, `Collectors.groupingBy()`로 집계를 DB 쿼리 대신 애플리케이션 레벨에서 처리하는 전략이 유효합니다. 병렬 스트림은 데이터 크기가 수만 건 이상일 때만 사용합니다.
+
+```java
+// 박싱 오버헤드 제거 — 매출 합산
+long totalRevenue = orders.stream()
+    .mapToLong(Order::getAmount) // LongStream으로 변환
+    .sum(); // 박싱 없이 직접 합산
+
+// 메모리 내 집계로 DB 쿼리 감소
+Map<String, DoubleSummaryStatistics> statsByCategory = products.stream()
+    .collect(Collectors.groupingBy(
+        Product::getCategory,
+        Collectors.summarizingDouble(Product::getPrice)
+    ));
+```
+
+### 100,000 TPS (대규모 서비스)
+
+이 규모에서는 스트림의 한계를 인식해야 합니다. 단일 JVM에서 스트림으로 모든 데이터를 처리하는 것 자체가 병목이 됩니다. 다음 전략을 고려하세요.
+
+- **병렬 스트림 + 커스텀 ForkJoinPool**: 공통 풀 오염을 막고 스레드 수를 제어
+- **Spliterator 커스텀 구현**: 데이터 분할 전략을 직접 제어해 불균형 분할 방지
+- **배치 처리 + 스트림**: 데이터를 청크 단위로 나눠 처리
+- **Reactive Streams(Project Reactor/RxJava)**: 배압(backpressure) 제어가 필요하면 스트림 대신 Reactive 방식
+
+```java
+// 100K TPS 환경에서 안전한 병렬 처리 패턴
+ForkJoinPool customPool = new ForkJoinPool(
+    Runtime.getRuntime().availableProcessors() * 2 // I/O 포함 시 계수 조정
+);
+
+try {
+    List<Result> results = customPool.submit(() ->
+        largeDataset.parallelStream()
+            .filter(item -> item.isValid())
+            .map(item -> processHeavy(item))
+            .collect(Collectors.toList())
+    ).get(30, TimeUnit.SECONDS);
+} finally {
+    customPool.shutdown();
+}
 ```
 
 ---
