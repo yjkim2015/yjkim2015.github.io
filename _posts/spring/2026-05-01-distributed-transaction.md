@@ -10,31 +10,22 @@ date: 2026-05-01
 
 마이크로서비스 아키텍처에서는 단일 비즈니스 작업이 여러 서비스에 걸쳐 실행된다. 각 서비스는 독립적인 데이터베이스를 가지므로 전통적인 ACID 트랜잭션을 사용할 수 없다. 분산 트랜잭션은 이 문제를 해결하기 위한 다양한 패턴을 다룬다.
 
-> 비유: 여러 은행 계좌 간 이체와 같다. A 은행에서 출금하고 B 은행에 입금할 때 중간에 네트워크가 끊기면 출금만 되고 입금이 안 될 수 있다. 각 은행(서비스)이 독립적이라 한쪽이 실패해도 다른 쪽을 자동으로 되돌릴 수 없다.
+> **비유**: 여러 은행 계좌 간 이체와 같다. A 은행에서 출금하고 B 은행에 입금할 때 중간에 네트워크가 끊기면 출금만 되고 입금이 안 될 수 있다. 각 은행(서비스)이 독립적이라 한쪽이 실패해도 다른 쪽을 자동으로 되돌릴 수 없다.
 
 ---
 
 ## 왜 분산 트랜잭션이 어려운가
 
-### 단일 DB에서의 트랜잭션
-
-```
-BEGIN;
-  INSERT INTO orders ...
-  UPDATE inventory SET stock = stock - 1 ...
-  INSERT INTO payments ...
-COMMIT; -- 또는 ROLLBACK (원자적)
-```
-
-### 마이크로서비스에서의 문제
+단일 DB에서는 `BEGIN/COMMIT/ROLLBACK`이 원자적으로 동작한다. 하지만 마이크로서비스에서는 각 서비스가 독립 DB를 소유하므로 하나의 트랜잭션으로 묶을 수 없다.
 
 <div class="mermaid">
 graph LR
-    OS["Order Service\nINSERT orders — DB A"]
-    IS["Inventory Service\nUPDATE inventory — DB B"]
-    PS["Payment Service\nINSERT payments — DB C"]
-    FAIL["하나라도 실패하면?\nDB A 커밋됨, DB B·C 롤백\n→ 데이터 불일치"]
-    OS --> IS --> PS --> FAIL
+    OS["Order Service\nINSERT orders → DB A"]
+    IS["Inventory Service\nUPDATE inventory → DB B"]
+    PS["Payment Service\nINSERT payments → DB C"]
+    FAIL["하나라도 실패하면?\nDB A 커밋됨\nDB B·C 롤백\n→ 데이터 불일치 발생"]
+    OS -->|"성공"| IS -->|"성공"| PS -->|"실패"| FAIL
+    style FAIL fill:#f88,stroke:#c00,color:#000
 </div>
 
 ### CAP 정리
@@ -53,78 +44,42 @@ graph LR
 
 ## 2PC (Two-Phase Commit)
 
-### 동작 방식
+분산 환경에서 강한 일관성(Strong Consistency)을 제공하려는 프로토콜이다. **코디네이터**가 모든 참여자를 2단계로 조율한다.
 
-2PC는 분산 환경에서 강한 일관성(Strong Consistency)을 제공하려는 프로토콜이다. **코디네이터**가 모든 참여자를 조율한다.
-
-| 단계 | 동작 |
-|------|------|
-| Phase 1: Prepare (투표) | 코디네이터가 모든 참여자에게 "준비됐나?" 질문 → 각 참여자가 로컬 트랜잭션 준비 후 Yes/No 응답 |
-| Phase 2: Commit/Rollback (결정) | 모든 참여자 Yes → Commit 명령 / 하나라도 No → Rollback 명령 |
+1️⃣ **Phase 1 - Prepare(투표)**: 코디네이터가 모든 참여자에게 "준비됐나?" 질문 → 각 참여자가 로컬 트랜잭션을 준비하고 Yes/No 응답
+2️⃣ **Phase 2 - Commit/Rollback(결정)**: 모든 참여자 Yes → Commit 명령 / 하나라도 No → Rollback 명령
 
 <div class="mermaid">
 sequenceDiagram
-    participant CO as 코디네이터
-    participant ODB as Order DB
-    participant IDB as Inventory DB
-    participant PDB as Payment DB
+    participant CO as "코디네이터"
+    participant ODB as "Order DB"
+    participant IDB as "Inventory DB"
+    participant PDB as "Payment DB"
 
-    Note over CO,PDB: Phase 1 - Prepare (투표)
-    CO->>ODB: Prepare
-    ODB-->>CO: Yes
-    CO->>IDB: Prepare
+    Note over CO,PDB: "Phase 1 - Prepare (투표)"
+    CO->>ODB: 1️⃣ Prepare
+    ODB-->>CO: Yes (로컬 트랜잭션 준비 완료)
+    CO->>IDB: 1️⃣ Prepare
     IDB-->>CO: Yes
-    CO->>PDB: Prepare
+    CO->>PDB: 1️⃣ Prepare
     PDB-->>CO: Yes
 
-    Note over CO,PDB: Phase 2 - Commit (결정)
-    CO->>ODB: Commit
-    CO->>IDB: Commit
-    CO->>PDB: Commit
+    Note over CO,PDB: "Phase 2 - Commit (결정)"
+    CO->>ODB: 2️⃣ Commit
+    CO->>IDB: 2️⃣ Commit
+    CO->>PDB: 2️⃣ Commit
+    Note over ODB,PDB: "모든 DB 커밋 완료"
 </div>
 
 ### 2PC의 문제점
 
-**1. 동기 블로킹**
-- Phase 1과 Phase 2 사이에 모든 참여자가 락을 보유한 채 대기
-- 코디네이터 장애 시 참여자들이 무한 대기 가능
-
-**2. 단일 실패 지점**
-- 코디네이터가 장애나면 전체가 중단됨
-
-**3. 성능 저하**
-- 모든 서비스가 응답할 때까지 대기 → 지연 시간이 가장 느린 서비스에 종속
-
-**4. 마이크로서비스와 맞지 않음**
-- 각 서비스가 독립적으로 배포되고 장애가 발생할 수 있는 환경에서 강한 결합을 만듦
-
-### 언제 사용하는가
-
-- 동일 데이터베이스 내의 XA 트랜잭션 (여러 DB 벤더를 하나의 트랜잭션으로)
-- 레거시 시스템 연동
-- 강한 일관성이 반드시 필요하고 성능 저하를 감수할 수 있을 때
+- **동기 블로킹**: Phase 1과 2 사이에 모든 참여자가 락을 보유한 채 대기한다. 코디네이터 장애 시 참여자들이 무한 대기 상태가 된다
+- **단일 실패 지점**: 코디네이터가 장애나면 전체 트랜잭션이 중단된다
+- **성능 저하**: 가장 느린 참여자에 전체가 종속된다
+- **마이크로서비스와 맞지 않음**: 서비스 간 강한 결합을 만들어 독립 배포가 어려워진다
 
 ```java
 // Spring JTA + XA 트랜잭션 (2PC)
-@Configuration
-public class XaDataSourceConfig {
-
-    @Bean
-    @Primary
-    public XADataSource orderXaDataSource() {
-        MysqlXADataSource ds = new MysqlXADataSource();
-        ds.setUrl("jdbc:mysql://order-db:3306/orders");
-        return ds;
-    }
-
-    @Bean
-    public XADataSource inventoryXaDataSource() {
-        MysqlXADataSource ds = new MysqlXADataSource();
-        ds.setUrl("jdbc:mysql://inventory-db:3306/inventory");
-        return ds;
-    }
-}
-
 @Service
 @Transactional  // JTA가 2PC로 여러 DB에 걸쳐 트랜잭션 처리
 public class OrderService {
@@ -136,13 +91,7 @@ public class OrderService {
 }
 ```
 
----
-
-## 3PC (Three-Phase Commit)
-
-2PC의 코디네이터 단일 실패 지점 문제를 개선한 프로토콜이다. Phase 1(CanCommit) → Phase 2(PreCommit) → Phase 3(Commit) 3단계로 나뉜다.
-
-**한계**: 실제로는 네트워크 파티션 상황에서도 완벽하지 않고, 복잡도 대비 이점이 크지 않아 실무에서 거의 사용하지 않는다.
+2PC는 레거시 단일 서버 환경이나 강한 일관성이 절대적으로 필요한 경우에만 제한적으로 사용한다.
 
 ---
 
@@ -150,18 +99,18 @@ public class OrderService {
 
 Saga는 **각 서비스의 로컬 트랜잭션 + 실패 시 보상 트랜잭션(Compensating Transaction)**으로 분산 트랜잭션을 구현한다. 강한 일관성 대신 **최종 일관성**을 목표로 한다.
 
-### 보상 트랜잭션이란
-
-> 비유: 여행 예약과 같다. 항공권 예약 → 호텔 예약 → 렌터카 예약 중 렌터카가 실패하면, 이미 예약한 호텔과 항공권을 취소(보상)해야 한다.
+> **비유**: 여행 예약과 같다. 항공권 예약 → 호텔 예약 → 렌터카 예약 중 렌터카가 실패하면, 이미 예약한 호텔과 항공권을 취소(보상 트랜잭션)해야 한다.
 
 <div class="mermaid">
 graph LR
-    A["주문 생성"] --> B["재고 차감"] --> C["결제"]
-    C -->|결제 실패| D["주문 취소 보상"]
-    D --> E["재고 복원 보상"]
+    A["1️⃣ 주문 생성"] -->|"성공"| B["2️⃣ 재고 차감"] -->|"성공"| C["3️⃣ 결제 처리"]
+    C -->|"결제 실패"| D["보상: 재고 복원"]
+    D --> E["보상: 주문 취소"]
+    style D fill:#ffa,stroke:#880,color:#000
+    style E fill:#ffa,stroke:#880,color:#000
 </div>
 
-각 단계가 실패하면 **이미 완료된 단계를 되돌리는** 보상 트랜잭션을 실행한다.
+각 단계가 실패하면 이미 완료된 단계를 역순으로 되돌리는 보상 트랜잭션을 실행한다.
 
 ---
 
@@ -171,22 +120,24 @@ graph LR
 
 <div class="mermaid">
 sequenceDiagram
-    participant OS as Order Service
-    participant IS as Inventory Service
-    participant PS as Payment Service
+    participant OS as "Order Service"
+    participant MQ as "메시지 브로커"
+    participant IS as "Inventory Service"
+    participant PS as "Payment Service"
 
-    OS->>OS: 주문 생성
-    OS-->>IS: OrderCreated 이벤트 발행
-    IS->>IS: 재고 차감
-    IS-->>PS: InventoryReserved 발행
-    Note over IS: 실패 시 InventoryReservationFailed 발행
-    PS->>PS: 결제 처리
-    PS-->>OS: PaymentCompleted 발행
-    Note over PS: 실패 시 PaymentFailed 발행
-    OS->>OS: 주문 확정
-    Note over OS: 실패 이벤트 수신 시 주문 취소 + 보상 이벤트 발행
-    OS-->>IS: 주문 취소 이벤트
-    IS->>IS: 재고 복원 (보상)
+    OS->>OS: 1️⃣ 주문 생성 (로컬 트랜잭션)
+    OS->>MQ: OrderCreated 이벤트 발행
+    MQ->>IS: 이벤트 전달
+    IS->>IS: 2️⃣ 재고 차감 (로컬 트랜잭션)
+    IS->>MQ: InventoryReserved 이벤트 발행
+    MQ->>PS: 이벤트 전달
+    PS->>PS: 3️⃣ 결제 처리
+    PS->>MQ: PaymentFailed 이벤트 발행 (실패 시)
+    MQ->>IS: 이벤트 전달
+    IS->>IS: 재고 복원 보상 트랜잭션
+    IS->>MQ: InventoryReleased 이벤트 발행
+    MQ->>OS: 이벤트 전달
+    OS->>OS: 주문 취소 보상 트랜잭션
 </div>
 
 **장점**: 느슨한 결합, 단순한 구현, 중앙 실패 지점 없음
@@ -197,31 +148,32 @@ sequenceDiagram
 
 ### Orchestration (오케스트레이션) Saga
 
-**중앙 오케스트레이터(Saga Orchestrator)**가 전체 흐름을 제어한다.
+**중앙 오케스트레이터(Saga Orchestrator)**가 전체 흐름을 명시적으로 제어한다.
 
 <div class="mermaid">
 sequenceDiagram
-    participant SO as Saga Orchestrator
-    participant OS as Order Service
-    participant IS as Inventory Service
-    participant PS as Payment Service
+    participant SO as "Saga Orchestrator"
+    participant OS as "Order Service"
+    participant IS as "Inventory Service"
+    participant PS as "Payment Service"
 
-    SO->>OS: 주문 생성 명령
+    SO->>OS: 1️⃣ 주문 생성 명령
     OS-->>SO: 성공 응답
-    SO->>IS: 재고 차감 명령
+    SO->>IS: 2️⃣ 재고 차감 명령
     IS-->>SO: 성공 응답
-    SO->>PS: 결제 처리 명령
+    SO->>PS: 3️⃣ 결제 처리 명령
     PS-->>SO: 실패 응답
-    Note over SO: 보상 트랜잭션 시작
-    SO->>IS: 재고 복원 명령 (보상)
-    SO->>OS: 주문 취소 명령 (보상)
+    Note over SO: "보상 트랜잭션 시작"
+    SO->>IS: 4️⃣ 재고 복원 명령 (보상)
+    IS-->>SO: 완료
+    SO->>OS: 5️⃣ 주문 취소 명령 (보상)
+    OS-->>SO: 완료
 </div>
 
 **장점**: 전체 흐름이 한곳에 집중 → 이해하고 모니터링하기 쉬움
 
 **단점**: 오케스트레이터가 단일 실패 지점, 서비스 간 결합도 증가
 
-**Spring State Machine으로 구현**
 ```java
 @Component
 @RequiredArgsConstructor
@@ -249,7 +201,7 @@ public class OrderSagaOrchestrator {
             return SagaResult.success(orderId);
 
         } catch (PaymentFailedException e) {
-            // 보상: 재고 복원 + 주문 취소
+            // 역순 보상: 재고 복원 → 주문 취소
             if (inventoryReserved) {
                 inventoryServiceClient.releaseInventory(request.productId(), request.quantity());
             }
@@ -259,7 +211,7 @@ public class OrderSagaOrchestrator {
             return SagaResult.failure("결제 실패");
 
         } catch (InventoryException e) {
-            // 보상: 주문 취소
+            // 역순 보상: 주문 취소만
             if (orderId != null) {
                 orderServiceClient.cancelOrder(orderId);
             }
@@ -269,13 +221,15 @@ public class OrderSagaOrchestrator {
 }
 ```
 
+보상 트랜잭션 실패에 대비해 상태를 DB에 저장하고 재시도할 수 있는 구조로 만들어야 한다.
+
 ---
 
 ## TCC (Try-Confirm-Cancel)
 
 TCC는 각 서비스의 비즈니스 로직을 Try / Confirm / Cancel 3단계로 분리한다.
 
-> 비유: 음식점 예약과 같다. Try(자리 임시 예약) → Confirm(당일 확정 입장) / Cancel(예약 취소). 자리를 실제로 점유하기 전에 먼저 확보해두고, 전체 조건이 맞으면 확정한다.
+> **비유**: 음식점 예약과 같다. Try(자리 임시 예약) → Confirm(당일 확정) / Cancel(예약 취소). 자리를 실제 점유하기 전에 먼저 확보해두고, 전체 조건이 맞으면 확정한다.
 
 | 단계 | 동작 |
 |------|------|
@@ -283,37 +237,32 @@ TCC는 각 서비스의 비즈니스 로직을 Try / Confirm / Cancel 3단계로
 | Confirm | 예약 확정 — 실제 처리 |
 | Cancel | 예약 취소 — 원상 복구 |
 
-### 동작 흐름
-
 <div class="mermaid">
 sequenceDiagram
-    participant CO as Coordinator
-    participant OS as Order Service
-    participant IS as Inventory Service
-    participant PS as Payment Service
+    participant CO as "Coordinator"
+    participant OS as "Order Service"
+    participant IS as "Inventory Service"
+    participant PS as "Payment Service"
 
-    Note over CO,PS: Phase 1 - Try (리소스 예약)
-    CO->>OS: Try - 주문 초안 생성 (PENDING)
-    CO->>IS: Try - 재고 10개 임시 차감 (reserved_qty += 10)
-    CO->>PS: Try - 결제 금액 임시 잠금 (hold_amount = 50000)
+    Note over CO,PS: "Phase 1 - Try (리소스 예약)"
+    CO->>OS: 1️⃣ Try - 주문 초안 생성 (PENDING)
+    CO->>IS: 1️⃣ Try - 재고 10개 임시 차감 (reserved_qty += 10)
+    CO->>PS: 1️⃣ Try - 결제 금액 임시 잠금 (hold_amount = 50000)
 
-    alt 모두 Try 성공
-        Note over CO,PS: Phase 2 - Confirm (확정)
-        CO->>OS: Confirm - 주문 확정 (CONFIRMED)
-        CO->>IS: Confirm - 임시 차감 확정 (actual_qty -= 10)
-        CO->>PS: Confirm - 잠금 금액 실제 차감
-    else 하나라도 Try 실패
-        Note over CO,PS: Phase 2 - Cancel (취소)
-        CO->>OS: Cancel - 주문 초안 삭제
-        CO->>IS: Cancel - 임시 차감 복원 (reserved_qty -= 10)
-        CO->>PS: Cancel - 잠금 금액 해제
+    alt "모두 Try 성공"
+        Note over CO,PS: "Phase 2 - Confirm (확정)"
+        CO->>OS: 2️⃣ Confirm - 주문 확정 (CONFIRMED)
+        CO->>IS: 2️⃣ Confirm - 임시 차감 확정
+        CO->>PS: 2️⃣ Confirm - 잠금 금액 실제 차감
+    else "하나라도 Try 실패"
+        Note over CO,PS: "Phase 2 - Cancel (취소)"
+        CO->>OS: 2️⃣ Cancel - 주문 초안 삭제
+        CO->>IS: 2️⃣ Cancel - 임시 차감 복원
+        CO->>PS: 2️⃣ Cancel - 잠금 금액 해제
     end
 </div>
 
-### 구현 예시
-
 ```java
-// Inventory Service - TCC 인터페이스
 @Service
 public class InventoryTccService {
 
@@ -326,13 +275,10 @@ public class InventoryTccService {
             throw new InsufficientStockException();
         }
 
-        // 가용 재고 감소, 예약 재고 증가
-        product.reserve(quantity);
+        product.reserve(quantity); // 가용 재고 감소, 예약 재고 증가
 
         String reservationId = UUID.randomUUID().toString();
-        Reservation reservation = new Reservation(reservationId, productId, quantity, ReservationStatus.PENDING);
-        reservationRepository.save(reservation);
-
+        reservationRepository.save(new Reservation(reservationId, productId, quantity, PENDING));
         return reservationId;
     }
 
@@ -341,16 +287,15 @@ public class InventoryTccService {
     public void confirm(String reservationId) {
         Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
         reservation.confirm();
-        // 예약 재고를 실제 차감으로 전환
         Product product = productRepository.findById(reservation.getProductId()).orElseThrow();
         product.confirmReservation(reservation.getQuantity());
     }
 
-    // Cancel: 예약 취소
+    // Cancel: 예약 취소 (멱등성 보장)
     @Transactional
     public void cancel(String reservationId) {
         Reservation reservation = reservationRepository.findById(reservationId).orElse(null);
-        if (reservation == null || reservation.isCancelled()) return; // 멱등성 보장
+        if (reservation == null || reservation.isCancelled()) return; // 중복 취소 방지
 
         reservation.cancel();
         Product product = productRepository.findById(reservation.getProductId()).orElseThrow();
@@ -359,15 +304,16 @@ public class InventoryTccService {
 }
 ```
 
+Cancel은 반드시 멱등성을 보장해야 한다. 네트워크 이슈로 Cancel이 중복 호출될 수 있기 때문이다.
+
 **TCC vs Saga 비교**
 
 | 항목 | TCC | Saga |
 |------|-----|------|
 | 일관성 수준 | 준강한 일관성 | 최종 일관성 |
-| 데이터 가시성 | 임시 상태 외부 노출 안 함 | 중간 상태 노출될 수 있음 |
-| 구현 복잡도 | 높음 (Try/Confirm/Cancel 분리) | 중간 |
+| 중간 상태 외부 노출 | 임시 상태 노출 안 함 | 중간 상태 노출될 수 있음 |
+| 구현 복잡도 | 높음 (3단계 분리) | 중간 |
 | 성능 | 2PC보다 좋음 | 좋음 |
-| 실패 복구 | Confirm/Cancel | 보상 트랜잭션 |
 
 ---
 
@@ -375,105 +321,81 @@ public class InventoryTccService {
 
 Saga와 이벤트 기반 아키텍처에서 **"서비스 로컬 DB에 저장 + 이벤트 발행"의 원자성**을 보장하는 패턴이다.
 
-### 문제
+### 문제: DB 저장과 이벤트 발행의 원자성 불일치
 
 ```java
 @Transactional
 public void placeOrder(OrderRequest request) {
     Order order = orderRepository.save(Order.from(request)); // DB 저장 성공
     eventPublisher.publish(new OrderCreatedEvent(order));    // 이벤트 발행 실패?
-    // DB는 커밋됐는데 이벤트가 안 나감 → 재고가 차감 안 됨 → 불일치
+    // DB는 커밋됐는데 이벤트가 안 나감 → 재고가 차감 안 됨 → 데이터 불일치
 }
 ```
 
-### Outbox 패턴 해결책
+DB 커밋은 성공했지만 이벤트 브로커 발행이 실패하면, 서비스 간 데이터가 영구적으로 불일치 상태가 된다.
+
+### 해결: outbox 테이블을 같은 트랜잭션으로 저장
 
 <div class="mermaid">
 graph TD
-    subgraph OS["Order Service"]
-        T["로컬 트랜잭션 (원자적)"]
-        T --> OT[orders 테이블에 주문 저장]
-        T --> OB[outbox 테이블에 이벤트 저장]
+    subgraph OS["Order Service (단일 로컬 트랜잭션)"]
+        T1["orders 테이블에 주문 저장"]
+        T2["outbox 테이블에 이벤트 저장"]
+        T1 --- T2
+        NOTE["두 작업이 원자적으로 커밋"]
     end
-    subgraph RELAY["Message Relay / Debezium"]
-        P["outbox 폴링 또는 CDC 감시"]
-        P --> PUB["Kafka/RabbitMQ에 미발행 이벤트 발행"]
-        PUB --> DEL["outbox 레코드 삭제 또는 상태 변경"]
+    subgraph RELAY["Message Relay (별도 프로세스)"]
+        P["1️⃣ outbox 테이블 폴링 또는 CDC 감시"]
+        PUB["2️⃣ Kafka/RabbitMQ에 이벤트 발행"]
+        DEL["3️⃣ outbox 레코드 published=true 처리"]
+        P --> PUB --> DEL
     end
-    OB --> P
+    T2 -->|"미발행 이벤트"| P
+    style NOTE fill:#8f8,stroke:#080,color:#000
 </div>
 
 ```java
-@Entity
-@Table(name = "outbox_events")
-public class OutboxEvent {
-    @Id
-    private String id;
-    private String aggregateType;  // "Order"
-    private String aggregateId;    // orderId
-    private String eventType;      // "OrderCreated"
-    private String payload;        // JSON
-    private LocalDateTime createdAt;
-    private boolean published;
-}
+@Transactional
+public Order placeOrder(OrderRequest request) {
+    Order order = orderRepository.save(Order.from(request));
 
-@Service
-@RequiredArgsConstructor
-public class OrderService {
+    // 같은 트랜잭션에서 outbox 저장 → DB 원자적 보장
+    OutboxEvent outboxEvent = OutboxEvent.builder()
+        .id(UUID.randomUUID().toString())
+        .aggregateType("Order")
+        .aggregateId(String.valueOf(order.getId()))
+        .eventType("OrderCreated")
+        .payload(objectMapper.writeValueAsString(new OrderCreatedEvent(order)))
+        .createdAt(LocalDateTime.now())
+        .published(false)
+        .build();
 
-    private final OrderRepository orderRepository;
-    private final OutboxEventRepository outboxEventRepository;
-    private final ObjectMapper objectMapper;
-
-    @Transactional
-    public Order placeOrder(OrderRequest request) {
-        Order order = orderRepository.save(Order.from(request));
-
-        // 같은 트랜잭션에서 outbox 저장 → 원자적
-        OutboxEvent outboxEvent = OutboxEvent.builder()
-            .id(UUID.randomUUID().toString())
-            .aggregateType("Order")
-            .aggregateId(String.valueOf(order.getId()))
-            .eventType("OrderCreated")
-            .payload(objectMapper.writeValueAsString(new OrderCreatedEvent(order)))
-            .createdAt(LocalDateTime.now())
-            .published(false)
-            .build();
-
-        outboxEventRepository.save(outboxEvent);
-        return order;
-    }
+    outboxEventRepository.save(outboxEvent);
+    return order;
 }
 
 // Relay: outbox를 폴링해서 Kafka에 발행
-@Component
-@RequiredArgsConstructor
-public class OutboxEventRelay {
-
-    private final OutboxEventRepository outboxEventRepository;
-    private final KafkaTemplate<String, String> kafkaTemplate;
-
-    @Scheduled(fixedDelay = 1000)
-    @Transactional
-    public void relay() {
-        List<OutboxEvent> events = outboxEventRepository.findByPublishedFalse();
-        for (OutboxEvent event : events) {
-            kafkaTemplate.send(event.getEventType(), event.getAggregateId(), event.getPayload());
-            event.setPublished(true);
-        }
+@Scheduled(fixedDelay = 1000)
+@Transactional
+public void relay() {
+    List<OutboxEvent> events = outboxEventRepository.findByPublishedFalse();
+    for (OutboxEvent event : events) {
+        kafkaTemplate.send(event.getEventType(), event.getAggregateId(), event.getPayload());
+        event.setPublished(true);
     }
 }
 ```
 
-**Debezium CDC 방식 (권장)**
-```yaml
-# Debezium Source Connector 설정
+outbox 레코드 저장과 주문 저장이 같은 트랜잭션이므로 둘 다 성공하거나 둘 다 롤백된다. Relay가 재실행되더라도 `published=true` 체크로 중복 발행을 방지한다.
+
+**Debezium CDC 방식 (권장)**: 폴링 지연 없이 DB 변경 로그에서 실시간으로 이벤트를 발행한다.
+
+```json
 {
   "name": "order-outbox-connector",
   "config": {
     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
     "database.hostname": "order-db",
-    "database.include.list": "orders",
     "table.include.list": "orders.outbox_events",
     "transforms": "outbox",
     "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter"
@@ -487,26 +409,26 @@ public class OutboxEventRelay {
 
 <div class="mermaid">
 graph TD
-    START([시작]) --> Q1{강한 일관성이 필요한가?}
-    Q1 -->|YES| R1["같은 DB로 경계 재설계<br>또는 XA + 2PC"]
-    Q1 -->|NO| Q2{최종 일관성으로 가능한가?}
-    Q2 -->|YES| SAGA[Saga 패턴 선택]
-    SAGA --> Q3{흐름이 단순한가?}
-    Q3 -->|YES| CHOREO["Choreography<br>(이벤트 기반)"]
-    Q3 -->|NO| ORCH["Orchestration<br>(중앙 오케스트레이터)"]
-    SAGA --> Q4{이벤트 발행 원자성 필요?}
-    Q4 -->|YES| OUTBOX[Outbox Pattern 적용]
-    SAGA --> Q5{임시 데이터 외부 노출 불가?}
-    Q5 -->|YES| TCC["TCC 패턴<br>(Try/Confirm/Cancel)"]
-    OUTBOX --> BEST["실무 권장 조합<br>Saga + Kafka + Outbox"]
+    START(["시작"]) --> Q1{"강한 일관성이\n반드시 필요한가?"}
+    Q1 -->|"YES"| R1["서비스 경계 재설계\n(단일 트랜잭션으로)"]
+    Q1 -->|"NO"| Q2{"최종 일관성으로 충분한가?"}
+    Q2 -->|"YES"| SAGA["Saga 패턴 선택"]
+    SAGA --> Q3{"흐름이 단순한가?"}
+    Q3 -->|"YES"| CHOREO["Choreography\n(이벤트 기반, 느슨한 결합)"]
+    Q3 -->|"NO"| ORCH["Orchestration\n(중앙 오케스트레이터)"]
+    SAGA --> Q4{"이벤트 발행 원자성 필요?"}
+    Q4 -->|"YES"| OUTBOX["Outbox Pattern 적용"]
+    SAGA --> Q5{"임시 상태 외부 노출 불가?"}
+    Q5 -->|"YES"| TCC["TCC 패턴\n(Try/Confirm/Cancel)"]
+    OUTBOX --> BEST["실무 권장 조합\nSaga + Kafka + Outbox"]
     style BEST fill:#8f8,stroke:#080,color:#000
-    style R1 fill:#f88,stroke:#c00,color:#000
+    style R1 fill:#ffa,stroke:#880,color:#000
 </div>
 
 ### 패턴별 특성 비교
 
-| 항목 | 2PC | Saga Choreography | Saga Orchestration | TCC |
-|------|-----|-------------------|--------------------|-----|
+| 항목 | 2PC | Saga (Choreography) | Saga (Orchestration) | TCC |
+|------|-----|---------------------|----------------------|-----|
 | 일관성 | 강한 | 최종 | 최종 | 준강한 |
 | 가용성 | 낮음 | 높음 | 높음 | 중간 |
 | 복잡도 | 낮음 | 중간 | 중간 | 높음 |
@@ -516,6 +438,45 @@ graph TD
 
 ---
 
-## 마치며
+## 극한 시나리오
 
-분산 트랜잭션에는 완벽한 해결책이 없다. 각 패턴은 일관성, 가용성, 복잡도 사이의 트레이드오프를 갖는다. 실무에서는 대부분 **Saga + Outbox Pattern** 조합을 사용한다. 강한 일관성이 진짜 필요한지 다시 검토하고, 가능하면 서비스 경계를 재설계해 단일 트랜잭션으로 처리할 수 있도록 하는 것이 최선이다.
+### 시나리오 1: 보상 트랜잭션도 실패하면?
+
+보상 트랜잭션 실행 중 네트워크 장애로 보상 자체가 실패할 수 있다. 이때 시스템이 영구적으로 불일치 상태가 된다.
+
+```
+대응 전략:
+1. 보상 트랜잭션도 멱등성 있게 구현 (같은 보상을 여러 번 실행해도 안전하게)
+2. Saga 상태를 DB에 저장하고 재시도 스케줄러 운영
+3. Dead Letter Queue: 반복 실패 시 수동 처리 대기열로 이관
+4. 최후 수단: 운영자 수동 보정
+```
+
+### 시나리오 2: 이벤트 중복 수신
+
+메시지 브로커는 최소 1회 배달(at-least-once)을 보장하므로 같은 이벤트가 여러 번 올 수 있다.
+
+```java
+// 멱등성 처리: 이미 처리된 이벤트는 무시
+@KafkaListener(topics = "OrderCreated")
+public void handleOrderCreated(OrderCreatedEvent event) {
+    if (processedEventRepository.existsById(event.getEventId())) {
+        log.info("중복 이벤트 무시: {}", event.getEventId());
+        return;
+    }
+    // 비즈니스 로직 처리
+    inventoryService.reserve(event.getProductId(), event.getQuantity());
+    processedEventRepository.save(new ProcessedEvent(event.getEventId()));
+}
+```
+
+### 시나리오 3: TCC에서 Try 성공 후 서버 다운
+
+Try는 성공했지만 서버가 재시작되면 Confirm/Cancel이 실행되지 못한 채 리소스가 임시 예약 상태로 남는다.
+
+```
+대응 전략:
+1. Try 시 타임아웃 설정 (예: 5분 내 Confirm/Cancel 없으면 자동 Cancel)
+2. 스케줄러로 PENDING 상태가 오래된 예약 자동 Cancel
+3. Try 결과를 DB에 저장해 서버 재시작 후 상태 복구
+```

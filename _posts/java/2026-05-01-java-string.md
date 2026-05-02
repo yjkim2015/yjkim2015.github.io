@@ -13,7 +13,11 @@ Java에서 `String`은 가장 많이 사용되는 클래스이면서, 동시에 
 
 ## 1. String이 불변(Immutable)인 이유
 
-### 불변이란?
+### 동작 원리 — 불변이란 무엇인가?
+
+Java에서 `String`이 불변이라는 것은 한 번 생성된 `String` 객체의 내용이 절대 변경되지 않는다는 의미입니다. `toUpperCase()`, `replace()`, `concat()` 등 모든 String 메서드는 원본을 수정하는 것이 아니라 **새로운 String 객체를 만들어 반환**합니다.
+
+내부적으로 Java 9 이후 `String`은 `byte[]` 배열로 문자열 데이터를 저장하며, 이 배열 자체가 `private final`로 선언되어 있습니다. 필드가 final이고 배열의 참조도 변경할 수 없으므로 외부에서 내용을 바꿀 방법이 없습니다.
 
 ```java
 String s = "Hello";
@@ -24,12 +28,7 @@ s = s.toUpperCase();    // 참조를 새 객체로 교체
 System.out.println(s);  // "HELLO"
 ```
 
-```
-메모리 구조:
-s ──────────────────► "Hello"   (변경 불가)
-s (재할당 후) ───────► "HELLO"  (새 객체)
-                       "Hello"  (GC 대상)
-```
+변수 `s`를 재할당하면 변수가 새 객체를 가리키는 것이지, 기존 객체가 변한 것이 아닙니다. 기존 "Hello" 객체는 더 이상 참조되지 않으면 GC 대상이 됩니다.
 
 ### 불변으로 설계한 이유
 
@@ -81,22 +80,26 @@ public final class String {
 
 ## 2. String Pool (intern) 동작 원리
 
-### String Pool이란?
+### 동작 원리 — JVM 내 문자열 캐시
 
-JVM Heap 내의 특별한 영역(Java 7+: Heap, 이전: PermGen)으로, 문자열 리터럴을 캐싱합니다.
+String Pool은 JVM Heap 내의 특별한 영역(Java 7+: Heap, 이전: PermGen)으로, 문자열 리터럴을 캐싱합니다. 소스 코드에서 `"hello"`라는 리터럴을 사용하면 컴파일러가 상수 풀(Constant Pool)에 등록하고, JVM이 해당 클래스를 로딩할 때 String Pool에서 동일한 문자열을 찾아 재사용합니다.
 
-```
-JVM 메모리:
-┌──────────────────────────────────────────┐
-│                  Heap                    │
-│  ┌─────────────────────────────────┐     │
-│  │         String Pool             │     │
-│  │  "hello" ◄──── 리터럴 자동 등록 │     │
-│  │  "world"                        │     │
-│  └─────────────────────────────────┘     │
-│                                          │
-│  new String("hello") ← Pool 밖 새 객체  │
-└──────────────────────────────────────────┘
+`new String("hello")`는 이 메커니즘을 우회해 항상 새 객체를 힙에 만듭니다. 따라서 리터럴과 `new String()`으로 만든 객체는 `==` 비교에서 false가 됩니다.
+
+```mermaid
+graph TD
+    HEAP["JVM Heap"]
+    POOL["String Pool
+    'hello' ← 리터럴 자동 등록
+    'world'"]
+    OBJ1["new String('hello')
+    Pool 밖 새 객체"]
+    OBJ2["new String('hello')
+    또 다른 새 객체"]
+
+    HEAP --> POOL
+    HEAP --> OBJ1
+    HEAP --> OBJ2
 ```
 
 ### 리터럴 vs new String()
@@ -142,9 +145,39 @@ String d = prefix2 + "lo";  // 컴파일 타임 → Pool 적용
 System.out.println(a == d);  // true
 ```
 
+**핵심 요약:** String Pool은 동일한 문자열 리터럴을 공유해 메모리를 절약합니다. 하지만 이 덕분에 `==` 비교가 우연히 동작하는 경우가 생겨, 항상 `equals()`를 사용해야 한다는 원칙을 흐릴 수 있으므로 주의가 필요합니다.
+
 ---
 
 ## 3. String vs StringBuilder vs StringBuffer 성능 비교
+
+### 동작 원리 — O(n²) vs O(n)
+
+String 연결에서 `+` 연산자를 반복 사용하면 매번 새 String 객체가 생성됩니다. `"a" + "b"`는 `new StringBuilder().append("a").append("b").toString()`으로 컴파일되는데, **반복문 안에서는 매 반복마다 새 StringBuilder가 생성**됩니다. n번 반복하면 1+2+3+...+n 크기의 복사가 일어나 O(n²) 시간 복잡도가 됩니다.
+
+StringBuilder는 내부에 `char[]` 버퍼를 갖고 있고, `append()` 시 버퍼가 부족해지면 현재 크기의 2배로 늘립니다(동적 배열 확장). 이 덕분에 n번 append해도 평균 O(n) 시간 복잡도를 달성합니다.
+
+```mermaid
+graph TD
+    subgraph "String + 반복 (O(n²))"
+        S1["'' → '0'
+        새 객체 (크기 1)"]
+        S2["'0' → '01'
+        새 객체 (크기 2)"]
+        S3["'01' → '012'
+        새 객체 (크기 3)"]
+        SN["... 매번 새 배열 + 복사"]
+        S1 --> S2 --> S3 --> SN
+    end
+
+    subgraph "StringBuilder (O(n) amortized)"
+        B1["버퍼 초기화 [        ]"]
+        B2["append → [0       ]"]
+        B3["append → [01      ]"]
+        B4["버퍼 가득 차면 2배 확장"]
+        B1 --> B2 --> B3 --> B4
+    end
+```
 
 ### 특성 비교
 
@@ -170,18 +203,6 @@ for (int i = 0; i < 10000; i++) {
     sb.append(i);  // 버퍼에 추가 → O(n)
 }
 String result = sb.toString();
-```
-
-```
-String 연결 (n번):
-"" → "0" → "01" → "012" → ...
-매번 새 배열 생성 + 복사 → O(1+2+3+...+n) = O(n²)
-
-StringBuilder (n번):
-[버퍼: ...........]
-→ append → append → append
-→ 필요 시 버퍼 2배 확장
-→ O(n) amortized
 ```
 
 ### 컴파일러 최적화
@@ -230,18 +251,15 @@ StringBuffer sharedBuffer = new StringBuffer();
 
 ### 벤치마크 비교 (JMH 기준)
 
-```
-연산 횟수: 100,000회
-┌─────────────────────┬────────────────┐
-│  방법               │  시간 (상대)   │
-├─────────────────────┼────────────────┤
-│ String + (반복)     │ 100x (기준)    │
-│ concat() (반복)     │  80x           │
-│ StringBuilder       │   1x (최적)    │
-│ StringBuffer        │   1.2x         │
-│ String.join()       │   1.5x (내부 SB│
-└─────────────────────┴────────────────┘
-```
+연산 100,000회 기준 상대적 성능 비교입니다.
+
+| 방법 | 상대 시간 | 비고 |
+|------|-----------|------|
+| String + (반복) | 100x | O(n²), 객체 폭발 |
+| concat() (반복) | 80x | 약간 낫지만 동일 문제 |
+| StringBuilder | 1x | 최적, 권장 |
+| StringBuffer | 1.2x | synchronized 오버헤드 |
+| String.join() | 1.5x | 내부적으로 StringBuilder 사용 |
 
 ### String.join() / Collectors.joining()
 
@@ -557,22 +575,118 @@ Objects.equals(a, b);         // 둘 다 null-safe
 
 ---
 
-## 9. 전체 요약
+## 9. 비유와 극한 시나리오
 
+### 비유: 화이트보드 vs 새 종이
+
+String은 화이트보드에 쓴 내용에 수정액을 칠하고 새로 쓰는 것이 아니라, 매번 새 종이를 꺼내 새로 쓰는 방식입니다. String Pool은 자주 쓰는 문구를 복사해 두는 템플릿 파일 폴더와 같습니다. StringBuilder는 지우개로 지우고 다시 쓸 수 있는 화이트보드입니다.
+
+### 극한 시나리오: 반복 연결로 인한 OOM
+
+```java
+// 대용량 로그 파싱 서비스
+public String buildReport(List<String> logLines) {
+    String report = "";
+    for (String line : logLines) {  // 10만 줄
+        if (line.contains("ERROR")) {
+            report += line + "\n";  // 매 반복마다 새 String 생성!
+        }
+    }
+    return report;
+    // 평균 1% 에러율 → 1,000개 에러 라인
+    // 총 복사량: 1 + 2 + 3 + ... + 1000 ≈ 50만 번 복사
+    // 각 라인 100자면 5,000만 자 복사 → OOM 또는 극심한 GC
+}
+
+// 올바른 구현
+public String buildReport(List<String> logLines) {
+    StringBuilder sb = new StringBuilder();
+    for (String line : logLines) {
+        if (line.contains("ERROR")) {
+            sb.append(line).append('\n');  // 버퍼에 추가만
+        }
+    }
+    return sb.toString();  // 마지막에 한 번만 String 생성
+}
 ```
-String 핵심 정리:
-┌────────────────────────────────────────────────────────┐
-│  불변성: 모든 메서드는 새 String 반환                  │
-│  Pool:   리터럴은 자동으로 Pool에 등록, == 비교 주의   │
-│  연결:   반복문에서 + 금지 → StringBuilder 사용        │
-│  비교:   항상 equals(), == 절대 금지                   │
-│  Java11: strip(), isBlank(), lines(), repeat() 활용    │
-│  Java15: 텍스트 블록 """ 적극 활용                    │
-└────────────────────────────────────────────────────────┘
 
-선택 가이드:
-단순 조합     → String 리터럴 + 텍스트 블록
-반복 연결     → StringBuilder
-스레드 공유   → StringBuffer (드문 경우)
-패턴 검색     → Pattern.compile() 미리 컴파일
+### 실무 실수
+
+**실수 1: == 비교가 테스트에서만 통과**
+
+```java
+// 테스트 코드에서는 리터럴 사용으로 Pool을 통해 true
+String expected = "hello";
+String actual = "hello";
+assert expected == actual;  // 통과 (둘 다 Pool)
+
+// 실서비스에서 DB나 외부 API 값이 오면 실패
+String dbValue = rs.getString("name");  // new String 반환
+assert expected == dbValue;  // 실패!
+```
+
+**실수 2: SimpleDateFormat 공유로 인한 파싱 오류**
+
+```java
+// 나쁜 예: static 공유 → 스레드 안전 아님
+private static final SimpleDateFormat SDF = new SimpleDateFormat("yyyy-MM-dd");
+
+public Date parse(String date) throws ParseException {
+    return SDF.parse(date);  // 멀티스레드에서 날짜가 뒤섞임!
+}
+
+// 좋은 예: ThreadLocal 또는 DateTimeFormatter 사용
+private static final DateTimeFormatter DTF =
+    DateTimeFormatter.ofPattern("yyyy-MM-dd");  // 불변, 스레드 안전
+
+public LocalDate parse(String date) {
+    return LocalDate.parse(date, DTF);
+}
+```
+
+---
+
+## 10. 전체 요약
+
+```mermaid
+graph TD
+    STRING["String 핵심 정리"]
+
+    IMMUT["불변성
+    모든 메서드는 새 String 반환
+    내부 byte[] 배열이 private final"]
+
+    POOL["String Pool
+    리터럴은 자동으로 Pool에 등록
+    == 비교 주의 → 항상 equals() 사용"]
+
+    CONCAT["문자열 연결
+    반복문에서 + 금지 (O(n²))
+    StringBuilder 사용 (O(n))"]
+
+    COMPARE["비교
+    항상 equals() 사용
+    == 절대 금지"]
+
+    JAVA11["Java 11+
+    strip(), isBlank(), lines(), repeat()
+    trim() 대신 strip() 권장"]
+
+    TEXTBLOCK["Java 15+
+    텍스트 블록 \"\"\" 적극 활용
+    SQL, HTML, JSON 가독성 향상"]
+
+    GUIDE["선택 가이드
+    단순 조합: String 리터럴 + 텍스트 블록
+    반복 연결: StringBuilder
+    스레드 공유: StringBuffer (드문 경우)
+    패턴 검색: Pattern.compile() 미리 컴파일"]
+
+    STRING --> IMMUT
+    STRING --> POOL
+    STRING --> CONCAT
+    STRING --> COMPARE
+    STRING --> JAVA11
+    STRING --> TEXTBLOCK
+    STRING --> GUIDE
 ```

@@ -50,7 +50,7 @@ public class DateUtil {
 
 ## 동작 원리 — Thread 내부 ThreadLocalMap 구조
 
-`ThreadLocal`의 핵심 원리는 **값이 `ThreadLocal` 객체가 아닌 `Thread` 객체 내부에 저장된다**는 점입니다.
+`ThreadLocal`의 핵심 원리는 **값이 `ThreadLocal` 객체가 아닌 `Thread` 객체 내부에 저장된다**는 점입니다. 여러 스레드가 같은 `ThreadLocal` 인스턴스를 공유하더라도, 각 스레드는 자신의 `Thread` 객체 안에 있는 `ThreadLocalMap`에 독립적인 값을 저장합니다. `ThreadLocal` 인스턴스 자체는 단순히 맵의 키(key) 역할만 합니다.
 
 ```java
 // Thread 클래스 내부 (JDK 소스)
@@ -64,20 +64,23 @@ public class Thread implements Runnable {
 
 `ThreadLocal.get()`을 호출하면 다음 순서로 동작합니다.
 
-```
-ThreadLocal.get() 호출
-        |
-        v
-Thread.currentThread() — 현재 스레드 참조 획득
-        |
-        v
-thread.threadLocals — Thread 내부 ThreadLocalMap 접근
-        |
-        v
-map.getEntry(this) — ThreadLocal 인스턴스를 키로 엔트리 검색
-        |
-        v
-entry.value — 저장된 값 반환
+```mermaid
+graph TD
+    GET["ThreadLocal.get() 호출"]
+    CURRENT["Thread.currentThread()
+    현재 스레드 참조 획득"]
+    MAP["thread.threadLocals
+    Thread 내부 ThreadLocalMap 접근"]
+    ENTRY["map.getEntry(this)
+    ThreadLocal 인스턴스를 키로 엔트리 검색"]
+    VALUE["entry.value
+    저장된 값 반환"]
+    INIT["setInitialValue()
+    맵 없거나 엔트리 없으면 초기값 설정"]
+
+    GET --> CURRENT --> MAP --> ENTRY
+    ENTRY -->|"엔트리 있음"| VALUE
+    ENTRY -->|"엔트리 없음"| INIT --> VALUE
 ```
 
 ```java
@@ -99,23 +102,32 @@ ThreadLocalMap getMap(Thread t) {
 }
 ```
 
-**핵심 구조:**
-
-```
-Thread-1
-  └── threadLocals (ThreadLocalMap)
-        ├── Entry[key=ThreadLocal-A (WeakRef), value=Value-1]
-        ├── Entry[key=ThreadLocal-B (WeakRef), value=Value-2]
-        └── Entry[key=ThreadLocal-C (WeakRef), value=Value-3]
-
-Thread-2
-  └── threadLocals (ThreadLocalMap)
-        ├── Entry[key=ThreadLocal-A (WeakRef), value=Value-X]
-        ├── Entry[key=ThreadLocal-B (WeakRef), value=Value-Y]
-        └── Entry[key=ThreadLocal-C (WeakRef), value=Value-Z]
-```
+**핵심 구조 — 스레드별 독립 저장:**
 
 각 Thread는 자신만의 `ThreadLocalMap`을 가지고, 동일한 `ThreadLocal` 키에 대해 서로 다른 값을 독립적으로 저장합니다.
+
+```mermaid
+graph TD
+    TLA["ThreadLocal-A (공유 인스턴스)"]
+    TLB["ThreadLocal-B (공유 인스턴스)"]
+
+    T1["Thread-1 threadLocals"]
+    T2["Thread-2 threadLocals"]
+
+    E1A["Entry: key=TLA(WeakRef), value=Value-1"]
+    E1B["Entry: key=TLB(WeakRef), value=Value-2"]
+    E2A["Entry: key=TLA(WeakRef), value=Value-X"]
+    E2B["Entry: key=TLB(WeakRef), value=Value-Y"]
+
+    T1 --> E1A
+    T1 --> E1B
+    T2 --> E2A
+    T2 --> E2B
+    TLA -.->|"키로 참조"| E1A
+    TLA -.->|"키로 참조"| E2A
+    TLB -.->|"키로 참조"| E1B
+    TLB -.->|"키로 참조"| E2B
+```
 
 ---
 
@@ -177,23 +189,33 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 
 **Linear Probing 충돌 예시:**
 
-```
-초기 상태 (배열 크기 8):
-index: [0] [1] [2] [3] [4] [5] [6] [7]
-value:  -   -   -   -   -   -   -   -
+초기 상태(배열 크기 8)에서 ThreadLocal-A와 ThreadLocal-B가 모두 인덱스 3에 해시되면, B는 4번 슬롯으로 밀립니다. 이후 A가 GC로 수거되면 인덱스 3의 키(WeakRef)는 null이 되지만 value는 남아 만료 엔트리(stale entry)가 됩니다.
 
-ThreadLocal-A (hash → 3) 삽입:
-index: [0] [1] [2] [3] [4] [5] [6] [7]
-value:  -   -   -  [A]  -   -   -   -
+```mermaid
+graph LR
+    subgraph "ThreadLocal-A 삽입 (hash→3)"
+        I0["[0] -"]
+        I1["[1] -"]
+        I2["[2] -"]
+        I3["[3] A"]
+        I4["[4] -"]
+    end
 
-ThreadLocal-B (hash → 3) 삽입 → 충돌 → 4번 슬롯 사용:
-index: [0] [1] [2] [3] [4] [5] [6] [7]
-value:  -   -   -  [A] [B]  -   -   -
+    subgraph "ThreadLocal-B 삽입 (hash→3, 충돌)"
+        J0["[0] -"]
+        J1["[1] -"]
+        J2["[2] -"]
+        J3["[3] A"]
+        J4["[4] B (다음 슬롯 사용)"]
+    end
 
-ThreadLocal-A 만료 (GC가 WeakReference 수거):
-index: [0] [1] [2] [3] [4] [5] [6] [7]
-value:  -   -   - [null] [B]  -   -   -
-              (키 null, 값은 남아있음 → stale entry)
+    subgraph "ThreadLocal-A GC 수거 후"
+        K0["[0] -"]
+        K1["[1] -"]
+        K2["[2] -"]
+        K3["[3] null키/값 잔류 ← stale entry"]
+        K4["[4] B"]
+    end
 ```
 
 ---
@@ -204,38 +226,34 @@ value:  -   -   - [null] [B]  -   -   -
 
 `ThreadLocalMap.Entry`의 키는 `WeakReference<ThreadLocal<?>>`로 저장됩니다. 이 설계의 이유는 **ThreadLocal 변수가 더 이상 사용되지 않을 때 GC가 수거할 수 있도록** 하기 위함입니다.
 
-```java
-// Strong Reference였다면 발생하는 문제
-ThreadLocal<String> tl = new ThreadLocal<>();
-tl.set("hello");
-tl = null; // 참조를 끊어도 ThreadLocalMap의 키(강참조)가 살아있어 GC 불가
+강참조(Strong Reference)로 저장했다면, 외부에서 `ThreadLocal` 변수를 null로 해도 `ThreadLocalMap`이 강참조를 유지해 GC가 수거하지 못합니다. WeakReference를 사용하면 외부 강참조가 사라졌을 때 GC가 키를 수거할 수 있습니다.
 
-// WeakReference이므로 GC 시 키가 수거됨
-tl = null; // 외부 강참조 제거 → GC 시 키(WeakRef)가 null이 됨
-// 단, value는 여전히 강참조로 남아있음 → 메모리 누수 가능
-```
+단, **키가 수거되어도 value는 여전히 강참조로 남습니다.** 이것이 메모리 누수의 원인입니다.
 
-**참조 관계 다이어그램:**
+```mermaid
+graph TD
+    subgraph "외부 강참조 존재 시"
+        VAR1["변수 tl (강참조)"] --> TL1["ThreadLocal 객체"]
+        ENTRY1["Entry.key (WeakRef)"] -.->|"약참조"| TL1
+        ENTRY1 --> VAL1["Entry.value (강참조) → 실제 값"]
+    end
 
-```
-[강참조]         [약참조]              [강참조]
-ThreadLocal -----> Entry.key      Entry.value ----> 실제 값
-    ^               (WeakRef)
-    |
-외부 변수
+    subgraph "외부 강참조 제거 후 (tl = null)"
+        VAR2["변수 tl = null"]
+        TL2["ThreadLocal 객체 ← GC 수거 대상"]
+        ENTRY2["Entry.key (WeakRef) → null됨"]
+        ENTRY2 --> VAL2["Entry.value (강참조) → 실제 값 ← 누수!"]
+    end
 
-외부 변수 = null 설정 시:
-    ThreadLocal ← 강참조 사라짐
-    Entry.key(WeakRef) → GC 시 null이 됨
-    Entry.value → 여전히 강참조 → 메모리 누수!
+    subgraph "remove() 호출 시"
+        REMOVED["Entry 자체 제거 → key, value 모두 정리됨"]
+    end
 ```
 
 ### 메모리 누수 시나리오 (스레드 풀 + ThreadLocal)
 
 스레드 풀 환경에서는 스레드가 재사용되므로 `ThreadLocal.remove()`를 호출하지 않으면 이전 요청의 값이 남아있게 됩니다.
 
-```
-시나리오:
 1. 스레드 풀에서 Thread-1이 요청 처리
 2. ThreadLocal에 대용량 객체(예: Map) 저장
 3. 요청 처리 완료, Thread-1은 풀에 반환
@@ -243,7 +261,6 @@ ThreadLocal -----> Entry.key      Entry.value ----> 실제 값
 5. GC → Entry.key(WeakRef) = null (키는 수거됨)
 6. 하지만 Entry.value(강참조)는 여전히 살아있음
 7. Thread-1이 풀에 살아있는 동안 메모리 누수 지속
-```
 
 ```java
 // 메모리 누수 발생 코드
@@ -651,82 +668,133 @@ public class RequestContext {
 
 ---
 
-## ASCII 다이어그램으로 ThreadLocalMap 내부 구조
+## 비유와 극한 시나리오
 
+### 비유: 개인 사물함
+
+ThreadLocal은 회사의 개인 사물함과 같습니다. 사물함 번호(ThreadLocal 인스턴스)는 모든 직원이 알지만, 각자의 사물함에는 자신의 물건만 들어 있습니다. 사무실(Thread)을 바꿔도 사물함 번호로 자신의 물건을 찾습니다. 퇴직(스레드 종료)할 때 사물함을 비우지 않으면(remove() 미호출) 내용물이 방치됩니다.
+
+### 극한 시나리오: 대규모 웹 서비스에서의 사용자 정보 오염
+
+```java
+// 50개 스레드 풀에서 운영되는 REST API
+// 특정 요청에서 remove()를 빠뜨린 경우
+
+@RestController
+class OrderController {
+    private static final ThreadLocal<String> currentUserId = new ThreadLocal<>();
+
+    @GetMapping("/orders")
+    public List<Order> getOrders(HttpServletRequest request) {
+        String userId = extractUserId(request);
+        currentUserId.set(userId);
+        return orderService.getOrders();
+        // remove() 없음!
+    }
+}
+
+// 스레드 풀 크기 50, TPS 1000
+// 스레드 재사용 시 이전 사용자의 userId가 남아있음
+// A 사용자 요청 → Thread-1에 "user-A" 저장
+// Thread-1이 pool에 반환 후 B 사용자 요청이 Thread-1에 배정
+// currentUserId.get() → "user-A" (B가 A의 주문을 볼 수 있음!)
+// → 심각한 데이터 유출 보안 사고
 ```
-ThreadLocalMap 내부 구조 (배열 기반, Linear Probing)
 
-  Thread 인스턴스
-  ┌─────────────────────────────────────┐
-  │ threadLocals: ThreadLocalMap        │
-  │   ┌──────────────────────────────┐  │
-  │   │ Entry[] table (크기: 16)     │  │
-  │   │  [0] null                    │  │
-  │   │  [1] null                    │  │
-  │   │  [2] Entry ─────────────┐    │  │
-  │   │  [3] null               │    │  │
-  │   │  [4] Entry ─────────┐   │    │  │
-  │   │  [5] null           │   │    │  │
-  │   │  ...                │   │    │  │
-  │   └─────────────────────┼───┼────┘  │
-  └─────────────────────────┼───┼───────┘
-                            │   │
-           ┌────────────────┘   └──────────────────┐
-           v                                       v
-  ┌──────────────────┐                   ┌──────────────────┐
-  │ Entry            │                   │ Entry            │
-  │ key: WeakRef ───────> ThreadLocal-A  │ key: WeakRef ───────> ThreadLocal-B
-  │ value: "user123" │                   │ value: ConnObj   │
-  └──────────────────┘                   └──────────────────┘
+### 실무 실수
 
-WeakReference 동작:
+**실수 1: static이 아닌 ThreadLocal 필드 선언**
 
-  외부 강참조 존재 시:
-  [변수 tl] ──강참조──> [ThreadLocal 객체] <──약참조── [Entry.key]
-                                                        [Entry.value ──강참조──> 값]
+```java
+// 안티패턴: 인스턴스 필드로 ThreadLocal 선언
+@Service
+class UserService {
+    private ThreadLocal<String> currentUser = new ThreadLocal<>();
+    // 서비스 빈이 프로토타입 스코프가 아닌 한 사실상 static처럼 동작하지만
+    // 인스턴스마다 별도 ThreadLocal 생성 → 불필요한 복잡도
+}
 
-  외부 강참조 제거 후 (tl = null):
-  [변수 tl = null]     [ThreadLocal 객체] <──약참조── [Entry.key]  ← GC 수거 대상
-                       (GC 시 수거)                   [Entry.value ──강참조──> 값] ← 누수!
+// 올바른 패턴
+@Service
+class UserService {
+    private static final ThreadLocal<String> currentUser = new ThreadLocal<>();
+}
+```
 
-  remove() 호출 시:
-  [Entry 자체 제거] → key, value 모두 정리됨
+**실수 2: 비동기 처리에서 ThreadLocal 값 미전달**
 
-ThreadLocal.set() 흐름:
-  ┌──────────────────────────────────────────────────────────┐
-  │                                                          │
-  │  threadLocal.set("value")                                │
-  │         │                                                │
-  │         ▼                                                │
-  │  Thread t = Thread.currentThread()                       │
-  │         │                                                │
-  │         ▼                                                │
-  │  ThreadLocalMap map = t.threadLocals                     │
-  │         │                                                │
-  │         ▼                                                │
-  │  map == null?                                            │
-  │    Yes → createMap(t, value) → t.threadLocals = new Map  │
-  │    No  → map.set(this, value)                            │
-  │              │                                           │
-  │              ▼                                           │
-  │         hash 계산 → 슬롯 탐색 → Entry 저장              │
-  │                                                          │
-  └──────────────────────────────────────────────────────────┘
+```java
+// 문제: CompletableFuture로 비동기 처리 시 ThreadLocal 값이 전달되지 않음
+@Service
+class AsyncService {
+    public CompletableFuture<Result> processAsync() {
+        String traceId = TraceContext.getTraceId(); // ThreadLocal에서 가져옴
+        return CompletableFuture.supplyAsync(() -> {
+            // 별도 스레드에서 실행 → traceId ThreadLocal 값이 없음!
+            String id = TraceContext.getTraceId(); // null 또는 다른 값
+            return doWork();
+        });
+    }
+}
+
+// 해결: 명시적 값 전달
+public CompletableFuture<Result> processAsync() {
+    String traceId = TraceContext.getTraceId();
+    return CompletableFuture.supplyAsync(() -> {
+        TraceContext.setTraceId(traceId); // 새 스레드에 명시적 설정
+        try {
+            return doWork();
+        } finally {
+            TraceContext.clear(); // 정리
+        }
+    });
+}
 ```
 
 ---
 
-## 정리
+## 전체 구조 요약
 
-| 항목 | 내용 |
-|------|------|
-| 저장 위치 | Thread 인스턴스 내부 (`threadLocals` 필드) |
-| 내부 자료구조 | ThreadLocalMap (배열 기반 해시맵) |
-| 충돌 해결 | Linear Probing (선형 탐색) |
-| 키 타입 | WeakReference\<ThreadLocal\<?\>\> |
-| 메모리 누수 원인 | WeakRef 키 수거 후 value 강참조 잔류 |
-| 해결책 | 반드시 `remove()` 호출 (finally 블록) |
-| 자식 스레드 전파 | InheritableThreadLocal 사용 |
-| Virtual Thread 대안 | ScopedValue (Java 21+) |
+```mermaid
+graph TD
+    TL["ThreadLocal 핵심 정리"]
+
+    STORAGE["저장 위치
+    Thread 인스턴스 내부 threadLocals 필드
+    ThreadLocalMap (배열 기반 해시맵)"]
+
+    COLLISION["충돌 해결
+    Linear Probing (선형 탐색)
+    별도 LinkedList 없이 배열 내 탐색"]
+
+    WEAKREF["WeakReference 키
+    ThreadLocal 키가 WeakRef로 저장
+    외부 강참조 제거 시 키 GC 수거 가능
+    value는 여전히 강참조 → 누수 가능"]
+
+    LEAK["메모리 누수 원인
+    WeakRef 키 수거 후 value 강참조 잔류
+    스레드 풀에서 스레드 재사용 시 위험"]
+
+    FIX["해결책
+    반드시 remove() 호출 (finally 블록)
+    try-finally 패턴 준수"]
+
+    INHERIT["자식 스레드 전파
+    InheritableThreadLocal 사용
+    스레드 풀에서는 TransmittableThreadLocal 권장"]
+
+    VTHREAD["Virtual Thread 대안
+    ScopedValue (Java 21+)
+    불변 바인딩, 자동 해제, 누수 없음"]
+
+    TL --> STORAGE
+    TL --> COLLISION
+    TL --> WEAKREF
+    WEAKREF --> LEAK
+    LEAK --> FIX
+    TL --> INHERIT
+    TL --> VTHREAD
+```
 
 ThreadLocal은 올바르게 사용하면 동기화 없이 스레드 안전성을 확보하는 강력한 도구입니다. 핵심은 **사용 후 반드시 `remove()` 호출**하는 것입니다. 특히 스레드 풀 환경에서는 이를 소홀히 하면 값 오염과 메모리 누수라는 두 가지 위험이 동시에 발생합니다.

@@ -13,31 +13,45 @@ toc_label: 목차
 
 ## 1. 리플렉션이란?
 
-**리플렉션(Reflection)**은 프로그램이 실행 중(runtime)에 자기 자신의 구조를 조사하고 수정하는 능력입니다. 컴파일 타임에 알 수 없는 클래스, 메서드, 필드에 동적으로 접근할 수 있습니다.
+**리플렉션(Reflection)** 은 프로그램이 실행 중(runtime)에 자기 자신의 구조를 조사하고 수정하는 능력입니다. 컴파일 타임에 알 수 없는 클래스, 메서드, 필드에 동적으로 접근할 수 있습니다.
 
-```
-일반 코드 흐름:
-  소스코드(.java) ──컴파일──▶ 바이트코드(.class) ──JVM 로딩──▶ 실행
+### 동작 원리 — 일반 코드 흐름과의 차이
 
-리플렉션:
-  실행 중인 JVM ──▶ 클래스 메타데이터(Class 객체) ──▶ 구조 조회/수정
-                    ↑
-                 java.lang.Class
-                 java.lang.reflect.*
+일반 Java 코드에서 `person.getName()`을 호출할 때, 컴파일러는 `Person` 클래스에 `getName()` 메서드가 있음을 확인하고 바이트코드의 invokevirtual 명령으로 변환합니다. 이 모든 것은 컴파일 시점에 결정됩니다.
+
+리플렉션은 다릅니다. JVM이 클래스를 로딩할 때 생성하는 `Class` 객체에는 해당 클래스의 모든 메타데이터(필드 목록, 메서드 목록, 접근 제어자, 어노테이션 등)가 담겨 있습니다. 리플렉션은 이 메타데이터를 런타임에 읽어 동적으로 메서드를 찾고 호출합니다.
+
+```mermaid
+graph TD
+    subgraph "일반 코드 흐름"
+        S1["소스코드 (.java)"]
+        B1["바이트코드 (.class)"]
+        E1["실행 — 타입 컴파일 시 확정"]
+        S1 -->|"컴파일"| B1 -->|"JVM 로딩"| E1
+    end
+
+    subgraph "리플렉션 흐름"
+        JVM["실행 중인 JVM"]
+        META["Class 객체 (메타데이터)
+        java.lang.Class
+        java.lang.reflect.*"]
+        OP["구조 조회 / 동적 호출"]
+        JVM -->|"getClass() / Class.forName()"| META -->|"invoke() / set() / newInstance()"| OP
+    end
 ```
 
 ### 왜 필요한가?
 
-```
-일반 코드:      컴파일 시점에 타입이 확정됨
-                  Person p = new Person();  // 컴파일러가 Person을 앎
-                  p.getName();              // 컴파일러가 getName()을 앎
+```java
+// 일반 코드: 컴파일 시점에 타입이 확정됨
+Person p = new Person();  // 컴파일러가 Person을 앎
+p.getName();              // 컴파일러가 getName()을 앎
 
-리플렉션:       런타임에 타입을 결정
-                  String className = config.get("class");
-                  Class<?> clazz = Class.forName(className);  // 런타임에 로딩
-                  Object obj = clazz.getDeclaredConstructor().newInstance();
-                  // → 플러그인 시스템, DI 컨테이너, ORM, 직렬화 라이브러리 등에 필수
+// 리플렉션: 런타임에 타입을 결정
+String className = config.get("class");
+Class<?> clazz = Class.forName(className);  // 런타임에 로딩
+Object obj = clazz.getDeclaredConstructor().newInstance();
+// → 플러그인 시스템, DI 컨테이너, ORM, 직렬화 라이브러리 등에 필수
 ```
 
 ### 리플렉션이 쓰이는 곳
@@ -542,13 +556,35 @@ public class Validator {
 
 ## 9. 리플렉션의 성능 비용
 
-```
-성능 비교 (상대적 수치, JVM/JIT 최적화에 따라 다름):
+### 동작 원리 — 왜 느린가?
 
-직접 호출:              1x   (기준)
-Method.invoke():       ~5x  (접근 검사 포함)
-setAccessible 후 invoke: ~3x  (접근 검사 캐싱)
-MethodHandle:          ~1.5x (JIT 최적화 가능)
+`Method.invoke()`가 일반 메서드 호출보다 느린 이유는 실행 경로에 여러 오버헤드가 겹치기 때문입니다.
+
+첫째, **접근 제어 검사**: `setAccessible(false)` 상태에서는 호출마다 접근 권한을 확인합니다. 둘째, **가변인수 배열**: `Object... args`로 인수를 전달하므로 배열 생성이 매번 발생합니다. 셋째, **오토박싱**: 기본형 인수를 Object로 포장해야 합니다. 넷째, **JIT 인라이닝 불가**: 동적 디스패치 구조라 컴파일러가 메서드 호출을 인라이닝하지 못합니다. 다섯째, **예외 래핑**: 실제 예외가 `InvocationTargetException`으로 감싸져 반환됩니다.
+
+```mermaid
+graph TD
+    INVOKE["Method.invoke(obj, args) 호출"]
+    CHECK["1. 접근 제어 검사
+    setAccessible(false)이면 매번 수행"]
+    ARRAY["2. 가변인수 배열 생성
+    Object... args → new Object[]"]
+    BOX["3. 오토박싱
+    int → Integer 등 기본형 래핑"]
+    DISPATCH["4. 동적 디스패치
+    JIT 인라이닝 불가"]
+    WRAP["5. 예외 래핑
+    실제 예외 → InvocationTargetException"]
+
+    INVOKE --> CHECK --> ARRAY --> BOX --> DISPATCH --> WRAP
+```
+
+```java
+// 성능 비교 (상대적 수치, JVM/JIT 최적화에 따라 다름):
+// 직접 호출:              1x   (기준)
+// Method.invoke():       ~5x  (접근 검사 포함)
+// setAccessible 후 invoke: ~3x  (접근 검사 캐싱)
+// MethodHandle:          ~1.5x (JIT 최적화 가능)
 ```
 
 ### 성능 최적화 전략
@@ -584,20 +620,6 @@ for (int i = 0; i < 1_000_000; i++) {
 Constructor<?> ctor = MyClass.class.getDeclaredConstructor(String.class);
 ctor.setAccessible(true);
 // ctor를 재사용
-```
-
-### 성능 비용 발생 원인
-
-```
-리플렉션 호출 시 내부 동작:
-
-Method.invoke(obj, args) 호출
-  │
-  ├─ 1. 접근 제어 검사 (setAccessible(false)이면 매번)
-  ├─ 2. 가변인수 배열 생성 (Object... args)
-  ├─ 3. 오토박싱 (기본형 인수: int → Integer)
-  ├─ 4. 동적 디스패치 (JIT 인라이닝 불가)
-  └─ 5. 예외 래핑 (InvocationTargetException)
 ```
 
 ---
@@ -744,12 +766,23 @@ public class SimpleTestRunner {
 
 동적 프록시는 리플렉션을 이용해 런타임에 인터페이스 구현체를 생성합니다. Spring AOP의 핵심 원리입니다.
 
-```
-동적 프록시 구조:
+클라이언트는 실제 객체 대신 프록시 객체를 받습니다. 프록시는 동일한 인터페이스를 구현하지만, 모든 메서드 호출이 `InvocationHandler.invoke()`를 거칩니다. 여기에 로깅, 트랜잭션, 캐싱 등의 부가 기능을 삽입합니다.
 
-Client ──▶ [Proxy 객체] ──▶ [InvocationHandler] ──▶ [실제 객체]
-                              (부가 기능 처리)
-  동일한 인터페이스를 구현하는 프록시가 런타임에 생성됨
+```mermaid
+sequenceDiagram
+    participant 클라이언트
+    participant 프록시
+    participant InvocationHandler
+    participant 실제객체
+
+    클라이언트->>프록시: findById(1L) 호출
+    프록시->>InvocationHandler: invoke(proxy, method, args)
+    InvocationHandler->>InvocationHandler: 부가 기능 처리 (로깅, 트랜잭션 등)
+    InvocationHandler->>실제객체: method.invoke(target, args)
+    실제객체-->>InvocationHandler: 결과 반환
+    InvocationHandler->>InvocationHandler: 후처리 (로깅 등)
+    InvocationHandler-->>프록시: 결과 반환
+    프록시-->>클라이언트: 결과 반환
 ```
 
 ```java
@@ -863,12 +896,10 @@ UserService logProxy = (UserService) Proxy.newProxyInstance(
 
 `MethodHandle`은 리플렉션보다 빠르고, JIT 컴파일러가 최적화할 수 있는 저수준 메서드 참조입니다.
 
-```
-성능:  직접 호출 ≒ MethodHandle >> Method.invoke()
-JIT:   MethodHandle은 인라이닝 가능, Method.invoke()는 불가
-```
-
 ```java
+// 성능: 직접 호출 ≒ MethodHandle >> Method.invoke()
+// JIT: MethodHandle은 인라이닝 가능, Method.invoke()는 불가
+
 import java.lang.invoke.*;
 
 MethodHandles.Lookup lookup = MethodHandles.lookup();
@@ -940,97 +971,134 @@ vh.compareAndSet(person, "새이름", "변경된이름");  // CAS 연산
 
 ---
 
-## 13. 리플렉션 사용 시 주의사항 정리
+## 13. 비유와 실무 실수
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  리플렉션 주의사항                                │
-│                                                                  │
-│  1. 성능 비용                                                    │
-│     → Method/Field/Constructor 객체 캐싱                        │
-│     → setAccessible(true) 한 번만 호출                          │
-│     → 고빈도 호출 시 MethodHandle 또는 코드 생성 고려           │
-│                                                                  │
-│  2. 타입 안전성 상실                                             │
-│     → 컴파일 타임 오류 대신 런타임 예외 (ClassCastException,    │
-│       IllegalArgumentException, InvocationTargetException)       │
-│     → 충분한 테스트 필요                                         │
-│                                                                  │
-│  3. 캡슐화 훼손                                                  │
-│     → private 접근은 설계 의도를 무시                           │
-│     → 테스트 목적 외에는 최소한으로 사용                        │
-│                                                                  │
-│  4. 모듈 시스템 (Java 9+)                                        │
-│     → 모듈 간 접근 시 InaccessibleObjectException               │
-│     → module-info.java의 opens 선언 필요                        │
-│                                                                  │
-│  5. 보안                                                         │
-│     → SecurityManager 환경에서 제한 가능                        │
-│     → 신뢰할 수 없는 코드에 리플렉션 권한 부여 주의             │
-│                                                                  │
-│  6. GraalVM Native Image                                         │
-│     → 리플렉션은 AOT 컴파일 시 정적 분석 불가                   │
-│     → reflect-config.json으로 명시적 등록 필요                  │
-└─────────────────────────────────────────────────────────────────┘
+### 비유: 건물 설계도 vs 건물
+
+Class 객체는 건물의 설계도입니다. 설계도를 보면 방이 몇 개인지(필드), 출입구가 어디인지(메서드), 어떤 재료로 지었는지(어노테이션)를 알 수 있습니다. 리플렉션은 설계도를 보고 건물에 새 문을 뚫거나(setAccessible), 원하는 방으로 직접 이동하는(invoke) 능력입니다.
+
+### 극한 시나리오: 플러그인 시스템
+
+```java
+// 런타임에 외부 JAR에서 플러그인 클래스 로딩
+File pluginJar = new File("plugins/analytics.jar");
+URLClassLoader loader = new URLClassLoader(
+    new URL[]{pluginJar.toURI().toURL()},
+    getClass().getClassLoader()
+);
+
+Class<?> pluginClass = loader.loadClass("com.plugin.AnalyticsPlugin");
+Object plugin = pluginClass.getDeclaredConstructor().newInstance();
+
+// 인터페이스 없이도 메서드 호출 가능
+Method processMethod = pluginClass.getMethod("process", EventData.class);
+processMethod.invoke(plugin, eventData);
+// → 컴파일 시점에 플러그인 클래스를 알 수 없어도 동작
 ```
 
----
+### 실무 실수
 
-## 14. 전체 구조 요약
+**실수 1: getDeclaredMethod 결과를 매번 새로 조회**
 
+```java
+// 나쁜 예: 요청마다 리플렉션 조회 → 성능 저하
+public void handleRequest(Object target, String methodName) throws Exception {
+    Method m = target.getClass().getDeclaredMethod(methodName); // 매번!
+    m.setAccessible(true);
+    m.invoke(target);
+}
+
+// 좋은 예: 캐싱
+private static final Map<String, Method> CACHE = new ConcurrentHashMap<>();
 ```
-java.lang.reflect 패키지 핵심 클래스:
 
-Class<T>
-├── getName() / getSimpleName() / getCanonicalName()
-├── getFields() / getDeclaredFields()          → Field[]
-├── getMethods() / getDeclaredMethods()        → Method[]
-├── getConstructors() / getDeclaredConstructors() → Constructor<?>[]
-├── getAnnotations() / getDeclaredAnnotations() → Annotation[]
-├── getSuperclass() / getInterfaces()
-├── newInstance() (deprecated) → getDeclaredConstructor().newInstance()
-└── isAnnotationPresent(), isInterface(), isArray(), ...
+**실수 2: InvocationTargetException 원인 예외 무시**
 
-Field
-├── get(obj) / set(obj, value)
-├── getInt/Long/Double/...()
-├── setAccessible(true)
-└── getAnnotation(), getType(), getGenericType()
+```java
+// 나쁜 예: 래핑된 예외만 처리
+try {
+    method.invoke(obj, args);
+} catch (InvocationTargetException e) {
+    log.error("실패", e);  // 실제 원인이 e.getCause()에 있음!
+}
 
-Method
-├── invoke(obj, args...)
-├── setAccessible(true)
-├── getReturnType() / getGenericReturnType()
-├── getParameterTypes() / getParameters()
-└── getAnnotation(), getExceptionTypes()
-
-Constructor<T>
-├── newInstance(args...)
-├── setAccessible(true)
-└── getParameterTypes()
-
-Proxy
-└── newProxyInstance(classLoader, interfaces[], InvocationHandler)
-    → 인터페이스 기반 동적 프록시 생성
-
-java.lang.invoke 패키지 (Java 7+):
-
-MethodHandles.Lookup
-├── findVirtual()    → 인스턴스 메서드
-├── findStatic()     → static 메서드
-├── findConstructor() → 생성자
-├── findGetter/Setter() → 필드
-└── privateLookupIn() → private 접근 (Java 9+)
-
-MethodHandle
-├── invoke() / invokeExact()
-├── bindTo()         → 부분 적용(커링)
-└── asType()         → 타입 변환
+// 좋은 예: 원인 예외 추출
+} catch (InvocationTargetException e) {
+    Throwable cause = e.getCause();
+    log.error("실패: {}", cause.getMessage(), cause);
+    throw cause;
+}
 ```
 
 ---
 
-## 핵심 정리
+## 14. 리플렉션 주의사항 정리
+
+리플렉션 사용 시 반드시 고려해야 할 6가지 사항입니다.
+
+**성능 비용:** `Method`, `Field`, `Constructor` 객체를 캐싱하고 `setAccessible(true)`을 한 번만 호출합니다. 고빈도 호출에는 `MethodHandle` 또는 코드 생성을 고려합니다.
+
+**타입 안전성 상실:** 컴파일 타임 오류 대신 런타임 예외(`ClassCastException`, `IllegalArgumentException`, `InvocationTargetException`)가 발생합니다. 충분한 테스트가 필요합니다.
+
+**캡슐화 훼손:** `private` 접근은 설계 의도를 무시합니다. 테스트 목적 외에는 최소한으로 사용합니다.
+
+**모듈 시스템(Java 9+):** 모듈 간 접근 시 `InaccessibleObjectException`이 발생합니다. `module-info.java`의 `opens` 선언이 필요합니다.
+
+**보안:** `SecurityManager` 환경에서는 리플렉션 권한이 제한될 수 있습니다. 신뢰할 수 없는 코드에 리플렉션 권한을 부여하지 않습니다.
+
+**GraalVM Native Image:** 리플렉션은 AOT 컴파일 시 정적 분석이 불가합니다. `reflect-config.json`으로 명시적 등록이 필요합니다.
+
+---
+
+## 15. 전체 구조 요약
+
+```mermaid
+graph TD
+    REFLECT["java.lang.reflect 패키지"]
+
+    CLASS["Class&lt;T&gt;
+    forName() / .class / getClass()
+    getFields() → Field[]
+    getMethods() → Method[]
+    getConstructors() → Constructor[]
+    getAnnotations()
+    getSuperclass() / getInterfaces()"]
+
+    FIELD["Field
+    get(obj) / set(obj, value)
+    setAccessible(true)
+    getAnnotation() / getType()"]
+
+    METHOD["Method
+    invoke(obj, args...)
+    setAccessible(true)
+    getReturnType() / getParameters()
+    getAnnotation()"]
+
+    CONSTRUCTOR["Constructor&lt;T&gt;
+    newInstance(args...)
+    setAccessible(true)
+    getParameterTypes()"]
+
+    PROXY["Proxy
+    newProxyInstance(classLoader, interfaces[], handler)
+    인터페이스 기반 동적 프록시 생성"]
+
+    INVOKE["java.lang.invoke 패키지
+    MethodHandles.Lookup
+    findVirtual() / findStatic()
+    findConstructor() / findGetter/Setter()
+    privateLookupIn()"]
+
+    REFLECT --> CLASS
+    CLASS --> FIELD
+    CLASS --> METHOD
+    CLASS --> CONSTRUCTOR
+    CLASS --> PROXY
+    REFLECT --> INVOKE
+```
+
+### 핵심 정리
 
 | 기능 | API | 주요 메서드 |
 |------|-----|------------|

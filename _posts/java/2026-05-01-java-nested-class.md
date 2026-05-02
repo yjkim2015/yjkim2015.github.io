@@ -13,21 +13,19 @@ Java는 클래스 안에 클래스를 선언할 수 있습니다. 이를 중첩 
 
 ## 1. 중첩 클래스 종류 전체 구조
 
-```
-중첩 클래스 (Nested Class):
-┌─────────────────────────────────────────────────────┐
-│                  Nested Class                       │
-│                                                     │
-│  ┌──────────────────────┐  ┌───────────────────┐   │
-│  │  Static Nested Class │  │   Inner Class     │   │
-│  │  (정적 중첩 클래스)  │  │   (내부 클래스)   │   │
-│  └──────────────────────┘  └─────────┬─────────┘   │
-│                                      │              │
-│                          ┌───────────┼───────────┐  │
-│                          │           │           │  │
-│                   Member Inner  Local Inner  Anonymous│
-│                   (멤버 내부)  (지역 내부)  (익명)   │
-└─────────────────────────────────────────────────────┘
+중첩 클래스의 가장 중요한 분류 기준은 **외부 클래스 인스턴스에 대한 참조를 보유하는가** 여부입니다. `static`으로 선언된 중첩 클래스는 외부 참조가 없어 독립적으로 생성 가능하고, 비static(inner) 클래스는 항상 외부 인스턴스를 참조합니다. 이 차이가 메모리 누수 가능성을 결정합니다.
+
+```mermaid
+graph TD
+    A["중첩 클래스 (Nested Class)"] --> B["Static Nested Class\n정적 중첩 클래스"]
+    A --> C["Inner Class\n내부 클래스"]
+    C --> D["Member Inner Class\n멤버 내부 클래스"]
+    C --> E["Local Inner Class\n지역 내부 클래스"]
+    C --> F["Anonymous Class\n익명 클래스"]
+    B --> B1["외부 인스턴스 참조 없음\n독립 생성 가능"]
+    D --> D1["외부 인스턴스 참조 보유\nouter.new Inner() 문법"]
+    E --> E1["메서드 내부에서만 선언"]
+    F --> F1["이름 없는 즉석 구현"]
 ```
 
 | 종류 | static | 외부 인스턴스 참조 | 선언 위치 |
@@ -41,7 +39,9 @@ Java는 클래스 안에 클래스를 선언할 수 있습니다. 이를 중첩 
 
 ## 2. Static 중첩 클래스 (Static Nested Class)
 
-### 특징
+### 동작 원리
+
+`static`을 붙이면 외부 클래스의 인스턴스와 완전히 독립됩니다. 외부 클래스의 `static` 멤버에만 접근 가능하고, 인스턴스 멤버에는 접근할 수 없습니다. `Outer` 인스턴스 없이 `new Outer.StaticNested()`로 바로 생성합니다.
 
 ```java
 public class Outer {
@@ -62,17 +62,10 @@ Outer.StaticNested nested = new Outer.StaticNested();
 nested.show();
 ```
 
-```
-메모리 구조:
-Outer 인스턴스 없이 독립적으로 생성 가능
-
-StaticNested ──► (Outer의 인스턴스를 참조하지 않음)
-```
-
 ### 사용 시점
 
 ```java
-// 1. 외부 클래스와 논리적으로 연관되지만 독립적인 클래스
+// 1. LinkedList 내부 Node — 논리적으로 연관되지만 독립적인 클래스
 public class LinkedList<E> {
     // Node는 LinkedList의 구현 세부사항
     private static class Node<E> {
@@ -138,7 +131,9 @@ Person person = new Person.Builder()
 
 ## 3. 멤버 내부 클래스 (Member Inner Class)
 
-### 특징
+### 동작 원리
+
+멤버 내부 클래스는 컴파일러가 자동으로 외부 클래스 인스턴스에 대한 숨겨진 참조(`this$0`)를 필드로 추가합니다. `Inner` 인스턴스를 생성하려면 반드시 `Outer` 인스턴스가 먼저 있어야 하고, `outer.new Inner()` 라는 독특한 문법을 사용합니다. 이 숨겨진 참조가 메모리 누수의 핵심 원인입니다.
 
 ```java
 public class Outer {
@@ -162,24 +157,7 @@ Outer.Inner inner = outer.new Inner();  // 독특한 문법
 inner.show();
 ```
 
-```
-메모리 구조:
-Inner 인스턴스는 Outer 인스턴스에 대한 숨겨진 참조를 보유
-
-┌─────────────────────┐
-│  Outer 인스턴스     │
-│  name = "Outer"     │
-└─────────┬───────────┘
-          ▲
-          │ 숨겨진 참조 (this$0)
-┌─────────┴───────────┐
-│  Inner 인스턴스     │
-│  name = "Inner"     │
-│  this$0 ────────────┘
-└─────────────────────┘
-```
-
-### 실제 컴파일 결과
+### 컴파일러가 생성하는 실제 코드
 
 ```java
 // 컴파일러가 생성하는 Inner 클래스 (대략)
@@ -215,7 +193,9 @@ public class ScrollPane {
 
 ## 4. 지역 내부 클래스 (Local Inner Class)
 
-### 특징
+### 동작 원리
+
+메서드 내부에서 선언하는 클래스입니다. 해당 메서드 스코프 안에서만 사용할 수 있어 외부 공개 없이 특정 메서드 전용 로직을 캡슐화할 때 씁니다. 람다가 없던 시절에는 이 방식을 썼지만 현대에는 거의 사용하지 않습니다.
 
 ```java
 public class Outer {
@@ -250,15 +230,13 @@ public void method() {
 }
 ```
 
-### 사용 시점
-
-지역 내부 클래스는 드물게 사용됩니다. 해당 메서드 내에서만 쓰이며, 익명 클래스보다 이름이 필요할 때 사용합니다.
-
 ---
 
 ## 5. 익명 클래스 (Anonymous Class)
 
-### 특징
+### 동작 원리
+
+익명 클래스는 인터페이스나 추상 클래스를 즉석에서 구현하는 문법입니다. 컴파일러는 `Outer$1.class`, `Outer$2.class` 같은 별도 파일을 생성합니다. Java 8 이후로는 함수형 인터페이스(추상 메서드 1개)라면 람다로 대체하는 것이 권장됩니다.
 
 ```java
 // 인터페이스나 추상 클래스를 즉석에서 구현
@@ -284,14 +262,6 @@ Greeting g = new Greeting() {
 };
 g.greet();
 g.common();
-```
-
-### 컴파일 결과
-
-```
-Outer.class
-Outer$1.class  ← 익명 클래스 1번
-Outer$2.class  ← 익명 클래스 2번
 ```
 
 ### 익명 클래스의 캡처
@@ -330,25 +300,6 @@ list.sort((a, b) -> a.compareTo(b));
 list.sort(String::compareTo);
 ```
 
-### 람다로 전환 가능한 조건
-
-```java
-// 함수형 인터페이스(추상 메서드 1개)만 람다로 전환 가능
-
-// O — 람다 가능 (메서드 1개)
-Runnable r = () -> System.out.println("run");
-Comparator<String> c = (a, b) -> a.compareTo(b);
-Predicate<Integer> p = n -> n > 0;
-Function<String, Integer> f = Integer::parseInt;
-
-// X — 람다 불가 (추상 메서드 2개 이상)
-abstract class TwoMethods {
-    abstract void foo();
-    abstract void bar();
-}
-// 위는 익명 클래스만 가능
-```
-
 ### 익명 클래스 vs 람다 차이
 
 ```java
@@ -379,6 +330,18 @@ Runnable lambdaCounter = () -> { /* count++ 불가 */ };
 
 ### 내부 클래스의 외부 참조 문제
 
+비static 내부 클래스 인스턴스가 외부 클래스 인스턴스보다 오래 살면 GC가 외부 클래스를 수거하지 못합니다. `Thread`나 `Handler` 같은 장수 객체가 내부 클래스 인스턴스를 보유할 때 특히 위험합니다.
+
+```mermaid
+graph TD
+    A["Thread (GC Root)"] --> B["MyTask 인스턴스 (Runnable)"]
+    B --> C["this$0 참조 (강참조)"]
+    C --> D["MyActivity 인스턴스 (GC 불가!)"]
+    D --> E["모든 필드, 뷰, 리소스..."]
+    style D fill:#ff6b6b
+    style E fill:#ff6b6b
+```
+
 ```java
 // 위험한 패턴 — Activity / Fragment에서 자주 발생
 public class MyActivity {
@@ -399,14 +362,6 @@ public class MyActivity {
         new Thread(new MyTask()).start();
     }
 }
-```
-
-```
-메모리 누수 구조:
-Thread (GC Root)
-    └── MyTask 인스턴스 (Runnable)
-            └── this$0 ──► MyActivity (GC 불가!)
-                                └── 모든 필드, 뷰, 리소스...
 ```
 
 ### 해결 방법 1: Static Nested Class + WeakReference
@@ -479,6 +434,10 @@ class MyComponent implements AutoCloseable {
 }
 ```
 
+**비유:** 멤버 내부 클래스는 집주인(외부 클래스)의 열쇠를 가진 세입자(내부 클래스)입니다. 세입자가 이사를 가지 않는 한(GC), 집주인도 집을 비울 수 없습니다(GC 불가). `WeakReference`는 열쇠를 종이에 적어두는 것과 같습니다. 집주인이 이미 집을 비웠다면(GC됨) 종이의 주소는 무효가 됩니다.
+
+**극한 시나리오:** 안드로이드 앱에서 `Activity` 안에 `AsyncTask`(멤버 내부 클래스)를 생성한 뒤 화면을 회전시키면 새 `Activity`가 생성되는데, 백그라운드 작업이 끝날 때까지 이전 `Activity`가 GC되지 않아 `OutOfMemoryError`로 앱이 크래시됩니다.
+
 ---
 
 ## 8. 실무 활용 패턴
@@ -533,25 +492,6 @@ button.addActionListener(new ActionListener() {
 button.addActionListener(e -> System.out.println("클릭!"));
 ```
 
-### 테스트에서의 활용
-
-```java
-// 테스트 더블(Test Double) — 익명 클래스
-interface UserRepository {
-    User findById(long id);
-}
-
-UserRepository mockRepo = new UserRepository() {
-    @Override
-    public User findById(long id) {
-        return new User(id, "Test User");  // 항상 테스트 데이터 반환
-    }
-};
-
-// 현대적: Mockito 또는 람다
-UserRepository mockRepo = id -> new User(id, "Test User");
-```
-
 ### 팩토리 메서드와 익명 클래스
 
 ```java
@@ -582,27 +522,21 @@ t.execute();
 
 ## 9. 전체 요약
 
+```mermaid
+graph TD
+    A["중첩 클래스 선택 가이드"] --> B["외부 인스턴스 불필요?"]
+    B -->|"Yes"| C["Static Nested Class\n빌더, 노드 등 구현 세부 클래스"]
+    B -->|"No"| D["Inner Class 계열"]
+    D --> E["이름이 필요한가?"]
+    E -->|"Yes, 메서드 내"| F["Local Inner Class\n(거의 사용 안 함)"]
+    E -->|"Yes, 멤버"| G["Member Inner Class\nIterator, 이벤트 핸들러 등"]
+    E -->|"No"| H["함수형 인터페이스인가?"]
+    H -->|"Yes (메서드 1개)"| I["람다로 대체"]
+    H -->|"No (메서드 여러개)"| J["Anonymous Class"]
 ```
-중첩 클래스 선택 가이드:
-┌──────────────────────┬────────────────────────────────────┐
-│  종류                │  사용 시점                         │
-├──────────────────────┼────────────────────────────────────┤
-│ Static Nested Class  │ 외부 인스턴스 불필요, 논리적 그룹화│
-│                      │ 빌더, 노드 등 구현 세부 클래스     │
-├──────────────────────┼────────────────────────────────────┤
-│ Member Inner Class   │ 외부 클래스 인스턴스 접근 필요     │
-│                      │ Iterator, 이벤트 핸들러 등         │
-├──────────────────────┼────────────────────────────────────┤
-│ Local Inner Class    │ 메서드 내 일회성, 이름이 필요할 때 │
-│                      │ (드물게 사용)                      │
-├──────────────────────┼────────────────────────────────────┤
-│ Anonymous Class      │ 인터페이스 즉석 구현               │
-│                      │ 함수형 인터페이스면 람다로 대체    │
-└──────────────────────┴────────────────────────────────────┘
 
-핵심 규칙:
-1. 외부 인스턴스가 필요 없으면 → static 중첩 클래스 우선
-2. 멤버 내부 클래스 + 백그라운드 작업 → 메모리 누수 주의
+**핵심 규칙:**
+1. 외부 인스턴스가 필요 없으면 → static 중첩 클래스 우선 선택
+2. 멤버 내부 클래스 + 백그라운드 작업 → 메모리 누수 반드시 확인
 3. 함수형 인터페이스 → 람다로 교체
-4. this$0 참조를 항상 인식하고 설계할 것
-```
+4. `this$0` 참조를 항상 인식하고 설계할 것

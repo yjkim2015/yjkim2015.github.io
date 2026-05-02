@@ -17,13 +17,20 @@ Java의 모든 클래스는 명시적으로 상속을 선언하지 않아도 `ja
 
 Java는 **단일 루트 계층(Single Root Hierarchy)** 을 채택합니다. 모든 클래스가 Object를 상속하므로 다음이 보장됩니다.
 
-```
-Object
-  ├── String
-  ├── Integer
-  ├── ArrayList
-  ├── MyCustomClass
-  └── ... (모든 클래스)
+```mermaid
+graph TD
+    Object["Object"]
+    String["String"]
+    Integer["Integer"]
+    ArrayList["ArrayList"]
+    MyClass["MyCustomClass"]
+    Etc["... (모든 클래스)"]
+
+    Object --> String
+    Object --> Integer
+    Object --> ArrayList
+    Object --> MyClass
+    Object --> Etc
 ```
 
 ```java
@@ -150,20 +157,33 @@ System.out.println(new Point(3, 4));  // Point[x=3, y=4]
 
 ## 3. equals()
 
-### 동일성(Identity) vs 동등성(Equality)
+### 동작 원리 — 동일성(Identity) vs 동등성(Equality)
 
+Java에서 `==` 연산자는 **메모리 주소(참조)** 를 비교합니다. 두 변수가 힙의 동일한 객체를 가리키는지 확인하는 것입니다. 반면 `equals()`는 **논리적 동등성** 을 비교합니다. 객체가 서로 다른 메모리 위치에 있더라도 "같은 것"으로 취급할 기준을 개발자가 정의할 수 있습니다.
+
+Object의 기본 `equals()`는 `==`와 동일하게 동작합니다. String이나 Integer 등이 내용 기반 비교를 하는 것은 이미 오버라이딩을 했기 때문입니다.
+
+```mermaid
+graph LR
+    subgraph "동일성 (==)"
+        A1["변수 a"] -->|"참조"| O1["객체 @1a2b"]
+        B1["변수 b"] -->|"참조"| O2["객체 @3c4d"]
+        R1["a == b → false (다른 주소)"]
+    end
+
+    subgraph "동등성 (equals)"
+        A2["변수 a"] -->|"내용: hello"| C1["✓ 같은 내용"]
+        B2["변수 b"] -->|"내용: hello"| C1
+        R2["a.equals(b) → true (내용 동일)"]
+    end
 ```
-동일성 (==)                동등성 (equals)
-┌─────────────────┐        ┌─────────────────┐
-│  같은 메모리    │        │  내용이 같은가? │
-│  주소인가?      │        │  (논리적 동등)  │
-└─────────────────┘        └─────────────────┘
 
+```java
 String a = new String("hello");
 String b = new String("hello");
 
-a == b       → false  (다른 객체)
-a.equals(b)  → true   (내용 동일)
+a == b       // false  (다른 객체)
+a.equals(b)  // true   (내용 동일)
 ```
 
 ### Object의 기본 equals()
@@ -265,6 +285,8 @@ class Point {
 }
 ```
 
+**핵심 요약:** equals를 오버라이딩할 때 instanceof 체크로 null과 타입 불일치를 한 번에 처리하고, 자기 자신과의 비교를 먼저 수행해 성능을 최적화합니다.
+
 ### Java 14+ record — equals 자동 생성
 
 ```java
@@ -277,34 +299,30 @@ record Point(int x, int y) { }
 
 ## 4. hashCode()
 
+### 동작 원리 — hashCode와 HashMap의 관계
+
+HashMap은 내부적으로 배열(버킷)과 연결 리스트/트리의 조합으로 구현됩니다. 키-값 쌍을 저장할 때 `hashCode()`로 버킷 인덱스를 결정하고, 같은 버킷에 여러 항목이 있으면 `equals()`로 정확한 항목을 찾습니다.
+
+**equals를 오버라이딩하고 hashCode를 빠뜨리면 HashMap이 망가집니다.** equals가 true인 두 객체가 서로 다른 버킷에 들어가게 되어 같은 키로 저장했어도 찾을 수 없게 됩니다.
+
+```mermaid
+graph TD
+    PUT["map.put(key, value) 호출"]
+    HASH["1. key.hashCode() 호출"]
+    BUCKET["2. 해시값으로 버킷 인덱스 결정"]
+    EQUALS["3. 버킷에서 key.equals()로 탐색"]
+    STORE["4. 일치하면 value 저장/반환"]
+    CHAIN["해시 충돌 시: 같은 버킷에 체이닝"]
+
+    PUT --> HASH --> BUCKET --> EQUALS --> STORE
+    BUCKET --> CHAIN --> EQUALS
+```
+
 ### hashCode() 계약
 
 1. **일관성**: 같은 실행 내에서 반복 호출 시 같은 값
 2. **equals 연동**: `a.equals(b)` → `a.hashCode() == b.hashCode()` (역은 성립 안 해도 됨)
 3. **충돌 최소화**: 다른 객체는 가급적 다른 해시코드 (성능)
-
-```
-equals()가 true  →  hashCode() 반드시 같아야 함
-equals()가 false →  hashCode() 달라도 되지만, 같으면 성능 저하
-```
-
-### hashCode()와 HashMap의 관계
-
-```
-put(key, value) 과정:
-┌────────────────────────────────────────────┐
-│ 1. key.hashCode() 호출                     │
-│ 2. 해시값으로 버킷(bucket) 인덱스 결정     │
-│ 3. 해당 버킷에서 key.equals() 로 탐색      │
-│ 4. 일치하면 value 저장/반환                │
-└────────────────────────────────────────────┘
-
-버킷 구조:
-[0] → null
-[1] → (key="A", val=1) → (key="B", val=2)  ← 해시 충돌 시 체이닝
-[2] → (key="C", val=3)
-...
-```
 
 ```java
 // hashCode를 오버라이딩하지 않으면 HashMap이 망가짐
@@ -373,34 +391,31 @@ class ImmutablePoint {
 }
 ```
 
+**핵심 요약:** `equals()`를 오버라이딩하면 반드시 `hashCode()`도 함께 오버라이딩해야 합니다. 이 계약을 어기면 HashMap, HashSet 등 해시 기반 컬렉션에서 예측 불가능한 동작이 발생합니다.
+
 ---
 
 ## 5. clone()
 
-### clone()의 기본 동작
+### 동작 원리 — 얕은 복사 vs 깊은 복사
 
-```java
-protected native Object clone() throws CloneNotSupportedException;
-```
+`clone()`은 JVM 네이티브 메서드로, 객체의 메모리를 그대로 복사합니다. 기본 동작은 **얕은 복사(Shallow Copy)** 입니다. 기본형 필드는 값 자체가 복사되지만, 참조형 필드는 참조(주소)만 복사됩니다. 즉 원본과 복사본이 같은 객체를 가리키게 됩니다.
 
-- `native` 메서드 — JVM이 직접 메모리 복사
-- `Cloneable` 마커 인터페이스를 구현해야 사용 가능
-- 구현하지 않으면 `CloneNotSupportedException` 발생
+배열이나 컬렉션처럼 내부 상태가 변할 수 있는 필드가 있다면 **깊은 복사(Deep Copy)** 를 직접 구현해야 합니다.
 
-### 얕은 복사(Shallow Copy) vs 깊은 복사(Deep Copy)
+```mermaid
+graph TD
+    subgraph "얕은 복사 (Shallow Copy)"
+        O1["original"] -->|"arr 필드"| ARR["int[] {1,2,3}"]
+        C1["clone"] -->|"arr 필드 (같은 참조)"| ARR
+        NOTE1["⚠️ 한쪽 수정 시 양쪽 영향"]
+    end
 
-```
-얕은 복사:
-┌──────────┐     ┌──────────┐
-│ original │     │  clone   │
-│  arr ────┼────►│  arr ────┼────► [1, 2, 3]  (같은 배열!)
-└──────────┘     └──────────┘
-
-깊은 복사:
-┌──────────┐     ┌──────────┐
-│ original │     │  clone   │
-│  arr ────┼────►[1, 2, 3]  │  arr ────► [1, 2, 3]  (다른 배열)
-└──────────┘     └──────────┘
+    subgraph "깊은 복사 (Deep Copy)"
+        O2["original"] -->|"arr 필드"| ARR2["int[] {1,2,3}"]
+        C2["clone"] -->|"arr 필드 (별도 복사)"| ARR3["int[] {1,2,3} (다른 배열)"]
+        NOTE2["✓ 서로 독립적"]
+    end
 ```
 
 ```java
@@ -542,15 +557,14 @@ if (obj.getClass() == getClass()) { ... }
 protected void finalize() throws Throwable { }
 ```
 
-### 문제점
+### finalize()의 문제점
 
-```
-finalize()의 문제점:
-1. GC 호출 시점 보장 없음 — 언제 실행될지 모름
-2. 성능 저하 — GC가 finalize 객체를 별도 큐에서 관리
-3. 예외 무시 — finalize 내부 예외가 조용히 사라짐
-4. 보안 취약점 — finalize 공격(finalizer attack) 가능
-```
+`finalize()`는 GC가 객체를 수거할 때 호출하도록 설계되었으나 실제로는 심각한 문제를 내포합니다.
+
+- **GC 호출 시점 보장 없음**: 언제 실행될지 전혀 알 수 없고 실행 자체가 보장되지 않습니다.
+- **성능 저하**: GC가 finalize 대상 객체를 별도 큐에서 관리해 GC 사이클이 길어집니다.
+- **예외 무시**: `finalize()` 내부에서 발생한 예외가 조용히 사라집니다.
+- **보안 취약점**: finalize 공격(finalizer attack)을 통해 불완전하게 초기화된 객체가 외부에 노출될 수 있습니다.
 
 ### 올바른 대안: AutoCloseable + try-with-resources
 
@@ -577,9 +591,24 @@ try (Resource r = new Resource()) {
 
 ## 8. wait() / notify() / notifyAll()
 
-### 스레드 협력 메커니즘
+### 동작 원리 — 모니터 락과 대기
 
-이 메서드들은 `synchronized` 블록 안에서만 호출할 수 있습니다.
+`wait()`, `notify()`, `notifyAll()`은 Java의 내장 모니터(Monitor) 메커니즘을 활용합니다. `synchronized` 블록으로 진입할 때 스레드는 해당 객체의 모니터 락을 획득하고, `wait()`을 호출하면 **락을 반납하고** WAITING 상태로 전환됩니다. 락을 반납하기 때문에 다른 스레드가 `synchronized` 블록에 진입할 수 있습니다. `notify()`를 받으면 다시 락을 경쟁해 획득한 후 실행을 재개합니다.
+
+```mermaid
+sequenceDiagram
+    participant 생산자
+    participant 모니터
+    participant 소비자
+
+    생산자->>모니터: synchronized 진입 (락 획득)
+    생산자->>모니터: 버퍼 가득 참 → wait() 호출
+    모니터-->>생산자: 락 반납, WAITING 상태
+    소비자->>모니터: synchronized 진입 (락 획득)
+    소비자->>모니터: 항목 소비 후 notifyAll()
+    모니터-->>생산자: 깨어남, 락 경쟁
+    생산자->>모니터: 락 재획득, 실행 재개
+```
 
 ```java
 class SharedBuffer {
@@ -607,37 +636,131 @@ class SharedBuffer {
 }
 ```
 
-```
-wait() 동작:
-1. 현재 스레드가 monitor lock 해제
-2. WAITING 상태로 전환
-3. notify/notifyAll 또는 인터럽트 시 깨어남
-4. 다시 lock 획득 후 재개
-
-notify()   → 대기 중인 스레드 1개 임의 깨움
-notifyAll() → 대기 중인 모든 스레드 깨움 (권장)
-```
+`notify()`는 대기 중인 스레드 1개를 임의로 깨우고, `notifyAll()`은 모든 대기 스레드를 깨웁니다. 어떤 스레드가 깨어날지 보장이 없으므로 실무에서는 `notifyAll()`을 우선 사용합니다.
 
 > 실무에서는 `java.util.concurrent` 패키지의 `Lock`, `Condition`, `BlockingQueue`를 우선 사용합니다.
 
 ---
 
-## 9. 전체 요약
+## 9. 비유와 극한 시나리오
 
+### 비유: 도서관 대출 카드
+
+Object의 `equals()`와 `hashCode()`는 도서관 대출 시스템과 같습니다. `hashCode()`는 책장 번호(버킷)를 결정하고, `equals()`는 그 책장에서 정확한 책을 찾습니다. 책장 번호(`hashCode`)가 다르면 아무리 같은 책이어도 찾을 수 없습니다.
+
+### 극한 시나리오: equals 오버라이딩 후 hashCode 미구현
+
+```java
+// 수백만 건의 데이터를 HashMap에 저장하는 서비스
+class UserId {
+    final String value;
+    UserId(String value) { this.value = value; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof UserId)) return false;
+        return value.equals(((UserId) o).value);
+    }
+    // hashCode 오버라이딩 없음!
+}
+
+Map<UserId, UserProfile> cache = new HashMap<>();
+// 100만 사용자 프로필 캐싱
+for (User u : users) {
+    cache.put(new UserId(u.id), u.profile);
+}
+
+// 조회 시 매번 null 반환
+UserProfile profile = cache.get(new UserId("user123")); // null!
+// → 100만 건 전부 다시 DB 조회 → 서비스 장애
 ```
-Object 메서드 오버라이딩 가이드:
-┌─────────────┬──────────────────────────────────────────────┐
-│  메서드     │  핵심 규칙                                   │
-├─────────────┼──────────────────────────────────────────────┤
-│ toString()  │ 항상 오버라이딩, 디버깅에 유용               │
-│ equals()    │ 5가지 계약 준수, hashCode와 함께             │
-│ hashCode()  │ equals와 일관성 필수, HashMap 정상 동작      │
-│ clone()     │ Cloneable 필요, 복사 생성자 대안 권장        │
-│ getClass()  │ final, 오버라이딩 불가, 리플렉션 활용        │
-│ finalize()  │ 절대 사용 금지, AutoCloseable 사용           │
-│ wait/notify │ synchronized 내부에서만, concurrent 패키지 선호│
-└─────────────┴──────────────────────────────────────────────┘
 
-황금 법칙:
-equals()를 오버라이딩하면 반드시 hashCode()도 오버라이딩하라.
+### 실무 실수
+
+**실수 1: equals와 hashCode를 따로 관리하다 불일치 발생**
+
+코드 리뷰 없이 equals에 새 필드를 추가하면서 hashCode를 갱신하지 않는 경우입니다. HashSet에 넣은 객체가 사라지거나 중복 저장되는 현상이 발생합니다.
+
+```java
+// 원래 코드
+class Order {
+    String id;
+    // equals: id만 비교
+    // hashCode: id 기반
+}
+
+// 리팩토링 중 실수
+class Order {
+    String id;
+    String customerId;  // 추가
+    // equals에 customerId 추가했지만 hashCode는 그대로!
+    // → Set에서 중복 체크 실패
+}
+```
+
+**실수 2: 가변 객체를 HashMap 키로 사용**
+
+```java
+class MutableKey {
+    int value;
+    // equals, hashCode 모두 value 기반
+}
+
+MutableKey key = new MutableKey();
+key.value = 1;
+map.put(key, "hello");
+
+key.value = 2;  // 키 변경!
+map.get(key);   // null — hashCode가 바뀌어 다른 버킷 탐색
+```
+
+---
+
+## 10. 전체 요약
+
+```mermaid
+graph TD
+    OBJECT["Object 메서드 오버라이딩 가이드"]
+
+    TOSTRING["toString()
+    항상 오버라이딩
+    디버깅에 유용"]
+
+    EQUALS["equals()
+    5가지 계약 준수
+    hashCode와 반드시 함께"]
+
+    HASHCODE["hashCode()
+    equals와 일관성 필수
+    HashMap 정상 동작 보장"]
+
+    CLONE["clone()
+    Cloneable 필요
+    복사 생성자 대안 권장"]
+
+    GETCLASS["getClass()
+    final, 오버라이딩 불가
+    리플렉션 활용"]
+
+    FINALIZE["finalize()
+    절대 사용 금지
+    AutoCloseable 사용"]
+
+    WAITNOTIFY["wait/notify
+    synchronized 내부에서만
+    concurrent 패키지 선호"]
+
+    GOLDEN["황금 법칙:
+    equals() 오버라이딩 시
+    반드시 hashCode()도 오버라이딩"]
+
+    OBJECT --> TOSTRING
+    OBJECT --> EQUALS
+    OBJECT --> HASHCODE
+    OBJECT --> CLONE
+    OBJECT --> GETCLASS
+    OBJECT --> FINALIZE
+    OBJECT --> WAITNOTIFY
+    EQUALS --> GOLDEN
+    HASHCODE --> GOLDEN
 ```

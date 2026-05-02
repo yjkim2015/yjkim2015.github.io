@@ -1,17 +1,16 @@
 ---
 title: "모니터링 도구"
 categories: MONITORING
-tags: [Prometheus, Grafana, ELK, Datadog, Micrometer, Spring Actuator]
+tags: [Prometheus, Grafana, ELK, Datadog, Micrometer, SpringActuator]
 toc: true
 toc_sticky: true
 toc_label: 목차
+date: 2026-05-01
 ---
 
-## 비유로 시작하기
+모니터링 시스템은 소프트웨어의 조종석이다. 시스템이 얼마나 잘 동작하고 있는지 측정하고(Metrics), 무슨 일이 일어났는지 기록하며(Logs), 요청이 어디를 거쳤는지 추적한다(Traces).
 
-비행기 조종석을 생각해보세요. 고도계, 속도계, 연료계, 엔진 온도계 등 수십 개의 계기판이 있습니다. 조종사는 이 계기판들을 통해 비행기 상태를 실시간으로 파악하고, 이상 징후가 발생하면 경보음이 울립니다.
-
-모니터링 시스템은 소프트웨어의 조종석입니다. **시스템이 얼마나 잘 동작하고 있는지를 측정하고(Metrics), 무슨 일이 일어났는지 기록하며(Logs), 요청이 어디를 거쳤는지 추적합니다(Traces).**
+> **비유**: 비행기 조종석의 계기판과 같다. 고도계, 속도계, 연료계, 엔진 온도계 수십 개가 있고, 이상 징후가 발생하면 경보음이 울린다. 계기판 없이 비행하면 이미 추락 중에야 문제를 알게 된다.
 
 ---
 
@@ -19,49 +18,51 @@ toc_label: 목차
 
 <div class="mermaid">
 graph TD
-    OBS[Observability]
-    OBS --> METRICS[Metrics<br>숫자로 측정 - CPU, TPS, 에러율]
-    OBS --> LOGS[Logs<br>이벤트 기록 - 오류 상세, 감사]
-    OBS --> TRACES[Traces<br>요청 흐름 추적 - 분산 트레이싱]
+    OBS["Observability\n(시스템 내부 상태를 외부에서 파악하는 능력)"]
+    OBS --> METRICS["Metrics\n숫자로 측정\nCPU, TPS, 에러율"]
+    OBS --> LOGS["Logs\n이벤트 기록\n오류 상세, 감사 추적"]
+    OBS --> TRACES["Traces\n요청 흐름 추적\n분산 트레이싱"]
 
-    METRICS --> PROM[Prometheus + Grafana]
-    LOGS --> ELK[ELK Stack / Loki]
-    TRACES --> JAEGER[Jaeger / Zipkin]
+    METRICS --> PROM["Prometheus + Grafana"]
+    LOGS --> ELK["ELK Stack / Loki"]
+    TRACES --> JAEGER["Jaeger / Zipkin / Tempo"]
 </div>
 
-| 요소 | 질문 | 도구 |
-|------|------|------|
-| Metrics | 지금 시스템이 얼마나 바쁜가? | Prometheus, Datadog |
-| Logs | 에러가 왜 발생했나? | ELK, Loki |
+| 요소 | 핵심 질문 | 대표 도구 |
+|------|---------|---------|
+| Metrics | 지금 시스템이 얼마나 바쁜가? 느린가? | Prometheus, Datadog |
+| Logs | 에러가 왜 발생했나? 무슨 일이 있었나? | ELK Stack, Loki |
 | Traces | 어느 서비스에서 지연이 발생했나? | Jaeger, Zipkin, Tempo |
+
+세 요소는 서로 보완한다. Metrics로 이상을 감지하고, Logs로 원인을 파악하며, Traces로 어느 서비스가 문제인지 추적한다.
 
 ---
 
 ## Prometheus + Grafana
 
-가장 널리 쓰이는 오픈소스 메트릭 모니터링 스택입니다.
+가장 널리 쓰이는 오픈소스 메트릭 모니터링 스택이다.
 
 ### Prometheus 동작 원리
 
+Prometheus는 **Pull 방식**으로 동작한다. 각 서비스가 메트릭 엔드포인트를 노출하면 Prometheus가 주기적으로 긁어간다(scrape). 서비스가 메트릭을 Push하는 방식(Datadog Agent)과 대비된다. Pull 방식은 Prometheus가 장애나도 서비스에는 영향이 없다는 장점이 있다.
+
 <div class="mermaid">
 sequenceDiagram
-    participant APP as Spring App<br>/actuator/prometheus
-    participant PROM as Prometheus Server
-    participant ALERT as Alertmanager
-    participant GRAF as Grafana
-    participant SLACK as Slack
+    participant APP as "Spring App\n(/actuator/prometheus)"
+    participant PROM as "Prometheus Server"
+    participant ALERT as "Alertmanager"
+    participant GRAF as "Grafana"
+    participant SLACK as "Slack"
 
-    PROM->>APP: Scrape (15초마다 Pull)
-    APP-->>PROM: 메트릭 데이터
-    PROM->>PROM: TSDB에 저장
-    GRAF->>PROM: PromQL 쿼리
-    PROM-->>GRAF: 데이터 반환
-    GRAF-->>GRAF: 대시보드 렌더링
-    PROM->>ALERT: 알림 규칙 위반
-    ALERT->>SLACK: Slack 알림 발송
+    PROM->>APP: 1️⃣ Scrape (15초마다 Pull)
+    APP-->>PROM: "메트릭 데이터 반환"
+    PROM->>PROM: 2️⃣ TSDB에 시계열 저장
+    GRAF->>PROM: 3️⃣ PromQL 쿼리
+    PROM-->>GRAF: "데이터 반환"
+    GRAF-->>GRAF: 4️⃣ 대시보드 렌더링
+    PROM->>ALERT: 5️⃣ 알림 규칙 위반 감지
+    ALERT->>SLACK: 6️⃣ Slack 알림 발송
 </div>
-
-**Pull 방식**: Prometheus가 각 서비스에서 메트릭을 수집합니다. Push 방식(Datadog Agent)과 대비됩니다.
 
 ### Prometheus 설정
 
@@ -84,8 +85,8 @@ scrape_configs:
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['app1:8080', 'app2:8080']
-    # Kubernetes 환경에서는 자동 디스커버리
 
+  # Kubernetes 환경: Pod 어노테이션 기반 자동 디스커버리
   - job_name: 'kubernetes-pods'
     kubernetes_sd_configs:
       - role: pod
@@ -109,7 +110,7 @@ groups:
         expr: |
           rate(http_server_requests_seconds_count{status=~"5.."}[5m])
           / rate(http_server_requests_seconds_count[5m]) > 0.01
-        for: 2m
+        for: 2m          # 2분간 지속될 때만 알림 (일시적 스파이크 무시)
         labels:
           severity: critical
         annotations:
@@ -142,10 +143,10 @@ groups:
 # 초당 요청 수 (TPS)
 rate(http_server_requests_seconds_count[5m])
 
-# P95 응답시간
+# P95 응답시간 (상위 5% 느린 요청의 응답시간)
 histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m]))
 
-# 에러율
+# 에러율 (5xx 응답 비율)
 rate(http_server_requests_seconds_count{status=~"5.."}[5m])
 / rate(http_server_requests_seconds_count[5m])
 
@@ -163,9 +164,7 @@ rate(container_cpu_usage_seconds_total[5m]) * 100
 
 ## Spring Actuator + Micrometer
 
-Spring Boot 애플리케이션의 메트릭을 Prometheus로 내보내는 설정입니다.
-
-### 의존성
+Spring Boot 애플리케이션의 메트릭을 Prometheus로 내보내는 설정이다. Micrometer는 메트릭 수집 추상화 계층으로, Prometheus 외에 Datadog, InfluxDB 등으로도 동일하게 전송할 수 있다.
 
 ```gradle
 dependencies {
@@ -174,10 +173,7 @@ dependencies {
 }
 ```
 
-### 설정
-
 ```yaml
-# application.yml
 management:
   endpoints:
     web:
@@ -187,14 +183,14 @@ management:
     health:
       show-details: always
       probes:
-        enabled: true  # liveness, readiness 분리
+        enabled: true  # liveness, readiness 엔드포인트 분리 (K8s probe용)
   metrics:
     tags:
       application: ${spring.application.name}
       environment: ${spring.profiles.active}
     distribution:
       percentiles-histogram:
-        http.server.requests: true  # 히스토그램 활성화 (P95 계산용)
+        http.server.requests: true  # 히스토그램 활성화 (P95 계산에 필요)
       slo:
         http.server.requests: 100ms, 500ms, 1s, 2s
 ```
@@ -207,64 +203,55 @@ management:
 public class OrderMetrics {
 
     private final MeterRegistry registry;
-    private final Counter orderCreatedCounter;
-    private final Counter orderCancelledCounter;
-    private final Timer orderProcessingTimer;
-    private final Gauge pendingOrdersGauge;
 
     @PostConstruct
     public void init() {
-        orderCreatedCounter = Counter.builder("order.created.total")
+        // Counter: 단조증가 카운터 (주문 수, 에러 수)
+        Counter.builder("order.created.total")
             .description("생성된 주문 수")
             .tag("type", "all")
             .register(registry);
 
-        orderCancelledCounter = Counter.builder("order.cancelled.total")
-            .description("취소된 주문 수")
-            .register(registry);
-
-        orderProcessingTimer = Timer.builder("order.processing.duration")
+        // Timer: 처리 시간 측정 (분포 포함)
+        Timer.builder("order.processing.duration")
             .description("주문 처리 시간")
             .publishPercentiles(0.5, 0.95, 0.99)
             .register(registry);
+
+        // Gauge: 현재 상태를 반영하는 값 (람다로 실시간 제공)
+        // register(registry) 호출 시 람다가 주기적으로 호출됨
     }
 
-    public void recordOrderCreated() {
-        orderCreatedCounter.increment();
-    }
-
-    public void recordOrderProcessing(Runnable task) {
-        orderProcessingTimer.record(task);
-    }
-
-    // 게이지: 현재 상태를 반영 (람다로 실시간 값 제공)
     public void registerPendingOrdersGauge(OrderRepository repository) {
-        Gauge.builder("order.pending.count", repository, r -> r.countByStatus(OrderStatus.PENDING))
+        Gauge.builder("order.pending.count", repository,
+                r -> r.countByStatus(OrderStatus.PENDING))
             .description("처리 대기 중인 주문 수")
             .register(registry);
     }
 }
 ```
 
+Counter는 단조 증가만 하므로 `rate()`로 초당 변화량을 계산한다. Gauge는 현재값을 바로 사용한다.
+
 ---
 
 ## ELK Stack
 
-**E**lasticsearch + **L**ogstash + **K**ibana. 로그 수집, 저장, 시각화 스택입니다.
+**E**lasticsearch + **L**ogstash + **K**ibana. 로그 수집, 저장, 시각화 스택이다.
 
 <div class="mermaid">
 graph LR
-    APP[Spring App<br>Logback] -->|JSON 로그| FB[Filebeat]
-    FB -->|전송| LS[Logstash<br>파싱/필터링]
-    LS -->|저장| ES[(Elasticsearch)]
-    ES -->|쿼리| KI[Kibana<br>시각화/검색]
-    SLACK[Slack] -.->|알림| KI
+    APP["Spring App\n(Logback JSON 출력)"] -->|"JSON 로그"| FB["Filebeat\n(로그 파일 감시)"]
+    FB -->|"전송"| LS["Logstash\n(파싱/필터링/변환)"]
+    LS -->|"저장"| ES[("Elasticsearch\n(검색/저장)")]
+    ES -->|"쿼리"| KI["Kibana\n(시각화/검색)"]
 </div>
 
 ### Spring Logback JSON 설정
 
+로그를 JSON으로 출력하면 Elasticsearch에 구조화된 형태로 저장되어 `traceId`, `userId` 등으로 필터링이 가능하다.
+
 ```xml
-<!-- logback-spring.xml -->
 <configuration>
     <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
@@ -282,6 +269,7 @@ graph LR
 ```
 
 출력 결과:
+
 ```json
 {
   "@timestamp": "2026-05-01T10:00:00.000Z",
@@ -297,32 +285,23 @@ graph LR
 }
 ```
 
+`traceId`가 있으면 ELK에서 검색해 해당 요청이 거친 모든 서비스의 로그를 한 화면에서 조회할 수 있다.
+
 ### Logstash 파이프라인
 
 ```ruby
-# logstash.conf
 input {
-  beats {
-    port => 5044
-  }
+  beats { port => 5044 }
 }
 
 filter {
-  json {
-    source => "message"
-  }
+  json { source => "message" }
 
-  # 에러 로그 태깅
   if [level] == "ERROR" {
-    mutate {
-      add_tag => ["error"]
-    }
+    mutate { add_tag => ["error"] }
   }
 
-  # IP 지역 정보 추가
-  geoip {
-    source => "clientIp"
-  }
+  geoip { source => "clientIp" }  # IP 지역 정보 추가
 }
 
 output {
@@ -331,7 +310,7 @@ output {
     index => "myapp-logs-%{+YYYY.MM.dd}"
     ilm_enabled => true
     ilm_rollover_alias => "myapp-logs"
-    ilm_policy => "myapp-logs-policy"
+    ilm_policy => "myapp-logs-policy"    # 오래된 인덱스 자동 삭제
   }
 }
 ```
@@ -340,49 +319,32 @@ output {
 
 ## Datadog
 
-**SaaS 형태의 통합 모니터링** 플랫폼. 메트릭/로그/트레이싱을 하나의 플랫폼에서 제공합니다.
+SaaS 형태의 통합 모니터링 플랫폼이다. Metrics/Logs/Traces를 하나의 플랫폼에서 제공한다.
 
-장점:
+**장점**:
 - 설치가 매우 간단 (Agent 하나로 모든 것)
 - UI/UX가 우수함
 - APM(Application Performance Monitoring) 내장
 - 이상 감지(Anomaly Detection) AI 내장
 
-단점:
+**단점**:
 - 비용이 높음 (Host당 월 $15~$35)
-- 데이터가 외부로 나감 (금융권 제약)
-
-```yaml
-# Kubernetes Datadog Agent
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: datadog-config
-data:
-  datadog.yaml: |
-    api_key: YOUR_API_KEY
-    logs_enabled: true
-    apm_config:
-      enabled: true
-    process_config:
-      enabled: true
-```
+- 데이터가 외부로 나감 (금융권 제약 가능성)
 
 ```java
-// Spring Boot Datadog 통합 (dd-java-agent 사용)
-// JVM 옵션 추가만으로 자동 계측
+// dd-java-agent 사용 — JVM 옵션만으로 자동 계측, 코드 변경 불필요
 // -javaagent:/path/to/dd-java-agent.jar
 // -Ddd.service=myapp
 // -Ddd.env=production
 // -Ddd.version=1.0.0
-// -Ddd.logs.injection=true
+// -Ddd.logs.injection=true   // 로그에 traceId 자동 주입
 ```
 
 ---
 
-## 모니터링 전략
+## 4 Golden Signals (SRE 기준)
 
-### 4 Golden Signals (SRE 기준)
+Google SRE에서 정의한 서비스 품질의 핵심 4가지 신호다. 이 네 가지를 모니터링하면 대부분의 장애를 조기에 감지할 수 있다.
 
 | 신호 | 설명 | 예시 메트릭 |
 |------|------|------------|
@@ -398,11 +360,13 @@ SLI (Service Level Indicator): 측정 지표
   예) 지난 30일간 가용성 = 성공 요청 수 / 전체 요청 수 = 99.95%
 
 SLO (Service Level Objective): 내부 목표
-  예) 가용성 ≥ 99.9%, P95 응답시간 ≤ 500ms
+  예) 가용성 >= 99.9%, P95 응답시간 <= 500ms
 
 SLA (Service Level Agreement): 고객과의 계약
   예) 가용성 < 99.9% 시 서비스 크레딧 제공
 ```
+
+SLO는 SLA보다 약간 엄격하게 설정해야 한다. SLO를 위반하지 않아야 SLA 위반을 방지할 수 있다.
 
 ### 알림 전략 (Alert Fatigue 방지)
 
@@ -420,35 +384,75 @@ P1 (1시간 내 대응):
 P2 (다음 근무일):
   - 디스크 80% 초과
   - 배포 실패
-  → Slack #alerts (채널)
+  → Slack #alerts
 ```
+
+알림이 너무 많으면 중요한 알림도 무시하게 된다(Alert Fatigue). P0~P2로 분류해 각 수준에 맞는 채널과 대응 시간을 정해야 한다.
 
 ---
 
 ## 극한 시나리오
 
-### 시나리오: 메트릭은 정상인데 사용자 불만 폭발
+### 시나리오 1: 메트릭은 정상인데 사용자 불만 폭발
 
-**원인**: 비즈니스 메트릭 없이 기술 메트릭만 모니터링
+HTTP 200 응답률 99.9%이지만 결제 성공률이 60%인 경우다. 기술 메트릭만 보고 비즈니스 메트릭을 놓친 것이다.
 
 ```promql
-# 기술 메트릭 (정상): HTTP 200 응답률 99.9%
+# 기술 메트릭 (정상처럼 보임): HTTP 200 응답률 99.9%
 rate(http_requests_total{status="200"}[5m]) / rate(http_requests_total[5m])
 
-# 비즈니스 메트릭 (이상): 결제 성공률 60%
+# 비즈니스 메트릭 (실제 문제): 결제 성공률 60%
 rate(payment_success_total[5m]) / rate(payment_attempt_total[5m])
 ```
 
-HTTP 200이어도 결제 로직 내부에서 실패할 수 있습니다. **비즈니스 메트릭**을 반드시 추가하세요.
+HTTP 200이어도 결제 로직 내부에서 비즈니스 실패가 발생할 수 있다. 비즈니스 메트릭을 반드시 커스텀 메트릭으로 추가해야 한다.
 
-### 시나리오: 로그 스토리지 폭발
-
-일일 로그 100GB 발생 → 한 달 3TB → 비용 폭발
+### 시나리오 2: 로그 스토리지 폭발 — 한 달 3TB
 
 ```
-해결책:
-1. Log Level 조정: INFO → WARN (프로덕션)
+원인: 모든 요청에 DEBUG 로그 출력, 로그 보존 정책 없음
+
+해결:
+1. 로그 레벨 조정: 프로덕션은 WARN 이상만
 2. 샘플링: 정상 요청의 1%만 DEBUG 로깅
-3. ILM (Index Lifecycle Management): 7일 → 콜드 → 30일 후 삭제
-4. 중요도별 보존 기간 분리: ERROR 90일, INFO 7일
+3. ILM (Index Lifecycle Management):
+   - 7일: Hot (자주 조회)
+   - 30일: Cold (드물게 조회)
+   - 30일 후: 삭제
+4. 중요도별 보존 기간 분리:
+   - ERROR 로그: 90일
+   - INFO 로그: 7일
+```
+
+### 시나리오 3: Prometheus 스토리지 부족
+
+기본 보존 기간(15일)과 스크레이프 간격(15초), 메트릭 수에 따라 스토리지가 빠르게 찬다.
+
+```yaml
+# prometheus 실행 시 보존 기간 및 스토리지 제한
+--storage.tsdb.retention.time=30d
+--storage.tsdb.retention.size=50GB
+```
+
+장기 저장이 필요하면 Thanos 또는 Cortex로 원격 스토리지에 적재한다.
+
+### 시나리오 4: 알림 폭풍 (Alert Storm)
+
+한 서비스 장애로 수십 개 알림이 동시에 발생하면 핵심 알림을 놓친다. Alertmanager의 그룹핑과 억제(Inhibit) 규칙으로 연쇄 알림을 방지한다.
+
+```yaml
+# alertmanager.yml — 같은 서비스 알림을 5분간 모아서 한 번에 발송
+route:
+  group_by: ['alertname', 'job']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+inhibit_rules:
+  # 서비스 다운 알림이 있으면 그 서비스의 레이턴시 알림은 억제
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match:
+      alertname: 'HighLatency'
+    equal: ['job']
 ```
