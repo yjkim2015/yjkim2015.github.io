@@ -800,36 +800,29 @@ log.info("주문 처리 완료");
 
 ### 전체 MDC 생명주기 흐름
 
+요청이 들어오고 나가기까지, MDC가 어떤 시점에 설정되고 해제되는지 단계별로 살펴보겠습니다.
+
+```mermaid
+sequenceDiagram
+    participant C as "클라이언트"
+    participant F as "1️⃣ MdcLoggingFilter"
+    participant S as "2️⃣ SecurityFilter"
+    participant B as "3️⃣ Controller→Service→Repository"
+    participant A as "4️⃣ @Async 스레드"
+
+    C->>F: HTTP 요청 진입
+    Note over F: MDC.put("traceId", UUID)<br>MDC.put("clientIp", ip)<br>MDC.put("requestUri", uri)<br>→ ThreadLocal에 저장
+    F->>S: 필터 체인 전달
+    Note over S: MDC.put("userId", user)<br>→ 같은 스레드이므로 MDC 유효
+    S->>B: 비즈니스 로직 진입
+    Note over B: log.info("주문 처리")<br>→ MDC 값(traceId, userId 등) 자동 포함
+    B-->>A: @Async 호출
+    Note over A: ⚠️ MDC 전파 안 됨!<br>→ TaskDecorator 설정 필요
+    B->>F: 응답 반환
+    Note over F: finally { MDC.clear() }<br>→ 반드시 초기화해야<br>스레드 풀 오염 방지
+    F->>C: HTTP 응답
 ```
-HTTP 요청 진입
-      │
-      ▼
-[MdcLoggingFilter]
-  MDC.put("traceId", ...)    ─────────────────────────────────────┐
-  MDC.put("clientIp", ...)                                        │
-  MDC.put("requestUri", ...) ◄ ThreadLocal에 저장                 │
-      │                                                           │ MDC 유효 범위
-      ▼                                                           │ (같은 스레드)
-[Spring Security Filter]                                          │
-  MDC.put("userId", ...)                                          │
-      │                                                           │
-      ▼                                                           │
-[Controller → Service → Repository]                              │
-  log.info("...") ─── MDC 값 자동 포함                           │
-      │                                                           │
-      ▼                                                           │
-[@Async 호출 시]                                                  │
-  MDC 전파 없음! ─── TaskDecorator 설정 필요                      │
-      │                                                           │
-      ▼                                                           │
-[응답 반환]                                                       │
-      │                                                           │
-      ▼                                                           │
-[MdcLoggingFilter finally]                                        │
-  MDC.clear() ◄────────────────────────────────────────────────── ┘
-      │
-      ▼
-스레드 반환 (스레드 풀)
-```
+
+> **비유**: MDC는 배달 기사의 메모장과 같습니다. 주문을 받으면(요청 진입) 메모장에 주문번호·고객정보를 적고(MDC.put), 배달 과정에서 언제든 메모를 참조합니다(로그 출력). 배달 완료 후 반드시 메모장을 비워야(MDC.clear) 다음 주문과 섞이지 않습니다. 다른 배달 기사에게 일을 넘기면(@Async) 메모장은 복사해줘야 합니다(TaskDecorator).
 
 MDC는 구현 비용 대비 로그 추적 품질을 크게 높이는 효과적인 도구입니다. Filter에서 traceId를 주입하고 반드시 clear()를 호출하는 패턴만 지키면, 분산 시스템에서도 요청 단위 로그 추적을 손쉽게 구현할 수 있습니다.
