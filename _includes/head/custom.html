@@ -13,25 +13,90 @@
       document.addEventListener('DOMContentLoaded', function() {
         mermaid.initialize({
           startOnLoad: true,
-          theme: 'default',
+          theme: 'base',
           themeVariables: {
-            primaryColor: '#e8f5e9',
-            primaryBorderColor: '#1a8917',
-            primaryTextColor: '#1a1a1a',
-            lineColor: '#666',
-            secondaryColor: '#f3e5f5',
-            tertiaryColor: '#e3f2fd',
-            fontSize: '14px'
+            /* 노드 색상 — 부드럽고 구분 쉬운 파스텔 */
+            primaryColor: '#dcedc8',
+            primaryBorderColor: '#7cb342',
+            primaryTextColor: '#1b5e20',
+            secondaryColor: '#e1f5fe',
+            secondaryBorderColor: '#039be5',
+            secondaryTextColor: '#01579b',
+            tertiaryColor: '#fff3e0',
+            tertiaryBorderColor: '#fb8c00',
+            tertiaryTextColor: '#e65100',
+            /* 선/배경 */
+            lineColor: '#546e7a',
+            mainBkg: '#f1f8e9',
+            nodeBorder: '#7cb342',
+            /* 텍스트 */
+            fontSize: '15px',
+            fontFamily: 'Pretendard, -apple-system, sans-serif',
+            /* 시퀀스 다이어그램 */
+            actorBkg: '#e8f5e9',
+            actorBorder: '#43a047',
+            actorTextColor: '#1b5e20',
+            activationBorderColor: '#43a047',
+            signalColor: '#37474f',
+            signalTextColor: '#263238',
+            noteBkgColor: '#fff9c4',
+            noteBorderColor: '#f9a825',
+            noteTextColor: '#5d4037',
+            /* 클래스 다이어그램 */
+            classText: '#1a1a1a',
+            /* 라벨 */
+            labelBackground: '#ffffff',
+            labelTextColor: '#37474f',
+            /* edge 라벨 */
+            edgeLabelBackground: '#ffffffee'
+          },
+          flowchart: {
+            curve: 'basis',
+            padding: 20,
+            nodeSpacing: 50,
+            rankSpacing: 60,
+            htmlLabels: true,
+            useMaxWidth: true
+          },
+          sequence: {
+            diagramMarginX: 30,
+            diagramMarginY: 20,
+            actorMargin: 80,
+            width: 180,
+            height: 50,
+            boxMargin: 10,
+            boxTextMargin: 8,
+            noteMargin: 15,
+            messageMargin: 40,
+            mirrorActors: true,
+            useMaxWidth: true
           }
         });
       });
     </script>
     <style>
+      /* Mermaid 컨테이너 — 깔끔하고 이쁜 카드 */
       .mermaid {
         text-align: center;
-        margin: 1.5em 0;
+        margin: 2em 0;
+        padding: 1.5em 1em;
+        background: linear-gradient(135deg, #fafff5 0%, #f1f8e9 50%, #e8f5e9 100%);
+        border: 1px solid #c5e1a5;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(76, 175, 80, 0.08), 0 1px 6px rgba(0,0,0,0.04);
+        overflow-x: auto;
       }
-      /* Mermaid 텍스트 가독성 */
-      .mermaid .nodeLabel { font-size: 14px !important; }
-      .mermaid .edgeLabel { font-size: 12px !important; }
+      /* 노드 라벨 — 크고 읽기 쉽게 */
+      .mermaid .nodeLabel { font-size: 14px !important; font-weight: 600 !important; }
+      .mermaid .edgeLabel { font-size: 13px !important; font-weight: 500 !important; background: #ffffffee !important; padding: 2px 6px !important; border-radius: 4px !important; }
+      /* 시퀀스 다이어그램 참가자 */
+      .mermaid .actor { rx: 8; ry: 8; }
+      .mermaid text.actor { font-size: 14px !important; font-weight: 700 !important; }
+      /* 노드 라운드 처리 */
+      .mermaid .node rect, .mermaid .node polygon { rx: 10; ry: 10; }
+      /* 화살표 더 굵게 */
+      .mermaid .flowchart-link { stroke-width: 2px !important; }
+      .mermaid .messageText { font-size: 13px !important; }
+      /* Note 스타일 */
+      .mermaid .note { rx: 8; ry: 8; }
     </style>
