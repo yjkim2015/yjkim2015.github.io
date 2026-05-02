@@ -267,7 +267,7 @@ WHERE date BETWEEN '2026-01-01' AND '2026-01-31';
 
 ## 성능 vs 정합성 트레이드오프
 
-<div class="mermaid">
+```mermaid
 graph LR
     NORM[정규화] -->|더 많은 JOIN| SLOW_READ[느린 읽기]
     NORM -->|데이터 중복 없음| CONSIST[데이터 정합성 높음]
@@ -276,7 +276,7 @@ graph LR
     DENORM[반정규화] -->|JOIN 감소| FAST_READ[빠른 읽기]
     DENORM -->|중복 데이터| INCONSIST[정합성 관리 필요]
     DENORM -->|여러 곳 동기화| SLOW_WRITE[느린/복잡한 쓰기]
-</div>
+```
 
 ---
 

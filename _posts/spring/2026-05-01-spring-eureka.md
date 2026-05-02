@@ -25,7 +25,7 @@ date: 2026-05-01
 3️⃣ **클라이언트 사이드 로드밸런싱**: 받은 인스턴스 목록 중 하나를 선택해 직접 호출한다
 4️⃣ **Heartbeat**: 인스턴스가 살아있음을 주기적으로 알린다
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant S as "서비스 인스턴스"
     participant E as "Eureka Server"
@@ -41,13 +41,13 @@ sequenceDiagram
     E-->>C: 인스턴스 목록 반환
     C->>S: 4️⃣ 직접 HTTP 호출
     S->>E: DELETE /eureka/apps/{appName}/{instanceId} (Deregister)
-</div>
+```
 
 ---
 
 ## Eureka 아키텍처
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph "Eureka Server 클러스터"
         ES1["Eureka Server 1"]
@@ -68,7 +68,7 @@ graph LR
     OS -->|"Discover user-service"| ES1
     ES1 -->|"인스턴스 목록"| OS
     OS -->|"직접 HTTP 호출"| US
-</div>
+```
 
 ---
 
@@ -181,7 +181,7 @@ Eureka Server의 중요한 특성이다. 네트워크 장애로 인해 Heartbeat
 
 기대 Heartbeat 수보다 실제 수신량이 85% 미만이 되면 자가 보호 모드에 진입한다. 이 모드에서는 인스턴스 만료/제거가 중단된다. 네트워크가 복구되면 자동으로 해제된다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["Heartbeat 감소 감지"] --> B{"실제 수신 < 85% 임계치?"}
     B -->|"Yes"| C["자가 보호 모드 진입"]
@@ -190,7 +190,7 @@ graph TD
     C --> F["레지스트리 현상 유지"]
     C --> G["경고 메시지 표시"]
     E --> H["네트워크 복구 후 자동 해제"]
-</div>
+```
 
 이는 Eureka가 AP(Available + Partition-tolerant) 시스템임을 보여준다. 네트워크 파티션 상황에서 일관성보다 가용성을 선택한다.
 
@@ -228,7 +228,7 @@ eureka:
       defaultZone: http://eureka-server-1:8761/eureka/,http://eureka-server-2:8762/eureka/
 ```
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "HA Eureka 클러스터"
         ES1["Eureka Server 1\n:8761"]
@@ -242,7 +242,7 @@ graph TD
 
     MS1 -->|"Discovery"| ES1
     MS1 -.->|"Fallback"| ES2
-</div>
+```
 
 ---
 

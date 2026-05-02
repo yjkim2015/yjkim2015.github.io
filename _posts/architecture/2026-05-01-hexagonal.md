@@ -57,7 +57,7 @@ Adapter(구현체)가 기술을 다룬다.
 
 ## 핵심 구조
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph DRIVING["외부 세계 (Driving Side)"]
         HTTP["HTTP Client\nREST 요청"]
@@ -97,7 +97,7 @@ graph LR
     class AS,DOM core
     class IP,OP port
     class HTTP,CLI,TEST,DB,MQ,EXT external
-</div>
+```
 
 ---
 
@@ -129,7 +129,7 @@ graph LR
 
 > **모든 의존성은 Application Core를 향해야 한다**
 
-<div class="mermaid">
+```mermaid
 graph LR
     WA["Web Adapter\n(Controller)"]
     IP["Inbound Port\n(UseCase Interface)"]
@@ -149,7 +149,7 @@ graph LR
     class AS core
     class IP,OP port
     class WA,DA adapter
-</div>
+```
 
 `Application Service`는 `JpaRepository`를 직접 알지 않습니다. `OrderRepository` 인터페이스(Outbound Port)만 압니다. JPA는 언제든 교체 가능합니다.
 
@@ -311,7 +311,7 @@ public class OrderPersistenceAdapter implements OrderRepository {
 
 헥사고날 아키텍처의 가장 큰 이점 중 하나는 **테스트 용이성**입니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "테스트 레벨"
         UT["단위 테스트\nApplication Service\nDB 불필요, Port Mock 사용\n빠름 (ms 단위)"]
@@ -329,7 +329,7 @@ graph TD
     class UT ut
     class IT it
     class E2E e2e
-</div>
+```
 
 ```java
 // Application Service 단위 테스트 — DB, Kafka 불필요
@@ -391,7 +391,7 @@ class OrderServiceTest {
 
 ## DDD와의 관계
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "DDD + 헥사고날 통합"
         subgraph "Domain Layer (헥사고날 Core 내부)"
@@ -428,7 +428,7 @@ graph TD
     class E,VO,AGG,DE domain
     class UC,IP,OP app
     class WA,PA,MA infra
-</div>
+```
 
 - DDD의 **Domain Layer**가 헥사고날의 **Application Core** 내부에 위치
 - DDD의 **Repository Interface**가 헥사고날의 **Outbound Port**

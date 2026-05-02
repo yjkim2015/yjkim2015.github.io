@@ -7,94 +7,101 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-## 실생활 비유: 신문사 구독 서비스
+## 실생활 비유: 우체국이 아니라 방송국
 
-Kafka는 거대한 **신문사 구독 시스템**과 같습니다.
-- **신문사(Producer)**: 기사를 생산
-- **신문(Topic)**: 특정 주제의 기사 모음 (스포츠, 경제, 정치)
-- **구독자(Consumer)**: 원하는 신문을 구독
-- **신문 보관소(Broker)**: 신문을 보관하고 배달
+Kafka를 우체국이라고 설명하는 책이 많은데, 그건 절반만 맞습니다. 우체국은 편지를 배달하면 사라집니다. Kafka는 다릅니다. 더 정확한 비유는 **라디오 방송국**입니다.
 
-특징: 구독자가 신문을 읽어도 신문이 없어지지 않습니다. 나중에 다시 읽을 수 있습니다.
+라디오 방송국(Producer)이 음악을 송출(메시지 발행)하면, 주파수(Topic)에 맞춰 놓은 수신기(Consumer) 누구나 들을 수 있습니다. 방송이 나가도 내용이 사라지지 않습니다. 늦게 튼 사람도 녹음(오프셋)을 되감아 처음부터 들을 수 있습니다. 이것이 Kafka가 기존 메시지 큐(RabbitMQ 등)와 근본적으로 다른 점입니다.
+
+왜 이게 중요할까요? 주문 서비스가 "주문 생성" 이벤트를 보내면, **배송 서비스도, 알림 서비스도, 분석 서비스도** 각자 독립적으로 같은 메시지를 소비할 수 있습니다. 메시지를 여러 번 "복사"해서 보낼 필요가 없습니다. 이 구조가 MSA 이벤트 드리븐 아키텍처의 핵심입니다.
 
 ---
 
-## 1. Kafka 핵심 개념
+## 1. Kafka 핵심 개념 — 왜 이렇게 설계했나
 
 ```mermaid
 graph TD
-    Producer1["생산자 1<br>주문 서비스"] -->|"메시지 발행"| Topic["토픽: orders<br>파티션 3개"]
-    Producer2["생산자 2<br>결제 서비스"] -->|"메시지 발행"| Topic2["토픽: payments"]
+    Producer1["생산자 1\n주문 서비스"] -->|"1️⃣ 메시지 발행"| Topic["토픽: orders\n파티션 3개"]
+    Producer2["생산자 2\n결제 서비스"] -->|"1️⃣ 메시지 발행"| Topic2["토픽: payments"]
 
-    Topic --> P0["파티션 0<br>브로커1"]
-    Topic --> P1["파티션 1<br>브로커2"]
-    Topic --> P2["파티션 2<br>브로커3"]
+    Topic --> P0["2️⃣ 파티션 0\n브로커1"]
+    Topic --> P1["2️⃣ 파티션 1\n브로커2"]
+    Topic --> P2["2️⃣ 파티션 2\n브로커3"]
 
-    P0 --> CG1["컨슈머 그룹 A<br>배송 서비스"]
+    P0 --> CG1["3️⃣ 컨슈머 그룹 A\n배송 서비스"]
     P1 --> CG1
     P2 --> CG1
 
-    P0 --> CG2["컨슈머 그룹 B<br>알림 서비스"]
+    P0 --> CG2["3️⃣ 컨슈머 그룹 B\n알림 서비스"]
     P1 --> CG2
     P2 --> CG2
 ```
 
-### 핵심 용어 정리
+### 핵심 용어 — 단순 나열이 아닌 관계 이해
 
-| 용어 | 설명 | 비유 |
-|------|------|------|
-| Broker | Kafka 서버 1대 | 우체국 지점 |
-| Topic | 메시지 분류 채널 | 우편함 이름 |
-| Partition | 토픽의 물리적 분할 | 우편함 서랍 |
-| Producer | 메시지 생산자 | 편지 발송인 |
-| Consumer | 메시지 소비자 | 편지 수신인 |
-| Consumer Group | 소비자 그룹 | 같은 회사 팀 |
-| Offset | 파티션 내 메시지 위치 | 편지 일련번호 |
-| Zookeeper/KRaft | 클러스터 메타데이터 관리 | 우체국 본사 |
+| 용어 | 설명 | 왜 필요한가 |
+|------|------|------------|
+| Broker | Kafka 서버 1대 | 데이터를 실제로 저장하는 주체. 여러 대를 묶어 클러스터 구성 |
+| Topic | 메시지 분류 채널 | 주제별로 메시지를 분리해 컨슈머가 관심 있는 것만 구독 |
+| Partition | 토픽의 물리적 분할 | **병렬 처리의 핵심.** 파티션 수 = 동시에 처리 가능한 컨슈머 수 |
+| Producer | 메시지 생산자 | 메시지를 어느 파티션으로 보낼지 결정하는 권한 보유 |
+| Consumer | 메시지 소비자 | 자신의 오프셋을 직접 관리. 실패 시 되돌아가기 가능 |
+| Consumer Group | 소비자 그룹 | 같은 그룹은 파티션을 나눠 처리. 다른 그룹은 독립적 소비 |
+| Offset | 파티션 내 메시지 위치 | "어디까지 읽었나" 기록. 이 덕분에 재처리 가능 |
+| Zookeeper/KRaft | 클러스터 메타데이터 관리 | 리더 선출, 브로커 등록/탈퇴 조율 |
+
+**파티션을 왜 나눌까요?** 파티션이 하나면 컨슈머도 하나만 붙을 수 있습니다. 초당 100만 건을 처리해야 하는데 컨슈머가 초당 10만 건밖에 못 처리하면? 파티션을 10개로 나누면 컨슈머 10개가 병렬로 처리해 초당 100만 건을 소화할 수 있습니다. **파티션 수가 곧 처리량의 상한선**입니다.
 
 ---
 
-## 2. 파티션과 오프셋
+## 2. 파티션과 오프셋 — "어디까지 읽었나"의 정확한 의미
 
 ```mermaid
 graph LR
     subgraph "파티션 0"
-        M0["오프셋0<br>msg A"] --> M1["오프셋1<br>msg B"] --> M2["오프셋2<br>msg C"] --> M3["오프셋3<br>msg D"]
+        M0["오프셋0\nmsg A"] --> M1["오프셋1\nmsg B"] --> M2["오프셋2\nmsg C"] --> M3["오프셋3\nmsg D"]
     end
 
     subgraph "파티션 1"
-        N0["오프셋0<br>msg E"] --> N1["오프셋1<br>msg F"] --> N2["오프셋2<br>msg G"]
+        N0["오프셋0\nmsg E"] --> N1["오프셋1\nmsg F"] --> N2["오프셋2\nmsg G"]
     end
 
     subgraph "파티션 2"
-        O0["오프셋0<br>msg H"] --> O1["오프셋1<br>msg I"]
+        O0["오프셋0\nmsg H"] --> O1["오프셋1\nmsg I"]
     end
 
-    Consumer["컨슈머<br>파티션0: offset=2<br>파티션1: offset=1<br>파티션2: offset=0"]
+    Consumer["컨슈머\n파티션0: offset=2\n파티션1: offset=1\n파티션2: offset=0"]
 ```
 
-**중요한 특성:**
-- 파티션 내에서는 순서 보장
-- 파티션 간에는 순서 보장 안됨
-- 메시지는 설정된 보관 기간(기본 7일) 동안 유지
+오프셋은 단순한 번호가 아닙니다. **"내가 여기까지 처리했다"는 책갈피**입니다. 컨슈머가 오프셋 2까지 처리했다고 커밋하면, 재시작 후에도 오프셋 3부터 이어서 처리합니다.
+
+**중요한 특성을 제대로 이해해야 합니다:**
+
+- **파티션 내에서는 순서 보장**: msg A → msg B → msg C는 절대 역전되지 않습니다. 왜냐하면 파티션은 append-only 로그이기 때문입니다.
+- **파티션 간에는 순서 보장 안됨**: 파티션 0의 msg A와 파티션 1의 msg E 중 어느 것이 먼저 처리될지 알 수 없습니다. 이게 중요한 이유는, "같은 주문 ID의 이벤트는 반드시 순서대로 처리"해야 한다면 **같은 파티션에 넣어야** 하기 때문입니다. 이것이 파티션 키를 주문 ID로 설정하는 이유입니다.
+- **메시지는 보관 기간(기본 7일) 동안 유지**: 컨슈머가 읽어도 메시지가 사라지지 않습니다. 7일 내라면 언제든 처음부터 다시 읽을 수 있습니다. 장애 복구, 신규 서비스 온보딩에 강력한 기능입니다.
+
+이걸 잘못 이해하면 어떤 장애가 날까요? 주문 생성, 주문 결제, 주문 취소 이벤트가 각각 다른 파티션으로 분산되면, 취소 이벤트가 결제 이벤트보다 먼저 처리될 수 있습니다. 결과는 "취소가 됐는데 결제가 또 됨"입니다.
 
 ---
 
-## 3. Producer 심화
+## 3. Producer 심화 — 메시지를 어떻게 보낼 것인가
 
 ### 파티션 선택 전략
 
 ```mermaid
 graph TD
     Producer["Producer 메시지 발송"]
-    Producer --> Q{"파티셔너 전략"}
+    Producer --> Q{"1️⃣ 파티셔너 전략"}
 
-    Q -->|"Key 없음"| RR["라운드 로빈<br>파티션 순서대로"]
-    Q -->|"Key 있음"| Hash["Key 해시<br>같은 Key → 같은 파티션"]
-    Q -->|"커스텀"| Custom["커스텀 파티셔너"]
+    Q -->|"Key 없음"| RR["2️⃣ 라운드 로빈\n파티션 순서대로"]
+    Q -->|"Key 있음"| Hash["2️⃣ Key 해시\n같은 Key → 같은 파티션"]
+    Q -->|"커스텀"| Custom["2️⃣ 커스텀 파티셔너"]
 
-    Hash --> OrderGuarantee["같은 주문ID의 이벤트<br>항상 같은 파티션<br>→ 순서 보장!"]
+    Hash --> OrderGuarantee["3️⃣ 같은 주문ID의 이벤트\n항상 같은 파티션\n→ 순서 보장!"]
 ```
+
+파티션 키를 주문 ID로 설정하면 `hash("order-123") % 파티션수 = 1`처럼 항상 같은 파티션으로 갑니다. 이것이 **"같은 주문에 대한 이벤트는 반드시 순서대로 처리"를 보장하는 유일한 방법**입니다.
 
 ```java
 // Kafka Producer 설정
@@ -134,7 +141,7 @@ public class OrderEventPublisher {
 
         ProducerRecord<String, OrderEvent> record = new ProducerRecord<>(
             "orders",
-            order.getId(),  // 파티션 키: 주문ID
+            order.getId(),  // 파티션 키: 주문ID → 같은 주문 이벤트는 항상 같은 파티션
             event
         );
 
@@ -154,7 +161,7 @@ public class OrderEventPublisher {
 }
 ```
 
-### Producer acks 설정
+### Producer acks 설정 — "전송 완료"의 기준이 뭔가
 
 ```
 acks=0: 브로커 확인 없이 발송 (가장 빠름, 유실 가능)
@@ -162,9 +169,15 @@ acks=1: 리더만 확인 (중간)
 acks=all: 모든 ISR 레플리카 확인 (가장 안전, 느림)
 ```
 
+`acks=0`은 "불을 질러놓고 확인 안 하는 것"입니다. 브로커가 죽으면 메시지는 사라집니다. 로그성 데이터에는 괜찮지만, 주문/결제 데이터에 이걸 쓰면 돈이 사라집니다.
+
+`acks=1`은 위험한 중간 지점입니다. 리더가 받았는데 팔로워에 복제되기 전에 리더가 죽으면? 새 리더로 페일오버되는 순간 메시지가 유실됩니다. "리더 확인했으니 안전하겠지"라고 방심하다가 장애 나는 패턴입니다.
+
+`acks=all`이 금융, 주문 같은 중요 데이터의 유일한 선택지입니다. 모든 ISR 레플리카가 복제를 완료해야 성공으로 처리하기 때문에 브로커 장애가 나도 데이터가 보존됩니다.
+
 ---
 
-## 4. Consumer 심화
+## 4. Consumer 심화 — 파티션을 어떻게 나눠 처리하나
 
 ### 컨슈머 그룹과 파티션 배정
 
@@ -179,7 +192,7 @@ graph TD
         P5[P5]
     end
 
-    subgraph "컨슈머 그룹: delivery-service 컨슈머 3개"
+    subgraph "1️⃣ 컨슈머 그룹: delivery-service 컨슈머 3개"
         C1["컨슈머1"]
         C2["컨슈머2"]
         C3["컨슈머3"]
@@ -193,7 +206,9 @@ graph TD
     P5 --> C3
 ```
 
-**중요**: 컨슈머 수 > 파티션 수이면 일부 컨슈머는 놀게 됩니다!
+컨슈머 그룹은 **분산 처리 팀**입니다. 파티션 6개, 컨슈머 3개면 컨슈머 한 명이 파티션 2개씩 담당합니다. 처리량이 부족하면 컨슈머를 추가하면 됩니다. 파티션 6개에 컨슈머 6개면 1:1 매핑으로 최대 처리량이 나옵니다.
+
+**컨슈머 수 > 파티션 수이면 일부 컨슈머는 놀게 됩니다!** 파티션 6개에 컨슈머 10개를 붙이면 4개는 아무 일도 안 합니다. 서버 비용 낭비입니다. 이유는 파티션 하나에 컨슈머가 여럿 붙으면 **순서 보장이 깨지기 때문**에 Kafka가 이를 허용하지 않습니다.
 
 ```java
 // Consumer 설정
@@ -209,6 +224,7 @@ public class KafkaConsumerConfig {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
         // 오프셋 자동 커밋 끄기 (수동 커밋으로 안전하게)
+        // 왜? 자동 커밋은 처리 완료 전에 커밋할 수 있어 장애 시 메시지 유실
         configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
         // 처음 구독 시 가장 처음부터 읽기
@@ -229,7 +245,7 @@ public class OrderEventConsumer {
     @KafkaListener(
         topics = "orders",
         groupId = "delivery-service",
-        concurrency = "3"  // 3개 스레드 = 파티션당 1개
+        concurrency = "3"  // 스레드 3개 = 파티션당 1개 (파티션이 3개면 최적)
     )
     public void consume(
         ConsumerRecord<String, OrderEvent> record,
@@ -242,12 +258,13 @@ public class OrderEventConsumer {
             processOrder(record.value());
 
             // 처리 성공 후 수동 커밋
+            // 왜 여기서 커밋? 처리 완료를 확인한 다음에만 "읽었다"고 기록
             ack.acknowledge();
 
         } catch (Exception e) {
             log.error("처리 실패: {}", e.getMessage());
-            // 재시도 또는 DLQ로 보내기
-            throw e;  // 예외 던지면 재처리
+            // 예외 던지면 오프셋 커밋 안 됨 → 재처리
+            throw e;
         }
     }
 
@@ -267,21 +284,21 @@ public class OrderEventConsumer {
 
 ---
 
-## 5. 리밸런싱 (Rebalancing)
+## 5. 리밸런싱 (Rebalancing) — 조용한 서비스 중단의 원인
 
-컨슈머가 추가/제거될 때 파티션 재배정이 일어납니다.
+컨슈머가 추가/제거될 때 파티션 재배정이 일어납니다. 이게 왜 문제가 될까요?
 
 ```mermaid
 graph TD
-    subgraph "리밸런싱 전"
+    subgraph "1️⃣ 리밸런싱 전"
         C1a["컨슈머1: P0,P1"]
         C2a["컨슈머2: P2,P3"]
         C3a["컨슈머3: P4,P5"]
     end
 
-    Event["컨슈머3 장애!"]
+    Event["2️⃣ 컨슈머3 장애!"]
 
-    subgraph "리밸런싱 후"
+    subgraph "3️⃣ 리밸런싱 후"
         C1b["컨슈머1: P0,P1,P2"]
         C2b["컨슈머2: P3,P4,P5"]
     end
@@ -289,7 +306,10 @@ graph TD
     C3a --> Event --> C1b
 ```
 
-**리밸런싱 문제점과 해결:**
+리밸런싱 중에는 **모든 컨슈머가 잠시 멈춥니다.** 이것을 "Stop the World" 리밸런싱이라고 합니다. 1초~수십 초까지 메시지 처리가 중단될 수 있습니다. 초당 70만 건을 처리하는 채팅 시스템에서 이게 발생하면 메시지가 수십만 건 쌓입니다.
+
+더 큰 문제는 리밸런싱 도중에 처리 중이던 메시지를 제대로 커밋하지 않으면 **중복 처리**가 발생합니다. 컨슈머1이 P0의 오프셋 5를 처리 중에 리밸런싱이 일어나서 P0가 컨슈머2로 넘어가면, 컨슈머2는 오프셋 5부터 다시 처리합니다.
+
 ```java
 @Component
 public class OrderConsumer implements ConsumerAwareRebalanceListener {
@@ -300,6 +320,7 @@ public class OrderConsumer implements ConsumerAwareRebalanceListener {
         Collection<TopicPartition> partitions
     ) {
         // 리밸런싱 전 현재 처리 중인 메시지 커밋
+        // 이걸 안 하면 파티션이 넘어갈 때 중복 처리 발생
         log.info("파티션 반환 전 커밋: {}", partitions);
         consumer.commitSync();
     }
@@ -309,7 +330,6 @@ public class OrderConsumer implements ConsumerAwareRebalanceListener {
         Consumer<?, ?> consumer,
         Collection<TopicPartition> partitions
     ) {
-        // 새 파티션 배정 후 처리할 위치 설정
         log.info("새 파티션 배정: {}", partitions);
     }
 }
@@ -317,27 +337,33 @@ public class OrderConsumer implements ConsumerAwareRebalanceListener {
 
 ---
 
-## 6. ISR (In-Sync Replicas)
+## 6. ISR (In-Sync Replicas) — 복제의 실제 동작
 
 ```mermaid
 graph TD
-    subgraph "파티션 0 복제"
-        Leader["리더 레플리카<br>브로커1"]
-        Follower1["팔로워<br>브로커2"]
-        Follower2["팔로워<br>브로커3"]
+    subgraph "1️⃣ 파티션 0 복제"
+        Leader["리더 레플리카\n브로커1"]
+        Follower1["팔로워\n브로커2"]
+        Follower2["팔로워\n브로커3"]
     end
 
-    Producer[Producer] -->|"쓰기"| Leader
-    Leader -->|"복제"| Follower1
-    Leader -->|"복제"| Follower2
+    Producer[Producer] -->|"2️⃣ 쓰기"| Leader
+    Leader -->|"3️⃣ 복제"| Follower1
+    Leader -->|"3️⃣ 복제"| Follower2
 
-    ISR["ISR = In-Sync Replicas<br>리더와 동기화된 레플리카"]
+    ISR["ISR = In-Sync Replicas\n리더와 동기화된 레플리카"]
     ISR --> Leader
     ISR --> Follower1
-    ISR -.-->|"지연 발생"| Follower2
+    ISR -.->|"4️⃣ 지연 발생"| Follower2
 
     Follower2 -->|"ISR 이탈!"| OutOfSync[Out-of-Sync]
 ```
+
+ISR은 "지금 리더와 동기화된 레플리카 목록"입니다. `acks=all`은 ISR 내 모든 레플리카가 쓰기를 완료해야 성공으로 처리합니다.
+
+왜 ISR이 중요할까요? 팔로워2가 네트워크 문제로 복제가 느려지면 ISR에서 제거됩니다. 이 상태에서 `acks=all`이면 ISR(리더+팔로워1)만 확인하면 되므로 쓰기가 계속 가능합니다. 팔로워2가 복구되면 자동으로 재동기화 후 ISR에 재합류합니다.
+
+이걸 잘못 설정하면 어떤 장애가 날까요? `min.insync.replicas=3`인데 브로커 1대가 죽으면 ISR이 2개뿐이라 `acks=all` 쓰기가 전부 실패합니다. 서비스 전체 장애입니다. 브로커 3대 클러스터에서 `min.insync.replicas=2`로 설정하는 게 브로커 1대 장애를 허용하면서 안전성을 유지하는 표준 설정입니다.
 
 ```
 replica.lag.time.max.ms = 10000  # 10초 이상 복제 지연 시 ISR에서 제거
@@ -348,20 +374,25 @@ min.insync.replicas = 2: 최소 2개 ISR이 있어야 쓰기 허용
 
 ---
 
-## 7. 정확히 한 번 전송 (Exactly-Once Semantics)
+## 7. 정확히 한 번 전송 (Exactly-Once Semantics) — 왜 어려운가
 
 ```mermaid
 graph TD
-    Semantics["메시지 전달 보장 수준"]
-    Semantics --> AtMost["At-Most-Once<br>최대 1번<br>유실 가능, 중복 없음"]
-    Semantics --> AtLeast["At-Least-Once<br>최소 1번<br>유실 없음, 중복 가능"]
-    Semantics --> Exactly["Exactly-Once<br>정확히 1번<br>유실도 중복도 없음"]
+    Semantics["1️⃣ 메시지 전달 보장 수준"]
+    Semantics --> AtMost["At-Most-Once\n최대 1번\n유실 가능, 중복 없음"]
+    Semantics --> AtLeast["At-Least-Once\n최소 1번\n유실 없음, 중복 가능"]
+    Semantics --> Exactly["2️⃣ Exactly-Once\n정확히 1번\n유실도 중복도 없음"]
 
-    Exactly --> Cost["가장 비용이 높음"]
+    Exactly --> Cost["3️⃣ 가장 비용이 높음"]
     Exactly --> Use["금융 거래, 재고 관리에 필수"]
 ```
 
-**Exactly-Once 설정:**
+At-Least-Once가 왜 기본값인지부터 이해해야 합니다. 네트워크 오류로 브로커가 ACK를 못 보내면 Producer는 "실패했나?"라고 판단하고 재전송합니다. 실제로는 브로커에 이미 저장됐는데 중복이 생깁니다.
+
+이걸 방지하는 게 멱등성(Idempotence)입니다. Producer에 `ENABLE_IDEMPOTENCE_CONFIG=true`를 설정하면 각 메시지에 시퀀스 번호가 붙어서, 브로커가 중복을 자동으로 감지하고 무시합니다.
+
+Exactly-Once를 위해서는 여기서 한 발 더 나아가 **트랜잭션**이 필요합니다. "이 5개의 메시지를 원자적으로 발행하거나 아니면 전부 안 보내거나"를 보장합니다.
+
 ```java
 // Producer 설정
 configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
@@ -382,25 +413,30 @@ public class TransactionalProducer {
 }
 
 // Consumer - 트랜잭션 커밋된 메시지만 읽기
+// 이 설정 없으면 아직 롤백될 수도 있는 메시지를 읽어버림
 configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
 ```
 
 ---
 
-## 8. 스키마 레지스트리 (Schema Registry)
+## 8. 스키마 레지스트리 (Schema Registry) — 메시지 형식 계약
 
-Producer와 Consumer 사이의 메시지 형식을 관리합니다.
+Producer와 Consumer 사이의 메시지 형식을 관리합니다. 이게 왜 필요할까요?
+
+주문 서비스가 `totalAmount` 필드를 `int`에서 `long`으로 바꿨는데 결제 서비스가 아직 `int`로 파싱하면? **런타임에 역직렬화 오류**가 납니다. 스키마 레지스트리는 이런 "계약 위반"을 배포 전에 차단합니다.
 
 ```mermaid
 graph TD
-    Producer[Producer] -->|"스키마 등록/확인"| SchemaRegistry["Schema Registry<br>Confluent"]
-    Consumer[Consumer] -->|"스키마 조회"| SchemaRegistry
+    Producer[Producer] -->|"1️⃣ 스키마 등록/확인"| SchemaRegistry["Schema Registry\nConfluent"]
+    Consumer[Consumer] -->|"1️⃣ 스키마 조회"| SchemaRegistry
 
-    Producer -->|"Avro/Protobuf 직렬화"| Kafka[Kafka]
-    Kafka -->|"Avro/Protobuf 역직렬화"| Consumer
+    Producer -->|"2️⃣ Avro/Protobuf 직렬화"| Kafka[Kafka]
+    Kafka -->|"3️⃣ Avro/Protobuf 역직렬화"| Consumer
 
-    SchemaRegistry --> Compatibility["스키마 호환성 검증<br>BACKWARD / FORWARD / FULL"]
+    SchemaRegistry --> Compatibility["4️⃣ 스키마 호환성 검증\nBACKWARD / FORWARD / FULL"]
 ```
+
+BACKWARD 호환성이란 "새 스키마로 이전 데이터를 읽을 수 있어야 한다"입니다. 필드 추가는 OK, 필드 삭제는 NG입니다. 이 규칙을 지키면 컨슈머를 먼저 배포하고 프로듀서를 나중에 배포해도 장애 없이 롤링 업데이트가 됩니다.
 
 **Avro 스키마 예시:**
 ```json
@@ -429,9 +465,9 @@ graph TD
 
 ---
 
-## 9. Kafka Streams
+## 9. Kafka Streams — Kafka 위에서 실시간 처리
 
-Kafka 내에서 실시간 스트림 처리를 할 수 있습니다.
+Kafka Streams는 별도 시스템(Flink, Spark) 없이 Kafka 클러스터 안에서 실시간 스트림 처리를 수행합니다. 비유하자면 수도관 안에 정수 필터를 내장한 것입니다. 물이 관을 지나가면서 동시에 정제됩니다.
 
 ```java
 @Configuration
@@ -441,18 +477,19 @@ public class OrderStreamProcessor {
     public KStream<String, OrderEvent> processOrderStream(StreamsBuilder builder) {
         KStream<String, OrderEvent> orders = builder.stream("orders");
 
-        // 1. 필터링: PAID 상태 주문만
+        // 1. 필터링: PAID 상태 주문만 (나머지는 버림)
         KStream<String, OrderEvent> paidOrders = orders
             .filter((key, value) -> value.getStatus() == OrderStatus.PAID);
 
-        // 2. 변환: 배송 이벤트로 변환
+        // 2. 변환: 배송 이벤트로 변환 (도메인 이벤트 분리)
         KStream<String, DeliveryEvent> deliveryEvents = paidOrders
             .mapValues(order -> DeliveryEvent.from(order));
 
         // 3. 배송 토픽으로 발행
         deliveryEvents.to("delivery-requests");
 
-        // 4. 집계: 5분 윈도우 내 매출 합계
+        // 4. 집계: 5분 윈도우 내 카테고리별 매출 합계
+        // 왜 윈도우? 전체 합계는 무한히 커지지만 5분 단위면 실시간 대시보드 가능
         KTable<Windowed<String>, Long> revenueByWindow = orders
             .filter((k, v) -> v.getStatus() == OrderStatus.PAID)
             .groupBy((key, value) -> value.getCategoryId())
@@ -478,9 +515,9 @@ public class OrderStreamProcessor {
 
 ---
 
-## 10. 데드 레터 큐 (DLQ)
+## 10. 데드 레터 큐 (DLQ) — 처리 실패한 메시지의 생명 보험
 
-처리 실패한 메시지를 별도 토픽으로 보냅니다.
+메시지를 처리하다 실패하면 어떻게 해야 할까요? 그냥 버리면 데이터 유실, 무한 재시도하면 서비스 마비입니다. DLQ는 "3번 시도해도 안 되면 격리 병동으로 보내자"는 접근입니다.
 
 ```java
 @Service
@@ -498,6 +535,7 @@ public class ResilientConsumer {
                 ack.acknowledge();
                 return;
             } catch (RetryableException e) {
+                // 일시적 장애 (DB 연결 실패 등) → 재시도 가능
                 if (attempt == maxRetries) {
                     sendToDLQ(record, e);
                     ack.acknowledge();  // DLQ로 보내고 원본 커밋
@@ -506,7 +544,8 @@ public class ResilientConsumer {
                     Thread.sleep(1000L * attempt);  // 지수 백오프
                 }
             } catch (NonRetryableException e) {
-                // 재시도해도 의미없는 에러 (잘못된 데이터 등)
+                // 재시도해도 의미없는 에러 (잘못된 데이터 포맷 등)
+                // 재시도하면 똑같이 실패하므로 즉시 DLQ로
                 sendToDLQ(record, e);
                 ack.acknowledge();
                 return;
@@ -521,7 +560,7 @@ public class ResilientConsumer {
             record.key(),
             record.value().toString()
         );
-        // 에러 정보 헤더에 추가
+        // 에러 정보 헤더에 추가 → 나중에 왜 실패했는지 분석 가능
         dlqRecord.headers().add("error-message", e.getMessage().getBytes());
         dlqRecord.headers().add("original-topic", record.topic().getBytes());
         dlqRecord.headers().add("original-offset", String.valueOf(record.offset()).getBytes());
@@ -532,31 +571,33 @@ public class ResilientConsumer {
 }
 ```
 
+DLQ 없이 무한 재시도하면 어떻게 될까요? 파싱 불가능한 잘못된 JSON 메시지가 하나 들어오면, 그 메시지에서 영원히 멈춥니다. 뒤에 쌓이는 정상 메시지들은 모두 처리되지 못합니다. 이걸 "poison pill(독약 메시지)"이라고 부릅니다.
+
 ---
 
 ## 11. Kafka 클러스터 설계
 
 ```mermaid
 graph TD
-    subgraph Kafka Cluster
-        Broker1["브로커1<br>ZK Leader"]
+    subgraph "1️⃣ Kafka Cluster"
+        Broker1["브로커1\nZK Leader"]
         Broker2["브로커2"]
         Broker3["브로커3"]
 
-        subgraph "토픽: orders 레플리카 3"
-            P0_L["P0 Leader<br>브로커1"]
-            P1_L["P1 Leader<br>브로커2"]
-            P2_L["P2 Leader<br>브로커3"]
+        subgraph "2️⃣ 토픽: orders 레플리카 3"
+            P0_L["P0 Leader\n브로커1"]
+            P1_L["P1 Leader\n브로커2"]
+            P2_L["P2 Leader\n브로커3"]
 
-            P0_F1["P0 Follower<br>브로커2"]
-            P0_F2["P0 Follower<br>브로커3"]
+            P0_F1["P0 Follower\n브로커2"]
+            P0_F2["P0 Follower\n브로커3"]
         end
     end
 
     Producer[Producer] --> P0_L
     Producer --> P1_L
 
-    CG[Consumer Group] --> P0_L
+    CG["3️⃣ Consumer Group"] --> P0_L
     CG --> P1_L
     CG --> P2_L
 ```
@@ -566,14 +607,14 @@ graph TD
 # server.properties
 
 # 데이터 보관 기간
-log.retention.hours=168          # 7일
-log.retention.bytes=1073741824   # 1GB
+log.retention.hours=168          # 7일 — 재처리 여유, 신규 컨슈머 온보딩
+log.retention.bytes=1073741824   # 1GB — 디스크 용량 제어
 
 # 복제 설정
-default.replication.factor=3     # 레플리카 3개
-min.insync.replicas=2            # 최소 2개 ISR
+default.replication.factor=3     # 레플리카 3개 — 브로커 2대 동시 장애까지 허용
+min.insync.replicas=2            # 최소 2개 ISR — 브로커 1대 장애 허용하면서 내구성 유지
 
-# 파티션당 리더 균형
+# 파티션당 리더 균형 — 특정 브로커에 리더 쏠림 방지
 auto.leader.rebalance.enable=true
 leader.imbalance.check.interval.seconds=300
 
@@ -588,22 +629,22 @@ socket.receive.buffer.bytes=102400
 
 ## 12. 실전: 5000억건 금융 데이터 처리 사례
 
-실제 금융사에서 Kafka로 초당 수백만 건의 거래 데이터를 처리하는 아키텍처:
+실제 금융사에서 Kafka로 초당 수백만 건의 거래 데이터를 처리하는 아키텍처입니다. 이 규모에서는 설계 결정 하나하나가 실제 운영 비용과 장애 빈도에 직결됩니다.
 
 ```mermaid
 graph TD
-    ATM["ATM 기기들"] --> Producer[Kafka Producer]
-    POS["POS 단말들"] --> Producer
-    OnlineBanking["온라인뱅킹"] --> Producer
+    ATM["1️⃣ ATM 기기들"] --> Producer[Kafka Producer]
+    POS["1️⃣ POS 단말들"] --> Producer
+    OnlineBanking["1️⃣ 온라인뱅킹"] --> Producer
 
-    Producer --> KafkaCluster["Kafka Cluster<br>30 브로커<br>300 파티션"]
+    Producer --> KafkaCluster["2️⃣ Kafka Cluster\n30 브로커\n300 파티션"]
 
-    KafkaCluster --> FraudDetect["사기 감지 서비스<br>Kafka Streams<br>실시간 패턴 분석"]
-    KafkaCluster --> Settlement["정산 서비스<br>일별 배치 정산"]
-    KafkaCluster --> Analytics["분석 서비스<br>Flink → Druid"]
-    KafkaCluster --> Archiver["아카이브 서비스<br>S3 콜드 스토리지"]
+    KafkaCluster --> FraudDetect["3️⃣ 사기 감지 서비스\nKafka Streams\n실시간 패턴 분석"]
+    KafkaCluster --> Settlement["3️⃣ 정산 서비스\n일별 배치 정산"]
+    KafkaCluster --> Analytics["3️⃣ 분석 서비스\nFlink → Druid"]
+    KafkaCluster --> Archiver["3️⃣ 아카이브 서비스\nS3 콜드 스토리지"]
 
-    FraudDetect --> Alert["사기 거래 알림<br>100ms 이내"]
+    FraudDetect --> Alert["4️⃣ 사기 거래 알림\n100ms 이내"]
     Analytics --> Dashboard["실시간 대시보드"]
 
     subgraph "규모"
@@ -617,10 +658,20 @@ graph TD
 **성능 최적화 포인트:**
 ```
 파티션 수 = 브로커 수 × 10 = 300개
+  → 왜 10배? 브로커당 10개 파티션이 CPU/디스크 I/O 균형점
+
 레플리카 수 = 3 (고가용성)
+  → 브로커 2대 동시 장애까지 허용
+
 보관 기간 = 7일 (이후 S3로 아카이브)
+  → 7일 내 재처리 가능, 장기 보관은 S3로 비용 절감
+
 압축 = LZ4 (빠른 압축/해제)
-배치 크기 = 1MB (처리량 극대화)
+  → snappy보다 해제 속도 빠름, 금융 데이터는 텍스트 비율 높아 압축률 좋음
+
+배치 크기 = 1MB
+  → 개당 크기 작은 거래 데이터를 묶어서 보내 네트워크 오버헤드 감소
+
 Consumer 처리량 = 파티션당 초당 1만건 × 300 = 초당 300만건
 ```
 
@@ -628,12 +679,16 @@ Consumer 처리량 = 파티션당 초당 1만건 × 300 = 초당 300만건
 
 ## 13. KRaft 모드 (Zookeeper 없는 Kafka)
 
-Kafka 3.x부터 Zookeeper 없이 동작하는 KRaft 모드 지원:
+Kafka 3.x부터 Zookeeper 없이 동작하는 KRaft 모드를 지원합니다. 왜 Zookeeper를 없앴을까요?
+
+기존에는 Kafka 클러스터 운영에 Zookeeper 클러스터가 별도로 필요했습니다. 즉 3대 Kafka + 3대 Zookeeper = 최소 6대 서버입니다. Zookeeper 장애 시 Kafka 전체가 마비됩니다. 관리 포인트가 두 배입니다.
+
+KRaft는 Kafka 브로커 중 일부가 Controller 역할을 겸직하면서 메타데이터를 직접 관리합니다. Raft 합의 알고리즘 기반이라 내결함성도 유지됩니다.
 
 ```mermaid
 graph TD
-    subgraph "기존: Kafka + Zookeeper"
-        ZK["Zookeeper 클러스터<br>3대"]
+    subgraph "1️⃣ 기존: Kafka + Zookeeper"
+        ZK["Zookeeper 클러스터\n3대"]
         K1["Kafka 브로커1"]
         K2["Kafka 브로커2"]
         K3["Kafka 브로커3"]
@@ -642,19 +697,19 @@ graph TD
         K3 --> ZK
     end
 
-    subgraph "KRaft: Kafka만"
-        KR1["Kafka 1<br>Controller + Broker"]
-        KR2["Kafka 2<br>Controller + Broker"]
-        KR3["Kafka 3<br>Broker"]
+    subgraph "2️⃣ KRaft: Kafka만"
+        KR1["Kafka 1\nController + Broker"]
+        KR2["Kafka 2\nController + Broker"]
+        KR3["Kafka 3\nBroker"]
         KR1 <--> KR2
         KR2 <--> KR3
     end
 ```
 
 **KRaft 장점:**
-- 관리 복잡도 감소 (Zookeeper 불필요)
-- 파티션 수 제한 완화 (수백만 파티션 지원)
-- 빠른 컨트롤러 페일오버
+- 관리 복잡도 감소 (Zookeeper 별도 운영 불필요)
+- 파티션 수 제한 완화 (수백만 파티션 지원 — Zookeeper 기반은 수만 개가 한계)
+- 빠른 컨트롤러 페일오버 (수분 → 수십 초)
 
 ---
 
@@ -662,15 +717,19 @@ graph TD
 
 ```mermaid
 graph TD
-    Normal["정상 운영<br>브로커3 = P0 리더"]
-    Normal --> Fail["브로커3 장애!"]
-    Fail --> Detect["Zookeeper/KRaft 감지<br>세션 타임아웃 10초"]
-    Detect --> Election["리더 선출<br>ISR 중 브로커2 선택"]
-    Election --> Recovery["서비스 재개<br>총 다운타임 ~15초"]
+    Normal["1️⃣ 정상 운영\n브로커3 = P0 리더"]
+    Normal --> Fail["2️⃣ 브로커3 장애!"]
+    Fail --> Detect["3️⃣ Zookeeper/KRaft 감지\n세션 타임아웃 10초"]
+    Detect --> Election["4️⃣ 리더 선출\nISR 중 브로커2 선택"]
+    Election --> Recovery["5️⃣ 서비스 재개\n총 다운타임 ~15초"]
 
-    Recovery --> Replication["브로커3 복구 후<br>전체 재동기화"]
-    Replication --> Balance["파티션 리밸런싱<br>리더 재분배"]
+    Recovery --> Replication["6️⃣ 브로커3 복구 후\n전체 재동기화"]
+    Replication --> Balance["7️⃣ 파티션 리밸런싱\n리더 재분배"]
 ```
+
+15초 다운타임이 짧아 보이지만, 이 동안 쓰기 요청은 에러를 반환합니다. 이게 허용 안 되는 시스템(결제, 주문)에서는 Producer 쪽에서 재시도 로직이 반드시 필요합니다.
+
+`unclean.leader.election.enable=false`가 왜 중요한지 이해해야 합니다. ISR에 포함되지 않은 팔로워(즉, 최신 데이터가 없는 복제본)가 리더가 되면 최근 메시지가 유실됩니다. 금융 시스템에서 이건 돈이 사라지는 것과 같습니다. false로 설정하면 ISR 레플리카가 없을 때 리더 선출을 거부하고, 복구될 때까지 쓰기를 막습니다. 가용성보다 데이터 무결성 우선입니다.
 
 **장애 복구 설정:**
 ```properties
@@ -680,19 +739,19 @@ replica.lag.time.max.ms=10000           # 10초 지연 시 ISR 제거
 
 # 언클린 리더 선출 (데이터 유실 vs 가용성)
 unclean.leader.election.enable=false    # 금융: 데이터 무결성 우선
-# unclean.leader.election.enable=true   # 일반: 가용성 우선
+# unclean.leader.election.enable=true   # 일반: 가용성 우선 (약간의 메시지 유실 허용)
 ```
 
 ---
 
 ## 핵심 설계 결정 요약
 
-| 설정 | 권장값 | 이유 |
-|------|--------|------|
-| 파티션 수 | 브로커 수 × 10 | 병렬 처리 극대화 |
-| 레플리카 수 | 3 | 2개 장애 허용 |
-| acks | all | 데이터 유실 방지 |
-| 압축 | snappy/lz4 | 처리량 vs CPU 균형 |
-| 보관 기간 | 7일 | 재처리 여유 |
-| 배치 크기 | 16KB~1MB | 처리량 향상 |
-| 자동 커밋 | off | 수동 커밋으로 안전하게 |
+| 설정 | 권장값 | 왜 이 값인가 |
+|------|--------|------------|
+| 파티션 수 | 브로커 수 × 10 | 병렬 처리 극대화, 브로커당 부하 균형 |
+| 레플리카 수 | 3 | 브로커 2대 동시 장애 허용 |
+| acks | all | 메시지 유실 원천 차단 |
+| 압축 | snappy/lz4 | 처리량 vs CPU 균형, lz4가 해제 빠름 |
+| 보관 기간 | 7일 | 재처리 여유, 신규 컨슈머 온보딩 시간 |
+| 배치 크기 | 16KB~1MB | 크면 처리량 좋지만 지연 증가, 튜닝 필요 |
+| 자동 커밋 | off | 처리 완료 전 커밋 방지, 수동으로 안전하게 |

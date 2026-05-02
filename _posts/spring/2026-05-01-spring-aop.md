@@ -251,7 +251,7 @@ Spring AOP의 핵심은 **프록시 패턴**이다. 클라이언트가 `OrderSer
 3️⃣ **프록시 → 실제 Bean 위임**: `joinPoint.proceed()`로 실제 메서드를 호출한다
 4️⃣ **결과 반환**: After Advice, Around Advice의 뒷부분이 실행된 후 결과를 반환한다
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as "클라이언트"
     participant P as "Proxy Object (Spring 자동 생성)"
@@ -263,7 +263,7 @@ sequenceDiagram
     R-->>P: 결과 반환
     P->>P: After Advice 실행
     P-->>C: 최종 결과 반환
-</div>
+```
 
 ### JDK Dynamic Proxy
 
@@ -326,14 +326,14 @@ public class PaymentService$$EnhancerBySpringCGLIB extends PaymentService {
 
 Spring Boot 2.0+부터 `spring.aop.proxy-target-class=true`가 기본값이므로 CGLIB을 먼저 사용한다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["AOP 적용 대상 Bean"] --> B{"proxy-target-class=true?<br>(Spring Boot 기본값)"}
     B -->|"YES"| E["CGLIB 프록시 생성<br>(서브클래스 방식)"]
     B -->|"NO"| C{"인터페이스가 있는가?"}
     C -->|"YES"| D["JDK Dynamic Proxy 생성<br>(인터페이스 방식)"]
     C -->|"NO"| E
-</div>
+```
 
 ---
 
@@ -343,7 +343,7 @@ graph TD
 
 메서드 호출 전에 트랜잭션을 시작하고, 정상 반환이면 커밋, 예외 발생이면 롤백하는 코드가 자동으로 삽입된다. 개발자는 트랜잭션 관리 코드를 전혀 작성하지 않아도 된다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as "클라이언트"
     participant P as "TransactionInterceptor (Proxy)"
@@ -359,7 +359,7 @@ sequenceDiagram
         P->>P: 3️⃣ TransactionManager.rollback()
     end
     P-->>C: 응답
-</div>
+```
 
 ```java
 @Service
@@ -403,7 +403,7 @@ public class OrderService {
 }
 ```
 
-<div class="mermaid">
+```mermaid
 graph LR
     C["클라이언트"] --> P["Proxy"]
     P --> R["실제 OrderService.createOrder()"]
@@ -411,7 +411,7 @@ graph LR
 
     style N fill:#ffe0e0
     style R fill:#fff8e0
-</div>
+```
 
 **해결책: 빈 분리**
 
@@ -494,7 +494,7 @@ public class LoggingAspect { ... }
 
 실행 순서는 양파 껍질처럼 쌓인다. 바깥쪽(낮은 Order)이 먼저 감싸고, 실행은 안쪽에서 바깥쪽 순서로 돌아온다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as "클라이언트"
     participant SA as "SecurityAspect (Order 1)"
@@ -510,7 +510,7 @@ sequenceDiagram
     LA-->>TA: 2️⃣ after()
     TA-->>SA: 3️⃣ after()
     SA-->>C: 최종 반환
-</div>
+```
 
 ---
 

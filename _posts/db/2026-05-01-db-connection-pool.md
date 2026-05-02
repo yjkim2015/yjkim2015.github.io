@@ -36,7 +36,7 @@ DB 커넥션을 맺는 것은 생각보다 비싸다. TCP 연결, 인증, 세션
 
 Spring Boot 2.x+의 기본 커넥션 풀. "빠른 커넥션 풀" 표방.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "HikariCP"
         POOL[커넥션 풀\nConcurrentBag]
@@ -55,7 +55,7 @@ graph TD
     T1 -->|close 호출\n실제 반납| POOL
 
     T2[스레드 2] -->|getConnection\n대기중| POOL
-</div>
+```
 
 ### 커넥션 생명주기
 

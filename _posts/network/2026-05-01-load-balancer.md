@@ -18,7 +18,7 @@ date: 2026-05-01
 
 로드밸런서는 동작하는 OSI 계층에 따라 L4와 L7로 나뉜다. 높은 계층일수록 더 많은 정보를 보고 결정하지만, 그만큼 처리 비용이 높아진다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     L7["L7 Application Layer\nHTTP, HTTPS, WebSocket"]
     L4["L4 Transport Layer\nTCP, UDP"]
@@ -30,7 +30,7 @@ graph TD
     L4 --> LB_L4
     style LB_L7 fill:#8f8,stroke:#080,color:#000
     style LB_L4 fill:#88f,stroke:#008,color:#000
-</div>
+```
 
 ---
 
@@ -103,7 +103,7 @@ server {
 
 ## L4 vs L7 비교
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph "L4 로드밸런서"
         C1["클라이언트"] -->|"TCP:443"| L4LB["L4 LB\n(IP+Port만 확인)"]
@@ -116,7 +116,7 @@ graph LR
         L7LB -->|"/api/orders"| S2A["Order 서버"]
         L7LB -->|"/api/products"| S2B["Product 서버"]
     end
-</div>
+```
 
 | 항목 | L4 | L7 |
 |------|----|----|
@@ -338,7 +338,7 @@ proxy_next_upstream_timeout 5s;
 
 로드밸런서가 하나면 그 자체가 단일 실패 지점(SPOF)이 된다. VRRP/Keepalived로 Active-Passive 이중화한다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     VIP["가상 IP (VIP: 10.0.0.100)\n클라이언트는 이 IP로 접속"]
     LB1["LB-1 (Active)\nVIP 보유 중"]
@@ -348,7 +348,7 @@ graph TD
     LB1 -->|"VRRP Heartbeat"| LB2
     LB1 --> SERVERS
     LB2 -.->|"LB-1 장애 시\nVIP 인계"| VIP
-</div>
+```
 
 ```bash
 # Keepalived VRRP 설정 (Active LB)

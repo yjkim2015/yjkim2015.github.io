@@ -25,7 +25,7 @@ JavaScript 런타임은 **한 명의 유능한 웨이터가 있는 레스토랑*
 
 JavaScript 코드가 실행될 때, 엔진은 **실행 컨텍스트**를 생성합니다. 실행 컨텍스트는 코드가 실행되는 환경으로, 변수·함수 선언·this 바인딩 정보를 담습니다.
 
-<div class="mermaid">
+```mermaid
 flowchart TD
     subgraph "1️⃣ 전역 실행 컨텍스트 생성"
         GEC["Global Execution Context\n- Variable Object: 전역 변수/함수\n- Scope Chain: 전역 스코프\n- this: window (브라우저)"]
@@ -45,7 +45,7 @@ flowchart TD
     style GEC fill:#3498db,color:#fff
     style FEC fill:#f39c12,color:#fff
     style CS fill:#2ecc71,color:#fff
-</div>
+```
 
 ```javascript
 // 콜 스택 동작 예시
@@ -102,7 +102,7 @@ let y = 20;
 
 JavaScript는 싱글 스레드이지만 이벤트 루프 덕분에 비동기 처리가 가능합니다.
 
-<div class="mermaid">
+```mermaid
 flowchart TD
     subgraph "JavaScript 엔진"
         CS2["콜 스택 Call Stack\n현재 실행 중인 함수들"]
@@ -131,7 +131,7 @@ flowchart TD
     style MQ fill:#e74c3c,color:#fff
     style TQ fill:#f39c12,color:#fff
     style EL fill:#3498db,color:#fff
-</div>
+```
 
 ```javascript
 // 실행 순서 퀴즈
@@ -194,7 +194,7 @@ async function processInChunks(items, chunkSize = 100) {
 
 `this`는 **함수가 호출되는 방식**에 따라 결정됩니다. 선언 위치가 아닌 호출 시점의 컨텍스트입니다.
 
-<div class="mermaid">
+```mermaid
 flowchart TD
     Q["함수 호출 방식은?"]
     Q -->|"new 키워드"| NEW["new 바인딩\nthis = 새로 생성된 객체"]
@@ -208,7 +208,7 @@ flowchart TD
     style METHOD fill:#2ecc71,color:#fff
     style ARROW fill:#f39c12,color:#fff
     style DEFAULT fill:#e74c3c,color:#fff
-</div>
+```
 
 ```javascript
 // 1. 기본 바인딩: 일반 함수 호출
@@ -285,7 +285,7 @@ class Button extends React.Component {
 
 클로저는 **함수가 생성될 때의 렉시컬 환경을 기억**하는 것입니다. 함수가 외부 함수의 실행이 끝난 후에도 외부 함수의 변수에 접근할 수 있는 메커니즘입니다.
 
-<div class="mermaid">
+```mermaid
 flowchart TD
     subgraph "makeCounter(10) 실행"
         F["makeCounter 함수\n→ count = 10 생성"]
@@ -308,7 +308,7 @@ flowchart TD
 
     style ENV fill:#e74c3c,color:#fff
     style RET fill:#3498db,color:#fff
-</div>
+```
 
 ```javascript
 // 클로저로 private 변수 구현
@@ -407,7 +407,7 @@ cleanup();
 
 JavaScript는 **프로토타입 기반 상속**을 사용합니다. 모든 객체는 `[[Prototype]]` 내부 슬롯을 통해 다른 객체를 참조하고, 이 체인을 따라 프로퍼티를 검색합니다.
 
-<div class="mermaid">
+```mermaid
 flowchart TD
     subgraph "프로토타입 체인"
         DOG["dog 인스턴스\nname: '바둑이'\n[[Prototype]] →"]
@@ -424,7 +424,7 @@ flowchart TD
     style ANIMAL_PROTO fill:#f39c12,color:#fff
     style OBJ_PROTO fill:#2ecc71,color:#fff
     style NULL fill:#95a5a6,color:#fff
-</div>
+```
 
 ```javascript
 // ES5 방식 (프로토타입 직접 조작)
@@ -478,7 +478,7 @@ console.log(dog instanceof Animal); // true (프로토타입 체인)
 
 ### Promise 상태 다이어그램
 
-<div class="mermaid">
+```mermaid
 stateDiagram-v2
     [*] --> Pending : new Promise() 생성
     Pending --> Fulfilled : resolve() 호출
@@ -487,7 +487,7 @@ stateDiagram-v2
     Rejected --> [*] : .catch() 처리
     Fulfilled --> Fulfilled : .then() 체이닝
     Rejected --> Fulfilled : .catch()에서 복구
-</div>
+```
 
 ```javascript
 // Promise 생성

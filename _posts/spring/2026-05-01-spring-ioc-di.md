@@ -51,7 +51,7 @@ IoC의 핵심은 **"내가 사용할 객체를 내가 만들지 않는다"**는 
 
 Spring IoC 컨테이너는 **Bean Definition**을 읽어서 Bean을 생성하고 관리한다. 컨테이너가 시작할 때 설정 파일(또는 어노테이션)을 파싱하여 "어떤 클래스를 어떤 스코프로, 어떤 의존성과 함께 만들 것인가"라는 메타데이터를 BeanDefinition 객체로 변환한다. 그 후 이 메타데이터를 바탕으로 Bean 인스턴스를 만들고 의존성을 연결한다. 이 과정이 끝나야 비로소 애플리케이션이 요청을 받을 준비가 된다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["1️⃣ Configuration 읽기<br>@Configuration+@Bean<br>@ComponentScan+@Component<br>XML legacy"] --> B["2️⃣ BeanDefinition 생성<br>클래스 정보, 스코프, 의존성 정보"]
     B --> C["3️⃣ Bean 인스턴스 생성<br>생성자 호출"]
@@ -63,7 +63,7 @@ graph TD
     style A fill:#e8f4f8
     style F fill:#e8f8e8
     style G fill:#f8e8e8
-</div>
+```
 
 핵심은 3단계와 4단계의 분리다. 생성자 주입의 경우 3단계와 4단계가 동시에 일어나지만, 세터/필드 주입은 인스턴스가 먼저 만들어진 후 별도로 주입된다. 이 차이가 순환 참조 감지 시점에 영향을 준다.
 
@@ -116,7 +116,7 @@ public interface ApplicationContext extends
 
 ### 주요 구현체
 
-<div class="mermaid">
+```mermaid
 graph TD
     AC[ApplicationContext] --> ACAC["AnnotationConfigApplicationContext<br>Java 설정, 순수 Java 테스트"]
     AC --> ACSWSAC["AnnotationConfigServletWebServerApplicationContext<br>Spring Boot 웹 환경"]
@@ -124,7 +124,7 @@ graph TD
     AC --> CPXAC["ClassPathXmlApplicationContext<br>XML 설정, 클래스패스"]
 
     style AC fill:#e8f4f8
-</div>
+```
 
 ---
 
@@ -132,7 +132,7 @@ graph TD
 
 Bean의 생명주기를 정확히 이해해야 초기화 콜백을 올바른 시점에 사용할 수 있다. 예를 들어 DB 커넥션 풀을 초기화하려면, 커넥션 풀 Bean이 생성되고 **모든 의존성 주입이 완료된 후**에 초기화가 실행되어야 한다. `@PostConstruct`가 바로 그 시점을 보장한다. 생성자에서 초기화하면 의존성이 아직 주입되지 않은 상태일 수 있다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     S([Spring Container 시작]) --> A
     A["1️⃣ Bean 인스턴스 생성<br>기본 생성자 또는 @Bean 팩토리 메서드 호출"]
@@ -141,7 +141,7 @@ graph TD
     C --> D["4️⃣ Bean 사용 (애플리케이션 동작)"]
     D --> E["5️⃣ 소멸 콜백 (Container 종료 시)<br>@PreDestroy<br>DisposableBean.destroy()<br>@Bean(destroyMethod='close')"]
     E --> END([Spring Container 종료])
-</div>
+```
 
 ### 코드 예제
 
@@ -197,14 +197,14 @@ public class UserService {
 }
 ```
 
-<div class="mermaid">
+```mermaid
 graph LR
     A["getBean('userService')"] --> I["동일한 인스턴스"]
     B["getBean('userService')"] --> I
     C["getBean('userService')"] --> I
 
     style I fill:#e8f8e8
-</div>
+```
 
 ### Prototype
 
@@ -219,7 +219,7 @@ public class ShoppingCart {
 }
 ```
 
-<div class="mermaid">
+```mermaid
 graph LR
     A["getBean('shoppingCart')"] --> I1["새 인스턴스 A"]
     B["getBean('shoppingCart')"] --> I2["새 인스턴스 B"]
@@ -228,7 +228,7 @@ graph LR
     style I1 fill:#fff8e0
     style I2 fill:#fff8e0
     style I3 fill:#fff8e0
-</div>
+```
 
 ### Singleton + Prototype 혼용 문제
 
@@ -383,7 +383,7 @@ class OrderServiceTest {
 
 타입으로 먼저 찾고, 같은 타입이 여러 개면 이름이나 한정자로 좁힌다. 이 순서를 모르면 "NoUniqueBeanDefinitionException이 왜 났지?" 하고 헤매게 된다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["1️⃣ 타입Type으로 매칭 시도<br>ApplicationContext에서 해당 타입의 Bean 검색"] --> B{"타입 매칭 Bean이 2개 이상?"}
     B -->|"@Qualifier 있음"| C["2️⃣ @Qualifier 확인<br>@Qualifier('mainDiscountPolicy') Bean 선택"]
@@ -392,7 +392,7 @@ graph TD
     C --> F["주입 완료"]
     D --> F
     E --> F
-</div>
+```
 
 ### 예제
 
@@ -466,7 +466,7 @@ public class DiscountService {
 
 A가 B를 필요로 하고, B가 C를 필요로 하며, C가 다시 A를 필요로 하는 상황이다. 생성자 주입에서는 A를 만들려면 B가 필요하고, B를 만들려면 C가 필요하고, C를 만들려면 A가 필요한 데드락이 발생한다.
 
-<div class="mermaid">
+```mermaid
 graph LR
     A["ServiceA<br>@Autowired B b"] --> B["ServiceB<br>@Autowired C c"]
     B --> C["ServiceC<br>@Autowired A a"]
@@ -475,7 +475,7 @@ graph LR
     style A fill:#ffe0e0
     style B fill:#ffe0e0
     style C fill:#ffe0e0
-</div>
+```
 
 ### Spring Boot 2.6+ 기본 동작
 

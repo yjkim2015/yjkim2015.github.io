@@ -20,7 +20,7 @@ date: 2026-05-01
 
 Spring Cloud Config를 사용하면 Git 하나에서 모든 설정을 관리하고, 변경 이력을 추적하며, 재배포 없이 런타임에 반영할 수 있다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "설정 저장소"
         GIT["Git Repository\n/config-repo"]
@@ -40,7 +40,7 @@ graph TD
     CS -->|"설정 제공"| OS
     CS -->|"설정 제공"| US
     CS -->|"설정 제공"| PS
-</div>
+```
 
 ---
 
@@ -169,7 +169,7 @@ curl -X POST http://order-service:8080/actuator/refresh
 2️⃣ Config Server가 메시지 브로커에 `RefreshRemoteApplicationEvent`를 발행한다
 3️⃣ 모든 클라이언트가 이벤트를 수신하고 Config Server에서 새 설정을 가져온다
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant DEV as "개발자"
     participant GIT as "Git"
@@ -189,7 +189,7 @@ sequenceDiagram
     OS2->>CS: 3️⃣ 새 설정 fetch
     US->>CS: 3️⃣ 새 설정 fetch
     Note over OS1,US: "재배포 없이 새 설정 적용"
-</div>
+```
 
 ---
 

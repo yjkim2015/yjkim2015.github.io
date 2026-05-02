@@ -636,7 +636,7 @@ System.out.println(stringList.getClass()); // class java.util.ArrayList
 
 타입 소거가 왜 존재하는지 이해하면 제약사항이 더 자연스럽게 받아들여집니다. Java 5는 기존 코드(제네릭 없는 Java 1.4 이하)와의 하위 호환성을 유지하면서 제네릭을 도입해야 했습니다. 런타임 JVM은 그대로 두고, 컴파일러만 타입 검사를 추가하는 방식을 선택한 것입니다. 덕분에 제네릭 코드와 레거시 코드가 같은 JVM에서 실행됩니다.
 
-<div class="mermaid">
+```mermaid
 graph LR
   subgraph "컴파일 타임"
     SRC["List&lt;String&gt; list\nlist.add('hello')\nString s = list.get(0)"]
@@ -650,7 +650,7 @@ graph LR
     BC["List list\nlist.add('hello')\nString s = (String)list.get(0)"]
   end
   SRC --> CHECK --> ERASE --> CAST --> BC
-</div>
+```
 
 컴파일러는 타입 소거 시 다음 규칙을 적용합니다.
 

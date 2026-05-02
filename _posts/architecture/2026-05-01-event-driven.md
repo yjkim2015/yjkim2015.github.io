@@ -22,7 +22,7 @@ date: 2026-05-01
 
 ### 동기 호출 방식의 문제
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph "동기 호출 (문제 상황)"
         OS1["Order Service"]
@@ -40,7 +40,7 @@ graph LR
     classDef normal fill:#DAE8FC,stroke:#6C8EBF
     class PS1 down
     class OS1,IS1,NS1 normal
-</div>
+```
 
 ```
 동기 호출의 문제:
@@ -52,7 +52,7 @@ graph LR
 
 ### EDA로 해결
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph "EDA (이벤트 기반)"
         OS2["Order Service\n(Producer)"]
@@ -76,7 +76,7 @@ graph LR
     class OS2 producer
     class EB broker
     class PS2,IS2,NS2,AN consumer
-</div>
+```
 
 ```
 EDA의 이점:
@@ -164,7 +164,7 @@ public record OrderCreatedEventV2(
 
 ### 개념: 상태 대신 이벤트를 저장
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph "전통적 방식 (상태 저장)"
         DB1[("orders 테이블\nid=1\nstatus=SHIPPED\namount=50000\nupdatedAt=...")]
@@ -185,7 +185,7 @@ graph LR
 
     class E1,E2,E3,E4 event
     class STATE state
-</div>
+```
 
 ```
 전통적 방식의 한계:
@@ -323,7 +323,7 @@ public Order findById(Long orderId) {
 
 Event Sourcing은 CQRS와 함께 쓸 때 강력합니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "Command Side (쓰기)"
         CMD["Command\n주문 생성/취소"] --> AGG["Order Aggregate\n이벤트 발행"]
@@ -354,7 +354,7 @@ graph TD
     class CMD,AGG,ES command
     class P1,P2,P3,DB1,DB2,DB3,Q1,Q2,Q3 query
     class KB broker
-</div>
+```
 
 ---
 

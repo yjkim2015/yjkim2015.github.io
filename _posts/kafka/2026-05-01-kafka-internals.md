@@ -15,7 +15,7 @@ toc_label: 목차
 
 ### 전체 아키텍처
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph app["Application Thread"]
         SEND["producer.send(record)"]
@@ -31,13 +31,13 @@ graph LR
         SENDER --> NC --> BROKERS
     end
     ACC -->|"ready batches"| SENDER
-</div>
+```
 
 ### 배치(Batch) 처리
 
 프로듀서는 메시지를 하나씩 보내지 않는다. 성능을 위해 **RecordAccumulator**에 배치로 모아서 전송한다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph acc["RecordAccumulator — 파티션별 deque"]
         subgraph p0["Partition 0 deque"]
@@ -46,7 +46,7 @@ graph TD
             B1 --> B2
         end
     end
-</div>
+```
 
 배치 전송 트리거 조건:
 - `batch.size`: 배치가 설정 크기에 도달 (기본 16KB)
@@ -61,7 +61,7 @@ props.put(ProducerConfig.LINGER_MS_CONFIG, 20);         // 20ms 대기
 
 **linger.ms 효과:**
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph linger0["linger.ms=0 (기본) — 네트워크 요청 3번"]
         L0A["t=0: msg1 → 즉시 전송"]
@@ -77,7 +77,7 @@ graph TD
         L1B --> L1D
         L1C --> L1D
     end
-</div>
+```
 
 ### 압축(Compression)
 
@@ -129,7 +129,7 @@ public class RegionPartitioner implements Partitioner {
 
 **Sticky Partitioner (Kafka 2.4+, 현재 기본값):**
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph rr["키 없는 메시지의 라운드로빈 문제"]
         RR1["msg1 → P0 (배치 즉시 전송)"]
@@ -143,7 +143,7 @@ graph TD
         ST1 --> ST2
         STNOTE["큰 배치 = 좋은 압축 효율"]
     end
-</div>
+```
 
 ---
 
@@ -181,7 +181,7 @@ public class OrderConsumerService {
 
 **poll() 동작 세부 과정:**
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["1. poll(timeout) 호출"]
     B["2. Fetcher가 각 파티션 리더에 FetchRequest 전송"]
@@ -190,7 +190,7 @@ graph TD
     E["5. ConsumerRecords 반환"]
     F["6. 다음 poll() 이전에 max.poll.interval.ms 초과하면 리밸런싱 트리거!"]
     A --> B --> C --> D --> E --> F
-</div>
+```
 
 ### Fetch 관련 설정
 
@@ -210,7 +210,7 @@ max.poll.records=500
 
 **Fetch 동작 시각화:**
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as Consumer
     participant B as Broker
@@ -218,11 +218,11 @@ sequenceDiagram
     Note over B: 현재 데이터: 200 bytes (1024 미만, 대기...)
     Note over B: 500ms 후 (max.wait.ms 도달)
     B-->>C: FetchResponse (200 bytes 반환)
-</div>
+```
 
 ### Heartbeat와 세션 관리
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as Consumer
     participant GC as Group Coordinator (Broker)
@@ -230,7 +230,7 @@ sequenceDiagram
     GC-->>C: HeartbeatResponse
     Note over C,GC: session.timeout.ms 동안 heartbeat 없으면
     Note over GC: 컨슈머 사망으로 판단 → 리밸런싱 시작!
-</div>
+```
 
 ```properties
 # 하트비트 전송 주기 (session.timeout.ms의 1/3 권장)
@@ -273,7 +273,7 @@ max.poll.interval.ms:
 
 ### Eager Rebalancing (기존 방식)
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph before["초기 상태"]
         C1A["Consumer 1: P0, P1"]
@@ -290,7 +290,7 @@ graph TD
         C3C["Consumer 3: P3 (신규)"]
     end
     before --> phase1 --> phase2
-</div>
+```
 
 **문제점:**
 - 리밸런싱 동안 **전체 컨슈머 그룹이 처리를 멈춤** (Stop-The-World)
@@ -299,7 +299,7 @@ graph TD
 
 ### Cooperative/Incremental Rebalancing (Kafka 2.4+)
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph before["초기 상태"]
         C1A["Consumer 1: P0, P1"]
@@ -317,7 +317,7 @@ graph TD
         C3C["Consumer 3: P3 (신규 할당)"]
     end
     before --> round1 --> round2
-</div>
+```
 
 **차이점:**
 - 이동이 필요한 파티션만 해제하고 재할당
@@ -332,7 +332,7 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 
 ### Group Coordinator와 리밸런싱 프로토콜
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C1 as Consumer (Leader)
     participant C2 as Consumer (Others)
@@ -348,7 +348,7 @@ sequenceDiagram
     GC-->>C1: 4. SyncGroup Response (자신의 파티션 할당 결과)
     GC-->>C2: 4. SyncGroup Response (자신의 파티션 할당 결과)
     Note over C1,C2: 5. 처리 재개
-</div>
+```
 
 ---
 
@@ -356,7 +356,7 @@ sequenceDiagram
 
 ### At-Most-Once (최대 한 번)
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as Consumer
     participant K as Kafka
@@ -365,7 +365,7 @@ sequenceDiagram
     C->>K: Offset 커밋 (처리 완료로 기록)
     C->>DB: 처리 중... 장애 발생!
     Note over C,K: 재시작 시 커밋된 offset 이후부터 읽음 → 메시지 유실!
-</div>
+```
 
 ```java
 // At-Most-Once 컨슈머 패턴
@@ -380,7 +380,7 @@ for (ConsumerRecord<String, String> record : records) {
 
 ### At-Least-Once (최소 한 번)
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as Consumer
     participant K as Kafka
@@ -389,7 +389,7 @@ sequenceDiagram
     C->>DB: 처리 완료
     Note over C: Offset 커밋 전 장애 발생!
     Note over C,K: 재시작 시 이전 offset부터 다시 읽음 → 동일 메시지 중복 처리!
-</div>
+```
 
 ```java
 // At-Least-Once 컨슈머 패턴
@@ -404,7 +404,7 @@ consumer.commitSync();  // 커밋 (장애 시 재처리 발생)
 
 ### Exactly-Once (정확히 한 번)
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant P as Producer
     participant K as Kafka
@@ -415,7 +415,7 @@ sequenceDiagram
     P->>K: 트랜잭션 commit
     K-->>C: 커밋된 메시지 읽기 가능
     Note over P,K: 실패 시: 트랜잭션 롤백 → 재시도
-</div>
+```
 
 ---
 
@@ -425,7 +425,7 @@ sequenceDiagram
 
 동일 메시지를 여러 번 보내도 한 번만 저장되도록 보장한다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant P as Producer
     participant B as Broker
@@ -445,7 +445,7 @@ sequenceDiagram
     P->>B: msg(PID=100, seq=1) 재전송
     Note over B: seq=1 이미 처리됨 → 중복 무시
     B-->>P: ACK (정상 응답)
-</div>
+```
 
 Broker는 각 프로듀서(PID)마다 최근 5개의 시퀀스 번호를 기억한다.
 
@@ -497,7 +497,7 @@ public class OrderTransactionalService {
 
 **트랜잭션 내부 동작:**
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant P as Producer
     participant TC as Transaction Coordinator
@@ -513,7 +513,7 @@ sequenceDiagram
     TC->>PL: COMMITTED 마커 전송
     Note over PL: 컨슈머는 이제 메시지를 읽을 수 있음
     Note over P,TC: 실패 시: abortTransaction() → ABORTED 마커 → uncommitted 메시지 무시
-</div>
+```
 
 ### Exactly-Once Semantics (EOS) 전체 그림
 
@@ -570,7 +570,7 @@ public class ExactlyOnceProcessor {
 
 ### 정상 상태
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph partition["Partition 0"]
         L["Broker 1 (Leader)\nISR: Broker1, Broker2, Broker3"]
@@ -579,11 +579,11 @@ graph LR
         L -->|복제| F1
         L -->|복제| F2
     end
-</div>
+```
 
 ### 리더 장애 시
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant CTL as Controller
     participant B1 as Broker 1 (구 Leader)
@@ -595,13 +595,13 @@ sequenceDiagram
     CTL->>B2: 메타데이터 갱신
     CTL->>B3: 메타데이터 갱신
     Note over B2: Partition 0 새 Leader\nISR: [Broker2, Broker3]
-</div>
+```
 
 ### 컨트롤러(Controller) 역할
 
 ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러**로 선출된다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph zk["ZooKeeper 방식"]
         ZKA["브로커들이 /controller 노드 생성 시도"]
@@ -615,7 +615,7 @@ graph TD
         KRA --> KRB --> KRC
     end
     DUTIES["컨트롤러 책임:\n파티션 리더 선출\nISR 변경 관리\n브로커 등록/해제 감지\n토픽/파티션 생성/삭제"]
-</div>
+```
 
 ---
 
@@ -639,7 +639,7 @@ key="user-2" → {"name":"이영희", "email":"c@c.com"}  (유일값)
 
 ### 컴팩션 동작 과정
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph before["파티션 로그 (컴팩션 전)"]
         CLEAN["Clean 영역 (이미 컴팩션됨)\nk1:v1, k2:v2"]
@@ -652,9 +652,9 @@ graph TD
         SCAN --> NEW --> REPLACE
     end
     before --> process
-</div>
+```
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph before["컴팩션 전"]
         B0["offset 0\nk1:v1"]
@@ -674,7 +674,7 @@ graph LR
         A2 --> A4 --> A5 --> A6
     end
     before -->|컴팩션| after
-</div>
+```
 
 **주의:** 컴팩션 후에도 offset은 변하지 않는다. 일부 offset이 없는 sparse log가 된다.
 
@@ -687,11 +687,11 @@ producer.send(new ProducerRecord<>("user-profile", "user-1", null));
 // → 컴팩션 시 해당 키의 모든 레코드 삭제
 ```
 
-<div class="mermaid">
+```mermaid
 graph LR
     T1["k1:v1"] --> T2["k1:v2"] --> T3["k1:null (tombstone)"]
     T3 -->|컴팩션| GONE["k1 관련 모든 레코드 삭제\n(tombstone도 일정 시간 후 삭제)"]
-</div>
+```
 
 ### 컴팩션 설정
 

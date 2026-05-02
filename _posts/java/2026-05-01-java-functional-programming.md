@@ -17,7 +17,7 @@ Java는 본래 순수 객체지향 언어지만, Java 8부터 람다와 Stream A
 
 프로그래밍 패러다임의 두 축은 **명령형(Imperative)** 과 **선언적(Declarative)** 입니다.
 
-<div class="mermaid">
+```mermaid
 graph LR
   subgraph "명령형 — 어떻게(How)"
     A["for (int i = 0; ...)"] --> B["if (조건) {"]
@@ -28,7 +28,7 @@ graph LR
     E --> F[".map(변환)"]
     F --> G[".collect(결과)"]
   end
-</div>
+```
 
 ```java
 // 명령형 스타일 — 상태 변경, 반복 제어, 단계적 기술
@@ -1043,7 +1043,7 @@ Function<String, String> timedAndLogged  = withTiming.apply(withLogging.apply(ba
 
 ### 두 패러다임의 특성
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph "객체지향 프로그래밍 (OOP)"
         O1["데이터 + 동작 = 객체"]
@@ -1061,7 +1061,7 @@ graph LR
         F5["순수 함수로 복잡도 관리"]
         F6["변환 파이프라인"]
     end
-</div>
+```
 
 ### Java에서의 조화 전략
 

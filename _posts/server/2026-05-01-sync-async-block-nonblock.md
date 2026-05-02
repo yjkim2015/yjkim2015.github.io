@@ -46,7 +46,7 @@ date: 2026-05-01
 
 가장 일반적인 방식. 결과를 기다리는 동안 스레드가 멈춘다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant T as 호출자 스레드
     participant IO as I/O
@@ -54,7 +54,7 @@ sequenceDiagram
     Note over T: 스레드 블로킹 (대기 중)
     IO-->>T: 결과 수신
     Note over T: 다음 작업 진행
-</div>
+```
 
 ```java
 // Java - 전통적인 블로킹 I/O
@@ -87,7 +87,7 @@ ResultSet rs = ps.executeQuery(); // 쿼리 완료까지 블로킹
 
 I/O 시스템 콜은 즉시 반환하지만, 호출자가 직접 반복 폴링(polling)해서 결과를 확인한다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant T as 호출자 스레드
     participant IO as I/O
@@ -98,7 +98,7 @@ sequenceDiagram
     T->>IO: 폴링
     IO-->>T: 완료! 결과 반환
     Note over T: 다음 작업 진행
-</div>
+```
 
 ```java
 // Java NIO - 논블로킹 소켓
@@ -135,7 +135,7 @@ while ((bytesRead = channel.read(buffer)) == 0) {
 
 드문 조합. 비동기로 요청하지만 결과를 받을 때 블로킹한다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant T as 호출자 스레드
     participant BG as 별도 스레드
@@ -143,7 +143,7 @@ sequenceDiagram
     Note over T: Future.get() — 블로킹 대기
     BG-->>T: 결과 반환
     Note over T: 다음 작업 진행
-</div>
+```
 
 ```java
 // Java Future - 비동기 요청 후 블로킹 대기
@@ -187,7 +187,7 @@ String r3 = f3.get();
 
 가장 효율적인 조합. 요청 후 즉시 반환되고, 완료 시 콜백/이벤트로 통보된다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant T as 호출자 스레드
     participant IO as I/O / 커널
@@ -196,7 +196,7 @@ sequenceDiagram
     Note over T: 다른 작업 A 진행
     Note over T: 다른 작업 B 진행
     IO-->>T: 완료 이벤트 → 콜백 실행
-</div>
+```
 
 ```java
 // Java NIO2 (AsynchronousSocketChannel)
@@ -272,7 +272,7 @@ Unix/Linux 시스템에서 I/O는 5가지 모델로 분류된다. (W. Richard St
 
 ### 1. Blocking I/O
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant App as Application
     participant K as Kernel
@@ -281,11 +281,11 @@ sequenceDiagram
     Note over K: 데이터 도착\n커널 버퍼 → 유저 버퍼 복사
     K-->>App: OK, 데이터 반환
     Note over App: 애플리케이션 재개
-</div>
+```
 
 ### 2. Non-blocking I/O
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant App as Application
     participant K as Kernel
@@ -296,13 +296,13 @@ sequenceDiagram
     App->>K: recvfrom() (폴링)
     Note over K: 데이터 도착! 복사 중
     K-->>App: OK, 데이터 반환
-</div>
+```
 
 ### 3. I/O Multiplexing (select/poll/epoll)
 
 하나의 스레드로 여러 소켓을 감시할 수 있다. Java NIO Selector가 이 방식이다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant App as Application
     participant K as Kernel
@@ -312,7 +312,7 @@ sequenceDiagram
     K-->>App: 준비된 소켓 반환
     App->>K: recvfrom()
     K-->>App: 데이터 반환
-</div>
+```
 
 **epoll (Linux 고성능 방식)**
 
@@ -365,7 +365,7 @@ while (true) {
 
 소켓이 준비되면 커널이 SIGIO 시그널을 보낸다. 잘 사용하지 않는다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant App as Application
     participant K as Kernel
@@ -376,13 +376,13 @@ sequenceDiagram
     K-->>App: SIGIO 시그널
     App->>K: recvfrom()
     K-->>App: 데이터 반환
-</div>
+```
 
 ### 5. Asynchronous I/O (aio_read)
 
 데이터 복사(커널 버퍼 → 유저 버퍼)까지 완료된 후 통보된다. Java의 `AsynchronousSocketChannel`이 이 방식이다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant App as Application
     participant K as Kernel
@@ -392,7 +392,7 @@ sequenceDiagram
     Note over K: 데이터 도착\n커널 버퍼 → 유저 버퍼 복사 완료
     K-->>App: 완료 시그널/콜백
     Note over App: 데이터 이미 유저 버퍼에 있음
-</div>
+```
 
 **5가지 모델 비교**
 

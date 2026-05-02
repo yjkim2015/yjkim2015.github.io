@@ -61,7 +61,7 @@ T(cold start) = T(scheduling) + T(image pull) + T(container start)
 
 ### 전체 흐름
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant User as 사용자
     participant HPA as HPA Controller
@@ -84,7 +84,7 @@ sequenceDiagram
     App-->>Kubelet: /health/ready 응답 성공
     Kubelet->>EP: Endpoint 등록
     EP-->>User: 트래픽 라우팅 시작
-</div>
+```
 
 ### 2-1. Pod 스케줄링 (kube-scheduler)
 
@@ -265,7 +265,7 @@ Cold Start 병목:
 
 **Cold Start 시간 vs 트래픽 허용 한계**:
 
-<div class="mermaid">
+```mermaid
 graph LR
     A[트래픽 급증] --> B{Cold Start 시간}
     B -->|5초 이내| C[영향 없음]
@@ -276,7 +276,7 @@ graph LR
     G --> H[OOMKilled]
     H --> I[더 많은 Pod 재시작]
     I --> F
-</div>
+```
 
 ---
 
@@ -754,7 +754,7 @@ spec:
 
 ### 역할 구분
 
-<div class="mermaid">
+```mermaid
 graph TD
     A[Pod 시작] --> B[startupProbe]
     B -->|성공| C[livenessProbe + readinessProbe 시작]
@@ -765,7 +765,7 @@ graph TD
     E -->|성공| H[Pod 정상 운영 유지]
     F -->|실패| I[Service Endpoint에서 제거]
     F -->|성공| J[트래픽 수신]
-</div>
+```
 
 ### 세부 비교표
 
@@ -1144,7 +1144,7 @@ spec:
 
 ### 7-4. Cold Start 최적화 사이클
 
-<div class="mermaid">
+```mermaid
 graph LR
     A[현재 Cold Start 시간 측정] --> B[병목 단계 식별]
     B --> C{병목 원인}
@@ -1157,7 +1157,7 @@ graph LR
     F --> H
     G --> H
     H --> A
-</div>
+```
 
 ---
 
@@ -1426,7 +1426,7 @@ ENTRYPOINT ["java",
 
 ### Cold Start 대응 전략 선택 기준
 
-<div class="mermaid">
+```mermaid
 graph TD
     A[Cold Start 문제 발생] --> B{트래픽 패턴}
     B -->|예측 가능| C[CronHPA / 사전 스케일아웃]
@@ -1440,7 +1440,7 @@ graph TD
     G --> I
     H --> I
     I --> J[모니터링 대시보드 구축]
-</div>
+```
 
 ### 체크리스트
 

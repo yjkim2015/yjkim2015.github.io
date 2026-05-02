@@ -23,7 +23,7 @@ toc_label: 목차
 
 ### 전체 아키텍처 흐름
 
-<div class="mermaid">
+```mermaid
 flowchart TD
     subgraph "클라이언트 요청"
         U1[사용자 A] -->|주문 요청| S1[서버 1]
@@ -52,7 +52,7 @@ flowchart TD
 
     style R fill:#ff6b6b,color:#fff
     style DB fill:#4ecdc4,color:#fff
-</div>
+```
 
 ### 왜 Redis인가?
 
@@ -80,7 +80,7 @@ SET resource_lock <unique_value> NX EX 30
 
 ### 락 획득 ~ 해제 전체 흐름
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as 클라이언트
     participant R as Redis
@@ -97,7 +97,7 @@ sequenceDiagram
     Note over C: Step 3: Lua로 안전하게 락 해제
     C->>R: EVAL "if get==uuid then del end" order:lock:42 uuid-abc
     R-->>C: 1 (해제 성공)
-</div>
+```
 
 ### 락 획득 코드
 
@@ -142,7 +142,7 @@ private void releaseLock(String key, String value) {
 
 > **비유**: GET으로 "내 열쇠 맞나 확인" 하고 DEL로 "열쇠 반납" 하는 사이에, 다른 사람이 새 열쇠를 걸어버리면 남의 열쇠를 빼앗게 된다. Lua는 확인과 반납을 하나의 동작으로 묶어준다.
 
-<div class="mermaid">
+```mermaid
 flowchart LR
     subgraph "❌ 잘못된 방식 (GET → DEL 분리)"
         A1[GET lock] --> A2{내 값?}
@@ -159,7 +159,7 @@ flowchart LR
 
     style A3 fill:#fdd
     style B1 fill:#dfd
-</div>
+```
 
 ---
 
@@ -259,7 +259,7 @@ public class OrderService {
 
 ### Lettuce 스핀락의 문제점
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant B as Thread B (대기 중)
     participant R as Redis
@@ -275,7 +275,7 @@ sequenceDiagram
     Note over B: 다음 sleep 종료까지 최대 100ms 추가 지연
     B->>R: Step 4. tryLock → OK
     Note over B: 불필요한 Redis 명령 3회, 지연 최대 100ms
-</div>
+```
 
 - 불필요한 Redis 명령어 반복 실행 → Redis 부하
 - 락 해제 이벤트를 즉시 감지 못해 최대 100ms 추가 지연
@@ -354,7 +354,7 @@ lock.lock(); // 무기한 보유, Watchdog이 TTL 연장
 
 Redisson의 가장 큰 장점은 락 대기 방식이다. 스핀락이 아닌 Pub/Sub 이벤트로 대기한다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant A as Thread A (락 보유)
     participant R as Redis
@@ -380,7 +380,7 @@ sequenceDiagram
     Note over B,C: Step 5. 경쟁 재시도
     B->>R: tryLock → OK (먼저 도착)
     C->>R: tryLock → FAIL → 다시 대기
-</div>
+```
 
 **스핀락 vs Pub/Sub 비교:**
 
@@ -397,7 +397,7 @@ sequenceDiagram
 
 Redisson은 leaseTime을 지정하지 않으면 **Watchdog**을 통해 락 TTL을 자동으로 연장한다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant App as Application
     participant WD as Watchdog (백그라운드)
@@ -421,7 +421,7 @@ sequenceDiagram
     Note over App: Step 5. 작업 완료
     App->>R: unlock() → 키 삭제
     Note over WD: Watchdog 자동 중단
-</div>
+```
 
 **Watchdog 동작 원리:**
 - 기본 TTL: 30초 (`lockWatchdogTimeout`)
@@ -463,7 +463,7 @@ try {
 }
 ```
 
-<div class="mermaid">
+```mermaid
 flowchart LR
     subgraph "FairLock 대기 큐 (Redis List)"
         Q1[Thread-1 먼저 요청] --> Q2[Thread-2] --> Q3[Thread-3 나중 요청]
@@ -473,7 +473,7 @@ flowchart LR
     Q3 -.->|Step 3. Thread-2 완료 후 차례| L
     style Q1 fill:#8f8
     style L fill:#4af,color:#fff
-</div>
+```
 
 **단점:** 일반 RLock보다 오버헤드가 크고, 처리량이 낮다.
 
@@ -612,7 +612,7 @@ latch.await();
 3. **과반수(N/2 + 1) 이상** 성공하고, 총 소요 시간이 TTL보다 짧으면 락 획득 성공
 4. 실패 시 모든 노드에서 락을 해제한다
 
-<div class="mermaid">
+```mermaid
 flowchart TD
     C[클라이언트] -->|Step 1. 현재 시각 T1 기록| START
 
@@ -637,7 +637,7 @@ flowchart TD
     style R4 fill:#f88,stroke:#c00
     style SUCCESS fill:#8f8,stroke:#080
     style FAIL fill:#fdd,stroke:#c00
-</div>
+```
 
 ```
 Redlock 알고리즘 의사코드:
@@ -690,7 +690,7 @@ Martin Kleppmann(DDIA 저자)은 Redlock의 안전성에 의문을 제기했다:
 
 **상황**: 서버 A가 락을 잡고 주문 처리 중에 갑자기 OOM으로 프로세스가 죽었다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant A as Process A
     participant B as Process B
@@ -712,7 +712,7 @@ sequenceDiagram
     Note over B: Step 5. 재시도
     B->>R: SET order:lock NX EX 30
     R-->>B: OK (락 획득 성공)
-</div>
+```
 
 **해결**: TTL이 자동으로 만료시킨다. **TTL이 없으면 영원히 데드락**이다. TTL은 반드시 설정해야 한다.
 
@@ -722,7 +722,7 @@ sequenceDiagram
 
 **상황**: 쿠팡 대용량 주문 처리 중 외부 결제 API가 응답을 늦게 줬다. 락 TTL은 30초였는데 작업이 35초 걸렸다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant A as Process A
     participant B as Process B
@@ -743,7 +743,7 @@ sequenceDiagram
     Note over A: Step 6. 작업 완료 (35s 후)
     A->>R: DEL lock (Lua 없이!)
     Note over A,R: ⚠️ A가 B의 락을 삭제! → B도 임계 영역 노출
-</div>
+```
 
 **해결 1**: Lua 스크립트로 `value` 비교 후 삭제 (UUID 확인 후 DEL)
 
@@ -764,7 +764,7 @@ if (ttl != null && ttl < MINIMUM_WORK_TIME_MS) {
 
 **상황**: 락을 저장한 Redis 마스터가 갑자기 죽었다. Sentinel이 레플리카를 마스터로 승격시켰다. 그 사이 서버 B가 새 마스터에서 락을 획득했다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant A as Process A
     participant M as Redis Master
@@ -784,7 +784,7 @@ sequenceDiagram
 
     Note over A,B: ⚠️ Step 5. A, B 동시에 임계 영역 진입!
     Note over A,B: 재고 1개인데 두 명에게 결제 완료
-</div>
+```
 
 **원인**: Redis 복제는 **비동기**이므로, 마스터가 죽기 전에 복제되지 않은 데이터는 유실된다.
 
@@ -806,7 +806,7 @@ redisTemplate.execute((RedisCallback<Long>) conn ->
 
 **상황**: 서버 A는 락을 보유하고 작업 중이지만, Redis와 통신이 끊겼다. Watchdog이 TTL을 연장하지 못해 락이 만료됐다. 서버 B가 락을 획득했다.
 
-<div class="mermaid">
+```mermaid
 flowchart LR
     subgraph "네트워크 파티션 발생"
         A[Process A\n락 보유 중] -. "Step 1.\n네트워크 단절 ✕" .- R[(Redis)]
@@ -817,13 +817,13 @@ flowchart LR
     B -->|Step 4. 실제 락 보유| DB
     style A fill:#fdd,stroke:#c00
     style B fill:#dfd,stroke:#080
-</div>
+```
 
 **해결: Fencing Token 패턴**
 
 A는 작업 시작 전 **fencing token**(단조 증가 번호)을 발급받는다. 공유 자원(DB 등)은 fencing token이 현재보다 큰 경우에만 쓰기를 허용한다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant A as Process A (구 락, token=33)
     participant B as Process B (현 락, token=34)
@@ -834,7 +834,7 @@ sequenceDiagram
     B->>DB: Step 3. 쓰기 시도 (fencing_token=34)
     DB-->>B: ✅ Step 4. 허용 (token 34 > 현재 최대값 0)
     DB-->>A: ❌ Step 5. 거부 (token 33 < 현재 최대값 34)
-</div>
+```
 
 ```java
 // 락 획득 시 단조 증가 토큰 발급
@@ -855,7 +855,7 @@ WHERE id = :id AND last_token < :token  -- 오래된 토큰이면 무시
 
 **상황**: 대용량 트래픽으로 JVM Full GC가 35초간 발생했다. 락 TTL이 30초였다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant A as Process A
     participant B as Process B
@@ -877,7 +877,7 @@ sequenceDiagram
     Note over A: Step 7. 작업 재개
 
     Note over A,B: ⚠️ Step 8. A, B 동시에 임계 영역 진입!
-</div>
+```
 
 **증상**: GC가 끝난 서버 A가 자신이 여전히 락을 보유하고 있다고 착각하고 작업을 이어간다.
 
@@ -891,7 +891,7 @@ sequenceDiagram
 
 ## 11. 전체 선택 가이드
 
-<div class="mermaid">
+```mermaid
 flowchart TD
     START([분산 락 구현 결정]) --> Q1{서버 인스턴스\n수는?}
 
@@ -917,7 +917,7 @@ flowchart TD
     style REDISSON fill:#4af,color:#fff
     style REDLOCK fill:#f90,color:#fff
     style ZK fill:#f44,color:#fff
-</div>
+```
 
 ---
 

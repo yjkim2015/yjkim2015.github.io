@@ -15,14 +15,14 @@ toc_label: 목차
 
 Redis 복제는 **마스터(Master)** 노드의 데이터를 하나 이상의 **레플리카(Replica)** 노드에 실시간으로 복사하는 기능이다.
 
-<div class="mermaid">
+```mermaid
 graph LR
     C[Client]
     C -->|쓰기/읽기| M[Master]
     M -->|복제 읽기 전용| R1[Replica 1]
     M -->|복제 읽기 전용| R2[Replica 2]
     M -->|복제 읽기 전용| R3[Replica 3]
-</div>
+```
 
 ### 목적
 
@@ -67,7 +67,7 @@ REPLICAOF NO ONE
 
 레플리카가 **최초 연결** 시 또는 **재동기화가 불가능**할 때 수행된다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant Rep as Replica
     participant M as Master
@@ -80,7 +80,7 @@ sequenceDiagram
     M-->>Rep: replication buffer 전송
     Note over Rep: 3. buffer 명령어 적용
     Note over Rep,M: 동기화 완료!
-</div>
+```
 
 **주의**: Full Sync 중 마스터는 **BGSAVE + 버퍼 유지**로 메모리를 추가 사용한다. 데이터가 크면 수 GB 단위로 메모리가 증가할 수 있다.
 
@@ -88,7 +88,7 @@ sequenceDiagram
 
 연결이 잠시 끊겼다가 재연결되면, **끊긴 부분부터** 이어서 동기화한다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant Rep as Replica
     participant M as Master
@@ -98,7 +98,7 @@ sequenceDiagram
     Note over M: backlog에 offset 12345 이후 데이터 존재 확인
     M-->>Rep: cmd3, cmd4, cmd5 전송 (Partial Sync)
     Note over Rep,M: Partial Sync 성공!
-</div>
+```
 
 **실패 조건**: 레플리카의 offset이 backlog에 없으면 (너무 오래 끊어짐) → **Full Sync로 폴백**
 
@@ -111,7 +111,7 @@ repl-backlog-size 256mb
 
 동기화 완료 후, 마스터의 모든 쓰기 명령어가 **실시간으로** 레플리카에 전파된다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as Client
     participant M as Master
@@ -124,7 +124,7 @@ sequenceDiagram
     M->>R1: SET user:1 "Kim" (비동기)
     M->>R2: SET user:1 "Kim" (비동기)
     M->>R3: SET user:1 "Kim" (비동기)
-</div>
+```
 
 **비동기**: 마스터는 레플리카의 응답을 **기다리지 않는다.** 따라서 레플리카는 항상 마스터보다 약간 뒤처질 수 있다.
 
@@ -134,23 +134,23 @@ sequenceDiagram
 
 ### 체인 복제
 
-<div class="mermaid">
+```mermaid
 graph LR
     M[Master] --> RA[Replica A]
     RA --> RB[Replica B]
     RB --> RC[Replica C]
-</div>
+```
 
 마스터의 부하를 줄일 수 있지만, 전파 지연이 길어진다.
 
 ### 스타 복제
 
-<div class="mermaid">
+```mermaid
 graph LR
     M[Master] --> RA[Replica A]
     M --> RB[Replica B]
     M --> RC[Replica C]
-</div>
+```
 
 지연이 짧지만, 마스터의 네트워크 부하가 레플리카 수에 비례한다.
 
@@ -160,7 +160,7 @@ graph LR
 
 ### 데이터 유실 시나리오
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as Client
     participant M as Master
@@ -172,7 +172,7 @@ sequenceDiagram
     Note over M: 크래시 💀
     Note over Rep: 승격 → 새 마스터 (key 없음!)
     Note over C,Rep: 클라이언트는 OK 받았지만 데이터 유실!
-</div>
+```
 
 ### WAIT 명령어 — 동기 복제 흉내
 
@@ -191,7 +191,7 @@ WAIT 2 5000
 
 수동으로 레플리카를 승격시키는 것은 비현실적이다. **Redis Sentinel**이 자동으로 처리한다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     S1[Sentinel 1] --- S2[Sentinel 2]
     S2 --- S3[Sentinel 3]
@@ -201,7 +201,7 @@ graph TD
     S1 & S2 & S3 -->|감시| R2[Replica 2]
     M -->|복제| R1
     M -->|복제| R2
-</div>
+```
 
 ### 동작 과정
 
@@ -223,12 +223,12 @@ graph TD
 
 Redis Cluster는 **샤딩 + 복제**를 결합한다.
 
-<div class="mermaid">
+```mermaid
 graph LR
     MA["Master A (슬롯 0~5460)"] --> RA[Replica A']
     MB["Master B (슬롯 5461~10922)"] --> RB[Replica B']
     MC["Master C (슬롯 10923~16383)"] --> RC[Replica C']
-</div>
+```
 
 - 각 마스터가 해시 슬롯의 일부를 담당
 - 마스터 장애 시 해당 레플리카가 자동 승격
@@ -283,19 +283,19 @@ replica-serve-stale-data yes     # 동기화 중에도 (오래된) 데이터 제
 
 마스터가 혼자 남으면 쓰기를 거부하여, **장애 시 데이터 유실 범위**를 제한한다.
 
-<div class="mermaid">
+```mermaid
 graph LR
-    subgraph 정상
+    subgraph "정상"
         M1[Master] <-->|연결| R1[Replica]
         M1 --> W1[쓰기 허용]
     end
-    subgraph 장애
+    subgraph "장애"
         M2[Master] -. 연결 끊김 ✕ .- R2[Replica]
         M2 --> W2[쓰기 거부 - 유실 방지]
     end
     style W1 fill:#8f8,stroke:#080
     style W2 fill:#f88,stroke:#c00
-</div>
+```
 
 ---
 

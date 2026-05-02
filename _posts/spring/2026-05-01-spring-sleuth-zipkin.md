@@ -22,7 +22,7 @@ date: 2026-05-01
 - **SpanId**: 각 서비스(또는 작업 단위)를 식별하는 ID. 서비스마다 새로 생성된다.
 - **ParentSpanId**: 호출자의 SpanId. 이를 통해 서비스 간 호출 계층 구조를 파악한다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "TraceId: abc123 (하나의 주문 요청)"
         A["API Gateway\nSpanId: span1\nParent: 없음"]
@@ -36,7 +36,7 @@ graph TD
     B --> C
     B --> D
     B --> E
-</div>
+```
 
 TraceId가 있으면 각 서비스의 로그를 한 번에 조회할 수 있다.
 
@@ -210,7 +210,7 @@ docker run -d -p 9411:9411 openzipkin/zipkin
 
 Zipkin의 Gantt 차트로 각 서비스의 처리 시간과 순서를 한눈에 볼 수 있다.
 
-<div class="mermaid">
+```mermaid
 gantt
     title "TraceId abc123 타임라인 (Zipkin Gantt 차트)"
     dateFormat x
@@ -230,3 +230,4 @@ gantt
 
     section Notification Service
     "span5 - 알림 발송"      :285, 300
+```

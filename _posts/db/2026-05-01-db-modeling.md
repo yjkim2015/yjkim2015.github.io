@@ -17,7 +17,7 @@ DB 모델링도 동일하게 세 단계로 진행됩니다.
 
 ## 모델링 3단계
 
-<div class="mermaid">
+```mermaid
 graph LR
     A[개념적 모델링<br>무엇을 저장할까?<br>엔티티 식별] -->
     B[논리적 모델링<br>어떻게 구조화할까?<br>속성, 관계, 정규화] -->
@@ -26,7 +26,7 @@ graph LR
     style A fill:#AED6F1
     style B fill:#A9DFBF
     style C fill:#F9E79F
-</div>
+```
 
 ---
 
@@ -60,7 +60,7 @@ graph LR
 
 ### ERD (Entity-Relationship Diagram)
 
-<div class="mermaid">
+```mermaid
 erDiagram
     CUSTOMER {
         bigint customer_id PK
@@ -101,7 +101,7 @@ erDiagram
     PRODUCT ||--o{ ORDER_ITEM : "included in"
     CATEGORY ||--o{ PRODUCT : "has"
     CATEGORY ||--o{ CATEGORY : "parent of"
-</div>
+```
 
 ---
 

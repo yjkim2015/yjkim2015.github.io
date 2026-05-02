@@ -1,0 +1,25 @@
+{% if include.title or include.content %}
+<div class="extreme-scenario-section">
+  <details class="extreme-scenario-details">
+    <summary class="extreme-scenario-summary">
+      <span class="extreme-scenario-icon">🔥</span>
+      <span class="extreme-scenario-label">{{ include.title | default: "극한 시나리오 — 클릭하여 펼치기" }}</span>
+      <span class="extreme-scenario-toggle"></span>
+    </summary>
+    <div class="extreme-scenario-body">
+      <div class="extreme-scenario-ad">
+        <ins class="adsbygoogle"
+             style="display:block"
+             data-ad-client="ca-pub-7225106491387870"
+             data-ad-slot="0000000000"
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      </div>
+      <div class="extreme-scenario-content">
+        {{ include.content | markdownify }}
+      </div>
+    </div>
+  </details>
+</div>
+{% endif %}

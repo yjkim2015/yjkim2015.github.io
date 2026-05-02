@@ -1305,6 +1305,83 @@ nav.pagination,
 }
 
 /* ============================================
+   극한 시나리오 접이식 섹션
+   ============================================ */
+.extreme-scenario-section {
+  margin: 2.5em 0;
+}
+
+.extreme-scenario-details {
+  border: 1.5px solid #ffe0b2;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fffbf5;
+
+  &[open] .extreme-scenario-toggle::after { content: "▲"; }
+}
+
+.extreme-scenario-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 1em 1.3em;
+  cursor: pointer;
+  list-style: none;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  font-weight: 700;
+  font-size: 1em;
+  color: #e65100 !important;
+  user-select: none;
+  transition: background 0.15s;
+
+  &::-webkit-details-marker { display: none; }
+  &:hover { background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%); }
+}
+
+.extreme-scenario-icon {
+  font-size: 1.2em;
+}
+
+.extreme-scenario-label {
+  flex: 1;
+}
+
+.extreme-scenario-toggle {
+  font-size: 0.75em;
+  color: #bf360c !important;
+  &::after { content: "▼"; }
+}
+
+.extreme-scenario-body {
+  padding: 1.5em 1.8em;
+}
+
+.extreme-scenario-ad {
+  margin-bottom: 1.5em;
+  text-align: center;
+  padding: 0.5em 0;
+  border-bottom: 1px solid #ffe0b2;
+}
+
+.extreme-scenario-content {
+  font-size: 1em;
+  color: #333 !important;
+  line-height: 2.0;
+
+  h3, h4 {
+    color: #bf360c !important;
+    margin-top: 1.5em;
+  }
+
+  strong { color: #e65100 !important; }
+
+  blockquote {
+    border-left-color: #ff9800;
+    background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+  }
+}
+
+/* ============================================
    광고 유닛 공통
    ============================================ */
 .ad-unit {

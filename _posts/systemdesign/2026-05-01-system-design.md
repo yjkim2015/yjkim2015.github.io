@@ -48,7 +48,7 @@ toc_label: 목차
    - 트레이드오프 논의
 ```
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "1️⃣ 요구사항"
         R1[기능 요구사항]
@@ -92,7 +92,7 @@ graph TD
     class H1,H2,H3 high
     class D1,D2,D3 detail
     class F1,F2,F3 final
-</div>
+```
 
 ---
 
@@ -129,7 +129,7 @@ graph TD
 **장점**: 이론적으로 무한 확장 가능, 고가용성(HA), 비용 효율적
 **단점**: 상태(State) 공유 문제, 데이터 일관성 복잡도, 설계 난이도 증가
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "1️⃣ 클라이언트"
         C1[웹 브라우저]
@@ -182,7 +182,7 @@ graph TD
     class S1,S2,S3 server
     class CACHE cache
     class DB,DB_R1,DB_R2 db
-</div>
+```
 
 ---
 
@@ -194,7 +194,7 @@ graph TD
 
 DB를 선택할 때 단순히 "성능"만 보는 게 아니라, 비즈니스 요구사항에 맞는 일관성 모델을 선택해야 한다. 잘못 선택하면 은행 계좌에서 돈이 두 번 빠져나가거나, 재고가 음수가 되는 참사가 발생한다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "CAP 트라이앵글"
         C["C: Consistency\n모든 노드가 같은 데이터"]
@@ -227,7 +227,7 @@ graph TD
     class CP cp
     class AP ap
     class CA ca
-</div>
+```
 
 **현실**: 네트워크 파티션은 언제든 발생할 수 있으므로 P는 필수다. 따라서 실제 선택은 **CP vs AP**다.
 
@@ -288,7 +288,7 @@ L7 (Application Layer): HTTP 헤더/URL/쿠키 기반 라우팅
 
 한국 서버에서 미국 사용자에게 이미지를 보내면 왕복 시간만 150ms다. CDN이 있으면 미국 엣지 서버에서 즉시 응답한다.
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant USER as 1️⃣ 한국 사용자
     participant CDN_KR as 2️⃣ CDN 서울 엣지
@@ -304,7 +304,7 @@ sequenceDiagram
         CDN_KR->>CDN_KR: 캐싱 (TTL: 1일)
         CDN_KR-->>USER: 응답 (150ms)
     end
-</div>
+```
 
 **정적 파일** (이미지, JS, CSS, 동영상): CDN 필수
 **동적 콘텐츠** (로그인 상태, 개인화 데이터): Origin 서버에서 처리
@@ -343,7 +343,7 @@ sequenceDiagram
 
 ## DB 선택 기준 — 은빛 총알은 없다
 
-<div class="mermaid">
+```mermaid
 graph TD
     Q1{트랜잭션\nACID 필요?}
     Q2{데이터가\n계층적/비정형?}
@@ -366,7 +366,7 @@ graph TD
 
     classDef db fill:#fff3e0,stroke:#f57c00
     class RDBMS,MONGO,REDIS,NEO4J,INFLUX,ES db
-</div>
+```
 
 | 요구사항 | DB 선택 | 이유 |
 |---------|---------|------|
@@ -433,7 +433,7 @@ Snowflake ID → Base62 인코딩:
 예시: 12345678 → "W7e3p2K"
 ```
 
-<div class="mermaid">
+```mermaid
 sequenceDiagram
     participant C as 1️⃣ 클라이언트
     participant LB as 2️⃣ 로드밸런서
@@ -464,7 +464,7 @@ sequenceDiagram
         API->>CACHE: SET W7e3p2K → longUrl EX=86400
         API-->>C: 302 Redirect → longUrl
     end
-</div>
+```
 
 ---
 
