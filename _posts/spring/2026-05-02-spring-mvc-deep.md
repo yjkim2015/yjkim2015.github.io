@@ -28,11 +28,11 @@ Spring MVC 이전 시대에는 URL마다 별도의 서블릿을 등록해야 했
 ```mermaid
 sequenceDiagram
     participant B as 🌐 브라우저
-    participant T as 🐱 Tomcat<br/>(서블릿 컨테이너)
+    participant T as 🐱 Tomcat<br>(서블릿 컨테이너)
     participant S as 📄 Servlet
 
     B->>T: HTTP 요청 (POST /orders)
-    Note over T: HttpServletRequest 생성<br/>HttpServletResponse 생성
+    Note over T: HttpServletRequest 생성<br>HttpServletResponse 생성
     T->>S: service(request, response) 호출
     Note over S: HTTP Method 판별
     S->>S: doPost() 실행
@@ -163,7 +163,7 @@ sequenceDiagram
     Note over F: 인코딩, CORS, 보안 처리
     F->>DS: 2️⃣ 필터 통과
     DS->>HM: 3️⃣ 핸들러 조회
-    HM-->>DS: HandlerExecutionChain 반환<br/>(핸들러 + 인터셉터 목록)
+    HM-->>DS: HandlerExecutionChain 반환<br>(핸들러 + 인터셉터 목록)
     DS->>DS: 4️⃣ HandlerAdapter 선택
     DS->>I: 5️⃣ preHandle() 호출
     alt preHandle() == false
@@ -232,15 +232,15 @@ protected void doDispatch(HttpServletRequest request, HttpServletResponse respon
 ```mermaid
 graph TD
     subgraph "HandlerMapping 우선순위"
-        A["1️⃣ RequestMappingHandlerMapping\n@RequestMapping 기반\n(가장 많이 사용)"]
-        B["2️⃣ BeanNameUrlHandlerMapping\n빈 이름이 URL인 경우\n(레거시 방식)"]
-        C["3️⃣ RouterFunctionMapping\nWebFlux RouterFunction\n(함수형 엔드포인트)"]
-        D["4️⃣ SimpleUrlHandlerMapping\nURL 패턴 직접 매핑\n(정적 자원)"]
+        A["1️⃣ RequestMappingHandlerMapping\n@RequestMapping 기반\n("가장 많이 사용")"]
+        B["2️⃣ BeanNameUrlHandlerMapping\n빈 이름이 URL인 경우\n("레거시 방식")"]
+        C["3️⃣ RouterFunctionMapping\nWebFlux RouterFunction\n("함수형 엔드포인트")"]
+        D["4️⃣ SimpleUrlHandlerMapping\nURL 패턴 직접 매핑\n("정적 자원")"]
     end
 
     A --> E["컨트롤러 메서드"]
     B --> F["빈 이름 /orderController"]
-    C --> G["route(GET('/path'), handler)"]
+    C --> G["route(GET("'/path'"), handler)"]
     D --> H["/**/*.html"]
 
     classDef primary fill:#cce5ff,stroke:#007bff
@@ -472,7 +472,7 @@ public ResponseEntity<OrderResponse> createOrder(
 ```mermaid
 flowchart TD
     subgraph "ViewResolver 체인 처리"
-        A["컨트롤러가\n'order/list' 반환"] --> B["1️⃣ ContentNegotiatingViewResolver\n(Accept 헤더 기반 선택)"]
+        A["컨트롤러가\n'order/list' 반환"] --> B["1️⃣ ContentNegotiatingViewResolver\n("Accept 헤더 기반 선택")"]
         B --> C["2️⃣ ThymeleafViewResolver\nclasspath:/templates/order/list.html"]
         B --> D["3️⃣ InternalResourceViewResolver\n/WEB-INF/views/order/list.jsp"]
     end
@@ -540,23 +540,23 @@ public String createOrderBad(OrderCreateRequest request) {
 ```mermaid
 graph TD
     subgraph "서블릿 컨테이너 영역"
-        A["HTTP 요청"] --> B["🔒 Filter 1\n(인코딩)"]
+        A["HTTP 요청"] --> B["🔒 Filter 1\n("인코딩")"]
         B --> C["🔒 Filter 2\n(CORS)"]
         C --> D["🔒 Filter 3\n(Security)"]
     end
 
     subgraph "Spring MVC 영역"
         D --> E["⚡ DispatcherServlet"]
-        E --> F["🛡️ Interceptor 1 preHandle\n(로그인 체크)"]
-        F --> G["🛡️ Interceptor 2 preHandle\n(권한 체크)"]
+        E --> F["🛡️ Interceptor 1 preHandle\n("로그인 체크")"]
+        F --> G["🛡️ Interceptor 2 preHandle\n("권한 체크")"]
         G --> H["🎯 Controller"]
         H --> I["🛡️ Interceptor 2 postHandle"]
         I --> J["🛡️ Interceptor 1 postHandle"]
         J --> K["🖼️ View 렌더링"]
-        K --> L["🛡️ afterCompletion\n(예외 포함 항상 실행)"]
+        K --> L["🛡️ afterCompletion\n("예외 포함 항상 실행")"]
     end
 
-    L --> M["🔒 Filter (역방향)"]
+    L --> M["🔒 Filter ("역방향")"]
     M --> N["HTTP 응답"]
 
     classDef filter fill:#fff3cd,stroke:#ffc107
@@ -723,7 +723,7 @@ flowchart TD
         H -->|"있음"| I["HTTP 상태코드로 응답"]
         H -->|"없음"| J["3️⃣ DefaultHandlerExceptionResolver"]
         J --> K{"Spring MVC\n표준 예외?"}
-        K -->|"있음"| L["표준 HTTP 응답\n(400, 405 등)"]
+        K -->|"있음"| L["표준 HTTP 응답\n("400, 405 등")"]
         K -->|"없음"| M["500 Internal Server Error"]
     end
 
@@ -836,7 +836,7 @@ public class ErrorResponse {
 flowchart LR
     subgraph "요청 처리 (@RequestBody)"
         A["HTTP 요청\nContent-Type: application/json"] --> B["컨버터 목록 순회"]
-        B --> C{"canRead(타입, 미디어타입)?"}
+        B --> C{"canRead("타입, 미디어타입")?"}
         C -->|"Yes"| D["read() 실행\nJSON → Java 객체"]
         C -->|"No"| E["다음 컨버터"]
         E --> C
@@ -844,7 +844,7 @@ flowchart LR
 
     subgraph "응답 처리 (@ResponseBody)"
         F["Java 객체 반환"] --> G["Accept 헤더 확인"]
-        G --> H{"canWrite(타입, Accept)?"}
+        G --> H{"canWrite("타입, Accept")?"}
         H -->|"Yes"| I["write() 실행\nJava 객체 → JSON"]
         H -->|"No"| J["다음 컨버터"]
         J --> H
@@ -1169,7 +1169,7 @@ public class OrderApiV2Controller {
 ```mermaid
 flowchart LR
     subgraph "서블릿 계층"
-        A["🌐 HTTP 요청\nPOST /api/orders"] --> B["🔒 Filter Chain\n(인코딩·CORS·보안)"]
+        A["🌐 HTTP 요청\nPOST /api/orders"] --> B["🔒 Filter Chain\n("인코딩·CORS·보안")"]
     end
 
     subgraph "Spring MVC 핵심"

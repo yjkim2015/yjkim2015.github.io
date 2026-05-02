@@ -1,330 +1,308 @@
 ---
-title: 플라이웨이트 (Flyweight) 패턴
+title: 플라이웨이트(Flyweight) 패턴
 categories:
-- DesignPattern
+- DESIGNPATTERN
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
 
-## 🔗 플라이웨이트 (flyweight) 패턴이란?
+> **한 줄 요약:** 플라이웨이트 패턴은 공유(Sharing)를 통해 대량의 유사 객체를 효율적으로 관리해 메모리 사용을 크게 줄이는 구조 패턴이다.
 
-* **플라이웨이트 패턴은** 어떤 클래스의 **인스턴스 한 개만 가지고 여러 개의 "가상 인스턴스"를 제공하고 싶을 때 사용하는 패턴이다**.
+## 실생활 비유
 
-  * <span style="color:red;">즉, 인스턴스를 가능한 대로 공유</span>시켜 쓸데없이 new 연산자를 통한 메모리 낭비를 줄이는 방식이다.
+**폰트 시스템**을 생각해보자. 워드 프로세서에서 10만 글자가 적힌 문서를 열었다고 하자. 각 글자마다 폰트 정보(글꼴, 크기, 굵기) 객체를 따로 만든다면 10만 개의 객체가 생긴다. 그런데 사실 대부분의 글자는 같은 "맑은고딕 12pt 보통" 폰트를 사용한다.
 
-  
+플라이웨이트 패턴은 이 폰트 객체를 **단 하나만 만들어 공유**한다. 10만 글자가 하나의 폰트 객체를 참조하므로 메모리가 획기적으로 줄어든다.
 
-  *  **많은 수의 객체를 생성해야 할 때 사용하는 패턴**으로 <span style="color:red;">공유(Sharing)</span>을 통하여 **대량의 객체들을 효과적으로 지원하는 방법**이다
+---
 
+## 패턴 개요
 
+### 내적 상태 vs 외적 상태
 
-* 주로 **생성 된 객체 수를 줄이고 메모리 사용 공간을 줄이며** <span style="color:red;">성능을 향상시키는 데 사용</span>되며, 이러한 유형의 디자인 패턴은 오브젝트 패턴을 감소시켜 어플리케이션에 필요한 오브젝트 구조를 향상시킨다.
+플라이웨이트 패턴의 핵심은 객체의 속성을 두 가지로 분리하는 것이다.
 
+| 구분 | 내적 상태 (Intrinsic State) | 외적 상태 (Extrinsic State) |
+|------|---------------------------|---------------------------|
+| 의미 | 객체를 고유하게 만드는 속성 | 문맥(Context)에 따라 달라지는 속성 |
+| 저장 위치 | Flyweight 객체 내부 (공유) | 클라이언트가 전달 |
+| 변경 여부 | 변경 불가 (불변) | 매 호출마다 달라짐 |
+| 예시 (글자) | 폰트 종류, 크기, 색상 | 화면상의 x, y 좌표 |
+| 예시 (나무) | 나무 종류, 텍스처 이미지 | 심은 위치(x, y) |
 
+### 언제 사용하는가?
 
-<hr>
+- 애플리케이션에서 생성하는 객체 수가 **매우 많아** 메모리 문제가 발생할 때
+- 대부분의 객체 상태가 **외적 상태로 분리**될 수 있을 때
+- 객체 제거 후에도 **많은 공유 객체로** 분류될 수 있을 때
 
+---
 
+## UML 다이어그램
 
-##### 💎 플라이웨이트 패턴이 적합한 경우
-
-* 어플리케이션에 의해 생성되는 객체의 수가 많아야 한다.
-
-
-
-* 생성된 객체가 오래도록 메모리에 상주하며 사용되는 횟수가 많다.
-
-
-
-* **객체의 특성**을 **내적 속성**과 **외적 속성**으로 나눴을 때, **객체의 외적 특성이 클라이언트 프로그램으로부터 정의**되어야 한다.
-
-  
-
-<hr>
-
-
-
-##### 💎 내적 속성? 외적 속성?
-
-* 객체의 **내적 속성은 객체를 유니크하게 하는 것**이고, **외적 속성은 클라이언트의 코드로부터 설정**되어 다른 동작을 수행하도록 사용되는 특성이다.
-
-
-
-<hr>
-
-
-
-💎 **플라이웨이트 패턴 활용 예**
-
-* **자바의 모든 래퍼 클래스의 valueOf 메서드**
-
-  * 그래서 래퍼 클래스를 생성해야 할 때 **new 키워드**를 통해 인스턴스를 매번 생성하기보다는 **valueOf()** 메서드를 통해 생성하는 것이 더 효율적이다.
-
-  
-
-* **Java의 String Pool**
-
-  * 자바에서는 **String Poo**l을 별도로 두어 같은 문자열에 대해 다시 사용될 때에 새로운 메모리를 할당하는 것이 아니라 **String Pool**에 있는지 검사해서 있으면 가져오고 없으면 새로 메모리를 할당하여 **String Pool**에 등록한 후에 사용하고 있다.
-
-
-
-<hr>
-
-
-
-💎 **Shape.java**
-
-* 도형을 그리는 draw 메소드를 갖고 있는 인터페이스
-
-```java
-package StructurePattern.FlyweightPattern;
-
-import java.awt.*;
-
-public interface Shape {
-    public void draw(Graphics g, int x, int y, int width, int height, Color color);
-}
-```
-
-
-
-<hr>
-
-
-
-💎 **Line.java**
-
-* Shape 인터페이스를 구현하는 선을 그리는 클래스
-
-
-
-* 인스턴스화 할 때 시간이 많이 걸린다는 것을 조금 더 과장해서 보여주기 위해 Thread.sleep 코드를 넣었다.
-
-```java
-package StructurePattern.FlyweightPattern;
-
-import java.awt.*;
-
-public class Line implements Shape {
-
-    public Line() {
-        System.out.println("Creating Line Object");
-
-        try {
-            Thread.sleep(2000);
-        }catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+```mermaid
+classDiagram
+    class Flyweight {
+        <<interface>>
+        +operation(extrinsicState: Context): void
+    }
+    class ConcreteFlyweight {
+        -intrinsicState: String
+        +operation(extrinsicState: Context): void
+    }
+    class FlyweightFactory {
+        -cache: Map
+        +getFlyweight(key: String): Flyweight
+    }
+    class Client {
+        -extrinsicState: Context
+        +operation(): void
     }
 
-    @Override
-    public void draw(Graphics line, int x1, int y1, int x2, int y2, Color color) {
-        line.setColor(color);
-        line.drawLine(x1, y1, x2, y2);
+    Flyweight <|.. ConcreteFlyweight
+    FlyweightFactory --> Flyweight : "캐시 관리"
+    Client --> FlyweightFactory : "요청"
+    Client --> Flyweight : "사용"
+```
+
+---
+
+## Java 코드 예제
+
+### 예제 1: 나무 렌더링 (게임 맵)
+
+숲에 수천 그루의 나무를 렌더링할 때 나무 종류(내적 상태)를 공유하는 예제다.
+
+```java
+// Flyweight: 공유할 내적 상태 (나무 종류, 텍스처)
+public class TreeType {
+    private final String name;        // 나무 이름 (소나무, 참나무 등)
+    private final String color;       // 색상
+    private final String texture;     // 텍스처 이미지 경로
+
+    public TreeType(String name, String color, String texture) {
+        this.name = name;
+        this.color = color;
+        this.texture = texture;
+        System.out.println("[생성] TreeType 객체 생성: " + name);
+    }
+
+    // 외적 상태(위치)는 파라미터로 전달
+    public void draw(int x, int y) {
+        System.out.println(name + " (" + color + ") 을 (" + x + ", " + y + ")에 렌더링");
     }
 }
 ```
 
-
-
-<hr>
-
-
-
-💎 **Oval.java**
-
-* Shape 인터페이스를 구현하여 원형을 그리는 클래스
-
-
-
-* 인스턴스화 할 때 시간이 많이 걸린다는 것을 조금 더 과장해서 보여주기 위해 Thread.sleep 코드를 넣었다.
-
 ```java
-package StructurePattern.FlyweightPattern;
+// Flyweight Factory: 캐시를 통해 공유 객체 관리
+public class TreeTypeFactory {
+    private static final Map<String, TreeType> cache = new HashMap<>();
 
-import java.awt.*;
+    public static TreeType getTreeType(String name, String color, String texture) {
+        String key = name + "_" + color;
 
-public class Oval implements Shape {
-
-    private boolean fill;
-
-    public Oval(boolean f) {
-        this.fill = f;
-        System.out.println("Creating Oval obejct with fill = " + f);
-
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        // 캐시에 없으면 새로 생성해서 저장, 있으면 기존 것 반환
+        if (!cache.containsKey(key)) {
+            cache.put(key, new TreeType(name, color, texture));
+        } else {
+            System.out.println("[캐시] 재사용: " + name);
         }
+        return cache.get(key);
     }
 
-    @Override
-    public void draw(Graphics circle, int x, int y, int width, int height, Color color) {
-        circle.setColor(color);
-        circle.drawOval(x, y, width, height);
-
-        if (fill) {
-            circle.fillOval(x, y, width, height);
-        }
+    public static int getCacheSize() {
+        return cache.size();
     }
 }
 ```
 
-
-
-
-
-<hr>
-
-
-
-💎 **ShapeFactory.java**
-
-* **Map**으로 **객체들을 관리**하여 팩토리 안에 정의 해둔 **Map에 객체가 있다면 별도의 인스턴스 생성 없이 그대로 Map에서 리턴** 하고 **만약 없다면 새로 인스턴스를 생성**하여 맵에 저장(put) 한 후에 그 객체를 리턴한다.
-
 ```java
-package StructurePattern.FlyweightPattern;
+// Context: 외적 상태(위치)를 보유하는 개별 나무 객체
+public class Tree {
+    private final int x;
+    private final int y;
+    private final TreeType type;  // 공유 객체 참조
 
-import java.util.HashMap;
-
-/*
-디자인 패턴의 교과서인 GoF에서는 플라이웨이트 패턴에 대해 다음과 같이 정의하고 있습니다.
-
-'공유(Sharing)'를 통하여 대량의 객체들을 효과적으로 지원하는 방법
-
-이처럼 플라이웨이트 패턴은 많은 수의 객체를 생성해야 할 때 주로 쓰입니다.
-
-쉽게 말하면 캐시된 데이터 사용하는거 같은데?
- */
-
-
-/*
-플라이웨이트 패턴은 어디에서 쓰이고 있을까요?
-
-자바의 모든 래퍼 클래스의 valueOf() 메소드가 바로 이 플라이웨이트 패턴을 사용하고 있습니다.
-그래서 래퍼 클래스를 생성해야 할 때 new 키워드를 통해 인스턴스를 매번 생성하기보다는 valueOf() 메소드를 통해 생성하는 것이 더 효율적입니다.
-
-
-또, 대표적으로 사용되는 것이 바로 Java의 String Pool 입니다.
-Java에서는 String Pool을 별도로 두어 같은 문자열에 대해 다시 사용될 때에 새로운 메모리를 할당하는 것이 아니라
-tring Pool에 있는지 검사해서 있으면 가져오고 없으면 새로 메모리를 할당하여 String Pool에 등록한 후에 사용하도록 하고 있습니다.
- */
-public class ShapeFactory {
-    private static final HashMap<ShapeType, Shape> shapes = new HashMap<ShapeType, Shape>();
-    public static Shape getShape(ShapeType type) {
-        Shape shapeImpl = shapes.get(type);
-        if ( shapeImpl == null ) {
-            if ( type.equals(ShapeType.OVAL_FILL) ) {
-                shapeImpl = new Oval(true);
-            }
-            else if ( type.equals(ShapeType.OVAL_NOFILL) ) {
-                shapeImpl = new Oval(false);
-            }
-            else if ( type.equals(ShapeType.LINE) ) {
-                shapeImpl = new Line();
-            }
-            shapes.put(type, shapeImpl);
-        }
-        return shapeImpl;
+    public Tree(int x, int y, TreeType type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
     }
 
-
-    public static enum ShapeType {
-        OVAL_FILL, OVAL_NOFILL, LINE;
+    public void draw() {
+        type.draw(x, y);  // 외적 상태를 전달
     }
 }
 ```
 
-
-
-<hr>
-
-
-
-💎 **DrawingClient.java**
-
-* 테스트 코드
-
-
-
-* 반복문 내에서 20번 **ShapeFactory** 클래스의 **getShape**를 호출한다.
-
-
-
-* Line 객체와 Oval 객체가 최초에 생성 될 때에만 생성자에서 설정해두었던 Sleep(2000)이 실행되고 이후에는 별도의 딜레이 없이 빠르게 생성되는 것을 확인할 수 있다.
-
 ```java
-package StructurePattern.FlyweightPattern;
+// 클라이언트: 수천 그루의 나무 생성
+public class Forest {
+    private final List<Tree> trees = new ArrayList<>();
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-
-public class DrawingClient extends JFrame {
-
-    private final int WIDTH;
-    private final int HEIGHT;
-
-    private static final ShapeFactory.ShapeType shapes[] = {ShapeFactory.ShapeType.LINE, ShapeFactory.ShapeType.OVAL_FILL, ShapeFactory.ShapeType.OVAL_NOFILL};
-    private static final Color colors[] = {Color.RED, Color.green, Color.yellow};
-
-    public DrawingClient(int width, int height) {
-        this.WIDTH = width;
-        this.HEIGHT = height;
-        Container contentPane = getContentPane();
-
-        JButton startButton = new JButton("Draw");
-        final JPanel panel = new JPanel();
-
-        contentPane.add(panel, BorderLayout.CENTER);
-        contentPane.add(startButton, BorderLayout.SOUTH);
-        setSize(WIDTH, HEIGHT);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setVisible(true);
-
-        startButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent event) {
-                Graphics g = panel.getGraphics();
-                for (int i = 0; i < 20; ++i) {
-                    Shape shape = ShapeFactory.getShape(getRandomShape());
-                    shape.draw(g, getRandomX(), getRandomY(), getRandomWidth(),
-                            getRandomHeight(), getRandomColor());
-                }
-            }
-        });
+    public void plantTree(int x, int y, String name, String color, String texture) {
+        // TreeType은 공유되므로 실제 생성은 최초 1회만
+        TreeType type = TreeTypeFactory.getTreeType(name, color, texture);
+        trees.add(new Tree(x, y, type));
     }
 
-    private ShapeFactory.ShapeType getRandomShape() {
-        return shapes[(int) (Math.random() * shapes.length)];
+    public void draw() {
+        for (Tree tree : trees) {
+            tree.draw();
+        }
     }
+}
 
-    private int getRandomX() {
-        return (int) (Math.random() * WIDTH);
-    }
-
-    private int getRandomY() {
-        return (int) (Math.random() * HEIGHT);
-    }
-
-    private int getRandomWidth() {
-        return (int) (Math.random() * (WIDTH / 10));
-    }
-
-    private int getRandomHeight() {
-        return (int) (Math.random() * (HEIGHT / 10));
-    }
-
-    private Color getRandomColor() {
-        return colors[(int) (Math.random() * colors.length)];
-    }
-
+public class Main {
     public static void main(String[] args) {
-        DrawingClient drawing = new DrawingClient(500,600);
-    }
+        Forest forest = new Forest();
 
+        // 1000그루의 나무를 심어도 TreeType 객체는 3개만 생성됨
+        for (int i = 0; i < 500; i++) {
+            forest.plantTree(i * 2, i * 3, "소나무", "초록", "pine.png");
+        }
+        for (int i = 0; i < 300; i++) {
+            forest.plantTree(i * 4, i * 5, "참나무", "갈색", "oak.png");
+        }
+        for (int i = 0; i < 200; i++) {
+            forest.plantTree(i * 6, i * 7, "벚나무", "분홍", "cherry.png");
+        }
+
+        System.out.println("\nTreeType 캐시 크기: " + TreeTypeFactory.getCacheSize());
+        // 출력: TreeType 캐시 크기: 3  (1000개가 아니라 3개!)
+
+        System.out.println("Tree 객체 수: 1000");
+        System.out.println("TreeType 공유 객체 수: " + TreeTypeFactory.getCacheSize());
+    }
 }
 ```
 
+---
+
+### 예제 2: 문자 렌더링
+
+```java
+// Flyweight: 글자 모양 정보 (내적 상태)
+public class CharacterGlyph {
+    private final char character;
+    private final String fontFamily;
+    private final int fontSize;
+
+    public CharacterGlyph(char character, String fontFamily, int fontSize) {
+        this.character = character;
+        this.fontFamily = fontFamily;
+        this.fontSize = fontSize;
+    }
+
+    // 외적 상태(위치, 색상)는 파라미터로 전달
+    public void render(int x, int y, String color) {
+        System.out.printf("글자 '%c' [%s %dpt] 를 (%d,%d) 위치에 %s 색으로 렌더링%n",
+                character, fontFamily, fontSize, x, y, color);
+    }
+}
+
+// Factory
+public class GlyphFactory {
+    private static final Map<String, CharacterGlyph> cache = new HashMap<>();
+
+    public static CharacterGlyph getGlyph(char ch, String font, int size) {
+        String key = ch + "_" + font + "_" + size;
+        return cache.computeIfAbsent(key,
+                k -> new CharacterGlyph(ch, font, size));
+    }
+}
+```
+
+---
+
+## 동작 흐름
+
+```mermaid
+sequenceDiagram
+    participant C as "Forest (클라이언트)"
+    participant F as "TreeTypeFactory"
+    participant T1 as "TreeType(소나무)"
+    participant T2 as "TreeType(참나무)"
+
+    C->>F: "1. getTreeType('소나무') 요청"
+    F->>F: "2. 캐시 확인 → 없음"
+    F->>T1: "3. new TreeType('소나무') 생성"
+    T1-->>F: "4. 인스턴스 반환"
+    F-->>C: "5. 소나무 TreeType 반환"
+
+    C->>F: "6. getTreeType('소나무') 재요청 (500번째)"
+    F->>F: "7. 캐시 확인 → 있음"
+    F-->>C: "8. 기존 TreeType 재사용 (생성 없음)"
+
+    C->>F: "9. getTreeType('참나무') 요청"
+    F->>F: "10. 캐시 확인 → 없음"
+    F->>T2: "11. new TreeType('참나무') 생성"
+    T2-->>F: "12. 인스턴스 반환"
+    F-->>C: "13. 참나무 TreeType 반환"
+```
+
+---
+
+## 실무 적용 사례
+
+| 분야 | 플라이웨이트 적용 예 |
+|------|------------------|
+| **JDK** | `Integer.valueOf(-128 ~ 127)` — 정수 캐시 풀 |
+| **JDK** | `String.intern()` — String Pool |
+| **JDK** | `Boolean.valueOf()`, `Byte.valueOf()` 등 래퍼 클래스 |
+| **게임 엔진** | 수천 개의 나무, 적군, 파티클 객체 관리 |
+| **브라우저** | 동일한 폰트, 색상 정보를 공유해 DOM 렌더링 최적화 |
+
+### JDK Integer 캐싱 예
+
+```java
+// Integer.valueOf()는 -128 ~ 127 범위를 캐시한다 (플라이웨이트)
+Integer a = Integer.valueOf(100);
+Integer b = Integer.valueOf(100);
+System.out.println(a == b);   // true  (동일 객체 공유)
+
+Integer c = Integer.valueOf(200);
+Integer d = Integer.valueOf(200);
+System.out.println(c == d);   // false (범위 초과, 새 객체 생성)
+
+// 래퍼 타입은 항상 equals()로 비교해야 하는 이유
+System.out.println(c.equals(d)); // true
+```
+
+---
+
+## 메모리 절약 효과 비교
+
+```
+[플라이웨이트 미적용]
+나무 1,000그루 × TreeType 객체(텍스처 1MB) = 1,000MB
+
+[플라이웨이트 적용]
+TreeType 객체 3개 × 1MB = 3MB
+Tree 객체 1,000개 × 위치 정보(int x, y) ≈ 수십 KB
+총계 ≈ 3MB  (약 333배 절약)
+```
+
+---
+
+## 장단점 비교
+
+| 항목 | 내용 |
+|------|------|
+| **장점: 메모리 절약** | 수많은 객체를 공유 객체로 대체해 메모리 사용량을 크게 줄인다 |
+| **장점: 성능 향상** | 객체 생성 횟수가 줄어 GC 부하가 감소한다 |
+| **단점: 코드 복잡도** | 내적/외적 상태를 분리해야 하므로 설계가 복잡해진다 |
+| **단점: 공유 상태 위험** | 플라이웨이트 객체가 변경되면 공유하는 모든 곳에 영향을 미친다. 반드시 불변이어야 한다 |
+| **단점: CPU 트레이드오프** | 외적 상태를 매번 전달해야 하므로 메모리 절약 대신 CPU 비용이 증가할 수 있다 |
+
+---
+
+## 핵심 포인트 정리
+
+- 플라이웨이트 패턴은 **공유(Sharing)를 통해 대량의 객체를 효율적으로 관리**하는 구조 패턴이다.
+- 핵심은 객체 상태를 **내적 상태(공유, 불변)**와 **외적 상태(문맥마다 다름, 클라이언트 전달)**로 분리하는 것이다.
+- JDK의 `Integer.valueOf()`, `String Pool`이 플라이웨이트 패턴의 대표적 내장 예다.
+- 게임 개발에서 수천 개의 파티클, 나무, 적군 객체를 효율적으로 관리할 때 자주 활용된다.
+- 공유 객체(플라이웨이트)는 반드시 **불변(Immutable)** 이어야 한다. 변경 가능하면 공유 중인 모든 객체에 영향을 준다.

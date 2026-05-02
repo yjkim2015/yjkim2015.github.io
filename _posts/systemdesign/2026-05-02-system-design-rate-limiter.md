@@ -17,17 +17,17 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    Problem[Rate Limiter 없는 상황]
-    Problem --> A[악의적 봇: 초당 10만 요청 → 서버 다운]
-    Problem --> B[잘못된 클라이언트 코드: 무한 루프로 API 호출]
-    Problem --> C[마케팅 이벤트: 갑작스런 트래픽 폭발]
-    Problem --> D[스크래퍼: 데이터 무단 수집]
+    Problem["Rate Limiter 없는 상황"]
+    Problem --> A["악의적 봇: 초당 10만 요청 → 서버 다운"]
+    Problem --> B["잘못된 클라이언트 코드: 무한 루프로 API 호출"]
+    Problem --> C["마케팅 이벤트: 갑작스런 트래픽 폭발"]
+    Problem --> D["스크래퍼: 데이터 무단 수집"]
 
-    Solution[Rate Limiter 도입]
-    Solution --> S1[서버 보호: 과부하 방지]
-    Solution --> S2[공정성: 특정 사용자의 독점 방지]
-    Solution --> S3[비용 절감: 불필요한 요청 차단]
-    Solution --> S4[보안: DDoS 완화]
+    Solution["Rate Limiter 도입"]
+    Solution --> S1["서버 보호: 과부하 방지"]
+    Solution --> S2["공정성: 특정 사용자의 독점 방지"]
+    Solution --> S3["비용 절감: 불필요한 요청 차단"]
+    Solution --> S4["보안: DDoS 완화"]
 ```
 
 ---
@@ -40,13 +40,13 @@ graph TD
 
 ```mermaid
 graph TD
-    Bucket[토큰 버킷<br/>용량: 10개]
-    Refill[매초 2개 충전]
+    Bucket["토큰 버킷<br>용량: 10개"]
+    Refill["매초 2개 충전"]
     Refill --> Bucket
 
-    Request[요청 도착] --> Check{토큰 있음?}
-    Check -->|Yes: 토큰 1개 소비| Allow[✅ 허용]
-    Check -->|No: 토큰 0개| Deny[❌ 429 Too Many Requests]
+    Request["요청 도착"] --> Check{"토큰 있음?"}
+    Check -->|"Yes: 토큰 1개 소비"| Allow["✅ 허용"]
+    Check -->|"No: 토큰 0개"| Deny[❌ 429 Too Many Requests]
 ```
 
 ```python
@@ -105,9 +105,9 @@ for i in range(15):
 
 ```mermaid
 graph LR
-    Req[요청들] --> Queue[큐 Queue<br/>최대 10개 대기]
-    Queue -->|일정 속도로 처리<br/>초당 2개| Server[서버 처리]
-    Req -->|큐 가득 참| Drop[❌ 요청 버림]
+    Req["요청들"] --> Queue["큐 Queue<br>최대 10개 대기"]
+    Queue -->|"일정 속도로 처리<br>초당 2개"| Server["서버 처리"]
+    Req -->|"큐 가득 참"| Drop["❌ 요청 버림"]
 ```
 
 ```python
@@ -191,13 +191,13 @@ class FixedWindowCounter:
 
 ```mermaid
 graph LR
-    Timeline[시간 축 ←————→]
-    subgraph Window [최근 1분 슬라이딩 윈도우]
-        R1[요청1<br/>T-50s]
-        R2[요청2<br/>T-40s]
-        R3[요청3<br/>T-20s]
-        R4[요청4<br/>T-10s]
-        R5[새 요청<br/>T=now]
+    Timeline["시간 축 ←————→"]
+    subgraph "Window [최근 1분 슬라이딩 윈도우]"
+        R1["요청1<br>T-50s"]
+        R2["요청2<br>T-40s"]
+        R3["요청3<br>T-20s"]
+        R4["요청4<br>T-10s"]
+        R5["새 요청<br>T=now"]
     end
 ```
 
@@ -291,12 +291,12 @@ class SlidingWindowCounter:
 
 ```mermaid
 graph TD
-    Compare[알고리즘 비교]
-    Compare --> TB[토큰 버킷]
-    Compare --> LB[누출 버킷]
-    Compare --> FW[고정 윈도우]
-    Compare --> SWL[슬라이딩 윈도우 로그]
-    Compare --> SWC[슬라이딩 윈도우 카운터]
+    Compare["알고리즘 비교"]
+    Compare --> TB["토큰 버킷"]
+    Compare --> LB["누출 버킷"]
+    Compare --> FW["고정 윈도우"]
+    Compare --> SWL["슬라이딩 윈도우 로그"]
+    Compare --> SWC["슬라이딩 윈도우 카운터"]
 ```
 
 | 알고리즘 | 메모리 | 정확도 | 버스트 허용 | 구현 복잡도 |
@@ -315,23 +315,23 @@ graph TD
 
 ```mermaid
 graph TD
-    User[사용자: 초당 100건 한도]
+    User["사용자: 초당 100건 한도"]
 
-    Req1[요청1] --> Server1[서버1<br/>카운터: 60]
-    Req2[요청2] --> Server2[서버2<br/>카운터: 60]
+    Req1["요청1"] --> Server1["서버1<br>카운터: 60"]
+    Req2["요청2"] --> Server2["서버2<br>카운터: 60"]
 
-    Problem[문제: 실제로는 120건인데<br/>각 서버는 60건으로 판단→ 모두 허용!]
+    Problem["문제: 실제로는 120건인데<br>각 서버는 60건으로 판단→ 모두 허용!"]
 ```
 
 ### 해결책: 중앙화된 Redis
 
 ```mermaid
 graph TD
-    Server1[서버1] --> Redis[Redis 클러스터<br/>중앙 카운터]
-    Server2[서버2] --> Redis
-    Server3[서버3] --> Redis
+    Server1["서버1"] --> Redis["Redis 클러스터<br>중앙 카운터"]
+    Server2["서버2"] --> Redis
+    Server3["서버3"] --> Redis
 
-    Redis --> Count[user_id별 통합 카운터]
+    Redis --> Count["user_id별 통합 카운터"]
 ```
 
 **Redis Lua 스크립트 (원자적 처리):**
@@ -384,19 +384,19 @@ class DistributedRateLimiter:
 
 ```mermaid
 graph TD
-    Client[클라이언트] --> MW[Rate Limiter 미들웨어]
+    Client["클라이언트"] --> MW["Rate Limiter 미들웨어"]
 
-    MW --> Redis[Redis 클러스터<br/>카운터 저장]
+    MW --> Redis["Redis 클러스터<br>카운터 저장"]
     Redis --> MW
 
-    MW -->|허용| API[API 서버]
-    MW -->|거부 429| Client
+    MW -->|"허용"| API["API 서버"]
+    MW -->|"거부 429"| Client
 
-    subgraph 응답 헤더
+    subgraph "응답 헤더"
         H1["X-RateLimit-Limit: 100"]
         H2["X-RateLimit-Remaining: 45"]
         H3["X-RateLimit-Reset: 1704067260"]
-        H4["Retry-After: 60 (거부 시)"]
+        H4["Retry-After: 60 ("거부 시")"]
     end
 ```
 
@@ -469,12 +469,12 @@ class RateLimitMiddleware:
 
 ```mermaid
 graph TD
-    Request[요청]
-    Request --> L1[L1: IP 레벨<br/>초당 100건/IP]
-    L1 --> L2[L2: API 키 레벨<br/>시간당 1000건/키]
-    L2 --> L3[L3: 엔드포인트 레벨<br/>/login: 분당 5건]
-    L3 --> L4[L4: 사용자 티어<br/>무료:100/일, 유료:10000/일]
-    L4 --> API[API 처리]
+    Request["요청"]
+    Request --> L1["L1: IP 레벨<br>초당 100건/IP"]
+    L1 --> L2["L2: API 키 레벨<br>시간당 1000건/키"]
+    L2 --> L3["L3: 엔드포인트 레벨<br>/login: 분당 5건"]
+    L3 --> L4["L4: 사용자 티어<br>무료:100/일, 유료:10000/일"]
+    L4 --> API["API 처리"]
 ```
 
 **티어별 설정:**
@@ -514,17 +514,17 @@ ENDPOINT_LIMITS = {
 
 ```mermaid
 graph TD
-    LB[로드밸런서] --> S1[API 서버 1]
-    LB --> S2[API 서버 2]
-    LB --> S3[API 서버 3]
+    LB["로드밸런서"] --> S1["API 서버 1"]
+    LB --> S2["API 서버 2"]
+    LB --> S3["API 서버 3"]
 
-    S1 --> RProxy[Redis Proxy<br/>Twemproxy/Envoy]
+    S1 --> RProxy["Redis Proxy<br>Twemproxy/Envoy"]
     S2 --> RProxy
     S3 --> RProxy
 
-    RProxy --> RC1[Redis 노드 1<br/>user_id 0~33%]
-    RProxy --> RC2[Redis 노드 2<br/>user_id 33~66%]
-    RProxy --> RC3[Redis 노드 3<br/>user_id 66~100%]
+    RProxy --> RC1["Redis 노드 1<br>user_id 0~33%"]
+    RProxy --> RC2["Redis 노드 2<br>user_id 33~66%"]
+    RProxy --> RC3["Redis 노드 3<br>user_id 66~100%"]
 ```
 
 ### Gossip 프로토콜 기반 분산 Rate Limiting
@@ -582,21 +582,21 @@ class GossipRateLimiter:
 
 ```mermaid
 graph TD
-    DDoS[DDoS 공격<br/>1만 IP × 초당1000건] --> WAF[WAF<br/>Web Application Firewall]
-    WAF --> CloudflareRL[Cloudflare<br/>네트워크 레벨 차단]
+    DDoS["DDoS 공격<br>1만 IP × 초당1000건"] --> WAF["WAF<br>Web Application Firewall"]
+    WAF --> CloudflareRL["Cloudflare<br>네트워크 레벨 차단"]
 
-    CloudflareRL --> AppRL[애플리케이션<br/>Rate Limiter]
+    CloudflareRL --> AppRL["애플리케이션<br>Rate Limiter"]
 
-    AppRL --> IPBan[IP 자동 차단<br/>분당 500건 초과 IP]
-    AppRL --> CAPTCHA[CAPTCHA 도전<br/>분당 100건 초과]
-    AppRL --> Normal[정상 처리]
+    AppRL --> IPBan["IP 자동 차단<br>분당 500건 초과 IP"]
+    AppRL --> CAPTCHA["CAPTCHA 도전<br>분당 100건 초과"]
+    AppRL --> Normal["정상 처리"]
 
-    subgraph 다층 방어
-        L1[L1: Cloudflare CDN - 네트워크 레벨]
-        L2[L2: AWS WAF - L7 레벨]
-        L3[L3: 로드밸런서 - 연결 제한]
-        L4[L4: 애플리케이션 - Rate Limiter]
-        L5[L5: DB - 쿼리 제한]
+    subgraph "다층 방어"
+        L1["L1: Cloudflare CDN - 네트워크 레벨"]
+        L2["L2: AWS WAF - L7 레벨"]
+        L3["L3: 로드밸런서 - 연결 제한"]
+        L4["L4: 애플리케이션 - Rate Limiter"]
+        L5["L5: DB - 쿼리 제한"]
     end
 ```
 
@@ -648,15 +648,15 @@ class AdaptiveRateLimiter:
 
 ```mermaid
 graph TD
-    Metrics[Rate Limiter 메트릭]
-    Metrics --> M1[총 요청 수]
-    Metrics --> M2[차단된 요청 수 및 비율]
-    Metrics --> M3[상위 차단 IP/사용자]
-    Metrics --> M4[Redis 응답 시간]
-    Metrics --> M5[처리량 초당 QPS]
+    Metrics["Rate Limiter 메트릭"]
+    Metrics --> M1["총 요청 수"]
+    Metrics --> M2["차단된 요청 수 및 비율"]
+    Metrics --> M3["상위 차단 IP/사용자"]
+    Metrics --> M4["Redis 응답 시간"]
+    Metrics --> M5["처리량 초당 QPS"]
 
-    M2 -->|차단율 5% 초과| Alert[운영팀 알림]
-    M4 -->|10ms 초과| Alert2[성능 알림]
+    M2 -->|"차단율 5% 초과"| Alert["운영팀 알림"]
+    M4 -->|"10ms 초과"| Alert2["성능 알림"]
 ```
 
 ---

@@ -26,15 +26,15 @@ NestJS의 구조는 대형 병원과 비슷합니다.
 ```mermaid
 graph TD
     CLIENT["클라이언트"] --> MW["미들웨어"]
-    MW --> GUARD["가드 (인증/인가)"]
-    GUARD --> INTERCEPTOR1["인터셉터 (전처리)"]
-    INTERCEPTOR1 --> PIPE["파이프 (유효성 검사)"]
+    MW --> GUARD["가드 ("인증/인가")"]
+    GUARD --> INTERCEPTOR1["인터셉터 ("전처리")"]
+    INTERCEPTOR1 --> PIPE["파이프 ("유효성 검사")"]
     PIPE --> CTRL["컨트롤러"]
-    CTRL --> SERVICE["서비스 (비즈니스 로직)"]
+    CTRL --> SERVICE["서비스 ("비즈니스 로직")"]
     SERVICE --> REPO["레포지토리 (DB)"]
     REPO --> SERVICE
     SERVICE --> CTRL
-    CTRL --> INTERCEPTOR2["인터셉터 (후처리)"]
+    CTRL --> INTERCEPTOR2["인터셉터 ("후처리")"]
     INTERCEPTOR2 --> CLIENT
 
     style GUARD fill:#e74c3c,color:#fff
@@ -260,15 +260,15 @@ export class UsersService {
 
 ```mermaid
 graph TD
-    DI["DI 컨테이너"] -->|인스턴스 생성/제공| US["UsersService"]
-    DI -->|인스턴스 생성/제공| ES["EmailService"]
-    DI -->|인스턴스 생성/제공| REPO["UserRepository"]
+    DI["DI 컨테이너"] -->|"인스턴스 생성/제공"| US["UsersService"]
+    DI -->|"인스턴스 생성/제공"| ES["EmailService"]
+    DI -->|"인스턴스 생성/제공"| REPO["UserRepository"]
 
-    US -->|의존| ES
-    US -->|의존| REPO
+    US -->|"의존"| ES
+    US -->|"의존"| REPO
 
-    UC["UsersController"] -->|의존| US
-    DI -->|주입| UC
+    UC["UsersController"] -->|"의존"| US
+    DI -->|"주입"| UC
 
     style DI fill:#e74c3c,color:#fff
 ```

@@ -23,18 +23,18 @@ Kafka는 거대한 **신문사 구독 시스템**과 같습니다.
 
 ```mermaid
 graph TD
-    Producer1[생산자 1<br/>주문 서비스] -->|메시지 발행| Topic[토픽: orders<br/>파티션 3개]
-    Producer2[생산자 2<br/>결제 서비스] -->|메시지 발행| Topic2[토픽: payments]
+    Producer1["생산자 1<br>주문 서비스"] -->|"메시지 발행"| Topic["토픽: orders<br>파티션 3개"]
+    Producer2["생산자 2<br>결제 서비스"] -->|"메시지 발행"| Topic2["토픽: payments"]
 
-    Topic --> P0[파티션 0<br/>브로커1]
-    Topic --> P1[파티션 1<br/>브로커2]
-    Topic --> P2[파티션 2<br/>브로커3]
+    Topic --> P0["파티션 0<br>브로커1"]
+    Topic --> P1["파티션 1<br>브로커2"]
+    Topic --> P2["파티션 2<br>브로커3"]
 
-    P0 --> CG1[컨슈머 그룹 A<br/>배송 서비스]
+    P0 --> CG1["컨슈머 그룹 A<br>배송 서비스"]
     P1 --> CG1
     P2 --> CG1
 
-    P0 --> CG2[컨슈머 그룹 B<br/>알림 서비스]
+    P0 --> CG2["컨슈머 그룹 B<br>알림 서비스"]
     P1 --> CG2
     P2 --> CG2
 ```
@@ -58,19 +58,19 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph 파티션 0
-        M0[오프셋0<br/>msg A] --> M1[오프셋1<br/>msg B] --> M2[오프셋2<br/>msg C] --> M3[오프셋3<br/>msg D]
+    subgraph "파티션 0"
+        M0["오프셋0<br>msg A"] --> M1["오프셋1<br>msg B"] --> M2["오프셋2<br>msg C"] --> M3["오프셋3<br>msg D"]
     end
 
-    subgraph 파티션 1
-        N0[오프셋0<br/>msg E] --> N1[오프셋1<br/>msg F] --> N2[오프셋2<br/>msg G]
+    subgraph "파티션 1"
+        N0["오프셋0<br>msg E"] --> N1["오프셋1<br>msg F"] --> N2["오프셋2<br>msg G"]
     end
 
-    subgraph 파티션 2
-        O0[오프셋0<br/>msg H] --> O1[오프셋1<br/>msg I]
+    subgraph "파티션 2"
+        O0["오프셋0<br>msg H"] --> O1["오프셋1<br>msg I"]
     end
 
-    Consumer[컨슈머<br/>파티션0: offset=2<br/>파티션1: offset=1<br/>파티션2: offset=0]
+    Consumer["컨슈머<br>파티션0: offset=2<br>파티션1: offset=1<br>파티션2: offset=0"]
 ```
 
 **중요한 특성:**
@@ -86,14 +86,14 @@ graph LR
 
 ```mermaid
 graph TD
-    Producer[Producer 메시지 발송]
-    Producer --> Q{파티셔너 전략}
+    Producer["Producer 메시지 발송"]
+    Producer --> Q{"파티셔너 전략"}
 
-    Q -->|Key 없음| RR[라운드 로빈<br/>파티션 순서대로]
-    Q -->|Key 있음| Hash[Key 해시<br/>같은 Key → 같은 파티션]
-    Q -->|커스텀| Custom[커스텀 파티셔너]
+    Q -->|"Key 없음"| RR["라운드 로빈<br>파티션 순서대로"]
+    Q -->|"Key 있음"| Hash["Key 해시<br>같은 Key → 같은 파티션"]
+    Q -->|"커스텀"| Custom["커스텀 파티셔너"]
 
-    Hash --> OrderGuarantee[같은 주문ID의 이벤트<br/>항상 같은 파티션<br/>→ 순서 보장!]
+    Hash --> OrderGuarantee["같은 주문ID의 이벤트<br>항상 같은 파티션<br>→ 순서 보장!"]
 ```
 
 ```java
@@ -170,7 +170,7 @@ acks=all: 모든 ISR 레플리카 확인 (가장 안전, 느림)
 
 ```mermaid
 graph TD
-    subgraph 토픽: orders 파티션 6개
+    subgraph "토픽: orders 파티션 6개"
         P0[P0]
         P1[P1]
         P2[P2]
@@ -179,10 +179,10 @@ graph TD
         P5[P5]
     end
 
-    subgraph 컨슈머 그룹: delivery-service 컨슈머 3개
-        C1[컨슈머1]
-        C2[컨슈머2]
-        C3[컨슈머3]
+    subgraph "컨슈머 그룹: delivery-service 컨슈머 3개"
+        C1["컨슈머1"]
+        C2["컨슈머2"]
+        C3["컨슈머3"]
     end
 
     P0 --> C1
@@ -273,17 +273,17 @@ public class OrderEventConsumer {
 
 ```mermaid
 graph TD
-    subgraph 리밸런싱 전
-        C1a[컨슈머1: P0,P1]
-        C2a[컨슈머2: P2,P3]
-        C3a[컨슈머3: P4,P5]
+    subgraph "리밸런싱 전"
+        C1a["컨슈머1: P0,P1"]
+        C2a["컨슈머2: P2,P3"]
+        C3a["컨슈머3: P4,P5"]
     end
 
-    Event[컨슈머3 장애!]
+    Event["컨슈머3 장애!"]
 
-    subgraph 리밸런싱 후
-        C1b[컨슈머1: P0,P1,P2]
-        C2b[컨슈머2: P3,P4,P5]
+    subgraph "리밸런싱 후"
+        C1b["컨슈머1: P0,P1,P2"]
+        C2b["컨슈머2: P3,P4,P5"]
     end
 
     C3a --> Event --> C1b
@@ -321,22 +321,22 @@ public class OrderConsumer implements ConsumerAwareRebalanceListener {
 
 ```mermaid
 graph TD
-    subgraph 파티션 0 복제
-        Leader[리더 레플리카<br/>브로커1]
-        Follower1[팔로워<br/>브로커2]
-        Follower2[팔로워<br/>브로커3]
+    subgraph "파티션 0 복제"
+        Leader["리더 레플리카<br>브로커1"]
+        Follower1["팔로워<br>브로커2"]
+        Follower2["팔로워<br>브로커3"]
     end
 
-    Producer[Producer] -->|쓰기| Leader
-    Leader -->|복제| Follower1
-    Leader -->|복제| Follower2
+    Producer[Producer] -->|"쓰기"| Leader
+    Leader -->|"복제"| Follower1
+    Leader -->|"복제"| Follower2
 
-    ISR[ISR = In-Sync Replicas<br/>리더와 동기화된 레플리카]
+    ISR["ISR = In-Sync Replicas<br>리더와 동기화된 레플리카"]
     ISR --> Leader
     ISR --> Follower1
-    ISR -.->|지연 발생| Follower2
+    ISR -.-->|"지연 발생"| Follower2
 
-    Follower2 -->|ISR 이탈!| OutOfSync[Out-of-Sync]
+    Follower2 -->|"ISR 이탈!"| OutOfSync[Out-of-Sync]
 ```
 
 ```
@@ -352,13 +352,13 @@ min.insync.replicas = 2: 최소 2개 ISR이 있어야 쓰기 허용
 
 ```mermaid
 graph TD
-    Semantics[메시지 전달 보장 수준]
-    Semantics --> AtMost[At-Most-Once<br/>최대 1번<br/>유실 가능, 중복 없음]
-    Semantics --> AtLeast[At-Least-Once<br/>최소 1번<br/>유실 없음, 중복 가능]
-    Semantics --> Exactly[Exactly-Once<br/>정확히 1번<br/>유실도 중복도 없음]
+    Semantics["메시지 전달 보장 수준"]
+    Semantics --> AtMost["At-Most-Once<br>최대 1번<br>유실 가능, 중복 없음"]
+    Semantics --> AtLeast["At-Least-Once<br>최소 1번<br>유실 없음, 중복 가능"]
+    Semantics --> Exactly["Exactly-Once<br>정확히 1번<br>유실도 중복도 없음"]
 
-    Exactly --> Cost[가장 비용이 높음]
-    Exactly --> Use[금융 거래, 재고 관리에 필수]
+    Exactly --> Cost["가장 비용이 높음"]
+    Exactly --> Use["금융 거래, 재고 관리에 필수"]
 ```
 
 **Exactly-Once 설정:**
@@ -393,13 +393,13 @@ Producer와 Consumer 사이의 메시지 형식을 관리합니다.
 
 ```mermaid
 graph TD
-    Producer[Producer] -->|스키마 등록/확인| SchemaRegistry[Schema Registry<br/>Confluent]
-    Consumer[Consumer] -->|스키마 조회| SchemaRegistry
+    Producer[Producer] -->|"스키마 등록/확인"| SchemaRegistry["Schema Registry<br>Confluent"]
+    Consumer[Consumer] -->|"스키마 조회"| SchemaRegistry
 
-    Producer -->|Avro/Protobuf 직렬화| Kafka[Kafka]
-    Kafka -->|Avro/Protobuf 역직렬화| Consumer
+    Producer -->|"Avro/Protobuf 직렬화"| Kafka[Kafka]
+    Kafka -->|"Avro/Protobuf 역직렬화"| Consumer
 
-    SchemaRegistry --> Compatibility[스키마 호환성 검증<br/>BACKWARD / FORWARD / FULL]
+    SchemaRegistry --> Compatibility["스키마 호환성 검증<br>BACKWARD / FORWARD / FULL"]
 ```
 
 **Avro 스키마 예시:**
@@ -539,17 +539,17 @@ public class ResilientConsumer {
 ```mermaid
 graph TD
     subgraph Kafka Cluster
-        Broker1[브로커1<br/>ZK Leader]
-        Broker2[브로커2]
-        Broker3[브로커3]
+        Broker1["브로커1<br>ZK Leader"]
+        Broker2["브로커2"]
+        Broker3["브로커3"]
 
-        subgraph 토픽: orders 레플리카 3
-            P0_L[P0 Leader<br/>브로커1]
-            P1_L[P1 Leader<br/>브로커2]
-            P2_L[P2 Leader<br/>브로커3]
+        subgraph "토픽: orders 레플리카 3"
+            P0_L["P0 Leader<br>브로커1"]
+            P1_L["P1 Leader<br>브로커2"]
+            P2_L["P2 Leader<br>브로커3"]
 
-            P0_F1[P0 Follower<br/>브로커2]
-            P0_F2[P0 Follower<br/>브로커3]
+            P0_F1["P0 Follower<br>브로커2"]
+            P0_F2["P0 Follower<br>브로커3"]
         end
     end
 
@@ -592,21 +592,21 @@ socket.receive.buffer.bytes=102400
 
 ```mermaid
 graph TD
-    ATM[ATM 기기들] --> Producer[Kafka Producer]
-    POS[POS 단말들] --> Producer
-    OnlineBanking[온라인뱅킹] --> Producer
+    ATM["ATM 기기들"] --> Producer[Kafka Producer]
+    POS["POS 단말들"] --> Producer
+    OnlineBanking["온라인뱅킹"] --> Producer
 
-    Producer --> KafkaCluster[Kafka Cluster<br/>30 브로커<br/>300 파티션]
+    Producer --> KafkaCluster["Kafka Cluster<br>30 브로커<br>300 파티션"]
 
-    KafkaCluster --> FraudDetect[사기 감지 서비스<br/>Kafka Streams<br/>실시간 패턴 분석]
-    KafkaCluster --> Settlement[정산 서비스<br/>일별 배치 정산]
-    KafkaCluster --> Analytics[분석 서비스<br/>Flink → Druid]
-    KafkaCluster --> Archiver[아카이브 서비스<br/>S3 콜드 스토리지]
+    KafkaCluster --> FraudDetect["사기 감지 서비스<br>Kafka Streams<br>실시간 패턴 분석"]
+    KafkaCluster --> Settlement["정산 서비스<br>일별 배치 정산"]
+    KafkaCluster --> Analytics["분석 서비스<br>Flink → Druid"]
+    KafkaCluster --> Archiver["아카이브 서비스<br>S3 콜드 스토리지"]
 
-    FraudDetect --> Alert[사기 거래 알림<br/>100ms 이내]
-    Analytics --> Dashboard[실시간 대시보드]
+    FraudDetect --> Alert["사기 거래 알림<br>100ms 이내"]
+    Analytics --> Dashboard["실시간 대시보드"]
 
-    subgraph 규모
+    subgraph "규모"
         Scale1["초당 거래: 200만건"]
         Scale2["일일 거래: 1729억건"]
         Scale3["5년 보관: 5000억건"]
@@ -632,20 +632,20 @@ Kafka 3.x부터 Zookeeper 없이 동작하는 KRaft 모드 지원:
 
 ```mermaid
 graph TD
-    subgraph 기존: Kafka + Zookeeper
-        ZK[Zookeeper 클러스터<br/>3대]
-        K1[Kafka 브로커1]
-        K2[Kafka 브로커2]
-        K3[Kafka 브로커3]
+    subgraph "기존: Kafka + Zookeeper"
+        ZK["Zookeeper 클러스터<br>3대"]
+        K1["Kafka 브로커1"]
+        K2["Kafka 브로커2"]
+        K3["Kafka 브로커3"]
         K1 --> ZK
         K2 --> ZK
         K3 --> ZK
     end
 
-    subgraph KRaft: Kafka만
-        KR1[Kafka 1<br/>Controller + Broker]
-        KR2[Kafka 2<br/>Controller + Broker]
-        KR3[Kafka 3<br/>Broker]
+    subgraph "KRaft: Kafka만"
+        KR1["Kafka 1<br>Controller + Broker"]
+        KR2["Kafka 2<br>Controller + Broker"]
+        KR3["Kafka 3<br>Broker"]
         KR1 <--> KR2
         KR2 <--> KR3
     end
@@ -662,14 +662,14 @@ graph TD
 
 ```mermaid
 graph TD
-    Normal[정상 운영<br/>브로커3 = P0 리더]
-    Normal --> Fail[브로커3 장애!]
-    Fail --> Detect[Zookeeper/KRaft 감지<br/>세션 타임아웃 10초]
-    Detect --> Election[리더 선출<br/>ISR 중 브로커2 선택]
-    Election --> Recovery[서비스 재개<br/>총 다운타임 ~15초]
+    Normal["정상 운영<br>브로커3 = P0 리더"]
+    Normal --> Fail["브로커3 장애!"]
+    Fail --> Detect["Zookeeper/KRaft 감지<br>세션 타임아웃 10초"]
+    Detect --> Election["리더 선출<br>ISR 중 브로커2 선택"]
+    Election --> Recovery["서비스 재개<br>총 다운타임 ~15초"]
 
-    Recovery --> Replication[브로커3 복구 후<br/>전체 재동기화]
-    Replication --> Balance[파티션 리밸런싱<br/>리더 재분배]
+    Recovery --> Replication["브로커3 복구 후<br>전체 재동기화"]
+    Replication --> Balance["파티션 리밸런싱<br>리더 재분배"]
 ```
 
 **장애 복구 설정:**

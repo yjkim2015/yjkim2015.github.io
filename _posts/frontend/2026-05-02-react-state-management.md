@@ -171,17 +171,17 @@ Prop Drilling 문제를 해결합니다.
 ```mermaid
 graph TD
     subgraph "Prop Drilling (문제)"
-        A1[App: theme] -->|theme prop| B1[Layout]
+        A1["App: theme"] -->|theme prop| B1[Layout]
         B1 -->|theme prop| C1[Sidebar]
         C1 -->|theme prop| D1[MenuItem]
-        D1 -->|theme prop| E1[Icon: 실제 사용자]
+        D1 -->|theme prop| E1["Icon: 실제 사용자"]
     end
 
     subgraph "Context (해결)"
-        CTX["ThemeContext<br/>theme 값 보유"]
+        CTX["ThemeContext<br>theme 값 보유"]
         A2[App] --> CTX
-        E2[Icon: useContext] -->|구독| CTX
-        Note["중간 컴포넌트들은<br/>theme을 알 필요 없음"]
+        E2["Icon: useContext"] -->|"구독"| CTX
+        Note["중간 컴포넌트들은<br>theme을 알 필요 없음"]
     end
 
     style E1 fill:#e74c3c,color:#fff
@@ -275,17 +275,17 @@ function GoodProviders({ children }) {
 
 ```mermaid
 flowchart LR
-    VIEW["View (컴포넌트)"] -->|dispatch(action)| STORE["Store"]
-    STORE -->|reducer(state, action)| NEW_STATE["새 State"]
-    NEW_STATE -->|상태 업데이트| VIEW
+    VIEW["View ("컴포넌트")"] -->|"dispatch(action)"| STORE["Store"]
+    STORE -->|"reducer(state, action)"| NEW_STATE["새 State"]
+    NEW_STATE -->|"상태 업데이트"| VIEW
 
     subgraph "Redux Store"
-        STATE["State (불변)"]
-        REDUCER["Reducer (순수함수)"]
+        STATE["State ("불변")"]
+        REDUCER["Reducer ("순수함수")"]
         STATE --> REDUCER
     end
 
-    MIDDLEWARE["Middleware<br/>(redux-thunk, saga)"] -->|비동기 처리| STORE
+    MIDDLEWARE["Middleware<br>(redux-thunk, saga)"] -->|"비동기 처리"| STORE
 
     style STORE fill:#764abc,color:#fff
     style MIDDLEWARE fill:#e74c3c,color:#fff
@@ -495,7 +495,7 @@ function Counter() {
 ```mermaid
 graph TD
     subgraph "클라이언트 상태"
-        CS1["UI 상태 (모달 열림/닫힘)"]
+        CS1["UI 상태 ("모달 열림/닫힘")"]
         CS2["폼 입력값"]
         CS3["선택된 탭"]
         CS4["사용자 선호설정"]
@@ -586,12 +586,12 @@ function CreateUserForm() {
 ```mermaid
 flowchart LR
     COMP["컴포넌트"] -->|useQuery| RQ["React Query"]
-    RQ -->|캐시 확인| CACHE[(QueryCache)]
-    CACHE -->|stale 데이터| COMP
-    RQ -->|백그라운드 재요청| API["API 서버"]
-    API -->|새 데이터| RQ
-    RQ -->|캐시 업데이트| CACHE
-    RQ -->|리렌더링| COMP
+    RQ -->|"캐시 확인"| CACHE["(QueryCache)"]
+    CACHE -->|"stale 데이터"| COMP
+    RQ -->|"백그라운드 재요청"| API["API 서버"]
+    API -->|"새 데이터"| RQ
+    RQ -->|"캐시 업데이트"| CACHE
+    RQ -->|"리렌더링"| COMP
 
     style RQ fill:#e74c3c,color:#fff
     style CACHE fill:#f39c12,color:#fff
@@ -633,14 +633,14 @@ quadrantChart
 
 ```mermaid
 flowchart TD
-    A["상태가 필요한가?"] -->|예| B{"여러 컴포넌트에서<br/>필요한가?"}
-    B -->|아니오| C[useState / useReducer]
-    B -->|예| D{"서버에서 오는 데이터인가?"}
-    D -->|예| E[React Query / SWR]
-    D -->|아니오| F{"앱 전체에서 필요한가?"}
-    F -->|소규모| G[Context API]
-    F -->|중규모| H[Zustand / Jotai]
-    F -->|대규모 팀| I[Redux Toolkit]
+    A["상태가 필요한가?"] -->|"예"| B{"여러 컴포넌트에서<br>필요한가?"}
+    B -->|"아니오"| C["useState / useReducer"]
+    B -->|"예"| D{"서버에서 오는 데이터인가?"}
+    D -->|"예"| E["React Query / SWR"]
+    D -->|"아니오"| F{"앱 전체에서 필요한가?"}
+    F -->|"소규모"| G[Context API]
+    F -->|"중규모"| H["Zustand / Jotai"]
+    F -->|"대규모 팀"| I[Redux Toolkit]
 
     style C fill:#2ecc71,color:#fff
     style E fill:#e74c3c,color:#fff

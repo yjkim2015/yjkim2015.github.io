@@ -52,12 +52,12 @@ public class MemberService {
 ```mermaid
 graph TD
     subgraph "횡단 관심사 — AOP 적용 전"
-        A["OrderService"] --> G["로그 코드\n(중복)"]
+        A["OrderService"] --> G["로그 코드\n("중복")"]
         B["MemberService"] --> G
         C["ItemService"] --> G
         D["PaymentService"] --> G
         E["DeliveryService"] --> G
-        A --> H["트랜잭션 코드\n(중복)"]
+        A --> H["트랜잭션 코드\n("중복")"]
         B --> H
         C --> H
         D --> H
@@ -83,12 +83,12 @@ graph TD
         H["TransactionAspect\n트랜잭션 처리"]
     end
 
-    G -. "자동 적용 (프록시)" .-> A
-    G -. "자동 적용 (프록시)" .-> B
-    G -. "자동 적용 (프록시)" .-> C
-    H -. "자동 적용 (프록시)" .-> A
-    H -. "자동 적용 (프록시)" .-> B
-    H -. "자동 적용 (프록시)" .-> C
+    G -. "자동 적용 ("프록시")" .--> A
+    G -. "자동 적용 ("프록시")" .--> B
+    G -. "자동 적용 ("프록시")" .--> C
+    H -. "자동 적용 ("프록시")" .--> A
+    H -. "자동 적용 ("프록시")" .--> B
+    H -. "자동 적용 ("프록시")" .--> C
 
     classDef green fill:#d4edda,stroke:#28a745
     class G,H green
@@ -265,13 +265,13 @@ ConcreteService proxy = (ConcreteService) enhancer.create();
 ```mermaid
 graph LR
     subgraph "JDK 동적 프록시"
-        A["인터페이스\nMemberService"] --> B["Proxy 구현체\n(런타임 생성)"]
+        A["인터페이스\nMemberService"] --> B["Proxy 구현체\n("런타임 생성")"]
         B --> C["InvocationHandler\n부가 기능"]
         C --> D["실제 객체\nMemberServiceImpl"]
     end
 
     subgraph "CGLIB"
-        E["원본 클래스\nConcreteService"] --> F["CGLIB 서브클래스\n(런타임 생성)"]
+        E["원본 클래스\nConcreteService"] --> F["CGLIB 서브클래스\n("런타임 생성")"]
         F --> G["MethodInterceptor\n부가 기능"]
         G --> E
     end
@@ -307,7 +307,7 @@ flowchart TD
     A["ProxyFactory 생성\nnew ProxyFactory(target)"] --> B{"인터페이스 있음?"}
     B -->|"있음"| C["JDK 동적 프록시 생성"]
     B -->|"없음"| D["CGLIB 생성"]
-    B -->|"proxyTargetClass=true\n(Spring Boot 기본)"| D
+    B -->|"proxyTargetClass=true\n("Spring Boot 기본")"| D
 
     E["Advice 추가\n부가 기능 로직"] --> A
     F["Pointcut 설정\n어디에 적용?"] --> A
@@ -354,8 +354,8 @@ graph TD
     C -->|"Spring AOP 지원"| J["메서드 실행 시점만"]
     D -->|"표현식"| K["execution(* hello..*.*(..))"]
     E -->|"종류"| L["@Before, @After, @Around"]
-    F -->|"시점"| M["런타임 (프록시 생성)"]
-    G -->|"예시"| N["OrderService (실제 빈)"]
+    F -->|"시점"| M["런타임 ("프록시 생성")"]
+    G -->|"예시"| N["OrderService ("실제 빈")"]
     H -->|"예시"| O["OrderService Proxy (CGLIB)"]
 
     classDef blue fill:#cce5ff,stroke:#007bff
@@ -674,7 +674,7 @@ public class PackageLogTracePostProcessor implements BeanPostProcessor {
 flowchart TD
     A["빈 생성 완료"] --> B["AnnotationAwareAspectJAutoProxyCreator\n(BeanPostProcessor)"]
     B --> C{"등록된 Advisor의\nPointcut과 매칭?"}
-    C -->|"매칭 (하나 이상)"| D["ProxyFactory로 프록시 생성\n매칭된 Advisor 모두 적용"]
+    C -->|"매칭 ("하나 이상")"| D["ProxyFactory로 프록시 생성\n매칭된 Advisor 모두 적용"]
     C -->|"미매칭"| E["원본 빈 그대로 등록"]
     D --> F["프록시 빈을 컨테이너에 등록"]
     E --> F
@@ -967,7 +967,7 @@ public class DistributedTracingAspect {
 ```mermaid
 flowchart TD
     A["Spring Boot 시작"] --> B["@Aspect 클래스 스캔\n@Component로 빈 등록"]
-    B --> C["AnnotationAwareAspectJAutoProxyCreator 등록\n(BeanPostProcessor 구현체)"]
+    B --> C["AnnotationAwareAspectJAutoProxyCreator 등록\n("BeanPostProcessor 구현체")"]
     C --> D["모든 빈 생성 시작"]
     D --> E["개별 빈 생성 및 의존관계 주입"]
     E --> F["postProcessAfterInitialization() 호출"]

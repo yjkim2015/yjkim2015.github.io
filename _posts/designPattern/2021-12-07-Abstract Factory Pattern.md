@@ -1,75 +1,404 @@
 ---
 title: 추상 팩토리(Abstract Factory) 패턴
 categories:
-- DesignPattern
+- DESIGNPATTERN
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
 
-## 추상 팩토리 (Abstract Factory) 패턴이란?
+> **한 줄 요약:** 추상 팩토리 패턴은 관련된 객체들의 묶음(제품군)을 if-else 없이 팩토리 객체 자체를 교체하는 방식으로 생성하는 패턴이다.
 
-**추상 팩토리 패턴**은 팩토리 패턴과 유사한 패턴으로 팩토리 메소드 패턴에서는 하나의 팩토리 클래스가 인풋으로 들어오는 값에 따라 if-else나 switch 문을 사용하여 다양한 서브클래스를 리턴하는 형식이었는 **반면, 추상 팩토리 패턴에서는 팩토리 클레스에서 서브 클래스를 생성하는데 있어 **
+## 실생활 비유
 
-**<span style="color:red;">if-else나 swtich문을 걷어내고 인풋으로 또 하나의 팩토리 클래스를 받는다.</span>**
+**가구 브랜드**를 생각해보자. 이케아(IKEA) 스타일로 집을 꾸민다면 소파, 테이블, 의자가 모두 이케아 디자인으로 통일된다. 한샘(HANSSEM) 스타일로 바꾼다면 소파, 테이블, 의자가 모두 한샘 제품으로 교체된다.
 
+이때 각 가구를 하나씩 고르는 것이 아니라 **"이케아 공장"** 또는 **"한샘 공장"** 자체를 선택하고, 해당 공장에서 전체 가구 세트를 생산한다.
 
+추상 팩토리 패턴은 이처럼 **팩토리 객체 자체를 교체**해서 연관된 객체 묶음 전체를 일관성 있게 바꾸는 패턴이다.
 
-**아래의 예제를 보자.**
+---
 
-~~젠장 사실 처음에 예제를 만들 때 뭘로 하면 좋을까 하다가 Pet을 생각해냈지만 아무래도 펫 공장이라는 느낌이 들어 별로이긴하지만 오해하지말고 예제는 예제로만 느끼자.~~
+## 팩토리 메서드 vs 추상 팩토리
 
-<hr>
+| 구분 | 팩토리 메서드 | 추상 팩토리 |
+|------|-------------|-----------|
+| 목적 | 하나의 제품 생성 | 연관된 제품군 생성 |
+| 분기 제거 | 서브클래스로 위임 | 팩토리 객체 교체 |
+| 구조 | Creator 상속 | Factory 인터페이스 구현 |
+| 확장 | 새 Creator 추가 | 새 Factory 구현체 추가 |
+| 적합한 상황 | 단일 제품, 생성 로직 위임 | 제품군 일관성 유지 필요 |
 
-**super class - Pet**
+---
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">package</span>&nbsp;CreationalPattern.AbstractFactoryPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">abstract</span>&nbsp;<span style="color:#a71d5d">class</span>&nbsp;Pet&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">abstract</span>&nbsp;<span style="color:#066de2">String</span>&nbsp;getName();</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">abstract</span>&nbsp;<span style="color:#066de2">int</span>&nbsp;getAge();</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;@Override</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#066de2">String</span>&nbsp;<span style="color:#066de2">toString</span>()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">return</span>&nbsp;<span style="color:#63a35c">"NAME&nbsp;=&nbsp;"</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">+</span>&nbsp;<span style="color:#a71d5d">this</span>.getName()&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">+</span>&nbsp;<span style="color:#63a35c">",&nbsp;AGE&nbsp;=&nbsp;"</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">+</span>&nbsp;<span style="color:#a71d5d">this</span>.getAge();</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+## UML 다이어그램
 
-**sub class - Dog**
+```mermaid
+classDiagram
+    class UIFactory {
+        <<interface>>
+        +createButton(): Button
+        +createCheckbox(): Checkbox
+    }
+    class WindowsFactory {
+        +createButton(): Button
+        +createCheckbox(): Checkbox
+    }
+    class MacFactory {
+        +createButton(): Button
+        +createCheckbox(): Checkbox
+    }
+    class Button {
+        <<interface>>
+        +render(): void
+    }
+    class Checkbox {
+        <<interface>>
+        +render(): void
+    }
+    class WindowsButton {
+        +render(): void
+    }
+    class MacButton {
+        +render(): void
+    }
+    class WindowsCheckbox {
+        +render(): void
+    }
+    class MacCheckbox {
+        +render(): void
+    }
+    class Application {
+        -factory: UIFactory
+        +Application(factory: UIFactory)
+        +buildUI(): void
+    }
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div><div style="line-height:130%">15</div><div style="line-height:130%">16</div><div style="line-height:130%">17</div><div style="line-height:130%">18</div><div style="line-height:130%">19</div><div style="line-height:130%">20</div><div style="line-height:130%">21</div><div style="line-height:130%">22</div><div style="line-height:130%">23</div><div style="line-height:130%">24</div><div style="line-height:130%">25</div><div style="line-height:130%">26</div><div style="line-height:130%">27</div><div style="line-height:130%">28</div><div style="line-height:130%">29</div><div style="line-height:130%">30</div><div style="line-height:130%">31</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">package</span>&nbsp;CreationalPattern.AbstractFactoryPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">class</span>&nbsp;Dog&nbsp;<span style="color:#a71d5d">extends</span>&nbsp;Pet&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">private</span>&nbsp;<span style="color:#066de2">String</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">private</span>&nbsp;<span style="color:#066de2">int</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;Dog(<span style="color:#066de2">String</span>&nbsp;name,&nbsp;<span style="color:#066de2">int</span>&nbsp;age)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.name&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.age&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;@Override</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#066de2">String</span>&nbsp;getName()&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">return</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">void</span>&nbsp;setName(<span style="color:#066de2">String</span>&nbsp;name)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.name&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;@Override</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#066de2">int</span>&nbsp;getAge()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">return</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">void</span>&nbsp;setAge(<span style="color:#066de2">int</span>&nbsp;age)&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.age&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+    UIFactory <|.. WindowsFactory
+    UIFactory <|.. MacFactory
+    Button <|.. WindowsButton
+    Button <|.. MacButton
+    Checkbox <|.. WindowsCheckbox
+    Checkbox <|.. MacCheckbox
+    WindowsFactory ..> WindowsButton : "생성"
+    WindowsFactory ..> WindowsCheckbox : "생성"
+    MacFactory ..> MacButton : "생성"
+    MacFactory ..> MacCheckbox : "생성"
+    Application --> UIFactory : "사용"
+```
 
+---
 
+## Java 코드 예제
 
-**sub class - Cat**
+### 예제 시나리오: OS별 UI 컴포넌트 생성
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div><div style="line-height:130%">15</div><div style="line-height:130%">16</div><div style="line-height:130%">17</div><div style="line-height:130%">18</div><div style="line-height:130%">19</div><div style="line-height:130%">20</div><div style="line-height:130%">21</div><div style="line-height:130%">22</div><div style="line-height:130%">23</div><div style="line-height:130%">24</div><div style="line-height:130%">25</div><div style="line-height:130%">26</div><div style="line-height:130%">27</div><div style="line-height:130%">28</div><div style="line-height:130%">29</div><div style="line-height:130%">30</div><div style="line-height:130%">31</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">package</span>&nbsp;CreationalPattern.AbstractFactoryPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">class</span>&nbsp;Cat&nbsp;<span style="color:#a71d5d">extends</span>&nbsp;Pet&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">private</span>&nbsp;<span style="color:#066de2">String</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">private</span>&nbsp;<span style="color:#066de2">int</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;Cat(<span style="color:#066de2">String</span>&nbsp;name,&nbsp;<span style="color:#066de2">int</span>&nbsp;age)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.name&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.age&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;@Override</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#066de2">String</span>&nbsp;getName()&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">return</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">void</span>&nbsp;setName(<span style="color:#066de2">String</span>&nbsp;name)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.name&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;@Override</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#066de2">int</span>&nbsp;getAge()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">return</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">void</span>&nbsp;setAge(<span style="color:#066de2">int</span>&nbsp;age)&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.age&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+Windows와 Mac 환경에서 각각 다른 스타일의 버튼과 체크박스를 생성하는 예제다.
 
+**제품 인터페이스**
 
+```java
+// 버튼 제품 인터페이스
+public interface Button {
+    void render();
+    void onClick();
+}
 
-이전 블로그를 보면 알겠지만 위 코드는 사실 팩토리 메서드 패턴과 같다. 
+// 체크박스 제품 인터페이스
+public interface Checkbox {
+    void render();
+    boolean isChecked();
+}
+```
 
-아래서부터 추상 팩토리의 역할을 하는 추상 클래스 또는 인터페이스가 추가 되면서 차이가 생긴다.
+**Windows 제품 구현체**
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">package</span>&nbsp;CreationalPattern.AbstractFactoryPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">abstract</span>&nbsp;<span style="color:#a71d5d">class</span>&nbsp;PetAbstractFactory&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">abstract</span>&nbsp;Pet&nbsp;createPet();</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+```java
+public class WindowsButton implements Button {
 
+    @Override
+    public void render() {
+        System.out.println("Windows 스타일 버튼을 렌더링합니다.");
+    }
 
+    @Override
+    public void onClick() {
+        System.out.println("Windows 버튼 클릭 이벤트 처리");
+    }
+}
 
-PetAbstractFactory 클래스의 메소드 createPet는 super class 인 Pet을 리턴한다.
+public class WindowsCheckbox implements Checkbox {
+    private boolean checked = false;
 
-이제 아래에서는 각각의 Pet을 상속받고 있는 Sub class를 위한 Factory class를 생성하여
+    @Override
+    public void render() {
+        System.out.println("Windows 스타일 체크박스를 렌더링합니다.");
+    }
 
-PetAbstractFactory 클래스를 상속받아 추상메소드를 각각 구현 할 것이다.
+    @Override
+    public boolean isChecked() {
+        return checked;
+    }
+}
+```
 
+**Mac 제품 구현체**
 
+```java
+public class MacButton implements Button {
 
-**DogFactory**
+    @Override
+    public void render() {
+        System.out.println("Mac 스타일 버튼을 렌더링합니다.");
+    }
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div><div style="line-height:130%">15</div><div style="line-height:130%">16</div><div style="line-height:130%">17</div><div style="line-height:130%">18</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">package</span>&nbsp;CreationalPattern.AbstractFactoryPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">class</span>&nbsp;DogFactory&nbsp;<span style="color:#a71d5d">extends</span>&nbsp;PetAbstractFactory&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">private</span>&nbsp;<span style="color:#066de2">String</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">private</span>&nbsp;<span style="color:#066de2">int</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;DogFactory(<span style="color:#066de2">String</span>&nbsp;name,&nbsp;<span style="color:#066de2">int</span>&nbsp;age)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.name&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.age&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;@Override</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;Pet&nbsp;createPet()&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">return</span>&nbsp;<span style="color:#a71d5d">new</span>&nbsp;Dog(name,&nbsp;age);</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+    @Override
+    public void onClick() {
+        System.out.println("Mac 버튼 클릭 이벤트 처리");
+    }
+}
 
-**CatFactory**
+public class MacCheckbox implements Checkbox {
+    private boolean checked = false;
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div><div style="line-height:130%">15</div><div style="line-height:130%">16</div><div style="line-height:130%">17</div><div style="line-height:130%">18</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">package</span>&nbsp;CreationalPattern.AbstractFactoryPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">class</span>&nbsp;CatFactory&nbsp;<span style="color:#a71d5d">extends</span>&nbsp;PetAbstractFactory&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">private</span>&nbsp;<span style="color:#066de2">String</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">private</span>&nbsp;<span style="color:#066de2">int</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;CatFactory(<span style="color:#066de2">String</span>&nbsp;name,&nbsp;<span style="color:#066de2">int</span>&nbsp;age)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.name&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;name;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">this</span>.age&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;age;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;@Override</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;Pet&nbsp;createPet()&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">return</span>&nbsp;<span style="color:#a71d5d">new</span>&nbsp;Cat(name,age);</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+    @Override
+    public void render() {
+        System.out.println("Mac 스타일 체크박스를 렌더링합니다.");
+    }
 
-이렇게 두개의 sub class [dog, cat]에 대한 Factory 클래스를 구현했다.
+    @Override
+    public boolean isChecked() {
+        return checked;
+    }
+}
+```
 
-이제 이 서브 클래스들을 생성하기 위한 클라이언트 코드에 접점으로 제공하는 consumer 클래스를 만든다.
+**추상 팩토리 인터페이스**
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">package</span>&nbsp;CreationalPattern.AbstractFactoryPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">class</span>&nbsp;PetFactory&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">static</span>&nbsp;Pet&nbsp;getPet(PetAbstractFactory&nbsp;factory)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">return</span>&nbsp;factory.createPet();</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+```java
+// 추상 팩토리: 연관된 제품군을 생성하는 메서드들을 선언
+public interface UIFactory {
+    Button createButton();
+    Checkbox createCheckbox();
+}
+```
 
-PetFactory클래스는 위에서 메소드 인자로 PetAbstractFactory 추상 클래스를 받고, getPet 메소드는 인자로 받은 factory 추상클래스의 createPet 메소드를 실행한다.
+**구체 팩토리 구현체**
 
-**PetAbstractFactory 를 상속받고 있는 클래스는 DogFactory, CatFactory 이므로 두가지 종류가 메소드 인자로 올 수 있다.**
+```java
+// Windows 전용 팩토리: Windows 제품군만 생성
+public class WindowsFactory implements UIFactory {
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">package</span>&nbsp;CreationalPattern.AbstractFactoryPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%"><span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">class</span>&nbsp;TestPetFactory&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a71d5d">public</span>&nbsp;<span style="color:#a71d5d">static</span>&nbsp;<span style="color:#a71d5d">void</span>&nbsp;main(<span style="color:#066de2">String</span>[]&nbsp;args)&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Pet&nbsp;dog&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;PetFactory.getPet(<span style="color:#a71d5d">new</span>&nbsp;DogFactory(<span style="color:#63a35c">"로또"</span>,&nbsp;<span style="color:#0099cc">7</span>));</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Pet&nbsp;cat&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">=</span>&nbsp;PetFactory.getPet(<span style="color:#a71d5d">new</span>&nbsp;CatFactory(<span style="color:#63a35c">"토토"</span>,&nbsp;<span style="color:#0099cc">2</span>));</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#066de2">System</span>.<span style="color:#066de2">out</span>.<span style="color:#066de2">println</span>(<span style="color:#63a35c">"Dog&nbsp;:&nbsp;"</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">+</span>&nbsp;dog);</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#066de2">System</span>.<span style="color:#066de2">out</span>.<span style="color:#066de2">println</span>(<span style="color:#63a35c">"Cat&nbsp;:&nbsp;"</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#a71d5d">+</span>&nbsp;cat);</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+    @Override
+    public Button createButton() {
+        return new WindowsButton();
+    }
 
+    @Override
+    public Checkbox createCheckbox() {
+        return new WindowsCheckbox();
+    }
+}
+
+// Mac 전용 팩토리: Mac 제품군만 생성
+public class MacFactory implements UIFactory {
+
+    @Override
+    public Button createButton() {
+        return new MacButton();
+    }
+
+    @Override
+    public Checkbox createCheckbox() {
+        return new MacCheckbox();
+    }
+}
+```
+
+**클라이언트 코드**
+
+```java
+// Application은 UIFactory 인터페이스만 알고 있다.
+// Windows인지 Mac인지 전혀 모른다.
+public class Application {
+    private final Button button;
+    private final Checkbox checkbox;
+
+    public Application(UIFactory factory) {
+        // 팩토리 교체만으로 전체 UI 스타일이 바뀐다
+        this.button = factory.createButton();
+        this.checkbox = factory.createCheckbox();
+    }
+
+    public void buildUI() {
+        button.render();
+        checkbox.render();
+    }
+}
+
+// Main: OS에 따라 팩토리만 교체
+public class Main {
+    public static void main(String[] args) {
+        String os = System.getProperty("os.name").toLowerCase();
+
+        UIFactory factory;
+        if (os.contains("windows")) {
+            factory = new WindowsFactory();
+        } else {
+            factory = new MacFactory();
+        }
+
+        // 클라이언트 코드는 변경 없이 팩토리만 교체
+        Application app = new Application(factory);
+        app.buildUI();
+    }
+}
+```
+
+---
+
+## 동작 흐름
+
+```mermaid
+sequenceDiagram
+    participant M as "Main"
+    participant F as "WindowsFactory"
+    participant A as "Application"
+    participant B as "WindowsButton"
+    participant C as "WindowsCheckbox"
+
+    M->>F: "1. new WindowsFactory() 생성"
+    M->>A: "2. new Application(factory) 생성"
+    A->>F: "3. factory.createButton() 호출"
+    F->>B: "4. new WindowsButton() 생성"
+    B-->>A: "5. WindowsButton 반환"
+    A->>F: "6. factory.createCheckbox() 호출"
+    F->>C: "7. new WindowsCheckbox() 생성"
+    C-->>A: "8. WindowsCheckbox 반환"
+    M->>A: "9. app.buildUI() 호출"
+    A->>B: "10. button.render()"
+    A->>C: "11. checkbox.render()"
+```
+
+---
+
+## 새 플랫폼 추가 시 (OCP 준수)
+
+Linux UI가 추가되어도 기존 코드는 전혀 수정하지 않는다.
+
+```java
+// 1. Linux 제품 클래스 추가
+public class LinuxButton implements Button {
+    @Override
+    public void render() {
+        System.out.println("Linux 스타일 버튼을 렌더링합니다.");
+    }
+
+    @Override
+    public void onClick() {
+        System.out.println("Linux 버튼 클릭 이벤트 처리");
+    }
+}
+
+public class LinuxCheckbox implements Checkbox {
+    @Override
+    public void render() {
+        System.out.println("Linux 스타일 체크박스를 렌더링합니다.");
+    }
+
+    @Override
+    public boolean isChecked() { return false; }
+}
+
+// 2. Linux 팩토리 추가 (기존 코드 수정 없음)
+public class LinuxFactory implements UIFactory {
+    @Override
+    public Button createButton() {
+        return new LinuxButton();
+    }
+
+    @Override
+    public Checkbox createCheckbox() {
+        return new LinuxCheckbox();
+    }
+}
+```
+
+---
+
+## 실무 적용 사례
+
+| 분야 | 추상 팩토리 적용 예 |
+|------|-----------------|
+| **JDK** | `DocumentBuilderFactory` — XML 파서 구현체 교체 |
+| **JDBC** | `Connection` 객체 — DB 종류에 따른 드라이버별 팩토리 |
+| **Spring** | `PlatformTransactionManager` — DB 종류에 따른 트랜잭션 팩토리 |
+| **테마 시스템** | 라이트/다크 모드 UI 컴포넌트 일괄 교체 |
+| **게임 개발** | 맵 종류에 따른 지형, 적군, 아이템 세트 일괄 생성 |
+
+### 실무 Spring 예제: 결제 수단별 팩토리
+
+```java
+// 결제 관련 객체군을 일관성 있게 생성
+public interface PaymentFactory {
+    PaymentValidator createValidator();
+    PaymentProcessor createProcessor();
+    PaymentNotifier createNotifier();
+}
+
+public class KakaoPayFactory implements PaymentFactory {
+    @Override
+    public PaymentValidator createValidator() {
+        return new KakaoPayValidator();
+    }
+
+    @Override
+    public PaymentProcessor createProcessor() {
+        return new KakaoPayProcessor();
+    }
+
+    @Override
+    public PaymentNotifier createNotifier() {
+        return new KakaoPayNotifier();
+    }
+}
+
+public class NaverPayFactory implements PaymentFactory {
+    @Override
+    public PaymentValidator createValidator() {
+        return new NaverPayValidator();
+    }
+
+    @Override
+    public PaymentProcessor createProcessor() {
+        return new NaverPayProcessor();
+    }
+
+    @Override
+    public PaymentNotifier createNotifier() {
+        return new NaverPayNotifier();
+    }
+}
+```
+
+---
+
+## 장단점 비교
+
+| 항목 | 내용 |
+|------|------|
+| **장점: 제품군 일관성** | 같은 팩토리에서 생성된 제품들은 서로 호환됨이 보장된다 |
+| **장점: OCP 준수** | 새 제품군 추가 시 기존 코드를 수정하지 않는다 |
+| **장점: 결합도 감소** | 클라이언트가 구체 제품 클래스를 직접 참조하지 않는다 |
+| **단점: 복잡도 증가** | 제품 종류가 늘어날수록 인터페이스와 클래스 수가 크게 늘어난다 |
+| **단점: 제품군 확장 어려움** | 기존 팩토리에 새 제품 종류를 추가하면 모든 구현 팩토리를 수정해야 한다 |
+
+---
+
+## 핵심 포인트 정리
+
+- 추상 팩토리 패턴은 **연관된 객체들의 묶음(제품군)을 일관성 있게 생성**하는 패턴이다.
+- 팩토리 메서드 패턴이 **단일 제품**을 대상으로 한다면, 추상 팩토리는 **여러 제품의 묶음**을 대상으로 한다.
+- 핵심은 **팩토리 객체 자체를 교체**함으로써 관련 객체 전체를 한꺼번에 바꿀 수 있다는 점이다.
+- 새로운 **제품군(플랫폼, 테마 등)이 자주 추가**되는 시스템에 적합하다.
+- 반면 기존 팩토리에 **새 제품 종류**를 추가하려면 모든 팩토리 구현체를 수정해야 해 주의가 필요하다.

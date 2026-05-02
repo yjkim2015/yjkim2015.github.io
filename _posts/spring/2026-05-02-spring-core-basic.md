@@ -168,9 +168,9 @@ graph LR
     A --> E[WebApplicationContext]
     E --> F[AnnotationConfigServletWebServerApplicationContext]
 
-    B -->|"어노테이션 기반 설정\n(Spring Boot 기본)"| G[자바 코드]
-    C -->|"XML 기반 설정\n(레거시)"| H[classpath XML]
-    F -->|"Spring Boot 웹 앱"| I[내장 톰캣 포함]
+    B -->|"어노테이션 기반 설정\n("Spring Boot 기본")"| G["자바 코드"]
+    C -->|"XML 기반 설정\n("레거시")"| H[classpath XML]
+    F -->|"Spring Boot 웹 앱"| I["내장 톰캣 포함"]
 
     classDef blue fill:#cce5ff,stroke:#007bff
     classDef green fill:#d4edda,stroke:#28a745
@@ -254,13 +254,13 @@ public class AutoAppConfig {
 
 ```mermaid
 graph TD
-    A["@Component\n(모든 컴포넌트 기반)"] --> B["@Controller\n웹 요청 처리"]
+    A["@Component\n("모든 컴포넌트 기반")"] --> B["@Controller\n웹 요청 처리"]
     A --> C["@Service\n비즈니스 로직"]
     A --> D["@Repository\n데이터 접근"]
     A --> E["@Configuration\n설정 클래스"]
 
     B -->|"추가 기능"| F["HandlerMapping 등록\n웹 요청 라우팅"]
-    C -->|"추가 기능"| G["(특별 부가 기능 없음)\n의미론적 분류"]
+    C -->|"추가 기능"| G["("특별 부가 기능 없음")\n의미론적 분류"]
     D -->|"추가 기능"| H["DataAccessException 변환\n예외 추상화 AOP 적용"]
     E -->|"추가 기능"| I["CGLIB 프록시 적용\n싱글톤 보장"]
 
@@ -365,7 +365,7 @@ flowchart TD
     B -->|"예 — 없으면 동작 불가"| C["1️⃣ 생성자 주입\nfinal + 불변"]
     B -->|"아니오 — 없어도 됨"| D{"런타임 변경 필요?"}
     D -->|"예"| E["2️⃣ 수정자 주입\nrequired=false"]
-    D -->|"아니오"| F["1️⃣ 생성자 주입\n(기본값으로도 가능)"]
+    D -->|"아니오"| F["1️⃣ 생성자 주입\n("기본값으로도 가능")"]
 
     C --> G["장점: final, 테스트 쉬움,\n순환참조 감지"]
     E --> H["장점: 선택적 의존관계,\n변경 가능"]
@@ -605,7 +605,7 @@ public class AppConfig {
 
 ```mermaid
 graph TD
-    A["Bean Scope"] --> B["싱글톤 Singleton\n(기본값)"]
+    A["Bean Scope"] --> B["싱글톤 Singleton\n("기본값")"]
     A --> C["프로토타입 Prototype"]
     A --> D["웹 스코프 Web Scopes"]
     D --> E["Request\nHTTP 요청 단위"]
@@ -793,7 +793,7 @@ graph TD
     A["XML 설정\n(ClassPathXmlApplicationContext)"] --> C["BeanDefinitionReader"]
     B["자바 @Configuration\n(AnnotationConfigApplicationContext)"] --> C
     D["@ComponentScan\n자동 스캔"] --> C
-    C --> E["BeanDefinition 생성\n(추상화)"]
+    C --> E["BeanDefinition 생성\n("추상화")"]
     E --> F["Spring Container\n빈 생성 및 관리"]
 
     E --> G["beanClassName\n구현 클래스명"]

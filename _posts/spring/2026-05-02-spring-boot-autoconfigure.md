@@ -67,14 +67,14 @@ graph TD
     A --> C[@EnableAutoConfiguration]
     A --> D[@ComponentScan]
 
-    B --> E[@Configuration: 설정 클래스로 등록]
-    C --> F[AutoConfigurationImportSelector 동작]
-    D --> G[현재 패키지부터 하위 패키지 스캔]
+    B --> E["@Configuration: 설정 클래스로 등록"]
+    C --> F["AutoConfigurationImportSelector 동작"]
+    D --> G["현재 패키지부터 하위 패키지 스캔"]
 
-    F --> H[spring.factories 또는 imports 파일 읽기]
-    H --> I[자동 구성 클래스 로드]
-    I --> J[@Conditional 조건 평가]
-    J --> K[조건 충족 시 빈 등록]
+    F --> H["spring.factories 또는 imports 파일 읽기"]
+    H --> I["자동 구성 클래스 로드"]
+    I --> J["@Conditional 조건 평가"]
+    J --> K["조건 충족 시 빈 등록"]
 ```
 
 ---
@@ -207,15 +207,15 @@ public class DataSourceAutoConfiguration {
 
 ```mermaid
 flowchart TD
-    A[DataSourceAutoConfiguration] --> B{DataSource.class 클래스패스에 있음?}
-    B -->|No| C[자동 구성 건너뜀]
-    B -->|Yes| D{DataSource 빈이 이미 등록됨?}
-    D -->|Yes| E[사용자 정의 DataSource 사용]
-    D -->|No| F{H2/HSQL/Derby 있음?}
-    F -->|Yes| G[임베디드 DB 자동 생성]
-    F -->|No| H{HikariCP 있음?}
-    H -->|Yes| I[HikariDataSource 생성]
-    H -->|No| J[다른 커넥션 풀 시도]
+    A[DataSourceAutoConfiguration] --> B{"DataSource.class 클래스패스에 있음?"}
+    B -->|No| C["자동 구성 건너뜀"]
+    B -->|Yes| D{"DataSource 빈이 이미 등록됨?"}
+    D -->|Yes| E["사용자 정의 DataSource 사용"]
+    D -->|No| F{"H2/HSQL/Derby 있음?"}
+    F -->|Yes| G["임베디드 DB 자동 생성"]
+    F -->|No| H{"HikariCP 있음?"}
+    H -->|Yes| I["HikariDataSource 생성"]
+    H -->|No| J["다른 커넥션 풀 시도"]
 ```
 
 ---
@@ -291,7 +291,7 @@ public class MyApplication {}
 
 ```mermaid
 graph TD
-    A[설정 우선순위 - 높을수록 우선] --> B["1. 커맨드라인 인수\n--server.port=9090"]
+    A["설정 우선순위 - 높을수록 우선"] --> B["1. 커맨드라인 인수\n--server.port=9090"]
     B --> C["2. SPRING_APPLICATION_JSON\n환경변수 JSON"]
     C --> D["3. 환경변수\nSERVER_PORT=9090"]
     D --> E["4. application-{profile}.yml\napplication-prod.yml"]
@@ -532,19 +532,19 @@ info:
 
 ```mermaid
 graph TD
-    A[Actuator 엔드포인트] --> B[/actuator/health]
-    A --> C[/actuator/info]
-    A --> D[/actuator/metrics]
-    A --> E[/actuator/loggers]
-    A --> F[/actuator/env]
-    A --> G[/actuator/beans]
-    A --> H[/actuator/mappings]
-    A --> I[/actuator/threaddump]
-    A --> J[/actuator/heapdump]
+    A["Actuator 엔드포인트"] --> B["/actuator/health"]
+    A --> C["/actuator/info"]
+    A --> D["/actuator/metrics"]
+    A --> E["/actuator/loggers"]
+    A --> F["/actuator/env"]
+    A --> G["/actuator/beans"]
+    A --> H["/actuator/mappings"]
+    A --> I["/actuator/threaddump"]
+    A --> J["/actuator/heapdump"]
 
-    B -->|UP/DOWN 상태| K[DB, 디스크, 캐시 연결 확인]
-    D -->|JVM, HTTP, 커스텀 메트릭| L[Prometheus 연동 가능]
-    E -->|런타임 로그 레벨 변경| M[재시작 없이 DEBUG 전환]
+    B -->|"UP/DOWN 상태"| K["DB, 디스크, 캐시 연결 확인"]
+    D -->|"JVM, HTTP, 커스텀 메트릭"| L["Prometheus 연동 가능"]
+    E -->|"런타임 로그 레벨 변경"| M["재시작 없이 DEBUG 전환"]
 ```
 
 ### 10.1 커스텀 Health Indicator
@@ -683,18 +683,18 @@ class OrderRepositoryTest {
 
 ```mermaid
 flowchart TD
-    A[SpringApplication.run] --> B[Environment 준비]
-    B --> C[application.yml 로드]
-    C --> D[ApplicationContext 생성]
-    D --> E[@ComponentScan 실행]
-    E --> F[@EnableAutoConfiguration 실행]
-    F --> G[AutoConfiguration.imports 읽기]
-    G --> H[@Conditional 평가]
-    H --> I[조건 충족 AutoConfiguration 클래스 등록]
-    I --> J[빈 생성 및 의존관계 주입]
-    J --> K[내장 서버 시작]
-    K --> L[ApplicationReadyEvent 발행]
-    L --> M[서비스 준비 완료]
+    A[SpringApplication.run] --> B["Environment 준비"]
+    B --> C["application.yml 로드"]
+    C --> D["ApplicationContext 생성"]
+    D --> E["@ComponentScan 실행"]
+    E --> F["@EnableAutoConfiguration 실행"]
+    F --> G["AutoConfiguration.imports 읽기"]
+    G --> H["@Conditional 평가"]
+    H --> I["조건 충족 AutoConfiguration 클래스 등록"]
+    I --> J["빈 생성 및 의존관계 주입"]
+    J --> K["내장 서버 시작"]
+    K --> L["ApplicationReadyEvent 발행"]
+    L --> M["서비스 준비 완료"]
 ```
 
 ---

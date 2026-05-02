@@ -19,21 +19,21 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph 전통적 스레드 모델
-        A[요청 1] --> T1[Thread 1 - 블로킹 대기 중...]
-        B[요청 2] --> T2[Thread 2 - 블로킹 대기 중...]
-        C[요청 N] --> TN[Thread N - 블로킹 대기 중...]
-        Note1[N개 요청 = N개 스레드 필요\n메모리: N × ~1MB]
+    subgraph "전통적 스레드 모델"
+        A["요청 1"] --> T1["Thread 1 - 블로킹 대기 중..."]
+        B["요청 2"] --> T2["Thread 2 - 블로킹 대기 중..."]
+        C["요청 N"] --> TN["Thread N - 블로킹 대기 중..."]
+        Note1["N개 요청 = N개 스레드 필요\n메모리: N × ~1MB"]
     end
 
-    subgraph 코루틴 모델
-        D[요청 1] --> C1[Coroutine 1]
-        E[요청 2] --> C2[Coroutine 2]
-        F[요청 N] --> CN[Coroutine N]
-        C1 --> CT[소수의 Thread Pool]
+    subgraph "코루틴 모델"
+        D["요청 1"] --> C1[Coroutine 1]
+        E["요청 2"] --> C2[Coroutine 2]
+        F["요청 N"] --> CN[Coroutine N]
+        C1 --> CT["소수의 Thread Pool"]
         C2 --> CT
         CN --> CT
-        Note2[N개 요청, 스레드 수 = CPU 코어 수\n대기 중 코루틴은 스레드 반환]
+        Note2["N개 요청, 스레드 수 = CPU 코어 수\n대기 중 코루틴은 스레드 반환"]
     end
 ```
 
@@ -104,17 +104,17 @@ suspend fun fetchAll(): List<User> = coroutineScope {
 
 ```mermaid
 graph TD
-    A[부모 코루틴 Scope] --> B[자식 코루틴 1]
-    A --> C[자식 코루틴 2]
-    A --> D[자식 코루틴 3]
+    A["부모 코루틴 Scope"] --> B["자식 코루틴 1"]
+    A --> C["자식 코루틴 2"]
+    A --> D["자식 코루틴 3"]
 
-    B --> E[완료]
-    C --> F[완료]
-    D --> G[예외 발생!]
+    B --> E["완료"]
+    C --> F["완료"]
+    D --> G["예외 발생!"]
 
-    G --> H[부모에게 전파]
-    H --> I[나머지 자식 모두 취소]
-    H --> J[부모 코루틴도 취소]
+    G --> H["부모에게 전파"]
+    H --> I["나머지 자식 모두 취소"]
+    H --> J["부모 코루틴도 취소"]
 ```
 
 ```kotlin
@@ -190,9 +190,9 @@ graph TD
     A --> C[Default]
     A --> D[Main]
 
-    B -->|64개 스레드 기본| E[DB, HTTP, File I/O]
-    C -->|CPU 코어 수| F[계산, 정렬, 암호화]
-    D -->|메인 스레드| G[Android UI, 테스트]
+    B -->|"64개 스레드 기본"| E["DB, HTTP, File I/O"]
+    C -->|"CPU 코어 수"| F["계산, 정렬, 암호화"]
+    D -->|"메인 스레드"| G["Android UI, 테스트"]
 ```
 
 ---
@@ -598,21 +598,21 @@ class OrderServiceTest {
 
 ```mermaid
 flowchart TD
-    A[일반 함수] -->|runBlocking| B[코루틴 스코프]
-    B -->|launch| C[Job: 결과 없음]
-    B -->|async| D[Deferred: 결과 있음]
+    A["일반 함수"] -->|runBlocking| B["코루틴 스코프"]
+    B -->|launch| C["Job: 결과 없음"]
+    B -->|async| D["Deferred: 결과 있음"]
 
-    C -->|취소| E[cancel/cancelAndJoin]
-    D -->|결과 대기| F[await]
+    C -->|"취소"| E["cancel/cancelAndJoin"]
+    D -->|"결과 대기"| F[await]
 
-    G[suspend fun] -->|Dispatchers.IO| H[I/O 스레드풀]
-    G -->|Dispatchers.Default| I[CPU 스레드풀]
+    G[suspend fun] -->|Dispatchers.IO| H["I/O 스레드풀"]
+    G -->|Dispatchers.Default| I["CPU 스레드풀"]
 
-    J[Flow] -->|emit| K[비동기 데이터 스트림]
-    K -->|collect| L[소비]
-    K -->|map/filter/flatMap| M[변환]
+    J[Flow] -->|emit| K["비동기 데이터 스트림"]
+    K -->|collect| L["소비"]
+    K -->|"map/filter/flatMap"| M["변환"]
 
-    N[Channel] -->|send/receive| O[코루틴 간 통신]
+    N[Channel] -->|"send/receive"| O["코루틴 간 통신"]
 ```
 
 ---

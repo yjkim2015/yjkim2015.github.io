@@ -67,9 +67,9 @@ GoF(Gang of Four)의 저서 *Design Patterns: Elements of Reusable Object-Orient
 
 ```mermaid
 graph TD
-    A[GoF 디자인 패턴 23가지] --> B[생성 패턴<br/>Creational]
-    A --> C[구조 패턴<br/>Structural]
-    A --> D[행동 패턴<br/>Behavioral]
+    A["GoF 디자인 패턴 23가지"] --> B["생성 패턴<br>Creational"]
+    A --> C["구조 패턴<br>Structural"]
+    A --> D["행동 패턴<br>Behavioral"]
 
     B --> B1[Singleton]
     B --> B2[Factory Method]
@@ -90,7 +90,7 @@ graph TD
     D --> D3[Template Method]
     D --> D4[Command]
     D --> D5[Iterator]
-    D --> D6[+ 8가지 더]
+    D --> D6["+ 8가지 더"]
 ```
 
 ---
@@ -148,13 +148,13 @@ graph TD
 
 ```mermaid
 flowchart TD
-    Q1{어떤 문제인가?} --> C[객체 생성 방식 제어]
-    Q1 --> S[클래스/객체 조합 구조]
-    Q1 --> B[객체 간 통신/알고리즘]
+    Q1{"어떤 문제인가?"} --> C["객체 생성 방식 제어"]
+    Q1 --> S["클래스/객체 조합 구조"]
+    Q1 --> B["객체 간 통신/알고리즘"]
 
-    C --> C1["생성 패턴\n(Singleton, Factory,\nBuilder, Prototype)"]
-    S --> S1["구조 패턴\n(Adapter, Composite,\nProxy, Decorator)"]
-    B --> B1["행동 패턴\n(Observer, Strategy,\nCommand, Template)"]
+    C --> C1["생성 패턴\n("Singleton, Factory,\nBuilder, Prototype")"]
+    S --> S1["구조 패턴\n("Adapter, Composite,\nProxy, Decorator")"]
+    B --> B1["행동 패턴\n("Observer, Strategy,\nCommand, Template")"]
 ```
 
 ---

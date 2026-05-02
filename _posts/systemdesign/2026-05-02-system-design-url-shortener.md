@@ -62,15 +62,15 @@ URL 하나 저장 크기:
 
 ```mermaid
 graph TD
-    A[짧은 코드 생성 방법] --> B[해시 방식]
-    A --> C[ID 생성 + Base62 인코딩]
+    A["짧은 코드 생성 방법"] --> B["해시 방식"]
+    A --> C["ID 생성 + Base62 인코딩"]
 
-    B --> D[MD5/SHA256 해시 → 앞 7자리]
-    B --> E[단점: 충돌 가능성]
+    B --> D["MD5/SHA256 해시 → 앞 7자리"]
+    B --> E["단점: 충돌 가능성"]
 
-    C --> F[고유 ID 생성]
-    C --> G[Base62 변환]
-    G --> H[충돌 없음, 예측 불가]
+    C --> F["고유 ID 생성"]
+    C --> G["Base62 변환"]
+    G --> H["충돌 없음, 예측 불가"]
 ```
 
 ### Base62 인코딩 이해하기
@@ -115,17 +115,17 @@ print(encode(12345678)) # "W7e"
 
 ```mermaid
 graph TD
-    Request[URL 생성 요청] --> IDGen[ID 생성기]
-    IDGen --> Snowflake[Twitter Snowflake 방식]
+    Request["URL 생성 요청"] --> IDGen["ID 생성기"]
+    IDGen --> Snowflake["Twitter Snowflake 방식"]
 
-    subgraph Snowflake ID 구조 64비트
-        T[타임스탬프 41비트]
-        M[머신 ID 10비트]
-        S[시퀀스 12비트]
+    subgraph "Snowflake ID 구조 64비트"
+        T["타임스탬프 41비트"]
+        M["머신 ID 10비트"]
+        S["시퀀스 12비트"]
     end
 
-    Snowflake --> Base62[Base62 인코딩]
-    Base62 --> ShortURL[7자리 단축 코드]
+    Snowflake --> Base62["Base62 인코딩"]
+    Base62 --> ShortURL["7자리 단축 코드"]
 ```
 
 **Snowflake ID 구조:**
@@ -141,23 +141,23 @@ graph TD
 
 ```mermaid
 graph TD
-    Client[클라이언트] --> DNS[DNS]
-    DNS --> LB[로드밸런서]
+    Client["클라이언트"] --> DNS[DNS]
+    DNS --> LB["로드밸런서"]
 
-    LB --> API1[API 서버 1]
-    LB --> API2[API 서버 2]
-    LB --> API3[API 서버 N]
+    LB --> API1["API 서버 1"]
+    LB --> API2["API 서버 2"]
+    LB --> API3["API 서버 N"]
 
-    API1 --> Cache[Redis 캐시 클러스터]
+    API1 --> Cache["Redis 캐시 클러스터"]
     API2 --> Cache
     API3 --> Cache
 
-    API1 --> IDService[ID 생성 서비스]
+    API1 --> IDService["ID 생성 서비스"]
     API2 --> IDService
 
-    API1 --> DB_W[(MySQL 마스터<br/>쓰기 전용)]
-    DB_W --> DB_R1[(MySQL 레플리카 1<br/>읽기 전용)]
-    DB_W --> DB_R2[(MySQL 레플리카 2<br/>읽기 전용)]
+    API1 --> DB_W["("MySQL 마스터<br>쓰기 전용")"]
+    DB_W --> DB_R1["("MySQL 레플리카 1<br>읽기 전용")"]
+    DB_W --> DB_R2["("MySQL 레플리카 2<br>읽기 전용")"]
 
     API1 --> DB_R1
     API2 --> DB_R1
@@ -288,18 +288,18 @@ CREATE TABLE click_logs (
 
 ```mermaid
 graph TD
-    Q{어떤 DB를?}
-    Q --> A[RDBMS MySQL/PostgreSQL]
-    Q --> B[NoSQL Cassandra/DynamoDB]
+    Q{"어떤 DB를?"}
+    Q --> A["RDBMS MySQL/PostgreSQL"]
+    Q --> B["NoSQL Cassandra/DynamoDB"]
 
-    A --> A1[장점: ACID 트랜잭션<br/>중복 URL 체크 원자적]
-    A --> A2[단점: 수평 확장 어려움<br/>대용량 시 샤딩 필요]
+    A --> A1["장점: ACID 트랜잭션<br>중복 URL 체크 원자적"]
+    A --> A2["단점: 수평 확장 어려움<br>대용량 시 샤딩 필요"]
 
-    B --> B1[장점: 수평 확장 쉬움<br/>대용량 처리 탁월]
-    B --> B2[단점: 중복 체크 복잡<br/>트랜잭션 제한적]
+    B --> B1["장점: 수평 확장 쉬움<br>대용량 처리 탁월"]
+    B --> B2["단점: 중복 체크 복잡<br>트랜잭션 제한적"]
 
-    A --> C[추천: 초기~중간 규모]
-    B --> D[추천: 초대규모 글로벌]
+    A --> C["추천: 초기~중간 규모"]
+    B --> D["추천: 초대규모 글로벌"]
 ```
 
 ---
@@ -382,12 +382,12 @@ def create_custom_url(long_url: str, custom_code: str, user_id: int) -> str:
 
 ```mermaid
 graph TD
-    Router[샤드 라우터] --> S1[샤드 1<br/>short_code A-G<br/>MySQL]
-    Router --> S2[샤드 2<br/>short_code H-N<br/>MySQL]
-    Router --> S3[샤드 3<br/>short_code O-Z<br/>MySQL]
-    Router --> S4[샤드 4<br/>short_code 0-9<br/>MySQL]
+    Router["샤드 라우터"] --> S1["샤드 1<br>short_code A-G<br>MySQL"]
+    Router --> S2["샤드 2<br>short_code H-N<br>MySQL"]
+    Router --> S3["샤드 3<br>short_code O-Z<br>MySQL"]
+    Router --> S4["샤드 4<br>short_code 0-9<br>MySQL"]
 
-    API[API 서버] --> Router
+    API["API 서버"] --> Router
 ```
 
 **일관된 해싱 (Consistent Hashing)**을 사용하면 샤드 추가/제거 시 데이터 이동을 최소화할 수 있습니다.
@@ -405,15 +405,15 @@ def get_shard(short_code: str, num_shards: int) -> int:
 
 ```mermaid
 graph TD
-    A[URL 만료 처리 방법]
-    A --> B[요청 시 확인 Lazy]
-    A --> C[배치 작업 Eager]
+    A["URL 만료 처리 방법"]
+    A --> B["요청 시 확인 Lazy"]
+    A --> C["배치 작업 Eager"]
 
-    B --> D[장점: 구현 단순<br/>단점: 만료 URL이 DB에 남음]
-    C --> E[장점: DB 정리됨<br/>단점: 배치 부하]
+    B --> D["장점: 구현 단순<br>단점: 만료 URL이 DB에 남음"]
+    C --> E["장점: DB 정리됨<br>단점: 배치 부하"]
 
-    E --> F[Cron Job<br/>매일 새벽 3시 실행]
-    F --> G["DELETE FROM urls<br/>WHERE expires_at < NOW()<br/>LIMIT 10000"]
+    E --> F["Cron Job<br>매일 새벽 3시 실행"]
+    F --> G["DELETE FROM urls<br>WHERE expires_at < NOW()<br>LIMIT 10000"]
 ```
 
 **요청 시 만료 확인:**
@@ -439,12 +439,12 @@ def redirect(short_code: str):
 
 ```mermaid
 graph LR
-    Click[클릭 이벤트] --> Kafka[Kafka<br/>메시지 큐]
-    Kafka --> StreamProcessor[Flink/Spark Streaming<br/>실시간 집계]
-    StreamProcessor --> Redis[Redis<br/>실시간 클릭수]
-    Kafka --> S3[S3<br/>원시 데이터]
-    S3 --> Athena[AWS Athena<br/>배치 분석]
-    Athena --> Dashboard[분석 대시보드]
+    Click["클릭 이벤트"] --> Kafka["Kafka<br>메시지 큐"]
+    Kafka --> StreamProcessor["Flink/Spark Streaming<br>실시간 집계"]
+    StreamProcessor --> Redis["Redis<br>실시간 클릭수"]
+    Kafka --> S3["S3<br>원시 데이터"]
+    S3 --> Athena["AWS Athena<br>배치 분석"]
+    Athena --> Dashboard["분석 대시보드"]
 ```
 
 **클릭 추적 비동기 처리:**
@@ -499,19 +499,19 @@ def check_rate_limit(user_id: str, tier: str) -> bool:
 
 ```mermaid
 graph TD
-    Traffic[초당 50만 요청] --> CDN[CDN Edge<br/>301 캐싱된 경우 처리]
-    Traffic --> LB[오토스케일링 로드밸런서]
+    Traffic["초당 50만 요청"] --> CDN["CDN Edge<br>301 캐싱된 경우 처리"]
+    Traffic --> LB["오토스케일링 로드밸런서"]
 
-    LB --> AS[Auto Scaling Group<br/>EC2 자동 증가]
-    LB --> RateLimit[Rate Limiter<br/>IP당 초당 10건 제한]
+    LB --> AS["Auto Scaling Group<br>EC2 자동 증가"]
+    LB --> RateLimit["Rate Limiter<br>IP당 초당 10건 제한"]
 
-    AS --> Cache[Redis 클러스터<br/>캐시 히트 99%]
-    Cache --> DB[DB 조회 최소화]
+    AS --> Cache["Redis 클러스터<br>캐시 히트 99%"]
+    Cache --> DB["DB 조회 최소화"]
 
-    subgraph Hot URL 처리
-        HotDetect[인기 URL 감지<br/>Redis Sorted Set]
-        HotDetect --> PreCache[사전 캐싱]
-        HotDetect --> LocalCache[각 서버 로컬 캐시]
+    subgraph "Hot URL 처리"
+        HotDetect["인기 URL 감지<br>Redis Sorted Set"]
+        HotDetect --> PreCache["사전 캐싱"]
+        HotDetect --> LocalCache["각 서버 로컬 캐시"]
     end
 ```
 
@@ -540,29 +540,29 @@ def preload_hot_urls():
 
 ```mermaid
 graph TD
-    Client[클라이언트] --> CF[CloudFront CDN<br/>301 리다이렉트 캐싱]
+    Client["클라이언트"] --> CF["CloudFront CDN<br>301 리다이렉트 캐싱"]
     CF --> Route53[Route53 DNS]
     Route53 --> ALB[Application Load Balancer]
 
-    ALB --> API_ASG[API 서버 Auto Scaling Group<br/>최소 3대, 최대 50대]
+    ALB --> API_ASG["API 서버 Auto Scaling Group<br>최소 3대, 최대 50대"]
 
-    API_ASG --> LocalCache[로컬 캐시<br/>Caffeine / Guava]
-    API_ASG --> Redis[Redis Cluster<br/>캐시 + Rate Limit + Hot URL]
-    API_ASG --> IDService[Snowflake ID 서비스<br/>2대 이중화]
+    API_ASG --> LocalCache["로컬 캐시<br>Caffeine / Guava"]
+    API_ASG --> Redis["Redis Cluster<br>캐시 + Rate Limit + Hot URL"]
+    API_ASG --> IDService["Snowflake ID 서비스<br>2대 이중화"]
 
-    API_ASG --> DBProxy[RDS Proxy<br/>Connection Pool]
-    DBProxy --> RDS_M[(RDS Aurora 마스터<br/>Multi-AZ)]
-    RDS_M --> RDS_R1[(Aurora 읽기 레플리카 1)]
-    RDS_M --> RDS_R2[(Aurora 읽기 레플리카 2)]
+    API_ASG --> DBProxy["RDS Proxy<br>Connection Pool"]
+    DBProxy --> RDS_M["("RDS Aurora 마스터<br>Multi-AZ")"]
+    RDS_M --> RDS_R1["("Aurora 읽기 레플리카 1")"]
+    RDS_M --> RDS_R2["("Aurora 읽기 레플리카 2")"]
 
-    API_ASG --> Kafka[Kafka<br/>클릭 이벤트 스트리밍]
-    Kafka --> Flink[Flink<br/>실시간 집계]
-    Kafka --> S3[S3<br/>원시 로그 아카이브]
-    Flink --> Analytics_Redis[Redis<br/>실시간 통계]
+    API_ASG --> Kafka["Kafka<br>클릭 이벤트 스트리밍"]
+    Kafka --> Flink["Flink<br>실시간 집계"]
+    Kafka --> S3["S3<br>원시 로그 아카이브"]
+    Flink --> Analytics_Redis["Redis<br>실시간 통계"]
 
-    subgraph 운영 도구
-        CloudWatch[CloudWatch 모니터링]
-        Lambda[Lambda<br/>만료 URL 정리]
+    subgraph "운영 도구"
+        CloudWatch["CloudWatch 모니터링"]
+        Lambda["Lambda<br>만료 URL 정리"]
     end
 ```
 

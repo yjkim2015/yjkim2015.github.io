@@ -79,25 +79,25 @@ public class UserDao {
 
 ```mermaid
 graph LR
-    A[UserDao] -->|의존| B[ConnectionMaker 인터페이스]
-    C[DConnectionMaker] -->|구현| B
-    D[NConnectionMaker] -->|구현| B
+    A[UserDao] -->|"의존"| B["ConnectionMaker 인터페이스"]
+    C[DConnectionMaker] -->|"구현"| B
+    D[NConnectionMaker] -->|"구현"| B
 
     E[UserDaoTest] -->|DI| A
-    E -->|선택| C
+    E -->|"선택"| C
 ```
 
 ### 2.2 개방-폐쇄 원칙 (OCP)
 
 ```mermaid
 graph TD
-    A[OCP: 확장에 열려있고, 변경에 닫혀있음] --> B[UserDao]
-    A --> C[ConnectionMaker 인터페이스]
+    A["OCP: 확장에 열려있고, 변경에 닫혀있음"] --> B[UserDao]
+    A --> C["ConnectionMaker 인터페이스"]
 
-    B -->|변경 없이| D[새 DB로 전환 가능]
-    C -->|새 구현체 추가| E[NConnectionMaker]
-    C -->|새 구현체 추가| F[TestConnectionMaker]
-    B -->|코드 수정 불필요| G[UserDao는 그대로]
+    B -->|"변경 없이"| D["새 DB로 전환 가능"]
+    C -->|"새 구현체 추가"| E[NConnectionMaker]
+    C -->|"새 구현체 추가"| F[TestConnectionMaker]
+    B -->|"코드 수정 불필요"| G["UserDao는 그대로"]
 ```
 
 ---
@@ -244,13 +244,13 @@ public class UserService {
 
 ```mermaid
 graph TD
-    A[UserService] -->|의존| B[PlatformTransactionManager 인터페이스]
-    C[DataSourceTransactionManager] -->|구현| B
-    D[JpaTransactionManager] -->|구현| B
-    E[HibernateTransactionManager] -->|구현| B
-    F[JtaTransactionManager] -->|구현| B
+    A[UserService] -->|"의존"| B["PlatformTransactionManager 인터페이스"]
+    C[DataSourceTransactionManager] -->|"구현"| B
+    D[JpaTransactionManager] -->|"구현"| B
+    E[HibernateTransactionManager] -->|"구현"| B
+    F[JtaTransactionManager] -->|"구현"| B
 
-    A -->|코드 변경 없이| G[DB 기술 교체 가능]
+    A -->|"코드 변경 없이"| G["DB 기술 교체 가능"]
 ```
 
 ---
@@ -298,7 +298,7 @@ public interface UserDao {
 
 ```mermaid
 graph TD
-    A[DataAccessException\nRuntimeException] --> B[NonTransientDataAccessException]
+    A["DataAccessException\nRuntimeException"] --> B[NonTransientDataAccessException]
     A --> C[TransientDataAccessException]
 
     B --> D[DataIntegrityViolationException]
@@ -310,9 +310,9 @@ graph TD
 
     D --> I[DuplicateKeyException]
 
-    J[MySQL SQLException\n에러코드 1062] -->|변환| I
-    K[Oracle SQLException\n에러코드 1] -->|변환| I
-    L[H2 SQLException\n에러코드 23505] -->|변환| I
+    J["MySQL SQLException\n에러코드 1062"] -->|"변환"| I
+    K["Oracle SQLException\n에러코드 1"] -->|"변환"| I
+    L["H2 SQLException\n에러코드 23505"] -->|"변환"| I
 ```
 
 ---
@@ -357,15 +357,15 @@ public record Failure<T>(String error) implements Result<T> {}
 
 ```mermaid
 graph LR
-    A[Spring 6 + GraalVM] --> B[AOT 컴파일]
-    B --> C[Native Image 생성]
-    C --> D[빠른 시작 시간]
-    C --> E[낮은 메모리 사용]
-    C --> F[JVM 불필요]
+    A[Spring 6 + GraalVM] --> B["AOT 컴파일"]
+    B --> C["Native Image 생성"]
+    C --> D["빠른 시작 시간"]
+    C --> E["낮은 메모리 사용"]
+    C --> F["JVM 불필요"]
 
-    G[기존 JVM 방식] --> H[JIT 컴파일]
-    H --> I[런타임 최적화]
-    I --> J[긴 시작 시간\n높은 메모리]
+    G["기존 JVM 방식"] --> H["JIT 컴파일"]
+    H --> I["런타임 최적화"]
+    I --> J["긴 시작 시간\n높은 메모리"]
 ```
 
 ```java
@@ -457,33 +457,33 @@ public class OrderService {
 
 ```mermaid
 graph TD
-    A[SOLID] --> B[SRP 단일 책임 원칙]
-    A --> C[OCP 개방-폐쇄 원칙]
-    A --> D[LSP 리스코프 치환 원칙]
-    A --> E[ISP 인터페이스 분리 원칙]
-    A --> F[DIP 의존관계 역전 원칙]
+    A[SOLID] --> B["SRP 단일 책임 원칙"]
+    A --> C["OCP 개방-폐쇄 원칙"]
+    A --> D["LSP 리스코프 치환 원칙"]
+    A --> E["ISP 인터페이스 분리 원칙"]
+    A --> F["DIP 의존관계 역전 원칙"]
 
-    B -->|Spring 적용| G[레이어 분리: Controller, Service, Repository]
-    C -->|Spring 적용| H[인터페이스 + DI로 확장에 열려있음]
-    D -->|Spring 적용| I[구현체는 인터페이스 계약 준수]
-    E -->|Spring 적용| J[UserDao, UserReadDao, UserWriteDao 분리]
-    F -->|Spring 적용| K[추상화에 의존, 구현체에 의존 X]
+    B -->|"Spring 적용"| G["레이어 분리: Controller, Service, Repository"]
+    C -->|"Spring 적용"| H["인터페이스 + DI로 확장에 열려있음"]
+    D -->|"Spring 적용"| I["구현체는 인터페이스 계약 준수"]
+    E -->|"Spring 적용"| J["UserDao, UserReadDao, UserWriteDao 분리"]
+    F -->|"Spring 적용"| K["추상화에 의존, 구현체에 의존 X"]
 ```
 
 ### 7.2 템플릿 콜백 패턴 — Spring 전반에서 사용
 
 ```mermaid
 graph TD
-    A[템플릿 콜백 패턴] --> B[JdbcTemplate]
+    A["템플릿 콜백 패턴"] --> B[JdbcTemplate]
     A --> C[RestTemplate]
     A --> D[TransactionTemplate]
     A --> E[RedisTemplate]
     A --> F[RabbitTemplate]
     A --> G[KafkaTemplate]
 
-    B -->|콜백| H[RowMapper, PreparedStatementCreator]
-    C -->|콜백| I[RequestCallback, ResponseExtractor]
-    D -->|콜백| J[TransactionCallback]
+    B -->|"콜백"| H[RowMapper, PreparedStatementCreator]
+    C -->|"콜백"| I[RequestCallback, ResponseExtractor]
+    D -->|"콜백"| J[TransactionCallback]
 ```
 
 ```java

@@ -481,10 +481,10 @@ const config: PlaywrightTestConfig = {
 ```mermaid
 graph TD
     subgraph "테스트 커버리지 지표"
-        LINE["라인 커버리지<br/>실행된 코드 라인 %"]
-        BRANCH["브랜치 커버리지<br/>if/else 분기 %"]
-        FUNCTION["함수 커버리지<br/>호출된 함수 %"]
-        STATEMENT["구문 커버리지<br/>실행된 구문 %"]
+        LINE["라인 커버리지<br>실행된 코드 라인 %"]
+        BRANCH["브랜치 커버리지<br>if/else 분기 %"]
+        FUNCTION["함수 커버리지<br>호출된 함수 %"]
+        STATEMENT["구문 커버리지<br>실행된 구문 %"]
     end
 
     LINE --> TARGET["목표: 80%+"]

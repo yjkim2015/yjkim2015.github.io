@@ -17,13 +17,13 @@ Java 버전 업그레이드는 스마트폰 OS 업데이트와 같습니다. 매
 
 ```mermaid
 graph LR
-    A[Java 7\n2011] --> B[Java 8 LTS\n2014]
-    B --> C[Java 9\n2017]
-    C --> D[Java 10\n2018]
-    D --> E[Java 11 LTS\n2018]
-    E --> F[Java 14\n2020]
-    F --> G[Java 17 LTS\n2021]
-    G --> H[Java 21 LTS\n2023]
+    A["Java 7\n2011"] --> B["Java 8 LTS\n2014"]
+    B --> C["Java 9\n2017"]
+    C --> D["Java 10\n2018"]
+    D --> E["Java 11 LTS\n2018"]
+    E --> F["Java 14\n2020"]
+    F --> G["Java 17 LTS\n2021"]
+    G --> H["Java 21 LTS\n2023"]
 
     style B fill:#99ff99
     style E fill:#99ff99
@@ -586,12 +586,12 @@ String describe(Animal animal) {
 
 ```mermaid
 graph TD
-    subgraph 기존 OS 스레드
+    subgraph "기존 OS 스레드"
         A[Thread 1 - 1MB]
         B[Thread 2 - 1MB]
         C[Thread 3 - 1MB]
         D[Thread N - 1MB]
-        Note1[10,000개 = 10GB 메모리]
+        Note1["10,000개 = 10GB 메모리"]
     end
 
     subgraph Virtual Threads
@@ -605,7 +605,7 @@ graph TD
         E --> H
         F --> I
         F --> J
-        Note2[100만 개도 가능]
+        Note2["100만 개도 가능"]
     end
 ```
 
@@ -679,15 +679,15 @@ String format(Object obj) {
 
 ```mermaid
 flowchart TD
-    A[현재 Java 8 사용] --> B{Spring 6 필요?}
-    B -->|Yes| C[Java 17 LTS로 업그레이드]
-    B -->|No| D{성능 개선 필요?}
-    D -->|Virtual Thread 필요| E[Java 21 LTS]
-    D -->|No| F[Java 11 LTS 검토]
+    A["현재 Java 8 사용"] --> B{"Spring 6 필요?"}
+    B -->|Yes| C["Java 17 LTS로 업그레이드"]
+    B -->|No| D{"성능 개선 필요?"}
+    D -->|"Virtual Thread 필요"| E[Java 21 LTS]
+    D -->|No| F["Java 11 LTS 검토"]
 
-    C --> G[jakarta.* 패키지 변경]
-    C --> H[javax.* → jakarta.* 전환]
-    E --> I[spring.threads.virtual.enabled: true]
+    C --> G["jakarta.* 패키지 변경"]
+    C --> H["javax.* → jakarta.* 전환"]
+    E --> I["spring.threads.virtual.enabled: true"]
 ```
 
 ### 마이그레이션 체크리스트

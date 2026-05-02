@@ -495,11 +495,11 @@ function CleanComponent() {
 
 ```mermaid
 graph TD
-    LH["Lighthouse 점수"] --> FCP["FCP: First Contentful Paint<br/>첫 콘텐츠 표시"]
-    LH --> LCP["LCP: Largest Contentful Paint<br/>주요 콘텐츠 표시"]
-    LH --> TBT["TBT: Total Blocking Time<br/>JS 실행 블로킹"]
-    LH --> CLS["CLS: Cumulative Layout Shift<br/>레이아웃 안정성"]
-    LH --> TTI["TTI: Time to Interactive<br/>인터랙션 가능 시점"]
+    LH["Lighthouse 점수"] --> FCP["FCP: First Contentful Paint<br>첫 콘텐츠 표시"]
+    LH --> LCP["LCP: Largest Contentful Paint<br>주요 콘텐츠 표시"]
+    LH --> TBT["TBT: Total Blocking Time<br>JS 실행 블로킹"]
+    LH --> CLS["CLS: Cumulative Layout Shift<br>레이아웃 안정성"]
+    LH --> TTI["TTI: Time to Interactive<br>인터랙션 가능 시점"]
 
     FCP --> F1["중요 CSS 인라인"]
     LCP --> L1["이미지 최적화, preload"]
@@ -605,7 +605,7 @@ const StockRow = React.memo(
 ```mermaid
 flowchart TD
     A["성능 최적화 시작"] --> B["1. 측정 먼저"]
-    B --> C["2. 번들 크기 줄이기<br/>(가장 큰 효과)"]
+    B --> C["2. 번들 크기 줄이기<br>("가장 큰 효과")"]
     C --> D["3. 불필요한 네트워크 요청 제거"]
     D --> E["4. 이미지 최적화"]
     E --> F["5. 불필요한 리렌더링 제거"]

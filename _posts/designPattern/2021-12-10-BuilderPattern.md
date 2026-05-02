@@ -1,71 +1,344 @@
 ---
 title: 빌더(Builder) 패턴
 categories:
-- DesignPattern
+- DESIGNPATTERN
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
 
-## 빌더 (Builder) 패턴이란?
+> **한 줄 요약:** 빌더 패턴은 복잡한 객체를 단계적으로 조립하는 패턴으로, 필수 값은 생성자로, 선택 값은 메서드 체이닝으로 받아 마지막에 `build()`로 완성된 객체를 반환한다.
 
-**빌더 패턴이란 복합 객체의 생성 과정과 표현 방법을 분리하여 동일한 생성 절차에서 서로 다른 표현 결과를 만들 수 있게 하는 패턴이다.**
+## 실생활 비유
 
+**서브웨이(Subway) 샌드위치**를 주문하는 과정을 떠올려보자.
 
+1. 빵 종류 선택 (필수)
+2. 사이즈 선택 (필수)
+3. 채소 추가 (선택)
+4. 소스 추가 (선택)
+5. 추가 토핑 (선택)
+6. 결제 (완성)
 
-구글에 나온 설명이지만... 솔직히 나는 빌더 패턴 보면 소스에 비해 말로 하는 설명이 너무 어렵다 ;;
+각 단계를 원하는 대로 선택하고, 마지막에 완성된 샌드위치를 받는다. 빌더 패턴도 똑같이 동작한다. 필요한 속성을 하나씩 설정하고 `build()`를 호출해 완성된 객체를 받는다.
 
-<hr>
-빌더 패턴은 많은 Optional한 멤버 변수(혹은 파라미터)나 지속성 없는 상태 값들에 대해 처리해야하는 문제들을 해결한다.
+---
 
-Optional 하다고 표현하는것은 개인적인 생각으로 null을 포함한다? 라는 의미인줄 알았는데
+## 패턴 개요
 
-말그대로 선택적이라는것이다 ㅡ.ㅡ;;;
+### 왜 빌더 패턴이 필요한가?
 
-<hr>
+**문제 상황: 점층적 생성자 패턴(Telescoping Constructor)**
 
-**그렇다면 또 와이!!! 왜 빌더 패턴을 언제 쓰냐!!**
+```java
+// 파라미터가 많아지면 어떤 값이 무엇인지 알 수 없다
+User user1 = new User("홍길동", 30, "서울", "010-1234-5678", "hong@mail.com", true, false);
+//                     이름    나이  주소    전화번호          이메일      알림여부  탈퇴여부
+// 7번째 파라미터가 뭘 의미하는지 바로 알기 어렵다
+```
 
-예를들어, 팩토리 패턴들에서는 생성해야하는 클래스에 대한 속성 값이 많을때 다음과 같은 이슈들이 있다.
+**또 다른 문제: null 파라미터 강제 전달**
 
-* 클라이언트 프로그램으로부터 팩토리 클래스로 많은 파라미터를 넘겨줄 때, 타입, 순서 등에 대한 관리가 어려워져 에러가 발생할 확률이 높아진다.
+```java
+// 이메일이 없는 경우 null을 강제로 넣어야 한다
+User user2 = new User("김철수", 25, "부산", "010-9876-5432", null, true, false);
+```
 
-* 경우에 따라 필요없는 파라미터들에 대해서 팩토리 클래스에 일일이 null 값을 넘겨줘야 한다.
+빌더 패턴은 이 두 가지 문제를 해결한다.
 
-* 생성해야 하는 sub class가 무거워지고 복잡해짐에 따라 팩토리 클래스 또한 복잡해진다.
+### 빌더 패턴의 4가지 구현 원칙
 
-  
+1. 빌더 클래스를 **Static Nested Class**로 생성한다
+2. 빌더 생성자는 **public**이며, 필수 값을 파라미터로 받는다
+3. 선택 값은 각각 **메서드로 제공**하며, 메서드는 **빌더 자신(this)을 반환**해 체이닝이 가능하게 한다
+4. `build()` 메서드에서 최종 객체를 생성하며, 대상 클래스의 생성자는 **private**으로 제한한다
 
-***빌더 패턴은 이러한 문제들을 해결하기 위해 별도의 Builder 클래스를 만들어 필수 값에 대해서는 생성자를 통해, 선택적인 값들에 대해서는 메소드를 통해 step-by-step으로 값을 입력받은 후에 build() 메소드를 통해 최종적으로 하나의 인스턴스를 리턴하는 방식이다.***
+---
 
+## UML 다이어그램
 
+```mermaid
+classDiagram
+    class User {
+        -name: String
+        -age: int
+        -address: String
+        -phone: String
+        -email: String
+        -User(builder: Builder)
+        +getName(): String
+        +getAge(): int
+    }
+    class Builder {
+        -name: String
+        -age: int
+        -address: String
+        -phone: String
+        -email: String
+        +Builder(name: String, age: int)
+        +address(address: String): Builder
+        +phone(phone: String): Builder
+        +email(email: String): Builder
+        +build(): User
+    }
 
-빌더 패턴은 굉장히 자주 사용되는 생성 패턴 중 하나이고, 또한 코드에서 딱 보는순간 이거 빌더패턴이네 라고 알아볼 정도로 쉽다.
+    User +-- Builder : "내부 클래스"
+    Builder ..> User : "생성"
+```
 
-<hr>
+---
 
+## Java 코드 예제
 
-#### 빌터 패턴의 구현 방법
+### 기본 빌더 패턴
 
-1. 빌더 클래스를 Static Nested Class(전역 중첩 클래스)로 생성한다. 위에서 말한 것처럼 코드에서 딱 보는순간 이거 빌더패턴이다 알아볼수 있다고 했는데, 그 이유가 관례적으로 생성하고자 하는 클래스 이름 뒤에 Builder를 붙이기 때문이다 .ㅋㅋ
-2. 빌더 클래스의 생성자는 public으로 하며, 필수 값들에 대해 생성자의 파라미터로 받는다.
-3. Optional한 값들에 대해서는 각각의 속성마다 메소드로 제공하며, 이때 중요한 것은 메소드의 리턴 값이 빌더 객체 자신이어야 한다.
-4. 마지막은 빌더 클래스 내에 build() 메소드를 정의하여 클라이언트 프로그램에게 최종 생성된 결과물을 제공한다. 이렇게 build() 메소드를 통해서만 객체 생성을 제공하기 때문에 생성 대상이 되는 클래스의 생성자는 private으로 정의해야 한다.
+```java
+public class User {
+    // 필수 필드
+    private final String name;
+    private final int age;
 
+    // 선택 필드 (기본값 설정 가능)
+    private final String address;
+    private final String phone;
+    private final String email;
+    private final boolean newsletter;
 
+    // private 생성자: 외부에서 직접 생성 불가, 빌더를 통해서만 생성 가능
+    private User(Builder builder) {
+        this.name = builder.name;
+        this.age = builder.age;
+        this.address = builder.address;
+        this.phone = builder.phone;
+        this.email = builder.email;
+        this.newsletter = builder.newsletter;
+    }
 
-코드는 아래와 같다.
+    // getter 메서드만 제공 (setter 없음 → 불변 객체)
+    public String getName() { return name; }
+    public int getAge() { return age; }
+    public String getAddress() { return address; }
+    public String getPhone() { return phone; }
+    public String getEmail() { return email; }
+    public boolean isNewsletter() { return newsletter; }
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div><div style="line-height:130%">14</div><div style="line-height:130%">15</div><div style="line-height:130%">16</div><div style="line-height:130%">17</div><div style="line-height:130%">18</div><div style="line-height:130%">19</div><div style="line-height:130%">20</div><div style="line-height:130%">21</div><div style="line-height:130%">22</div><div style="line-height:130%">23</div><div style="line-height:130%">24</div><div style="line-height:130%">25</div><div style="line-height:130%">26</div><div style="line-height:130%">27</div><div style="line-height:130%">28</div><div style="line-height:130%">29</div><div style="line-height:130%">30</div><div style="line-height:130%">31</div><div style="line-height:130%">32</div><div style="line-height:130%">33</div><div style="line-height:130%">34</div><div style="line-height:130%">35</div><div style="line-height:130%">36</div><div style="line-height:130%">37</div><div style="line-height:130%">38</div><div style="line-height:130%">39</div><div style="line-height:130%">40</div><div style="line-height:130%">41</div><div style="line-height:130%">42</div><div style="line-height:130%">43</div><div style="line-height:130%">44</div><div style="line-height:130%">45</div><div style="line-height:130%">46</div><div style="line-height:130%">47</div><div style="line-height:130%">48</div><div style="line-height:130%">49</div><div style="line-height:130%">50</div><div style="line-height:130%">51</div><div style="line-height:130%">52</div><div style="line-height:130%">53</div><div style="line-height:130%">54</div><div style="line-height:130%">55</div><div style="line-height:130%">56</div><div style="line-height:130%">57</div><div style="line-height:130%">58</div><div style="line-height:130%">59</div><div style="line-height:130%">60</div><div style="line-height:130%">61</div><div style="line-height:130%">62</div><div style="line-height:130%">63</div><div style="line-height:130%">64</div><div style="line-height:130%">65</div><div style="line-height:130%">66</div><div style="line-height:130%">67</div><div style="line-height:130%">68</div><div style="line-height:130%">69</div><div style="line-height:130%">70</div><div style="line-height:130%">71</div><div style="line-height:130%">72</div><div style="line-height:130%">73</div><div style="line-height:130%">74</div><div style="line-height:130%">75</div><div style="line-height:130%">76</div><div style="line-height:130%">77</div><div style="line-height:130%">78</div><div style="line-height:130%">79</div><div style="line-height:130%">80</div><div style="line-height:130%">81</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#ff3399">package</span>&nbsp;CreationalPattern.BuilderPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">class</span>&nbsp;Phone&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;ram;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;network;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;isIphone;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;isSamsung;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;is5G;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;Phone(PhoneBuilder&nbsp;builder)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.ram&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;builder.ram;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.network&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;builder.network;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.isIphone&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;builder.isIphone;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.isSamsung&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;builder.isSamsung;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.is5G&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;builder.is5G;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;@Override</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;<span style="color:#0099cc">toString</span>()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;<span style="color:#993333">"Phone{"</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span></div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#993333">"ram='"</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span>&nbsp;ram&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span>&nbsp;<span style="color:#993333">'\''</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#993333">",&nbsp;network='"</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span>&nbsp;network&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span>&nbsp;<span style="color:#993333">'\''</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span></div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#993333">",&nbsp;isIphone="</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span>&nbsp;isIphone&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#993333">",&nbsp;isSamsung="</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span>&nbsp;isSamsung&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span></div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#993333">",&nbsp;is5G="</span>&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span>&nbsp;is5G&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">+</span></div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#993333">'}'</span>;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;getRam()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;ram;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;getNetwork()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;network;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;isIphone()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;isIphone;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;isSamsung()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;isSamsung;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;isIs5G()&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;is5G;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">static</span>&nbsp;<span style="color:#ff3399">class</span>&nbsp;PhoneBuilder&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;ram;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">String</span>&nbsp;network;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;isIphone;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;isSamsung;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">private</span>&nbsp;<span style="color:#0099cc">boolean</span>&nbsp;is5G;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;PhoneBuilder(<span style="color:#0099cc">String</span>&nbsp;ram,&nbsp;<span style="color:#0099cc">String</span>&nbsp;network)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.ram&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;ram;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.network&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;network;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;PhoneBuilder&nbsp;setIphone(<span style="color:#0099cc">boolean</span>&nbsp;isIphone)&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.isIphone&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;isIphone;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;<span style="color:#ff3399">this</span>;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;PhoneBuilder&nbsp;setSamsung(<span style="color:#0099cc">boolean</span>&nbsp;isSamsung)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.isSamsung&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;isSamsung;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;<span style="color:#ff3399">this</span>;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;PhoneBuilder&nbsp;set5G(<span style="color:#0099cc">boolean</span>&nbsp;is5G)&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">this</span>.is5G&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;is5G;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;<span style="color:#ff3399">this</span>;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;Phone&nbsp;build()&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">return</span>&nbsp;<span style="color:#ff3399">new</span>&nbsp;Phone(<span style="color:#ff3399">this</span>);</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">}</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+    @Override
+    public String toString() {
+        return "User{name='" + name + "', age=" + age
+                + ", address='" + address + "', phone='" + phone
+                + "', email='" + email + "', newsletter=" + newsletter + "}";
+    }
 
-위 코드에서 살펴봐야할 것은 Phone 클래스에는 setter 메소드가 없고 getter메소드만 가진다.
+    // Static Nested Builder Class
+    public static class Builder {
+        // 필수 필드
+        private final String name;
+        private final int age;
 
-또한 생성자가 public이 아닌 private로 되있다는 것이다.
+        // 선택 필드 (기본값 설정)
+        private String address = "";
+        private String phone = "";
+        private String email = "";
+        private boolean newsletter = false;
 
-그렇기 때문에 Phone객체를 생성하기 위해서는 PhoneBuilder 클래스를 통해서만 가능하다.
+        // 빌더 생성자: 필수 값만 받는다
+        public Builder(String name, int age) {
+            this.name = name;
+            this.age = age;
+        }
 
-<div class="colorscripter-code" style="color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important; position:relative !important;overflow:auto"><table class="colorscripter-code-table" style="margin:0;padding:0;border:none;background-color:#fafafa;border-radius:4px;" cellspacing="0" cellpadding="0"><tr><td style="padding:6px;border-right:2px solid #e5e5e5"><div style="margin:0;padding:0;word-break:normal;text-align:right;color:#666;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="line-height:130%">1</div><div style="line-height:130%">2</div><div style="line-height:130%">3</div><div style="line-height:130%">4</div><div style="line-height:130%">5</div><div style="line-height:130%">6</div><div style="line-height:130%">7</div><div style="line-height:130%">8</div><div style="line-height:130%">9</div><div style="line-height:130%">10</div><div style="line-height:130%">11</div><div style="line-height:130%">12</div><div style="line-height:130%">13</div></div></td><td style="padding:6px 0;text-align:left"><div style="margin:0;padding:0;color:#010101;font-family:Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;line-height:130%"><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#ff3399">package</span>&nbsp;CreationalPattern.BuilderPattern;</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%"><span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">class</span>&nbsp;TestPhoneBuilder&nbsp;{</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff3399">public</span>&nbsp;<span style="color:#ff3399">static</span>&nbsp;<span style="color:#ff3399">void</span>&nbsp;main(<span style="color:#0099cc">String</span>[]&nbsp;args)&nbsp;{</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Phone&nbsp;phone&nbsp;<span style="color:#0086b3"></span><span style="color:#ff3399">=</span>&nbsp;<span style="color:#ff3399">new</span>&nbsp;Phone.PhoneBuilder(<span style="color:#993333">"16GB"</span>,<span style="color:#993333">"skt"</span>)</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.set5G(<span style="color:#308ce5">true</span>)</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.setIphone(<span style="color:#308ce5">false</span>)</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.setSamsung(<span style="color:#308ce5">true</span>)</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.build();</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;</div><div style="padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#0099cc">System</span>.<span style="color:#0099cc">out</span>.<span style="color:#0099cc">println</span>(phone);</div><div style="background-color:#f0f0f0; padding:0 6px; white-space:pre; line-height:130%">&nbsp;&nbsp;&nbsp;&nbsp;}</div><div style="padding:0 6px; white-space:pre; line-height:130%">}</div></div><div style="text-align:right;margin-top:-13px;margin-right:5px;font-size:9px;font-style:italic"><a href="http://colorscripter.com/info#e" target="_blank" style="color:#e5e5e5text-decoration:none">Colored by Color Scripter</a></div></td><td style="vertical-align:bottom;padding:0 2px 4px 0"><a href="http://colorscripter.com/info#e" target="_blank" style="text-decoration:none;color:white"><span style="font-size:9px;word-break:normal;background-color:#e5e5e5;color:white;border-radius:10px;padding:1px">cs</span></a></td></tr></table></div>
+        // 선택 값 설정 메서드: 반드시 this를 반환해 체이닝 가능하게 함
+        public Builder address(String address) {
+            this.address = address;
+            return this;
+        }
 
-위 코드를 보면 Phone 객체를 얻기 위해 PhoneBuilder 클래스를 사용하고 있으며,
+        public Builder phone(String phone) {
+            this.phone = phone;
+            return this;
+        }
 
-필수 값 속성에 대해서는 생성자로 받고 Optional한 값들에 대해서는 메소드를 통해 선택적으로 입력 받고 있다.
+        public Builder email(String email) {
+            this.email = email;
+            return this;
+        }
+
+        public Builder newsletter(boolean newsletter) {
+            this.newsletter = newsletter;
+            return this;
+        }
+
+        // 최종 객체 생성
+        public User build() {
+            return new User(this);
+        }
+    }
+}
+```
+
+**클라이언트 사용 코드**
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        // 모든 필드를 설정하는 경우
+        User fullUser = new User.Builder("홍길동", 30)
+                .address("서울시 강남구")
+                .phone("010-1234-5678")
+                .email("hong@example.com")
+                .newsletter(true)
+                .build();
+
+        System.out.println(fullUser);
+        // 출력: User{name='홍길동', age=30, address='서울시 강남구', ...}
+
+        // 필수 값만 설정하는 경우 (선택 필드는 기본값 사용)
+        User minimalUser = new User.Builder("김철수", 25)
+                .build();
+
+        System.out.println(minimalUser);
+        // 출력: User{name='김철수', age=25, address='', ...}
+
+        // 일부 필드만 설정하는 경우
+        User partialUser = new User.Builder("이영희", 28)
+                .email("lee@example.com")
+                .newsletter(true)
+                .build();
+
+        System.out.println(partialUser);
+    }
+}
+```
+
+---
+
+## 빌더에 유효성 검사 추가
+
+```java
+public User build() {
+    // build() 시점에 유효성 검사 가능
+    if (name == null || name.trim().isEmpty()) {
+        throw new IllegalStateException("이름은 필수입니다.");
+    }
+    if (age < 0 || age > 150) {
+        throw new IllegalStateException("나이가 올바르지 않습니다: " + age);
+    }
+    if (email != null && !email.isEmpty() && !email.contains("@")) {
+        throw new IllegalStateException("이메일 형식이 올바르지 않습니다: " + email);
+    }
+    return new User(this);
+}
+```
+
+---
+
+## 동작 흐름
+
+```mermaid
+sequenceDiagram
+    participant C as "클라이언트"
+    participant B as "User.Builder"
+    participant U as "User"
+
+    C->>B: "1. new Builder(name, age) — 필수값 설정"
+    C->>B: "2. .address(...) — 선택값 설정"
+    C->>B: "3. .email(...) — 선택값 설정"
+    C->>B: "4. .newsletter(true) — 선택값 설정"
+    C->>B: "5. .build() 호출"
+    B->>B: "6. 유효성 검사"
+    B->>U: "7. new User(this) — 객체 생성"
+    U-->>C: "8. 완성된 User 반환"
+```
+
+---
+
+## Lombok @Builder 활용
+
+실무에서는 Lombok의 `@Builder` 어노테이션을 사용하면 빌더 코드를 자동 생성할 수 있다.
+
+```java
+import lombok.Builder;
+import lombok.Getter;
+import lombok.ToString;
+
+@Getter
+@Builder
+@ToString
+public class Order {
+    private final String orderId;      // 필수
+    private final String productName;  // 필수
+
+    @Builder.Default
+    private final int quantity = 1;    // 기본값 1
+
+    @Builder.Default
+    private final boolean express = false;  // 기본값 false
+
+    private final String deliveryAddress;   // 선택
+    private final String couponCode;        // 선택
+}
+```
+
+**Lombok 빌더 사용 예**
+
+```java
+Order order = Order.builder()
+        .orderId("ORD-20241201-001")
+        .productName("노트북")
+        .quantity(2)
+        .express(true)
+        .deliveryAddress("서울시 마포구")
+        .build();
+
+System.out.println(order);
+```
+
+---
+
+## 실무 적용 사례
+
+| 사례 | 빌더 적용 예 |
+|------|------------|
+| **JDK** | `StringBuilder`, `StringBuffer` |
+| **JDK** | `ProcessBuilder` — 프로세스 실행 옵션 조립 |
+| **Spring** | `UriComponentsBuilder` — URI 조립 |
+| **Spring Security** | `HttpSecurity` 설정 체이닝 |
+| **Lombok** | `@Builder` 어노테이션 자동 생성 |
+| **OkHttp** | `Request.Builder()` — HTTP 요청 조립 |
+
+### Spring에서의 URI 빌더
+
+```java
+// UriComponentsBuilder는 빌더 패턴의 실무 예
+URI uri = UriComponentsBuilder
+        .fromHttpUrl("https://api.example.com")
+        .path("/v1/users/{userId}")
+        .queryParam("include", "profile")
+        .queryParam("format", "json")
+        .buildAndExpand("12345")
+        .toUri();
+```
+
+---
+
+## 장단점 비교
+
+| 항목 | 내용 |
+|------|------|
+| **장점: 가독성** | 각 파라미터의 의미가 메서드 이름으로 명확히 드러난다 |
+| **장점: 선택적 파라미터** | 필요한 필드만 설정하고 나머지는 기본값을 사용할 수 있다 |
+| **장점: 불변 객체** | setter가 없는 불변 객체를 자연스럽게 만들 수 있다 |
+| **장점: 유효성 검사** | build() 시점에 일관된 유효성 검사가 가능하다 |
+| **단점: 코드량 증가** | 빌더 클래스를 별도로 작성해야 해 코드가 늘어난다 (Lombok으로 해결 가능) |
+| **단점: 필수값 강제 어려움** | 컴파일 타임에 필수 파라미터를 강제하기 어렵다 (build() 시 런타임 검사) |
+
+---
+
+## 핵심 포인트 정리
+
+- 빌더 패턴은 **파라미터가 많은 객체 생성**에 특히 유용하다.
+- `new User("홍길동", 30, null, null, "hong@mail.com", true, false)` 같은 코드보다 **가독성이 훨씬 높다**.
+- **불변 객체(Immutable Object)** 를 만들기에 자연스러운 구조다. setter가 없어도 된다.
+- 실무에서는 **Lombok @Builder**를 사용하면 빌더 클래스를 직접 작성하지 않아도 된다.
+- `build()` 메서드에서 유효성 검사를 넣으면 **잘못된 상태의 객체 생성을 방지**할 수 있다.
+- Spring의 `UriComponentsBuilder`, OkHttp의 `Request.Builder()` 등이 실무에서 자주 마주치는 빌더 패턴 예다.

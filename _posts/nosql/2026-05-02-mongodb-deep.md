@@ -20,20 +20,20 @@ MongoDB는 **자유로운 서랍장**입니다. 어떤 서류든, 사진이든, 
 ```mermaid
 graph TD
     subgraph MongoDB
-        DB[데이터베이스]
-        DB --> Col[컬렉션 Collection]
-        Col --> Doc[도큐먼트 Document<br/>JSON 형태]
+        DB["데이터베이스"]
+        DB --> Col["컬렉션 Collection"]
+        Col --> Doc["도큐먼트 Document<br>JSON 형태"]
     end
 
     subgraph RDBMS
-        RDB[데이터베이스]
-        RDB --> Table[테이블]
-        Table --> Row[행 Row]
+        RDB["데이터베이스"]
+        RDB --> Table["테이블"]
+        Table --> Row["행 Row"]
     end
 
-    DB <-->|대응| RDB
-    Col <-->|대응| Table
-    Doc <-->|대응| Row
+    DB <-->|"대응"| RDB
+    Col <-->|"대응"| Table
+    Doc <-->|"대응"| Row
 ```
 
 ### 도큐먼트 예시
@@ -208,19 +208,19 @@ db.users.updateOne(
 
 ```mermaid
 graph TD
-    Design[스키마 설계 전략]
-    Design --> Embed[임베딩 Embedding<br/>관련 데이터를 하나의 도큐먼트에]
-    Design --> Reference[참조 Reference<br/>다른 컬렉션의 ID 저장]
+    Design["스키마 설계 전략"]
+    Design --> Embed["임베딩 Embedding<br>관련 데이터를 하나의 도큐먼트에"]
+    Design --> Reference["참조 Reference<br>다른 컬렉션의 ID 저장"]
 
-    Embed --> E1[장점: 단일 조회로 모든 데이터]
-    Embed --> E2[장점: 원자적 업데이트]
-    Embed --> E3[단점: 도큐먼트 크기 증가]
-    Embed --> E4[단점: 데이터 중복]
+    Embed --> E1["장점: 단일 조회로 모든 데이터"]
+    Embed --> E2["장점: 원자적 업데이트"]
+    Embed --> E3["단점: 도큐먼트 크기 증가"]
+    Embed --> E4["단점: 데이터 중복"]
 
-    Reference --> R1[장점: 데이터 중복 없음]
-    Reference --> R2[장점: 독립적 업데이트]
-    Reference --> R3[단점: 조인 필요 lookup]
-    Reference --> R4[단점: 여러 번 조회]
+    Reference --> R1["장점: 데이터 중복 없음"]
+    Reference --> R2["장점: 독립적 업데이트"]
+    Reference --> R3["단점: 조인 필요 lookup"]
+    Reference --> R4["단점: 여러 번 조회"]
 ```
 
 **임베딩 패턴 (자주 함께 조회되는 경우):**
@@ -283,14 +283,14 @@ graph TD
 
 ```mermaid
 graph TD
-    Index[MongoDB 인덱스 종류]
-    Index --> Single[단일 필드 인덱스]
-    Index --> Compound[복합 인덱스]
-    Index --> Text[텍스트 인덱스<br/>전문 검색]
-    Index --> Geo[지리 공간 인덱스<br/>2dsphere]
-    Index --> TTL[TTL 인덱스<br/>자동 만료]
-    Index --> Sparse[희소 인덱스<br/>값이 있는 도큐먼트만]
-    Index --> Partial[부분 인덱스<br/>조건 만족하는 것만]
+    Index["MongoDB 인덱스 종류"]
+    Index --> Single["단일 필드 인덱스"]
+    Index --> Compound["복합 인덱스"]
+    Index --> Text["텍스트 인덱스<br>전문 검색"]
+    Index --> Geo["지리 공간 인덱스<br>2dsphere"]
+    Index --> TTL["TTL 인덱스<br>자동 만료"]
+    Index --> Sparse["희소 인덱스<br>값이 있는 도큐먼트만"]
+    Index --> Partial["부분 인덱스<br>조건 만족하는 것만"]
 ```
 
 ```javascript
@@ -354,12 +354,12 @@ R (Range): 범위 조건 필드를 마지막
 
 ```mermaid
 graph LR
-    Input[컬렉션] --> Match[$match 필터링]
-    Match --> Group[$group 그룹화]
-    Group --> Sort[$sort 정렬]
-    Sort --> Limit[$limit 제한]
-    Limit --> Project[$project 필드 선택]
-    Project --> Output[결과]
+    Input["컬렉션"] --> Match["$match 필터링"]
+    Match --> Group["$group 그룹화"]
+    Group --> Sort["$sort 정렬"]
+    Sort --> Limit["$limit 제한"]
+    Limit --> Project["$project 필드 선택"]
+    Project --> Output["결과"]
 ```
 
 ```javascript
@@ -496,24 +496,24 @@ try {
 
 ```mermaid
 graph TD
-    subgraph 레플리카셋
-        Primary[Primary 노드<br/>읽기/쓰기]
-        Secondary1[Secondary 1<br/>읽기 가능]
-        Secondary2[Secondary 2<br/>읽기 가능]
-        Arbiter[Arbiter<br/>투표만 참여]
+    subgraph "레플리카셋"
+        Primary["Primary 노드<br>읽기/쓰기"]
+        Secondary1["Secondary 1<br>읽기 가능"]
+        Secondary2["Secondary 2<br>읽기 가능"]
+        Arbiter["Arbiter<br>투표만 참여"]
     end
 
-    App[애플리케이션] -->|쓰기| Primary
-    App -->|읽기 분산| Secondary1
-    App -->|읽기 분산| Secondary2
+    App["애플리케이션"] -->|"쓰기"| Primary
+    App -->|"읽기 분산"| Secondary1
+    App -->|"읽기 분산"| Secondary2
 
-    Primary -->|복제 oplog| Secondary1
-    Primary -->|복제 oplog| Secondary2
+    Primary -->|"복제 oplog"| Secondary1
+    Primary -->|"복제 oplog"| Secondary2
 
-    Primary -->|장애!| Election[선출 투표]
+    Primary -->|"장애!"| Election["선출 투표"]
     Election --> Secondary1
     Election --> Arbiter
-    Secondary1 -->|새 Primary| NewPrimary[Secondary1 → Primary 승격]
+    Secondary1 -->|"새 Primary"| NewPrimary["Secondary1 → Primary 승격"]
 ```
 
 **레플리카셋 연결 설정:**
@@ -547,12 +547,12 @@ db = client.mydb
 
 ```mermaid
 graph TD
-    App[애플리케이션] --> MongoS[mongos 라우터]
+    App["애플리케이션"] --> MongoS["mongos 라우터"]
 
-    MongoS --> ConfigServer[Config Server<br/>샤드 메타데이터]
-    MongoS --> Shard1[샤드 1<br/>레플리카셋<br/>userId 0~33%]
-    MongoS --> Shard2[샤드 2<br/>레플리카셋<br/>userId 33~66%]
-    MongoS --> Shard3[샤드 3<br/>레플리카셋<br/>userId 66~100%]
+    MongoS --> ConfigServer["Config Server<br>샤드 메타데이터"]
+    MongoS --> Shard1["샤드 1<br>레플리카셋<br>userId 0~33%"]
+    MongoS --> Shard2["샤드 2<br>레플리카셋<br>userId 33~66%"]
+    MongoS --> Shard3["샤드 3<br>레플리카셋<br>userId 66~100%"]
 ```
 
 **샤딩 키 선택:**
@@ -587,12 +587,12 @@ db.runCommand({
 ```mermaid
 graph TD
     Atlas[MongoDB Atlas]
-    Atlas --> Cluster[자동 관리 클러스터<br/>Auto-Scaling]
-    Atlas --> Search[Atlas Search<br/>Elasticsearch 대체]
-    Atlas --> Charts[Atlas Charts<br/>데이터 시각화]
-    Atlas --> DataAPI[Data API<br/>REST API 자동 생성]
-    Atlas --> Triggers[Database Triggers<br/>이벤트 기반 함수]
-    Atlas --> AppServices[App Services<br/>서버리스 백엔드]
+    Atlas --> Cluster["자동 관리 클러스터<br>Auto-Scaling"]
+    Atlas --> Search["Atlas Search<br>Elasticsearch 대체"]
+    Atlas --> Charts["Atlas Charts<br>데이터 시각화"]
+    Atlas --> DataAPI["Data API<br>REST API 자동 생성"]
+    Atlas --> Triggers["Database Triggers<br>이벤트 기반 함수"]
+    Atlas --> AppServices["App Services<br>서버리스 백엔드"]
 ```
 
 ---
@@ -675,20 +675,20 @@ public class OrderAnalyticsService {
 
 ```mermaid
 graph TD
-    App[배달의민족 앱] --> API[API 서버]
-    API --> MongoS[mongos 라우터]
+    App["배달의민족 앱"] --> API["API 서버"]
+    API --> MongoS["mongos 라우터"]
 
-    MongoS --> OrderShard1[주문 샤드1<br/>서울 지역]
-    MongoS --> OrderShard2[주문 샤드2<br/>경기 지역]
-    MongoS --> OrderShard3[주문 샤드3<br/>기타 지역]
+    MongoS --> OrderShard1["주문 샤드1<br>서울 지역"]
+    MongoS --> OrderShard2["주문 샤드2<br>경기 지역"]
+    MongoS --> OrderShard3["주문 샤드3<br>기타 지역"]
 
-    subgraph 규모
+    subgraph "규모"
         S1["일일 주문: 500만건"]
         S2["피크 QPS: 5만 TPS"]
         S3["저장 데이터: 수십 TB"]
     end
 
-    subgraph 최적화 포인트
+    subgraph "최적화 포인트"
         O1["샤드키: restaurantId + createdAt"]
         O2["인덱스: userId + status + createdAt"]
         O3["캐시: Redis로 최근 주문 조회"]
@@ -702,13 +702,13 @@ graph TD
 
 ```mermaid
 graph TD
-    Q1{스키마가 자주 변하는가?}
+    Q1{"스키마가 자주 변하는가?"}
     Q1 -->|Yes| MongoDB
-    Q1 -->|No| Q2{복잡한 JOIN이 많은가?}
-    Q2 -->|Yes| RDBMS[RDBMS MySQL/PostgreSQL]
-    Q2 -->|No| Q3{데이터 구조가 계층적인가?}
+    Q1 -->|No| Q2{"복잡한 JOIN이 많은가?"}
+    Q2 -->|Yes| RDBMS["RDBMS MySQL/PostgreSQL"]
+    Q2 -->|No| Q3{"데이터 구조가 계층적인가?"}
     Q3 -->|Yes| MongoDB
-    Q3 -->|No| Q4{수평 확장이 핵심인가?}
+    Q3 -->|No| Q4{"수평 확장이 핵심인가?"}
     Q4 -->|Yes| MongoDB
     Q4 -->|No| RDBMS
 ```

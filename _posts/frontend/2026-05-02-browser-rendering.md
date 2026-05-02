@@ -28,15 +28,15 @@ URL을 입력하고 엔터를 누르는 순간, 브라우저는 엄청난 일을
 flowchart LR
     HTML["HTML 파싱"] --> DOM["DOM 생성"]
     CSS["CSS 파싱"] --> CSSOM["CSSOM 생성"]
-    DOM --> RT["렌더 트리<br/>Render Tree"]
+    DOM --> RT["렌더 트리<br>Render Tree"]
     CSSOM --> RT
-    RT --> L["레이아웃<br/>Layout/Reflow"]
-    L --> P["페인트<br/>Paint"]
-    P --> C["컴포지팅<br/>Compositing"]
+    RT --> L["레이아웃<br>Layout/Reflow"]
+    L --> P["페인트<br>Paint"]
+    P --> C["컴포지팅<br>Compositing"]
     C --> SCREEN["화면 출력"]
 
-    JS["JavaScript 실행"] -->|DOM/CSSOM 수정| DOM
-    JS -->|DOM/CSSOM 수정| CSSOM
+    JS["JavaScript 실행"] -->|"DOM/CSSOM 수정"| DOM
+    JS -->|"DOM/CSSOM 수정"| CSSOM
 
     style DOM fill:#e74c3c,color:#fff
     style CSSOM fill:#3498db,color:#fff
@@ -54,9 +54,9 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["바이트<br/>0x3C 0x68 0x74..."] --> B["문자<br/>&lt;html&gt;&lt;body&gt;..."]
-    B --> C["토큰<br/>StartTag: html<br/>StartTag: body"]
-    C --> D["노드<br/>HTMLElement<br/>BodyElement"]
+    A["바이트<br>0x3C 0x68 0x74..."] --> B["문자<br>&lt;html&gt;&lt;body&gt;..."]
+    B --> C["토큰<br>StartTag: html<br>StartTag: body"]
+    C --> D["노드<br>HTMLElement<br>BodyElement"]
     D --> E["DOM 트리"]
 
     style A fill:#95a5a6,color:#fff
@@ -84,10 +84,10 @@ graph TD
     DOC[Document] --> HTML[html]
     HTML --> HEAD[head]
     HTML --> BODY[body]
-    HEAD --> TITLE[title: 예제]
-    HEAD --> LINK[link: style.css]
-    BODY --> H1[h1: 제목]
-    BODY --> P[p: 단락]
+    HEAD --> TITLE["title: 예제"]
+    HEAD --> LINK["link: style.css"]
+    BODY --> H1["h1: 제목"]
+    BODY --> P["p: 단락"]
 
     style DOC fill:#e74c3c,color:#fff
     style HTML fill:#e74c3c,color:#fff
@@ -139,9 +139,9 @@ span { display: none; }
 
 ```mermaid
 graph TD
-    CSSOM[CSSOM Root] --> BODY_CSS["body<br/>font-size: 16px"]
-    CSSOM --> P_CSS["p<br/>color: blue<br/>(font-size: 16px 상속)"]
-    CSSOM --> SPAN_CSS["span<br/>display: none<br/>(color: blue, font-size: 16px 상속)"]
+    CSSOM[CSSOM Root] --> BODY_CSS["body<br>font-size: 16px"]
+    CSSOM --> P_CSS["p<br>color: blue<br>("font-size: 16px 상속")"]
+    CSSOM --> SPAN_CSS["span<br>display: none<br>("color: blue, font-size: 16px 상속")"]
 
     style CSSOM fill:#3498db,color:#fff
 ```
@@ -159,9 +159,9 @@ flowchart TD
     subgraph "DOM"
         D_HTML[html]
         D_BODY[body]
-        D_H1[h1: 안녕]
-        D_P[p: 단락]
-        D_SPAN["span: 숨김<br/>(display: none)"]
+        D_H1["h1: 안녕"]
+        D_P["p: 단락"]
+        D_SPAN["span: 숨김<br>("display: none")"]
     end
 
     subgraph "CSSOM"
@@ -173,16 +173,16 @@ flowchart TD
     subgraph "렌더 트리"
         R_ROOT[Render Root]
         R_BODY[body]
-        R_H1["h1: 안녕<br/>color: red"]
+        R_H1["h1: 안녕<br>color: red"]
         R_P["p: 단락"]
-        NOTE["span은 제외!<br/>(display: none)"]
+        NOTE["span은 제외!<br>("display: none")"]
     end
 
-    D_HTML -->|결합| R_ROOT
-    D_BODY -->|결합| R_BODY
-    D_H1 -->|결합| R_H1
-    D_P -->|결합| R_P
-    D_SPAN -->|display:none| NOTE
+    D_HTML -->|"결합"| R_ROOT
+    D_BODY -->|"결합"| R_BODY
+    D_H1 -->|"결합"| R_H1
+    D_P -->|"결합"| R_P
+    D_SPAN -->|"display:none"| NOTE
 
     style NOTE fill:#e74c3c,color:#fff
     style R_ROOT fill:#9b59b6,color:#fff
@@ -204,10 +204,10 @@ flowchart TD
 
 ```mermaid
 graph TD
-    A[렌더 트리] --> B[뷰포트 크기 확인]
-    B --> C[박스 모델 계산]
-    C --> D[각 요소의 크기/위치 결정]
-    D --> E["레이아웃 완료<br/>(픽셀 단위)"]
+    A["렌더 트리"] --> B["뷰포트 크기 확인"]
+    B --> C["박스 모델 계산"]
+    C --> D["각 요소의 크기/위치 결정"]
+    D --> E["레이아웃 완료<br>("픽셀 단위")"]
 
     style E fill:#f39c12,color:#fff
 ```
@@ -233,11 +233,11 @@ const height = element.offsetHeight; // 리플로우!
 
 ```mermaid
 flowchart LR
-    A[레이아웃 완료] --> B[페인트 순서 결정]
-    B --> C[배경색 그리기]
-    C --> D[테두리 그리기]
-    D --> E[텍스트 그리기]
-    E --> F[이미지 그리기]
+    A["레이아웃 완료"] --> B["페인트 순서 결정"]
+    B --> C["배경색 그리기"]
+    C --> D["테두리 그리기"]
+    D --> E["텍스트 그리기"]
+    E --> F["이미지 그리기"]
 
     style F fill:#2ecc71,color:#fff
 ```
@@ -281,7 +281,7 @@ flowchart TD
         L4["레이어 4: 오버레이"]
     end
 
-    L1 --> COMP[컴포지터 스레드]
+    L1 --> COMP["컴포지터 스레드"]
     L2 --> COMP
     L3 --> COMP
     L4 --> COMP
@@ -455,9 +455,9 @@ gantt
 
 ```mermaid
 graph TD
-    CWV["Core Web Vitals"] --> LCP["LCP<br/>Largest Contentful Paint<br/>주요 콘텐츠 로드 시간<br/>목표: 2.5초 이하"]
-    CWV --> INP["INP<br/>Interaction to Next Paint<br/>인터랙션 응답 속도<br/>목표: 200ms 이하"]
-    CWV --> CLS["CLS<br/>Cumulative Layout Shift<br/>레이아웃 안정성<br/>목표: 0.1 이하"]
+    CWV["Core Web Vitals"] --> LCP["LCP<br>Largest Contentful Paint<br>주요 콘텐츠 로드 시간<br>목표: 2.5초 이하"]
+    CWV --> INP["INP<br>Interaction to Next Paint<br>인터랙션 응답 속도<br>목표: 200ms 이하"]
+    CWV --> CLS["CLS<br>Cumulative Layout Shift<br>레이아웃 안정성<br>목표: 0.1 이하"]
 
     style LCP fill:#2ecc71,color:#fff
     style INP fill:#3498db,color:#fff

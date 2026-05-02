@@ -42,10 +42,10 @@ graph TD
             O[y = 2]
             subgraph "inner() 스코프"
                 I[z = 3]
-                I_ACCESS["x 접근 가능 ✓<br/>y 접근 가능 ✓<br/>z 접근 가능 ✓"]
+                I_ACCESS["x 접근 가능 ✓<br>y 접근 가능 ✓<br>z 접근 가능 ✓"]
             end
         end
-        G_ACCESS["y 접근 불가 ✗<br/>z 접근 불가 ✗"]
+        G_ACCESS["y 접근 불가 ✗<br>z 접근 불가 ✗"]
     end
 
     style I_ACCESS fill:#2ecc71,color:#fff
@@ -82,8 +82,8 @@ flowchart LR
     subgraph "outer() 실행 완료 후"
         subgraph "클로저"
             FN["inner 함수"]
-            ENV["렉시컬 환경<br/>count = 0 (유지!)"]
-            FN -.->|참조| ENV
+            ENV["렉시컬 환경<br>count = 0 ("유지!")"]
+            FN -.-->|"참조"| ENV
         end
     end
 
@@ -267,12 +267,12 @@ graph TD
             getPending["getPending()"]
         end
 
-        add -->|접근| todos
-        add -->|접근| nextId
-        add -->|사용| validate
-        complete -->|접근| todos
-        getAll -->|읽기| todos
-        getPending -->|읽기| todos
+        add -->|"접근"| todos
+        add -->|"접근"| nextId
+        add -->|"사용"| validate
+        complete -->|"접근"| todos
+        getAll -->|"읽기"| todos
+        getPending -->|"읽기"| todos
     end
 
     style todos fill:#e74c3c,color:#fff
@@ -391,19 +391,19 @@ console.timeEnd('두 번째 계산');
 
 ```mermaid
 flowchart TD
-    A[함수 호출] --> B{캐시에 있나?}
-    B -->|예| C[캐시에서 반환]
-    B -->|아니오| D[실제 함수 실행]
-    D --> E[결과 캐시에 저장]
-    E --> F[결과 반환]
+    A["함수 호출"] --> B{"캐시에 있나?"}
+    B -->|"예"| C["캐시에서 반환"]
+    B -->|"아니오"| D["실제 함수 실행"]
+    D --> E["결과 캐시에 저장"]
+    E --> F["결과 반환"]
 
     subgraph "클로저"
-        CACHE[(cache Map)]
+        CACHE["(cache Map)"]
     end
 
-    B -->|확인| CACHE
-    E -->|저장| CACHE
-    C -->|읽기| CACHE
+    B -->|"확인"| CACHE
+    E -->|"저장"| CACHE
+    C -->|"읽기"| CACHE
 
     style CACHE fill:#3498db,color:#fff
     style C fill:#2ecc71,color:#fff
@@ -465,13 +465,13 @@ const getFirst = createHeavyResource();
 ```mermaid
 graph TD
     subgraph "메모리 누수"
-        GF[getFirst 함수] -->|클로저 참조| LD["largeData (4MB)"]
+        GF["getFirst 함수"] -->|"클로저 참조"| LD["largeData (4MB)"]
         LD --> D["실제 사용: largeData[0] 하나뿐"]
         D --> WASTE["나머지 999,999개 낭비"]
     end
 
     subgraph "해결책"
-        GF2[getFirst2 함수] -->|클로저 참조| FIRST["first = largeData[0]만 보관"]
+        GF2["getFirst2 함수"] -->|"클로저 참조"| FIRST["first = largeData[0]만 보관"]
         FIRST --> LD2["largeData 원본 GC 가능"]
     end
 
@@ -545,12 +545,12 @@ buttons[2](); // 5
 ```mermaid
 graph TD
     subgraph "for 루프 종료 후"
-        I["var i = 5 (하나의 변수)"]
-        B0["buttons[0]"] -->|참조| I
-        B1["buttons[1]"] -->|참조| I
-        B2["buttons[2]"] -->|참조| I
-        B3["buttons[3]"] -->|참조| I
-        B4["buttons[4]"] -->|참조| I
+        I["var i = 5 ("하나의 변수")"]
+        B0["buttons[0]"] -->|"참조"| I
+        B1["buttons[1]"] -->|"참조"| I
+        B2["buttons[2]"] -->|"참조"| I
+        B3["buttons[3]"] -->|"참조"| I
+        B4["buttons[4]"] -->|"참조"| I
     end
 
     style I fill:#e74c3c,color:#fff
@@ -586,14 +586,14 @@ buttons2[2](); // 2
 
 ```mermaid
 flowchart TD
-    A[변수 생성] --> B{참조하는 것이 있나?}
-    B -->|예| C[메모리 유지]
-    B -->|아니오| D[GC 대상]
+    A["변수 생성"] --> B{"참조하는 것이 있나?"}
+    B -->|"예"| C["메모리 유지"]
+    B -->|"아니오"| D["GC 대상"]
 
     subgraph "클로저 참조 관계"
-        E[외부 함수 실행 완료] --> F{내부 함수가<br/>외부 변수 참조?}
-        F -->|예| G[외부 변수 메모리 유지]
-        F -->|아니오| H[외부 변수 GC 가능]
+        E["외부 함수 실행 완료"] --> F{"내부 함수가<br>외부 변수 참조?"}
+        F -->|"예"| G["외부 변수 메모리 유지"]
+        F -->|"아니오"| H["외부 변수 GC 가능"]
     end
 
     style C fill:#f39c12,color:#fff
@@ -754,7 +754,7 @@ graph LR
 
     subgraph "클래스 방식"
         CC["class Counter"]
-        CC --> CCF["#count (private 필드)"]
+        CC --> CCF["#count ("private 필드")"]
         CC --> CCI["increment()"]
         CC --> CCD["decrement()"]
         CC --> CCG["getCount()"]

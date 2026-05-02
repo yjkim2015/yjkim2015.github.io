@@ -81,13 +81,13 @@ println(person)                            // Person(name=홍길동, age=30, ema
 
 ```mermaid
 graph TD
-    A[Java] --> B[모든 참조 타입은 null 가능]
-    B --> C[런타임 NPE 발생 가능]
+    A[Java] --> B["모든 참조 타입은 null 가능"]
+    B --> C["런타임 NPE 발생 가능"]
 
-    D[Kotlin] --> E[Non-null 타입: String]
-    D --> F[Nullable 타입: String?]
-    E --> G[null 대입 시 컴파일 에러]
-    F --> H[null 체크 강제]
+    D[Kotlin] --> E["Non-null 타입: String"]
+    D --> F["Nullable 타입: String?"]
+    E --> G["null 대입 시 컴파일 에러"]
+    F --> H["null 체크 강제"]
 ```
 
 ```kotlin
@@ -257,15 +257,15 @@ val processedUser = createUser()
 
 ```mermaid
 graph TD
-    A[스코프 함수] --> B[반환값: 람다 결과]
-    A --> C[반환값: 수신 객체]
+    A["스코프 함수"] --> B["반환값: 람다 결과"]
+    A --> C["반환값: 수신 객체"]
 
-    B --> D[let: it 사용, null 체크에 유용]
-    B --> E[run: this 사용, 결과 필요할 때]
-    B --> F[with: this 사용, 수신 객체가 인자]
+    B --> D["let: it 사용, null 체크에 유용"]
+    B --> E["run: this 사용, 결과 필요할 때"]
+    B --> F["with: this 사용, 수신 객체가 인자"]
 
-    C --> G[apply: this 사용, 초기화]
-    C --> H[also: it 사용, 부수 효과]
+    C --> G["apply: this 사용, 초기화"]
+    C --> H["also: it 사용, 부수 효과"]
 ```
 
 ---
@@ -448,13 +448,13 @@ ApiResult<User> apiResult = ApiResult.success(user);
 
 ```mermaid
 flowchart TD
-    A[Java 프로젝트] --> B[1단계: 새 파일은 Kotlin으로]
-    B --> C[2단계: DTO/Model을 data class로]
-    C --> D[3단계: 서비스 계층 변환]
-    D --> E[4단계: 컨트롤러 변환]
-    E --> F[완전한 Kotlin 프로젝트]
+    A["Java 프로젝트"] --> B["1단계: 새 파일은 Kotlin으로"]
+    B --> C["2단계: DTO/Model을 data class로"]
+    C --> D["3단계: 서비스 계층 변환"]
+    D --> E["4단계: 컨트롤러 변환"]
+    E --> F["완전한 Kotlin 프로젝트"]
 
-    B -->|Java-Kotlin 공존| G[상호 호출 가능]
+    B -->|"Java-Kotlin 공존"| G["상호 호출 가능"]
     G --> B
 ```
 

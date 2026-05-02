@@ -25,18 +25,18 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph 블로킹 모델 - 10,000 동시 요청
-        A[요청 1] --> T1[Thread 1 — DB 대기 중...]
-        B[요청 2] --> T2[Thread 2 — HTTP 대기 중...]
-        C[요청 N] --> TN[Thread N — File 대기 중...]
-        Note1[스레드 10,000개 필요\n메모리: ~10GB\nContext Switch 비용 큼]
+    subgraph "블로킹 모델 - 10,000 동시 요청"
+        A["요청 1"] --> T1["Thread 1 — DB 대기 중..."]
+        B["요청 2"] --> T2["Thread 2 — HTTP 대기 중..."]
+        C["요청 N"] --> TN["Thread N — File 대기 중..."]
+        Note1["스레드 10,000개 필요\n메모리: ~10GB\nContext Switch 비용 큼"]
     end
 
-    subgraph 논블로킹 모델 - 10,000 동시 요청
-        D[요청 1~N] --> EL[이벤트 루프\n스레드 소수]
-        EL --> E1[I/O 완료 이벤트]
-        EL --> E2[콜백/핸들러 실행]
-        Note2[스레드 수십 개로 처리\n메모리 효율적]
+    subgraph "논블로킹 모델 - 10,000 동시 요청"
+        D["요청 1~N"] --> EL["이벤트 루프\n스레드 소수"]
+        EL --> E1["I/O 완료 이벤트"]
+        EL --> E2["콜백/핸들러 실행"]
+        Note2["스레드 수십 개로 처리\n메모리 효율적"]
     end
 ```
 
@@ -44,15 +44,15 @@ graph TD
 
 ```mermaid
 graph TD
-    A[리액티브 시스템] --> B[응답성 Responsive]
-    A --> C[탄력성 Resilient]
-    A --> D[유연성 Elastic]
-    A --> E[메시지 주도 Message-Driven]
+    A["리액티브 시스템"] --> B["응답성 Responsive"]
+    A --> C["탄력성 Resilient"]
+    A --> D["유연성 Elastic"]
+    A --> E["메시지 주도 Message-Driven"]
 
-    B --> F[빠르고 일관된 응답 시간]
-    C --> G[실패해도 응답 유지]
-    D --> H[부하에 따라 자동 확장/축소]
-    E --> I[비동기 메시지로 느슨한 결합]
+    B --> F["빠르고 일관된 응답 시간"]
+    C --> G["실패해도 응답 유지"]
+    D --> H["부하에 따라 자동 확장/축소"]
+    E --> I["비동기 메시지로 느슨한 결합"]
 ```
 
 ---
@@ -163,19 +163,19 @@ Flux<OrderResponse> orderFlux = Flux.fromIterable(orders)
 ```mermaid
 graph LR
     subgraph Mono
-        A[---O--> 또는 ---X-->]
-        B[0 또는 1개]
+        A["---O--> 또는 ---X-->"]
+        B["0 또는 1개"]
     end
 
     subgraph Flux
-        C[---O-O-O-O-->]
-        D[0~N개]
+        C["---O-O-O-O-->"]
+        D["0~N개"]
     end
 
-    E[단건 조회] --> A
-    F[목록 조회] --> C
-    G[HTTP 요청] --> A
-    H[실시간 이벤트] --> C
+    E["단건 조회"] --> A
+    F["목록 조회"] --> C
+    G["HTTP 요청"] --> A
+    H["실시간 이벤트"] --> C
 ```
 
 ---
@@ -392,11 +392,11 @@ graph TD
     A --> F[parallel]
     A --> G[fromExecutorService]
 
-    B --> H[현재 스레드]
-    C --> I[단일 스레드 재사용]
-    E --> J[I/O 작업 - 스레드 탄력적 생성]
-    F --> K[CPU 작업 - 코어 수만큼]
-    G --> L[커스텀 Executor]
+    B --> H["현재 스레드"]
+    C --> I["단일 스레드 재사용"]
+    E --> J["I/O 작업 - 스레드 탄력적 생성"]
+    F --> K["CPU 작업 - 코어 수만큼"]
+    G --> L["커스텀 Executor"]
 ```
 
 ---
@@ -408,20 +408,20 @@ graph TD
 ```mermaid
 graph TD
     subgraph Spring MVC
-        A[클라이언트] --> B[Tomcat 스레드풀]
-        B --> C[서블릿 필터]
+        A["클라이언트"] --> B["Tomcat 스레드풀"]
+        B --> C["서블릿 필터"]
         C --> D[DispatcherServlet]
-        D --> E[Controller - 블로킹]
-        E --> F[DB/HTTP 블로킹 대기]
+        D --> E["Controller - 블로킹"]
+        E --> F["DB/HTTP 블로킹 대기"]
     end
 
     subgraph Spring WebFlux
-        G[클라이언트] --> H[Netty 이벤트 루프]
+        G["클라이언트"] --> H["Netty 이벤트 루프"]
         H --> I[WebFilter]
         I --> J[DispatcherHandler]
-        J --> K[Controller - 논블로킹]
-        K --> L[Mono/Flux 반환]
-        L --> M[비동기 완료 시 응답]
+        J --> K["Controller - 논블로킹"]
+        K --> L["Mono/Flux 반환"]
+        L --> M["비동기 완료 시 응답"]
     end
 ```
 
@@ -707,22 +707,22 @@ class OrderServiceTest {
 
 ```mermaid
 flowchart TD
-    A[클라이언트 요청] --> B[Netty 이벤트 루프]
+    A["클라이언트 요청"] --> B["Netty 이벤트 루프"]
     B --> C[WebFlux WebHandler]
     C --> D[WebFilter Chain]
     D --> E[DispatcherHandler]
     E --> F[HandlerMapping]
-    F --> G[Controller 메서드]
-    G --> H{반환 타입}
-    H -->|Mono| I[단일 값 처리]
-    H -->|Flux| J[스트림 처리]
-    I --> K[R2DBC DB 조회]
-    I --> L[WebClient HTTP 호출]
-    K --> M[Mono 결합/변환]
+    F --> G["Controller 메서드"]
+    G --> H{"반환 타입"}
+    H -->|Mono| I["단일 값 처리"]
+    H -->|Flux| J["스트림 처리"]
+    I --> K["R2DBC DB 조회"]
+    I --> L["WebClient HTTP 호출"]
+    K --> M["Mono 결합/변환"]
     L --> M
-    M --> N[응답 직렬화]
-    N --> O[클라이언트 응답]
-    J --> P[SSE 스트리밍 응답]
+    M --> N["응답 직렬화"]
+    N --> O["클라이언트 응답"]
+    J --> P["SSE 스트리밍 응답"]
 ```
 
 ---

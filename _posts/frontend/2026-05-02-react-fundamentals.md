@@ -106,8 +106,8 @@ flowchart TD
     A["상태/props 변경"] --> B["새 Virtual DOM 트리 생성"]
     B --> C["Diffing 알고리즘 실행"]
     C --> D{"같은 타입?"}
-    D -->|예| E["속성만 업데이트"]
-    D -->|아니오| F["노드 제거 후 새로 생성"]
+    D -->|"예"| E["속성만 업데이트"]
+    D -->|"아니오"| F["노드 제거 후 새로 생성"]
     E --> G["자식 노드 재귀 비교"]
     F --> G
     G --> H["실제 DOM 최소 업데이트"]
@@ -322,10 +322,10 @@ const content = (
 
 ```mermaid
 graph TD
-    PARENT["부모 컴포넌트<br/>state: { user, posts }"]
-    CHILD1["자식1: UserCard<br/>props: { user }"]
-    CHILD2["자식2: PostList<br/>props: { posts }"]
-    GRANDCHILD["손자: PostItem<br/>props: { post }"]
+    PARENT["부모 컴포넌트<br>state: { user, posts }"]
+    CHILD1["자식1: UserCard<br>props: { user }"]
+    CHILD2["자식2: PostList<br>props: { posts }"]
+    GRANDCHILD["손자: PostItem<br>props: { post }"]
 
     PARENT -->|"props 전달"| CHILD1
     PARENT -->|"props 전달"| CHILD2
@@ -373,11 +373,11 @@ function Button({ label = '클릭', size = 'medium', onClick }) {
 
 ```mermaid
 flowchart TD
-    A["렌더링 트리거"] --> B[setState 호출]
-    A --> C[props 변경]
-    A --> D[부모 컴포넌트 리렌더링]
-    A --> E[Context 값 변경]
-    A --> F[forceUpdate 호출 - 클래스]
+    A["렌더링 트리거"] --> B["setState 호출"]
+    A --> C["props 변경"]
+    A --> D["부모 컴포넌트 리렌더링"]
+    A --> E["Context 값 변경"]
+    A --> F["forceUpdate 호출 - 클래스"]
 
     B --> G["렌더 함수 실행"]
     C --> G

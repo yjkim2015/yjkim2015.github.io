@@ -240,11 +240,11 @@ app/
 
 ```mermaid
 graph TD
-    ROOT["app/layout.tsx<br/>(항상 렌더링)"]
-    ROOT --> HOME["app/page.tsx (/)"]
+    ROOT["app/layout.tsx<br>("항상 렌더링")"]
+    ROOT --> HOME["app/page.tsx ("/")"]
     ROOT --> BLOG["app/blog/layout.tsx"]
-    BLOG --> BLOG_PAGE["app/blog/page.tsx (/blog)"]
-    BLOG --> BLOG_DETAIL["app/blog/[slug]/page.tsx (/blog/:slug)"]
+    BLOG --> BLOG_PAGE["app/blog/page.tsx ("/blog")"]
+    BLOG --> BLOG_DETAIL["app/blog/[slug]/page.tsx ("/blog/:slug")"]
 
     subgraph "특수 파일"
         LOADING["loading.tsx → Suspense fallback"]

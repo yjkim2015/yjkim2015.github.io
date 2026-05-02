@@ -183,13 +183,13 @@ public class OrderService {
 
 ```mermaid
 graph TD
-    subgraph 트랜잭션 스크립트
-        A[OrderService] --> B[모든 비즈니스 로직]
-        C[Order] --> D[데이터만 보관 getter/setter]
+    subgraph "트랜잭션 스크립트"
+        A[OrderService] --> B["모든 비즈니스 로직"]
+        C[Order] --> D["데이터만 보관 getter/setter"]
     end
 
-    subgraph 도메인 모델
-        E[OrderService] --> F[얇은 오케스트레이션만]
+    subgraph "도메인 모델"
+        E[OrderService] --> F["얇은 오케스트레이션만"]
         G[Order] --> H[cancel, getTotalPrice...]
         I[Item] --> J[removeStock, addStock...]
         K[OrderItem] --> L[getTotalPrice, cancel...]
@@ -208,55 +208,55 @@ graph TD
     B --> C[Repository]
     C --> D[Database]
 
-    B -->|의존| E[JPA Entity]
-    B -->|의존| F[Spring @Transactional]
-    B -->|의존| G[Jackson DTO]
-    Note[서비스가 외부 기술에 오염됨]
+    B -->|"의존"| E[JPA Entity]
+    B -->|"의존"| F[Spring @Transactional]
+    B -->|"의존"| G[Jackson DTO]
+    Note["서비스가 외부 기술에 오염됨"]
 ```
 
 ### 3.2 헥사고날 아키텍처 구조
 
 ```mermaid
 graph TD
-    subgraph 외부 - 인바운드 어댑터
+    subgraph "외부 - 인바운드 어댑터"
         A[REST Controller]
         B[gRPC Handler]
         C[Kafka Consumer]
         D[CLI]
     end
 
-    subgraph 포트 - 인바운드
-        E[OrderUseCase 인터페이스]
-        F[MemberUseCase 인터페이스]
+    subgraph "포트 - 인바운드"
+        E["OrderUseCase 인터페이스"]
+        F["MemberUseCase 인터페이스"]
     end
 
-    subgraph 도메인 - 핵심
-        G[OrderService 구현]
-        H[Order 도메인 모델]
-        I[Item 도메인 모델]
+    subgraph "도메인 - 핵심"
+        G["OrderService 구현"]
+        H["Order 도메인 모델"]
+        I["Item 도메인 모델"]
     end
 
-    subgraph 포트 - 아웃바운드
-        J[OrderPort 인터페이스]
-        K[MemberPort 인터페이스]
-        L[EventPort 인터페이스]
+    subgraph "포트 - 아웃바운드"
+        J["OrderPort 인터페이스"]
+        K["MemberPort 인터페이스"]
+        L["EventPort 인터페이스"]
     end
 
-    subgraph 외부 - 아웃바운드 어댑터
+    subgraph "외부 - 아웃바운드 어댑터"
         M[JPA Order Repository]
         N[MySQL Adapter]
         O[Kafka Publisher]
         P[Email Sender]
     end
 
-    A -->|포트 통해| E
+    A -->|"포트 통해"| E
     B --> E
     C --> F
-    E -->|구현| G
+    E -->|"구현"| G
     G --> H
     G --> J
-    J -->|포트 통해| M
-    L -->|포트 통해| O
+    J -->|"포트 통해"| M
+    L -->|"포트 통해"| O
 ```
 
 ---

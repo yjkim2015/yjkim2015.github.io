@@ -51,12 +51,12 @@ graph TD
 ```mermaid
 flowchart TD
     A["컴포넌트 분리 고려"] --> B{"재사용 가능한가?"}
-    B -->|예| C[분리]
-    B -->|아니오| D{"너무 큰가? (150줄+)"}
-    D -->|예| E[기능 단위로 분리]
-    D -->|아니오| F{"여러 책임을 갖는가?"}
-    F -->|예| G[SRP에 따라 분리]
-    F -->|아니오| H["현재 크기 유지"]
+    B -->|"예"| C["분리"]
+    B -->|"아니오"| D{"너무 큰가? ("150줄+")"}
+    D -->|"예"| E["기능 단위로 분리"]
+    D -->|"아니오"| F{"여러 책임을 갖는가?"}
+    F -->|"예"| G["SRP에 따라 분리"]
+    F -->|"아니오"| H["현재 크기 유지"]
 
     style C fill:#2ecc71,color:#fff
     style E fill:#2ecc71,color:#fff
@@ -122,11 +122,11 @@ src/
 
 ```mermaid
 graph TD
-    COMPONENT["컴포넌트"] -->|훅 사용| HOOKS["커스텀 훅"]
-    HOOKS -->|데이터 요청| REACT_QUERY["React Query / SWR"]
-    REACT_QUERY -->|API 호출| API_LAYER["API Layer"]
-    API_LAYER -->|HTTP 요청| HTTP_CLIENT["HTTP 클라이언트 (axios/fetch)"]
-    HTTP_CLIENT -->|네트워크| SERVER["백엔드 서버"]
+    COMPONENT["컴포넌트"] -->|"훅 사용"| HOOKS["커스텀 훅"]
+    HOOKS -->|"데이터 요청"| REACT_QUERY["React Query / SWR"]
+    REACT_QUERY -->|"API 호출"| API_LAYER["API Layer"]
+    API_LAYER -->|"HTTP 요청"| HTTP_CLIENT["HTTP 클라이언트 ("axios/fetch")"]
+    HTTP_CLIENT -->|"네트워크"| SERVER["백엔드 서버"]
 
     style API_LAYER fill:#3498db,color:#fff
     style HTTP_CLIENT fill:#f39c12,color:#fff
@@ -212,10 +212,10 @@ export function useCreateProduct() {
 
 ```mermaid
 graph TD
-    STATE["상태 분류"] --> LOCAL["로컬 상태<br/>(컴포넌트 내부)"]
-    STATE --> SHARED["공유 상태<br/>(여러 컴포넌트)"]
-    STATE --> SERVER["서버 상태<br/>(API 데이터)"]
-    STATE --> URL["URL 상태<br/>(라우터 파라미터)"]
+    STATE["상태 분류"] --> LOCAL["로컬 상태<br>("컴포넌트 내부")"]
+    STATE --> SHARED["공유 상태<br>("여러 컴포넌트")"]
+    STATE --> SERVER["서버 상태<br>("API 데이터")"]
+    STATE --> URL["URL 상태<br>("라우터 파라미터")"]
 
     LOCAL --> USESTATE["useState, useReducer"]
     SHARED --> CONTEXT["Context / Zustand"]
@@ -290,10 +290,10 @@ graph TD
         APPS --> MOBILE["apps/mobile (React Native)"]
         APPS --> ADMIN["apps/admin (React)"]
 
-        PACKAGES --> UI["packages/ui (공통 컴포넌트)"]
-        PACKAGES --> TYPES["packages/types (공통 타입)"]
-        PACKAGES --> UTILS["packages/utils (유틸리티)"]
-        PACKAGES --> CONFIG["packages/config (ESLint, TS 설정)"]
+        PACKAGES --> UI["packages/ui ("공통 컴포넌트")"]
+        PACKAGES --> TYPES["packages/types ("공통 타입")"]
+        PACKAGES --> UTILS["packages/utils ("유틸리티")"]
+        PACKAGES --> CONFIG["packages/config ("ESLint, TS 설정")"]
     end
 
     style UI fill:#3498db,color:#fff
@@ -339,15 +339,15 @@ graph TD
 
 ```mermaid
 graph TD
-    SHELL["Shell App (앱 컨테이너)"]
-    SHELL --> AUTH["Auth MFE<br/>(팀 A)"]
-    SHELL --> PRODUCTS["Products MFE<br/>(팀 B)"]
-    SHELL --> CART["Cart MFE<br/>(팀 C)"]
-    SHELL --> CHECKOUT["Checkout MFE<br/>(팀 D)"]
+    SHELL["Shell App ("앱 컨테이너")"]
+    SHELL --> AUTH["Auth MFE<br>("팀 A")"]
+    SHELL --> PRODUCTS["Products MFE<br>("팀 B")"]
+    SHELL --> CART["Cart MFE<br>("팀 C")"]
+    SHELL --> CHECKOUT["Checkout MFE<br>("팀 D")"]
 
-    AUTH -.->|독립 배포| AUTH
-    PRODUCTS -.->|독립 배포| PRODUCTS
-    CART -.->|독립 배포| CART
+    AUTH -.-->|"독립 배포"| AUTH
+    PRODUCTS -.-->|"독립 배포"| PRODUCTS
+    CART -.-->|"독립 배포"| CART
 
     style SHELL fill:#e74c3c,color:#fff
     style AUTH fill:#3498db,color:#fff
@@ -394,16 +394,16 @@ const ProductList = lazy(() => import('products/ProductList'));
 
 ```mermaid
 flowchart LR
-    USER["사용자"] --> CDN["CDN<br/>(정적 파일)"]
+    USER["사용자"] --> CDN["CDN<br>("정적 파일")"]
     USER --> LB["로드 밸런서"]
-    LB --> EDGE["Edge Runtime<br/>(미들웨어)"]
+    LB --> EDGE["Edge Runtime<br>("미들웨어")"]
     EDGE --> SSR["SSR 서버"]
     SSR --> CACHE["Redis 캐시"]
     SSR --> API["API 서버"]
     API --> DB["데이터베이스"]
 
-    CDN -->|캐시 히트| USER
-    CACHE -->|캐시 히트| SSR
+    CDN -->|"캐시 히트"| USER
+    CACHE -->|"캐시 히트"| SSR
 
     style CDN fill:#2ecc71,color:#fff
     style CACHE fill:#f39c12,color:#fff
@@ -467,9 +467,9 @@ async function fetchProduct(id: string): Promise<Product> {
 ```mermaid
 graph TD
     subgraph "테스트 피라미드"
-        E2E["E2E 테스트 (소수)<br/>Playwright, Cypress"]
-        INT["통합 테스트 (중간)<br/>React Testing Library"]
-        UNIT["단위 테스트 (다수)<br/>Jest, Vitest"]
+        E2E["E2E 테스트 ("소수")<br>Playwright, Cypress"]
+        INT["통합 테스트 ("중간")<br>React Testing Library"]
+        UNIT["단위 테스트 ("다수")<br>Jest, Vitest"]
     end
 
     UNIT --> INT
@@ -486,9 +486,9 @@ graph TD
 
 ```mermaid
 flowchart LR
-    A["레거시 앱<br/>(jQuery, 스파게티 코드)"]
+    A["레거시 앱<br>("jQuery, 스파게티 코드")"]
     B["점진적 마이그레이션"]
-    C["현대적 앱<br/>(React, TypeScript)"]
+    C["현대적 앱<br>(React, TypeScript)"]
 
     A -->|"Strangler Fig 패턴"| B
     B --> C

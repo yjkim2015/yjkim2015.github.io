@@ -22,24 +22,24 @@ toc_label: 목차
 ```mermaid
 graph TD
     subgraph "var"
-        V1[함수 스코프]
-        V2[호이스팅 + undefined 초기화]
-        V3[중복 선언 가능]
-        V4[재할당 가능]
+        V1["함수 스코프"]
+        V2["호이스팅 + undefined 초기화"]
+        V3["중복 선언 가능"]
+        V4["재할당 가능"]
     end
 
     subgraph "let"
-        L1[블록 스코프]
-        L2[호이스팅 + TDZ]
-        L3[중복 선언 불가]
-        L4[재할당 가능]
+        L1["블록 스코프"]
+        L2["호이스팅 + TDZ"]
+        L3["중복 선언 불가"]
+        L4["재할당 가능"]
     end
 
     subgraph "const"
-        C1[블록 스코프]
-        C2[호이스팅 + TDZ]
-        C3[중복 선언 불가]
-        C4[재할당 불가]
+        C1["블록 스코프"]
+        C2["호이스팅 + TDZ"]
+        C3["중복 선언 불가"]
+        C4["재할당 불가"]
     end
 
     style V1 fill:#e74c3c,color:#fff
@@ -91,15 +91,15 @@ function testLet() {
 ```mermaid
 graph TD
     subgraph "함수 스코프 - var"
-        F[함수 경계]
-        F --> IF1[if 블록]
-        F --> IF2[else 블록]
-        F --> FOR[for 블록]
+        F["함수 경계"]
+        F --> IF1["if 블록"]
+        F --> IF2["else 블록"]
+        F --> FOR["for 블록"]
         IF1 --> VARX["var x - 함수 전체에서 접근 가능"]
     end
 
     subgraph "블록 스코프 - let/const"
-        F2[함수 경계]
+        F2["함수 경계"]
         F2 --> IF3["if 블록 { let y }"]
         F2 --> FOR2["for 블록 { let i }"]
         IF3 --> LETY["y는 이 블록 안에서만"]
@@ -157,7 +157,7 @@ console.log(age); // 25
 
 ```mermaid
 flowchart LR
-    A["블록 진입"] --> B["TDZ 시작<br/>(선언 전)"]
+    A["블록 진입"] --> B["TDZ 시작<br>("선언 전")"]
     B --> C["let/const 선언문 도달"]
     C --> D["초기화 완료"]
     D --> E["사용 가능"]
@@ -241,9 +241,9 @@ obj.age = 25;         // 가능!
 ```mermaid
 graph LR
     subgraph "const obj = { name: '홍길동' }"
-        OBJ_VAR["const obj<br/>(변수)"]
-        OBJ_VAL["메모리 주소<br/>0x1234"]
-        OBJ_DATA["{ name: '홍길동' }"]
+        OBJ_VAR["const obj<br>("변수")"]
+        OBJ_VAL["메모리 주소<br>0x1234"]
+        OBJ_DATA["{" name: '홍길동' "}"]
     end
 
     OBJ_VAR -->|"고정! 변경 불가"| OBJ_VAL
@@ -359,9 +359,9 @@ const sayHi = function() {
 ```mermaid
 flowchart TD
     subgraph "호이스팅 동작 비교"
-        A["function foo() {}"] --> A1["전체 함수 호이스팅<br/>선언 전에도 호출 가능"]
-        B["var foo = function() {}"] --> B1["var foo만 호이스팅 (undefined)<br/>할당 전 호출 시 TypeError"]
-        C["let/const foo = () => {}"] --> C1["TDZ 적용<br/>선언 전 접근 시 ReferenceError"]
+        A["function foo() {}"] --> A1["전체 함수 호이스팅<br>선언 전에도 호출 가능"]
+        B["var foo = function() {}"] --> B1["var foo만 호이스팅 (undefined)<br>할당 전 호출 시 TypeError"]
+        C["let/const foo = () => {}"] --> C1["TDZ 적용<br>선언 전 접근 시 ReferenceError"]
     end
 
     style A1 fill:#2ecc71,color:#fff
@@ -375,13 +375,13 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[변수 선언] --> B{값이 바뀌나?}
-    B -->|예| C{참조가 바뀌나?<br/>vs 내용만 바뀌나?}
-    B -->|아니오| D[const 사용]
-    C -->|참조 변경 필요| E[let 사용]
-    C -->|내용만 변경| F["const 사용<br/>(객체/배열)"]
-    A --> G{레거시 코드가 아닌가?}
-    G -->|맞음| H[var 절대 사용 금지]
+    A["변수 선언"] --> B{"값이 바뀌나?"}
+    B -->|"예"| C{"참조가 바뀌나?<br>vs 내용만 바뀌나?"}
+    B -->|"아니오"| D["const 사용"]
+    C -->|"참조 변경 필요"| E["let 사용"]
+    C -->|"내용만 변경"| F["const 사용<br>("객체/배열")"]
+    A --> G{"레거시 코드가 아닌가?"}
+    G -->|"맞음"| H["var 절대 사용 금지"]
 
     style D fill:#2ecc71,color:#fff
     style E fill:#3498db,color:#fff

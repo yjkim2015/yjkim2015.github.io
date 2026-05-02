@@ -17,21 +17,21 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A[JobLauncher] -->|실행| B[Job]
-    B -->|포함| C[Step 1]
-    B -->|포함| D[Step 2]
-    B -->|포함| E[Step 3]
+    A[JobLauncher] -->|"실행"| B[Job]
+    B -->|"포함"| C[Step 1]
+    B -->|"포함"| D[Step 2]
+    B -->|"포함"| E[Step 3]
 
-    C --> F[Tasklet 방식]
-    D --> G[Chunk 방식]
+    C --> F["Tasklet 방식"]
+    D --> G["Chunk 방식"]
     G --> H[ItemReader]
     G --> I[ItemProcessor]
     G --> J[ItemWriter]
 
-    K[JobRepository] -->|메타데이터 저장| B
-    K -->|실행 이력 관리| C
+    K[JobRepository] -->|"메타데이터 저장"| B
+    K -->|"실행 이력 관리"| C
 
-    L[JobParameters] -->|파라미터 전달| B
+    L[JobParameters] -->|"파라미터 전달"| B
 ```
 
 ### 2.1 메타 테이블 구조
@@ -116,8 +116,8 @@ flowchart TD
     A[Step 1] -->|COMPLETED| B[Step 2]
     A -->|FAILED| C[Failure Step]
     B --> D[Step 3]
-    C --> E[Job 종료]
-    D --> F[Job 완료]
+    C --> E["Job 종료"]
+    D --> F["Job 완료"]
 ```
 
 ---
@@ -454,13 +454,13 @@ public JdbcCursorItemReader<Order> orderReader(
 
 ```mermaid
 graph TD
-    A[Master Step] -->|파티션 생성| B[Partitioner]
-    B --> C[Worker Step 1: ID 1~100000]
-    B --> D[Worker Step 2: ID 100001~200000]
-    B --> E[Worker Step 3: ID 200001~300000]
-    B --> F[Worker Step N: ...]
+    A[Master Step] -->|"파티션 생성"| B[Partitioner]
+    B --> C["Worker Step 1: ID 1~100000"]
+    B --> D["Worker Step 2: ID 100001~200000"]
+    B --> E["Worker Step 3: ID 200001~300000"]
+    B --> F["Worker Step N: ..."]
 
-    C --> G[각자 독립적으로 처리]
+    C --> G["각자 독립적으로 처리"]
     D --> G
     E --> G
     F --> G
@@ -726,23 +726,23 @@ public class LargeScaleBatchConfig {
 
 ```mermaid
 flowchart TD
-    A[JobLauncher.run] --> B[JobRepository에 JobExecution 생성]
-    B --> C[Job 실행]
-    C --> D[Step 1 시작]
-    D --> E{Chunk 기반?}
+    A[JobLauncher.run] --> B["JobRepository에 JobExecution 생성"]
+    B --> C["Job 실행"]
+    C --> D["Step 1 시작"]
+    D --> E{"Chunk 기반?"}
     E -->|Yes| F[ItemReader.read × chunkSize]
     F --> G[ItemProcessor.process × chunkSize]
     G --> H[ItemWriter.write chunk]
-    H --> I[트랜잭션 커밋]
-    I --> J{더 읽을 데이터?}
+    H --> I["트랜잭션 커밋"]
+    I --> J{"더 읽을 데이터?"}
     J -->|Yes| F
-    J -->|No| K[Step 완료]
+    J -->|No| K["Step 완료"]
     E -->|No| L[Tasklet.execute]
     L --> K
-    K --> M{다음 Step?}
+    K --> M{"다음 Step?"}
     M -->|Yes| D
-    M -->|No| N[Job 완료]
-    N --> O[JobRepository에 상태 저장]
+    M -->|No| N["Job 완료"]
+    N --> O["JobRepository에 상태 저장"]
 ```
 
 ---

@@ -17,7 +17,7 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A[HTTP 요청] --> B[DelegatingFilterProxy]
+    A["HTTP 요청"] --> B[DelegatingFilterProxy]
     B --> C[FilterChainProxy]
     C --> D[SecurityFilterChain]
 
@@ -28,9 +28,9 @@ graph TD
     H --> I[ExceptionTranslationFilter]
     I --> J[FilterSecurityInterceptor]
 
-    J --> K{인증됨?}
+    J --> K{"인증됨?"}
     K -->|No| L[AuthenticationEntryPoint]
-    K -->|Yes| M{권한 있음?}
+    K -->|Yes| M{"권한 있음?"}
     M -->|No| N[AccessDeniedHandler]
     M -->|Yes| O[Controller]
 ```
@@ -668,20 +668,20 @@ public class MultiSecurityConfig {
 
 ```mermaid
 flowchart TD
-    A[HTTP 요청] --> B[SecurityContextPersistenceFilter]
-    B --> C{SecurityContext에 인증 정보?}
+    A["HTTP 요청"] --> B[SecurityContextPersistenceFilter]
+    B --> C{"SecurityContext에 인증 정보?"}
     C -->|Yes| J
     C -->|No| D[JwtAuthenticationFilter]
-    D --> E{유효한 JWT?}
-    E -->|Yes| F[SecurityContext에 인증 저장]
-    E -->|No| G[다음 필터로]
+    D --> E{"유효한 JWT?"}
+    E -->|Yes| F["SecurityContext에 인증 저장"]
+    E -->|No| G["다음 필터로"]
     F --> H[FilterSecurityInterceptor]
     G --> H
-    H --> I{요청 경로 권한 체크}
-    I -->|인증 필요 + 미인증| J1[AuthenticationEntryPoint → 401]
-    I -->|권한 없음| J2[AccessDeniedHandler → 403]
-    I -->|통과| J[Controller 실행]
-    J --> K[응답 반환]
+    H --> I{"요청 경로 권한 체크"}
+    I -->|"인증 필요 + 미인증"| J1[AuthenticationEntryPoint → 401]
+    I -->|"권한 없음"| J2[AccessDeniedHandler → 403]
+    I -->|"통과"| J["Controller 실행"]
+    J --> K["응답 반환"]
 ```
 
 ---

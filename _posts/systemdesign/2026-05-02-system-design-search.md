@@ -67,22 +67,22 @@ Document 3: ["자바", "스프링", "백엔드"]
 ```mermaid
 graph TD
     Query["검색어: 파이썬 머신러닝"]
-    Query --> Tokenize[토크나이저<br/>단어 분리]
+    Query --> Tokenize["토크나이저<br>단어 분리"]
     Tokenize --> T1["파이썬"]
     Tokenize --> T2["머신러닝"]
 
-    T1 --> Index1[역인덱스 조회]
-    T2 --> Index2[역인덱스 조회]
+    T1 --> Index1["역인덱스 조회"]
+    T2 --> Index2["역인덱스 조회"]
 
     Index1 --> DocList1["[Doc1, Doc2, Doc5]"]
     Index2 --> DocList2["[Doc1, Doc3]"]
 
-    DocList1 --> Intersect[교집합 계산]
+    DocList1 --> Intersect["교집합 계산"]
     DocList2 --> Intersect
 
     Intersect --> Result["[Doc1]"]
-    Result --> Rank[랭킹]
-    Rank --> Final[최종 결과]
+    Result --> Rank["랭킹"]
+    Rank --> Final["최종 결과"]
 ```
 
 ### 역인덱스 상세 구조
@@ -103,22 +103,22 @@ graph TD
 
 ```mermaid
 graph TD
-    Source[문서 소스들] --> Crawler[크롤러/수집기]
+    Source["문서 소스들"] --> Crawler["크롤러/수집기"]
 
     subgraph Source
-        Web[웹 페이지]
-        DB[데이터베이스]
-        FileSystem[파일 시스템]
+        Web["웹 페이지"]
+        DB["데이터베이스"]
+        FileSystem["파일 시스템"]
     end
 
-    Crawler --> Queue[문서 큐 Kafka]
-    Queue --> Parser[파서<br/>HTML/PDF/텍스트 파싱]
-    Parser --> Tokenizer[토크나이저<br/>단어 분리]
-    Tokenizer --> Normalizer[정규화<br/>소문자, 어간 추출]
-    Normalizer --> IndexBuilder[역인덱스 빌더]
-    IndexBuilder --> IndexStore[(인덱스 저장소<br/>Elasticsearch)]
+    Crawler --> Queue["문서 큐 Kafka"]
+    Queue --> Parser["파서<br>HTML/PDF/텍스트 파싱"]
+    Parser --> Tokenizer["토크나이저<br>단어 분리"]
+    Tokenizer --> Normalizer["정규화<br>소문자, 어간 추출"]
+    Normalizer --> IndexBuilder["역인덱스 빌더"]
+    IndexBuilder --> IndexStore["("인덱스 저장소<br>Elasticsearch")"]
 
-    IndexStore --> SearchAPI[검색 API]
+    IndexStore --> SearchAPI["검색 API"]
 ```
 
 ### 텍스트 처리 단계
@@ -266,19 +266,19 @@ def bm25_score(term: str, doc_id: int, k1: float = 1.5, b: float = 0.75) -> floa
 
 ```mermaid
 graph TD
-    Client[검색 API] --> Coordinator[코디네이터 노드<br/>쿼리 라우팅]
+    Client["검색 API"] --> Coordinator["코디네이터 노드<br>쿼리 라우팅"]
 
-    Coordinator --> S1[샤드 1<br/>문서 0~20%]
-    Coordinator --> S2[샤드 2<br/>문서 20~40%]
-    Coordinator --> S3[샤드 3<br/>문서 40~60%]
-    Coordinator --> S4[샤드 4<br/>문서 60~80%]
-    Coordinator --> S5[샤드 5<br/>문서 80~100%]
+    Coordinator --> S1["샤드 1<br>문서 0~20%"]
+    Coordinator --> S2["샤드 2<br>문서 20~40%"]
+    Coordinator --> S3["샤드 3<br>문서 40~60%"]
+    Coordinator --> S4["샤드 4<br>문서 60~80%"]
+    Coordinator --> S5["샤드 5<br>문서 80~100%"]
 
-    S1 --> R1[레플리카 1]
-    S2 --> R2[레플리카 2]
+    S1 --> R1["레플리카 1"]
+    S2 --> R2["레플리카 2"]
 
-    subgraph 각 샤드
-        Lucene[Lucene 역인덱스]
+    subgraph "각 샤드"
+        Lucene["Lucene 역인덱스"]
     end
 ```
 
@@ -380,15 +380,15 @@ graph TD
 
 ```mermaid
 graph TD
-    Root[root] --> P[파]
-    Root --> 자[자]
+    Root[root] --> P["파"]
+    Root --> 자["자"]
 
-    P --> 파이[파이]
-    파이 --> 파이썬[파이썬 ✓]
-    파이 --> 파이게임[파이게임 ✓]
+    P --> 파이["파이"]
+    파이 --> 파이썬["파이썬 ✓"]
+    파이 --> 파이게임["파이게임 ✓"]
 
-    자 --> 자바[자바 ✓]
-    자 --> 자바스크립트[자바스크립트 ✓]
+    자 --> 자바["자바 ✓"]
+    자 --> 자바스크립트["자바스크립트 ✓"]
 ```
 
 ```python
@@ -530,28 +530,28 @@ def suggest_correction(query: str, dictionary: list[str], max_dist: int = 2) -> 
 
 ```mermaid
 graph TD
-    User[사용자] --> LB[로드밸런서]
-    LB --> SearchAPI[검색 API 서버]
+    User["사용자"] --> LB["로드밸런서"]
+    LB --> SearchAPI["검색 API 서버"]
 
-    SearchAPI --> AC[자동완성 서비스<br/>Redis Trie]
-    SearchAPI --> QueryParser[쿼리 파서<br/>토크나이저 + 오타교정]
-    SearchAPI --> ES[Elasticsearch 클러스터]
+    SearchAPI --> AC["자동완성 서비스<br>Redis Trie"]
+    SearchAPI --> QueryParser["쿼리 파서<br>토크나이저 + 오타교정"]
+    SearchAPI --> ES["Elasticsearch 클러스터"]
 
     QueryParser --> ES
 
-    ES --> Coord[코디네이터 노드]
-    Coord --> Shard1[샤드 1]
-    Coord --> Shard2[샤드 2]
-    Coord --> ShardN[샤드 N]
+    ES --> Coord["코디네이터 노드"]
+    Coord --> Shard1["샤드 1"]
+    Coord --> Shard2["샤드 2"]
+    Coord --> ShardN["샤드 N"]
 
-    subgraph 색인 파이프라인
-        DocSource[문서 소스] --> Kafka[Kafka]
-        Kafka --> IndexWorker[색인 워커]
+    subgraph "색인 파이프라인"
+        DocSource["문서 소스"] --> Kafka[Kafka]
+        Kafka --> IndexWorker["색인 워커"]
         IndexWorker --> ES
     end
 
-    SearchAPI --> Cache[Redis 캐시<br/>인기 검색어 결과]
-    Cache -->|캐시 히트| SearchAPI
+    SearchAPI --> Cache["Redis 캐시<br>인기 검색어 결과"]
+    Cache -->|"캐시 히트"| SearchAPI
 ```
 
 ---
@@ -589,17 +589,17 @@ class SearchCache:
 
 ```mermaid
 graph TD
-    AllSearches[모든 검색 요청] --> Kafka[Kafka<br/>search-events]
-    Kafka --> Flink[Flink 스트림 처리<br/>5분 슬라이딩 윈도우]
-    Flink --> TrendCalc[트렌드 계산<br/>급증 감지]
-    TrendCalc --> Redis[Redis Sorted Set<br/>실시간 트렌딩]
-    Redis --> TrendingAPI[트렌딩 API]
+    AllSearches["모든 검색 요청"] --> Kafka["Kafka<br>search-events"]
+    Kafka --> Flink["Flink 스트림 처리<br>5분 슬라이딩 윈도우"]
+    Flink --> TrendCalc["트렌드 계산<br>급증 감지"]
+    TrendCalc --> Redis["Redis Sorted Set<br>실시간 트렌딩"]
+    Redis --> TrendingAPI["트렌딩 API"]
 
-    subgraph 급증 감지 알고리즘
-        Current[현재 5분 검색량]
-        Historical[과거 동시간대 평균]
-        Ratio[급증 비율 = Current / Historical]
-        Ratio -->|3배 이상| Trending[트렌딩 등록]
+    subgraph "급증 감지 알고리즘"
+        Current["현재 5분 검색량"]
+        Historical["과거 동시간대 평균"]
+        Ratio["급증 비율 = Current / Historical"]
+        Ratio -->|"3배 이상"| Trending["트렌딩 등록"]
     end
 ```
 

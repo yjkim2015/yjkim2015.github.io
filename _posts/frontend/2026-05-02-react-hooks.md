@@ -184,13 +184,13 @@ function ExpensiveList({ items, filter }) {
 
 ```mermaid
 flowchart TD
-    A{"계산이<br/>비싼가?"}
-    A -->|예, 복잡한 연산| B["useMemo 사용"]
-    A -->|아니오, 간단한 계산| C["useMemo 불필요"]
+    A{"계산이<br>비싼가?"}
+    A -->|"예, 복잡한 연산"| B["useMemo 사용"]
+    A -->|"아니오, 간단한 계산"| C["useMemo 불필요"]
 
-    D{"참조 동일성이<br/>중요한가?"}
-    D -->|예, 자식 컴포넌트에 전달| E["useMemo 사용"]
-    D -->|아니오| F["불필요"]
+    D{"참조 동일성이<br>중요한가?"}
+    D -->|"예, 자식 컴포넌트에 전달"| E["useMemo 사용"]
+    D -->|"아니오"| F["불필요"]
 
     style B fill:#2ecc71,color:#fff
     style C fill:#e74c3c,color:#fff

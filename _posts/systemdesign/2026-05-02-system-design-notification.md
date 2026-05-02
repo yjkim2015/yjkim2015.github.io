@@ -49,37 +49,37 @@ SMS:          1,000,000건/일 → 11.6 QPS
 
 ```mermaid
 graph TD
-    Sources[알림 발생 서비스들] --> API[알림 API 게이트웨이]
+    Sources["알림 발생 서비스들"] --> API["알림 API 게이트웨이"]
 
     subgraph Sources
-        OrderSvc[주문 서비스]
-        PaySvc[결제 서비스]
-        MarketSvc[마케팅 서비스]
-        SystemSvc[시스템 알림]
+        OrderSvc["주문 서비스"]
+        PaySvc["결제 서비스"]
+        MarketSvc["마케팅 서비스"]
+        SystemSvc["시스템 알림"]
     end
 
-    API --> Validator[유효성 검사<br/>+ 사용자 설정 확인]
-    Validator --> Priority[우선순위 분류기]
+    API --> Validator["유효성 검사<br>+ 사용자 설정 확인"]
+    Validator --> Priority["우선순위 분류기"]
 
-    Priority --> Q_High[긴급 큐<br/>Kafka: high-priority]
-    Priority --> Q_Normal[일반 큐<br/>Kafka: normal]
+    Priority --> Q_High["긴급 큐<br>Kafka: high-priority"]
+    Priority --> Q_Normal["일반 큐<br>Kafka: normal"]
 
-    Q_High --> Dispatcher[알림 디스패처]
+    Q_High --> Dispatcher["알림 디스패처"]
     Q_Normal --> Dispatcher
 
-    Dispatcher --> PushWorker[푸시 워커]
-    Dispatcher --> SMSWorker[SMS 워커]
-    Dispatcher --> EmailWorker[이메일 워커]
+    Dispatcher --> PushWorker["푸시 워커"]
+    Dispatcher --> SMSWorker["SMS 워커"]
+    Dispatcher --> EmailWorker["이메일 워커"]
 
     PushWorker --> APNs[Apple APNs]
     PushWorker --> FCM[Google FCM]
     SMSWorker --> Twilio[Twilio]
-    SMSWorker --> Nexmo[Nexmo/대체]
+    SMSWorker --> Nexmo["Nexmo/대체"]
     EmailWorker --> SendGrid[SendGrid]
     EmailWorker --> SES[AWS SES]
 
-    Dispatcher --> LogDB[(알림 로그 DB)]
-    Dispatcher --> Redis[Redis<br/>중복 방지]
+    Dispatcher --> LogDB["("알림 로그 DB")"]
+    Dispatcher --> Redis["Redis<br>중복 방지"]
 ```
 
 ---
@@ -149,11 +149,11 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    Problem[왜 중복 발생?]
-    Problem --> R1[Kafka 재처리: 워커 장애 후 재시작]
-    Problem --> R2[네트워크 타임아웃: 실제 전송됐지만 ACK 못 받음]
-    Problem --> R3[여러 서비스가 같은 알림 요청]
-    Problem --> R4[재시도 로직의 부작용]
+    Problem["왜 중복 발생?"]
+    Problem --> R1["Kafka 재처리: 워커 장애 후 재시작"]
+    Problem --> R2["네트워크 타임아웃: 실제 전송됐지만 ACK 못 받음"]
+    Problem --> R3["여러 서비스가 같은 알림 요청"]
+    Problem --> R4["재시도 로직의 부작용"]
 ```
 
 ### 멱등성 기반 중복 방지
@@ -209,23 +209,23 @@ def send_notification(user_id, event_type, title, body):
 
 ```mermaid
 graph TD
-    Incoming[알림 요청] --> PrefCheck{사용자 설정 확인}
+    Incoming["알림 요청"] --> PrefCheck{"사용자 설정 확인"}
 
-    PrefCheck --> GlobalOff{전체 수신 거부?}
-    GlobalOff -->|Yes| Discard[폐기]
-    GlobalOff -->|No| ChannelCheck{채널별 설정}
+    PrefCheck --> GlobalOff{"전체 수신 거부?"}
+    GlobalOff -->|Yes| Discard["폐기"]
+    GlobalOff -->|No| ChannelCheck{"채널별 설정"}
 
-    ChannelCheck --> Push{푸시 허용?}
-    ChannelCheck --> SMS{SMS 허용?}
-    ChannelCheck --> Email{이메일 허용?}
+    ChannelCheck --> Push{"푸시 허용?"}
+    ChannelCheck --> SMS{"SMS 허용?"}
+    ChannelCheck --> Email{"이메일 허용?"}
 
-    Push -->|Yes| PushQueue[푸시 큐]
-    SMS -->|Yes| SMSQueue[SMS 큐]
-    Email -->|Yes| EmailQueue[이메일 큐]
+    Push -->|Yes| PushQueue["푸시 큐"]
+    SMS -->|Yes| SMSQueue["SMS 큐"]
+    Email -->|Yes| EmailQueue["이메일 큐"]
 
-    Push -->|No| Skip1[건너뜀]
-    SMS -->|No| Skip2[건너뜀]
-    Email -->|No| Skip3[건너뜀]
+    Push -->|No| Skip1["건너뜀"]
+    SMS -->|No| Skip2["건너뜀"]
+    Email -->|No| Skip3["건너뜀"]
 ```
 
 **사용자 설정 스키마:**
@@ -256,18 +256,18 @@ CREATE TABLE user_notification_settings (
 
 ```mermaid
 graph TD
-    Notif[알림 요청] --> Classify{우선순위 분류}
+    Notif["알림 요청"] --> Classify{"우선순위 분류"}
 
-    Classify -->|P0: 긴급| Critical[긴급 큐<br/>결제 완료, 보안 알림<br/>즉시 처리]
-    Classify -->|P1: 높음| High[높음 큐<br/>주문 상태, 배송 알림<br/>1분 이내]
-    Classify -->|P2: 보통| Normal[보통 큐<br/>소셜 알림, 댓글<br/>5분 이내]
-    Classify -->|P3: 낮음| Low[낮음 큐<br/>마케팅, 뉴스레터<br/>1시간 이내]
+    Classify -->|"P0: 긴급"| Critical["긴급 큐<br>결제 완료, 보안 알림<br>즉시 처리"]
+    Classify -->|"P1: 높음"| High["높음 큐<br>주문 상태, 배송 알림<br>1분 이내"]
+    Classify -->|"P2: 보통"| Normal["보통 큐<br>소셜 알림, 댓글<br>5분 이내"]
+    Classify -->|"P3: 낮음"| Low["낮음 큐<br>마케팅, 뉴스레터<br>1시간 이내"]
 
-    subgraph 워커 할당
-        Critical --> W_C[전용 워커 10개]
-        High --> W_H[전용 워커 5개]
-        Normal --> W_N[공유 워커 3개]
-        Low --> W_L[공유 워커 2개]
+    subgraph "워커 할당"
+        Critical --> W_C["전용 워커 10개"]
+        High --> W_H["전용 워커 5개"]
+        Normal --> W_N["공유 워커 3개"]
+        Low --> W_L["공유 워커 2개"]
     end
 ```
 
@@ -297,23 +297,23 @@ def publish_notification(notification: dict):
 
 ```mermaid
 graph TD
-    Send[알림 전송 시도]
-    Send --> Success{성공?}
-    Success -->|Yes| Done[완료 기록]
-    Success -->|No| Retry{재시도 횟수?}
+    Send["알림 전송 시도"]
+    Send --> Success{"성공?"}
+    Success -->|Yes| Done["완료 기록"]
+    Success -->|No| Retry{"재시도 횟수?"}
 
-    Retry -->|1회| Wait1[1초 대기]
+    Retry -->|"1회"| Wait1["1초 대기"]
     Wait1 --> Send
 
-    Retry -->|2회| Wait2[4초 대기]
+    Retry -->|"2회"| Wait2["4초 대기"]
     Wait2 --> Send
 
-    Retry -->|3회| Wait3[16초 대기]
+    Retry -->|"3회"| Wait3["16초 대기"]
     Wait3 --> Send
 
-    Retry -->|4회 초과| DLQ[Dead Letter Queue<br/>실패 큐]
-    DLQ --> Alert[운영팀 알림]
-    DLQ --> Manual[수동 처리]
+    Retry -->|"4회 초과"| DLQ["Dead Letter Queue<br>실패 큐"]
+    DLQ --> Alert["운영팀 알림"]
+    DLQ --> Manual["수동 처리"]
 ```
 
 **지수 백오프(Exponential Backoff) 구현:**
@@ -404,14 +404,14 @@ COMMIT;
 
 ```mermaid
 graph LR
-    Notif[알림 발송] --> Log[알림 로그 DB]
-    Log --> Dashboard[운영 대시보드]
+    Notif["알림 발송"] --> Log["알림 로그 DB"]
+    Log --> Dashboard["운영 대시보드"]
 
-    Dashboard --> M1[전송률 - Delivery Rate]
-    Dashboard --> M2[열람률 - Open Rate]
-    Dashboard --> M3[클릭률 - CTR]
-    Dashboard --> M4[실패율 - Failure Rate]
-    Dashboard --> M5[채널별 성능 비교]
+    Dashboard --> M1["전송률 - Delivery Rate"]
+    Dashboard --> M2["열람률 - Open Rate"]
+    Dashboard --> M3["클릭률 - CTR"]
+    Dashboard --> M4["실패율 - Failure Rate"]
+    Dashboard --> M5["채널별 성능 비교"]
 ```
 
 **알림 로그 스키마:**
@@ -539,18 +539,18 @@ def should_send_now(user_id: str, priority: str) -> bool:
 
 ```mermaid
 graph TD
-    Marketing[마케팅팀: 1억명에게 발송]
-    Marketing --> Segmentation[사용자 세그먼테이션<br/>DB에서 대상 추출]
-    Segmentation --> Batching[배치 분할<br/>1000명씩 10만 배치]
-    Batching --> Kafka[Kafka에 순차 발행<br/>초당 1만건]
-    Kafka --> Workers[100개 워커 병렬 처리]
-    Workers --> APNs[APNs: 초당 1만건]
-    Workers --> FCM[FCM: 초당 1만건]
+    Marketing["마케팅팀: 1억명에게 발송"]
+    Marketing --> Segmentation["사용자 세그먼테이션<br>DB에서 대상 추출"]
+    Segmentation --> Batching["배치 분할<br>1000명씩 10만 배치"]
+    Batching --> Kafka["Kafka에 순차 발행<br>초당 1만건"]
+    Kafka --> Workers["100개 워커 병렬 처리"]
+    Workers --> APNs["APNs: 초당 1만건"]
+    Workers --> FCM["FCM: 초당 1만건"]
 
-    subgraph 타임라인
-        T1[0분: 발송 시작]
-        T2[10분: 전체의 6% 발송]
-        T3[2시간 46분: 완료!]
+    subgraph "타임라인"
+        T1["0분: 발송 시작"]
+        T2["10분: 전체의 6% 발송"]
+        T3["2시간 46분: 완료!"]
     end
 ```
 
@@ -600,22 +600,22 @@ class BulkNotificationScheduler:
 
 ```mermaid
 graph TD
-    Services[마이크로서비스들] --> APIGateway[알림 API 게이트웨이]
+    Services["마이크로서비스들"] --> APIGateway["알림 API 게이트웨이"]
 
-    APIGateway --> PrefCheck[사용자 설정 확인<br/>Redis 캐시]
-    APIGateway --> Dedup[중복 방지<br/>Redis SET NX]
-    APIGateway --> Validator[유효성 검사]
+    APIGateway --> PrefCheck["사용자 설정 확인<br>Redis 캐시"]
+    APIGateway --> Dedup["중복 방지<br>Redis SET NX"]
+    APIGateway --> Validator["유효성 검사"]
 
-    Validator --> P0[Kafka: critical]
-    Validator --> P1[Kafka: high]
-    Validator --> P2[Kafka: normal]
-    Validator --> P3[Kafka: low]
+    Validator --> P0["Kafka: critical"]
+    Validator --> P1["Kafka: high"]
+    Validator --> P2["Kafka: normal"]
+    Validator --> P3["Kafka: low"]
 
-    P0 --> PushWorker[푸시 워커 10개]
+    P0 --> PushWorker["푸시 워커 10개"]
     P1 --> PushWorker
-    P0 --> SMSWorker[SMS 워커 5개]
+    P0 --> SMSWorker["SMS 워커 5개"]
     P1 --> SMSWorker
-    P2 --> EmailWorker[이메일 워커 10개]
+    P2 --> EmailWorker["이메일 워커 10개"]
     P3 --> EmailWorker
 
     PushWorker --> APNs
@@ -629,12 +629,12 @@ graph TD
     SMSWorker --> DLQ
     EmailWorker --> DLQ
 
-    DLQ --> RetryWorker[재시도 워커]
-    RetryWorker --> Alert[운영 알림]
+    DLQ --> RetryWorker["재시도 워커"]
+    RetryWorker --> Alert["운영 알림"]
 
-    subgraph 저장 및 분석
-        LogDB[(알림 로그 DB)]
-        Analytics[분석 대시보드]
+    subgraph "저장 및 분석"
+        LogDB["("알림 로그 DB")"]
+        Analytics["분석 대시보드"]
     end
 
     PushWorker --> LogDB

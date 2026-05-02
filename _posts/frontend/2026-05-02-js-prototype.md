@@ -27,9 +27,9 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    DOG["dog 객체<br/>name: '멍멍이'<br/>age: 3"]
-    ANIMAL_PROTO["Animal.prototype<br/>speak()<br/>eat()"]
-    OBJ_PROTO["Object.prototype<br/>toString()<br/>hasOwnProperty()"]
+    DOG["dog 객체<br>name: '멍멍이'<br>age: 3"]
+    ANIMAL_PROTO["Animal.prototype<br>speak()<br>eat()"]
+    OBJ_PROTO["Object.prototype<br>toString()<br>hasOwnProperty()"]
     NULL[null]
 
     DOG -->|"[[Prototype]]"| ANIMAL_PROTO
@@ -72,13 +72,13 @@ console.log(dog.type); // '동물' - 프로토타입에서 찾음
 
 ```mermaid
 flowchart TD
-    A["dog.speak() 호출"] --> B{"dog에<br/>speak가 있나?"}
-    B -->|예| C["dog.speak() 실행"]
-    B -->|아니오| D{"Animal.prototype에<br/>speak가 있나?"}
-    D -->|예| E["Animal.prototype.speak.call(dog) 실행"]
-    D -->|아니오| F{"Object.prototype에<br/>speak가 있나?"}
-    F -->|예| G["Object.prototype.speak 실행"]
-    F -->|아니오| H["null - undefined 반환"]
+    A["dog.speak() 호출"] --> B{"dog에<br>speak가 있나?"}
+    B -->|"예"| C["dog.speak() 실행"]
+    B -->|"아니오"| D{"Animal.prototype에<br>speak가 있나?"}
+    D -->|"예"| E["Animal.prototype.speak.call(dog) 실행"]
+    D -->|"아니오"| F{"Object.prototype에<br>speak가 있나?"}
+    F -->|"예"| G["Object.prototype.speak 실행"]
+    F -->|"아니오"| H["null - undefined 반환"]
 
     style C fill:#2ecc71,color:#fff
     style E fill:#3498db,color:#fff
@@ -129,7 +129,7 @@ graph TD
 
     subgraph "인스턴스"
         I["myDog 인스턴스"]
-        I -->|".__proto__<br/>(= [[Prototype]])"| FP
+        I -->|".__proto__<br>(= [[Prototype]])"| FP
     end
 
     FP -->|".constructor"| F
@@ -205,8 +205,8 @@ graph LR
         CC["class Animal { speak() {} }"]
     end
 
-    PF -.->|동일한 결과| CC
-    PP -.->|동일한 결과| CC
+    PF -.-->|"동일한 결과"| CC
+    PP -.-->|"동일한 결과"| CC
 
     style CC fill:#9b59b6,color:#fff
 ```
@@ -327,11 +327,11 @@ console.log(buddy instanceof Animal);          // true
 
 ```mermaid
 graph BT
-    BUDDY["buddy<br/>name: '버디'"]
-    GR_PROTO["GoldenRetriever.prototype<br/>fetch()"]
-    DOG_PROTO["Dog.prototype<br/>bark(), speak()"]
-    ANIMAL_PROTO["Animal.prototype<br/>speak(), toString()"]
-    OBJ_PROTO["Object.prototype<br/>hasOwnProperty()<br/>toString()"]
+    BUDDY["buddy<br>name: '버디'"]
+    GR_PROTO["GoldenRetriever.prototype<br>fetch()"]
+    DOG_PROTO["Dog.prototype<br>bark(), speak()"]
+    ANIMAL_PROTO["Animal.prototype<br>speak(), toString()"]
+    OBJ_PROTO["Object.prototype<br>hasOwnProperty()<br>toString()"]
     NULL[null]
 
     BUDDY -->|"__proto__"| GR_PROTO
