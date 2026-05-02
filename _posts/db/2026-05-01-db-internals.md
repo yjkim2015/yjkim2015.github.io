@@ -597,6 +597,94 @@ WHERE phone = '01012345678'  -- 문자열로 비교 → 인덱스 사용 가능
 
 <br>
 
+## 극한 시나리오 대응
+
+### 쿼리가 갑자기 10배 느려진 경우
+
+운영 중에 특정 쿼리가 갑자기 느려지는 가장 흔한 원인은 통계 정보 만료다. 대량 INSERT/DELETE/UPDATE 후 통계가 오래되면 옵티마이저가 잘못된 실행 계획을 선택한다. `EXPLAIN`으로 `type=ALL`이 보이거나 `rows` 추정값이 실제와 크게 다르다면 먼저 `ANALYZE TABLE`을 실행한다.
+
+```sql
+-- 1단계: 실행 계획 확인
+EXPLAIN SELECT * FROM orders WHERE user_id = 100;
+
+-- 2단계: rows 추정값이 비정상적으로 크면 통계 갱신
+ANALYZE TABLE orders;
+
+-- 3단계: 통계 갱신 후 재확인
+EXPLAIN SELECT * FROM orders WHERE user_id = 100;
+
+-- 4단계: 여전히 느리면 Buffer Pool 상태 확인
+SHOW ENGINE INNODB STATUS;
+-- Buffer pool hit rate 확인: 999/1000 미만이면 메모리 부족
+```
+
+> **핵심**: 쿼리 성능 저하의 3대 원인은 통계 만료(ANALYZE TABLE), Buffer Pool 부족(메모리 증설 또는 innodb_buffer_pool_size 조정), 인덱스 단편화(OPTIMIZE TABLE)다.
+
+### Buffer Pool이 가득 찬 경우
+
+Buffer Pool 크기가 데이터 크기보다 훨씬 작으면 캐시 히트율이 떨어지고 랜덤 I/O가 폭발한다. Full Table Scan이 발생하면 대량의 페이지가 Old Sublist로 밀려들어 Hot Page를 축출하는 캐시 오염이 생긴다.
+
+```sql
+-- Buffer Pool 히트율 확인
+SELECT
+  (1 - (innodb_buffer_pool_reads / innodb_buffer_pool_read_requests)) * 100
+    AS hit_rate_pct
+FROM information_schema.GLOBAL_STATUS
+WHERE variable_name IN ('Innodb_buffer_pool_reads', 'Innodb_buffer_pool_read_requests');
+-- 99% 미만이면 메모리 부족 의심
+
+-- 현재 Buffer Pool 사용 현황
+SHOW STATUS LIKE 'Innodb_buffer_pool%';
+```
+
+히트율이 95% 미만이면 `innodb_buffer_pool_size`를 가용 메모리의 70~80%까지 늘리는 것을 검토한다. 단, Full Table Scan이 원인이라면 인덱스 추가가 근본 해결책이다.
+
+### 장시간 트랜잭션으로 Undo Log 폭증
+
+트랜잭션이 수십 분 이상 열려 있으면 Undo Log가 계속 쌓여 스토리지를 잠식한다. 다른 트랜잭션이 이전 버전 데이터를 계속 참조해야 하므로 Undo Log를 정리하지 못한다.
+
+```sql
+-- 오래된 트랜잭션 확인
+SELECT trx_id, trx_started, trx_state,
+       TIMESTAMPDIFF(SECOND, trx_started, NOW()) AS duration_sec,
+       trx_query
+FROM information_schema.INNODB_TRX
+ORDER BY trx_started ASC;
+
+-- Undo Log 크기 확인
+SELECT name, subsystem, count, type, comment
+FROM information_schema.INNODB_METRICS
+WHERE name LIKE '%undo%';
+```
+
+`duration_sec`이 300초(5분)를 넘는 트랜잭션이 있다면 즉시 원인을 파악하고, 필요하면 `KILL` 명령으로 강제 종료한다. 배치 처리 시에는 트랜잭션을 작게 나눠서 커밋하는 습관이 중요하다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+### 1. ANALYZE TABLE 누락 후 성능 저하 방치
+
+대량 데이터 변경 후 통계를 갱신하지 않아 옵티마이저가 잘못된 계획을 선택한다. 배치 작업 후에는 반드시 `ANALYZE TABLE`을 실행하거나, `innodb_stats_auto_recalc=ON`으로 자동 갱신을 설정한다.
+
+### 2. innodb_buffer_pool_size 기본값 사용
+
+MySQL 기본값은 128MB로 운영 환경에는 턱없이 작다. 데이터베이스 전용 서버라면 가용 메모리의 70~80%를 Buffer Pool에 할당해야 한다. 메모리 16GB 서버라면 `innodb_buffer_pool_size = 12G`가 적절하다.
+
+### 3. UUID를 PK로 사용해 페이지 분할 폭증
+
+UUID v4는 완전 랜덤이므로 InnoDB 클러스터드 인덱스에 삽입할 때 B+Tree 중간에 계속 끼어들어 페이지 분할이 빈번해진다. Snowflake ID나 UUID v7(시간순 정렬)을 사용하면 순차 삽입이 보장되어 페이지 분할이 최소화된다.
+
+### 4. SELECT FOR UPDATE를 남발해 데드락 유발
+
+여러 트랜잭션이 동일한 레코드 집합에 서로 다른 순서로 `SELECT FOR UPDATE`를 실행하면 데드락이 발생한다. 락 획득 순서를 애플리케이션 전체에서 일관되게 유지해야 한다. 또한 `SELECT FOR UPDATE`는 MVCC를 우회해 실제 최신 데이터를 읽으므로, 스냅샷 읽기로 충분한 경우에는 일반 SELECT를 사용한다.
+
+### 5. innodb_flush_log_at_trx_commit=0으로 내구성 포기
+
+성능을 위해 `innodb_flush_log_at_trx_commit=0`으로 설정하면 서버 크래시 시 최대 1초치 데이터가 손실될 수 있다. 금융, 주문 등 데이터 무결성이 중요한 서비스에서는 반드시 기본값인 `1`을 유지해야 한다.
+
+---
+
 ## 정리
 
 MySQL/InnoDB의 핵심 동작 원리를 요약하면:

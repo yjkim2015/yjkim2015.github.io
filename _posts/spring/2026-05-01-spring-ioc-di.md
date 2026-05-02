@@ -17,6 +17,8 @@ toc_label: 목차
 
 IoC는 **제어의 역전**을 의미한다. 전통적인 프로그래밍에서는 개발자가 직접 객체를 생성하고 의존 객체를 연결했다. IoC에서는 이 제어권이 프레임워크(Spring Container)로 넘어간다.
 
+**왜 제어를 역전해야 하는가?** 개발자가 직접 `new`로 객체를 만들면, 사용하는 쪽이 구현체를 알아야 한다. 구현체가 바뀔 때마다 사용하는 쪽 코드도 같이 바뀐다. 이것이 강한 결합(Tight Coupling)이다. IoC를 적용하면 사용하는 쪽은 인터페이스만 알면 되고, 어떤 구현체가 연결될지는 컨테이너가 결정한다. 코드 변경 없이 구현체 교체가 가능해진다.
+
 ### 전통적 방식 vs IoC
 
 ```java
@@ -47,21 +49,23 @@ IoC의 핵심은 **"내가 사용할 객체를 내가 만들지 않는다"**는 
 
 ## 2. IoC 컨테이너 동작 원리
 
-Spring IoC 컨테이너는 **Bean Definition**을 읽어서 Bean을 생성하고 관리한다.
+Spring IoC 컨테이너는 **Bean Definition**을 읽어서 Bean을 생성하고 관리한다. 컨테이너가 시작할 때 설정 파일(또는 어노테이션)을 파싱하여 "어떤 클래스를 어떤 스코프로, 어떤 의존성과 함께 만들 것인가"라는 메타데이터를 BeanDefinition 객체로 변환한다. 그 후 이 메타데이터를 바탕으로 Bean 인스턴스를 만들고 의존성을 연결한다. 이 과정이 끝나야 비로소 애플리케이션이 요청을 받을 준비가 된다.
 
 <div class="mermaid">
 graph TD
-    A["Configuration 읽기<br>@Configuration+@Bean<br>@ComponentScan+@Component<br>XML legacy"] --> B["BeanDefinition 생성<br>클래스 정보, 스코프, 의존성 정보"]
-    B --> C["Bean 인스턴스 생성<br>생성자 호출"]
-    C --> D["의존성 주입<br>생성자/세터/필드 주입"]
-    D --> E["초기화 콜백<br>@PostConstruct, InitializingBean"]
-    E --> F["Bean 사용"]
-    F --> G["소멸 콜백<br>@PreDestroy, DisposableBean"]
+    A["1️⃣ Configuration 읽기<br>@Configuration+@Bean<br>@ComponentScan+@Component<br>XML legacy"] --> B["2️⃣ BeanDefinition 생성<br>클래스 정보, 스코프, 의존성 정보"]
+    B --> C["3️⃣ Bean 인스턴스 생성<br>생성자 호출"]
+    C --> D["4️⃣ 의존성 주입<br>생성자/세터/필드 주입"]
+    D --> E["5️⃣ 초기화 콜백<br>@PostConstruct, InitializingBean"]
+    E --> F["6️⃣ Bean 사용"]
+    F --> G["7️⃣ 소멸 콜백<br>@PreDestroy, DisposableBean"]
 
     style A fill:#e8f4f8
     style F fill:#e8f8e8
     style G fill:#f8e8e8
 </div>
+
+핵심은 3단계와 4단계의 분리다. 생성자 주입의 경우 3단계와 4단계가 동시에 일어나지만, 세터/필드 주입은 인스턴스가 먼저 만들어진 후 별도로 주입된다. 이 차이가 순환 참조 감지 시점에 영향을 준다.
 
 ---
 
@@ -69,7 +73,7 @@ graph TD
 
 ### BeanFactory
 
-Spring 컨테이너의 최상위 인터페이스. Bean을 관리하고 조회하는 기본 기능을 제공한다.
+Spring 컨테이너의 최상위 인터페이스. Bean을 관리하고 조회하는 기본 기능을 제공한다. BeanFactory는 지연 로딩(Lazy Loading) 방식으로 동작한다. `getBean()`이 호출되는 시점에 처음으로 Bean 인스턴스를 생성한다. 메모리 효율은 좋지만 첫 호출 시 지연이 발생하고, 설정 오류가 런타임까지 발견되지 않는다.
 
 ```java
 public interface BeanFactory {
@@ -83,11 +87,9 @@ public interface BeanFactory {
 }
 ```
 
-**특징**: 지연 로딩(Lazy Loading). `getBean()` 호출 시점에 Bean을 생성한다.
-
 ### ApplicationContext
 
-BeanFactory를 상속받아 훨씬 많은 기능을 추가한 인터페이스.
+BeanFactory를 상속받아 훨씬 많은 기능을 추가한 인터페이스. 실무에서는 항상 ApplicationContext를 사용한다. ApplicationContext는 즉시 로딩(Eager Loading) 방식이다. 컨테이너 시작 시점에 모든 싱글톤 Bean을 미리 생성한다. 애플리케이션 시작이 약간 느려지지만 설정 오류를 시작 시점에 즉시 발견할 수 있고, 첫 요청부터 응답이 빠르다.
 
 ```java
 public interface ApplicationContext extends
@@ -99,8 +101,6 @@ public interface ApplicationContext extends
     ResourcePatternResolver {    // 리소스 조회
 }
 ```
-
-**특징**: 즉시 로딩(Eager Loading). 컨테이너 시작 시점에 모든 싱글톤 Bean을 미리 생성한다.
 
 ### 비교표
 
@@ -116,30 +116,36 @@ public interface ApplicationContext extends
 
 ### 주요 구현체
 
-```
-ApplicationContext
-├── AnnotationConfigApplicationContext   // Java 설정 (순수 Java, 테스트)
-├── AnnotationConfigServletWebServerApplicationContext  // Spring Boot 웹
-├── GenericXmlApplicationContext         // XML 설정
-└── ClassPathXmlApplicationContext       // XML (클래스패스)
-```
+<div class="mermaid">
+graph TD
+    AC[ApplicationContext] --> ACAC["AnnotationConfigApplicationContext<br>Java 설정, 순수 Java 테스트"]
+    AC --> ACSWSAC["AnnotationConfigServletWebServerApplicationContext<br>Spring Boot 웹 환경"]
+    AC --> GXAC["GenericXmlApplicationContext<br>XML 설정"]
+    AC --> CPXAC["ClassPathXmlApplicationContext<br>XML 설정, 클래스패스"]
+
+    style AC fill:#e8f4f8
+</div>
 
 ---
 
 ## 4. Bean 생명주기
 
+Bean의 생명주기를 정확히 이해해야 초기화 콜백을 올바른 시점에 사용할 수 있다. 예를 들어 DB 커넥션 풀을 초기화하려면, 커넥션 풀 Bean이 생성되고 **모든 의존성 주입이 완료된 후**에 초기화가 실행되어야 한다. `@PostConstruct`가 바로 그 시점을 보장한다. 생성자에서 초기화하면 의존성이 아직 주입되지 않은 상태일 수 있다.
+
 <div class="mermaid">
 graph TD
     S([Spring Container 시작]) --> A
-    A["[1] Bean 인스턴스 생성<br>기본 생성자 또는 @Bean 팩토리 메서드 호출"]
-    A --> B["[2] 의존성 주입 DI<br>생성자 주입은 1단계에서 동시 처리<br>세터/필드 주입은 이 단계에서 처리"]
-    B --> C["[3] 초기화 콜백<br>@PostConstruct<br>InitializingBean.afterPropertiesSet()<br>@Bean(initMethod='init')"]
-    C --> D["[4] Bean 사용 (애플리케이션 동작)"]
-    D --> E["[5] 소멸 콜백 (Container 종료 시)<br>@PreDestroy<br>DisposableBean.destroy()<br>@Bean(destroyMethod='close')"]
+    A["1️⃣ Bean 인스턴스 생성<br>기본 생성자 또는 @Bean 팩토리 메서드 호출"]
+    A --> B["2️⃣ 의존성 주입 DI<br>생성자 주입은 1단계에서 동시 처리<br>세터/필드 주입은 이 단계에서 처리"]
+    B --> C["3️⃣ 초기화 콜백<br>@PostConstruct<br>InitializingBean.afterPropertiesSet()<br>@Bean(initMethod='init')"]
+    C --> D["4️⃣ Bean 사용 (애플리케이션 동작)"]
+    D --> E["5️⃣ 소멸 콜백 (Container 종료 시)<br>@PreDestroy<br>DisposableBean.destroy()<br>@Bean(destroyMethod='close')"]
     E --> END([Spring Container 종료])
 </div>
 
 ### 코드 예제
+
+아래 코드는 `@PostConstruct`와 `@PreDestroy`를 활용하는 표준 패턴이다. 주석에 표시된 단계 번호가 위 다이어그램과 대응된다. `afterPropertiesSet()`과 `destroy()`는 Spring 인터페이스에 종속되므로, 가능하면 JSR-250 표준인 `@PostConstruct`/`@PreDestroy`를 우선 사용한다.
 
 ```java
 @Component
@@ -147,7 +153,7 @@ public class DatabaseConnectionPool implements InitializingBean, DisposableBean 
 
     private Connection connection;
 
-    // [3] 초기화 콜백 - 의존성 주입 완료 후 호출
+    // 3단계 초기화 콜백 - 의존성 주입 완료 후 호출
     @PostConstruct
     public void init() {
         System.out.println("@PostConstruct: DB 커넥션 풀 초기화");
@@ -159,7 +165,7 @@ public class DatabaseConnectionPool implements InitializingBean, DisposableBean 
         System.out.println("InitializingBean: 추가 초기화 작업");
     }
 
-    // [5] 소멸 콜백
+    // 5단계 소멸 콜백
     @PreDestroy
     public void cleanup() {
         System.out.println("@PreDestroy: DB 커넥션 풀 정리");
@@ -181,7 +187,7 @@ public class DatabaseConnectionPool implements InitializingBean, DisposableBean 
 
 ### Singleton (기본값)
 
-컨테이너당 인스턴스 하나. 가장 널리 사용된다.
+컨테이너당 인스턴스 하나. 가장 널리 사용된다. 싱글톤 Bean은 컨테이너 시작 시점에 딱 한 번 생성되어 컨테이너가 살아있는 동안 유지된다. 동일한 Bean을 여러 곳에서 주입받아도 모두 같은 인스턴스를 참조한다. 따라서 싱글톤 Bean에 상태(인스턴스 변수)를 저장하면 여러 요청 간에 공유되어 동시성 문제가 발생한다.
 
 ```java
 @Component
@@ -191,15 +197,18 @@ public class UserService {
 }
 ```
 
-```
-getBean("userService") ──→ [동일한 인스턴스 반환]
-getBean("userService") ──→ [동일한 인스턴스 반환]
-getBean("userService") ──→ [동일한 인스턴스 반환]
-```
+<div class="mermaid">
+graph LR
+    A["getBean('userService')"] --> I["동일한 인스턴스"]
+    B["getBean('userService')"] --> I
+    C["getBean('userService')"] --> I
+
+    style I fill:#e8f8e8
+</div>
 
 ### Prototype
 
-요청할 때마다 새 인스턴스 생성. 소멸 콜백을 컨테이너가 관리하지 않는다.
+요청할 때마다 새 인스턴스 생성. 컨테이너는 인스턴스 생성 후 소멸 콜백을 관리하지 않는다. `@PreDestroy`가 호출되지 않으므로 자원 해제를 직접 처리해야 한다.
 
 ```java
 @Component
@@ -210,15 +219,20 @@ public class ShoppingCart {
 }
 ```
 
-```
-getBean("shoppingCart") ──→ [새 인스턴스 A]
-getBean("shoppingCart") ──→ [새 인스턴스 B]
-getBean("shoppingCart") ──→ [새 인스턴스 C]
-```
+<div class="mermaid">
+graph LR
+    A["getBean('shoppingCart')"] --> I1["새 인스턴스 A"]
+    B["getBean('shoppingCart')"] --> I2["새 인스턴스 B"]
+    C["getBean('shoppingCart')"] --> I3["새 인스턴스 C"]
+
+    style I1 fill:#fff8e0
+    style I2 fill:#fff8e0
+    style I3 fill:#fff8e0
+</div>
 
 ### Singleton + Prototype 혼용 문제
 
-Singleton Bean이 Prototype Bean을 주입받으면 문제가 발생한다.
+Singleton Bean이 Prototype Bean을 주입받으면 문제가 발생한다. Singleton Bean은 컨테이너 시작 시 딱 한 번 DI를 받는다. 이때 Prototype Bean도 딱 한 번 생성되어 주입된다. 이후 Singleton Bean의 메서드를 호출할 때마다 같은 Prototype 인스턴스가 사용된다. Prototype의 의미가 사라진다.
 
 ```java
 @Component
@@ -229,7 +243,7 @@ public class SingletonService {
 }
 ```
 
-**해결책**: `ObjectProvider` 또는 `ApplicationContext` 사용
+**해결책**: `ObjectProvider` 사용. `getObject()` 호출마다 컨테이너에서 새 인스턴스를 꺼내온다.
 
 ```java
 @Component
@@ -269,13 +283,15 @@ public class MyLogger {
 }
 ```
 
-`proxyMode = ScopedProxyMode.TARGET_CLASS`: 싱글톤 Bean에 주입될 때 프록시 객체로 감싸서 실제 요청 시 진짜 인스턴스에 위임한다.
+`proxyMode = ScopedProxyMode.TARGET_CLASS`: Singleton Bean에 Request-scoped Bean을 주입할 때, 실제 인스턴스 대신 프록시 객체를 주입한다. 실제 요청이 들어올 때 프록시가 현재 요청에 맞는 진짜 인스턴스로 위임한다. 이 프록시 없이는 싱글톤 시작 시점에 request scope Bean을 만들 수 없어 오류가 난다.
 
 ---
 
 ## 6. DI(Dependency Injection) 방식 비교
 
 ### 생성자 주입 (Constructor Injection) — 권장
+
+생성자 주입은 Bean 인스턴스 생성과 의존성 주입이 동시에 일어난다. Spring이 생성자를 호출할 때 인자를 자동으로 찾아 넣어준다. 생성자가 하나뿐이면 `@Autowired`를 생략할 수 있다.
 
 ```java
 @Service
@@ -332,6 +348,8 @@ public class OrderService {
 
 ### 왜 생성자 주입이 권장되는가?
 
+테스트 코드에서 차이가 명확하게 드러난다. 필드 주입을 사용하면 `new`로 객체를 만들었을 때 의존성이 null이라 NullPointerException이 발생한다. 생성자 주입은 컴파일러가 의존성 누락을 잡아준다.
+
 ```java
 // 필드 주입 - 테스트 시 문제
 class OrderServiceTest {
@@ -359,17 +377,19 @@ class OrderServiceTest {
 
 ## 7. @Autowired 동작 원리
 
-`@Autowired`는 Spring이 Bean을 자동으로 찾아 주입하는 어노테이션이다.
+`@Autowired`는 Spring이 Bean을 자동으로 찾아 주입하는 어노테이션이다. 내부적으로 `AutowiredAnnotationBeanPostProcessor`가 동작하며, Bean 생성 후 `@Autowired`가 붙은 필드나 메서드를 리플렉션으로 탐색하여 ApplicationContext에서 알맞은 Bean을 찾아 주입한다.
 
 ### 매칭 순서
 
+타입으로 먼저 찾고, 같은 타입이 여러 개면 이름이나 한정자로 좁힌다. 이 순서를 모르면 "NoUniqueBeanDefinitionException이 왜 났지?" 하고 헤매게 된다.
+
 <div class="mermaid">
 graph TD
-    A["1. 타입Type으로 매칭 시도<br>ApplicationContext에서 해당 타입의 Bean 검색"] --> B{타입 매칭 Bean이 2개 이상?}
-    B -->|"@Qualifier 있음"| C["@Qualifier 확인<br>@Qualifier('mainDiscountPolicy') Bean 선택"]
-    B -->|"@Primary 있음"| D["@Primary 확인<br>@Primary가 붙은 Bean 선택"]
-    B -->|"그 외"| E["필드명/파라미터명으로 매칭<br>변수명과 일치하는 Bean ID 선택"]
-    C --> F[주입 완료]
+    A["1️⃣ 타입Type으로 매칭 시도<br>ApplicationContext에서 해당 타입의 Bean 검색"] --> B{"타입 매칭 Bean이 2개 이상?"}
+    B -->|"@Qualifier 있음"| C["2️⃣ @Qualifier 확인<br>@Qualifier('mainDiscountPolicy') Bean 선택"]
+    B -->|"@Primary 있음"| D["3️⃣ @Primary 확인<br>@Primary가 붙은 Bean 선택"]
+    B -->|"그 외"| E["4️⃣ 필드명/파라미터명으로 매칭<br>변수명과 일치하는 Bean ID 선택"]
+    C --> F["주입 완료"]
     D --> F
     E --> F
 </div>
@@ -416,6 +436,8 @@ public class OrderService {
 
 ### 모든 Bean 주입받기
 
+같은 타입의 모든 Bean을 Map이나 List로 받을 수 있다. 전략 패턴 구현에 매우 유용하다.
+
 ```java
 @Service
 public class DiscountService {
@@ -442,24 +464,18 @@ public class DiscountService {
 
 ### 순환 참조란?
 
-```
-A → B → C → A  (순환!)
+A가 B를 필요로 하고, B가 C를 필요로 하며, C가 다시 A를 필요로 하는 상황이다. 생성자 주입에서는 A를 만들려면 B가 필요하고, B를 만들려면 C가 필요하고, C를 만들려면 A가 필요한 데드락이 발생한다.
 
-@Service
-public class A {
-    @Autowired B b;  // A는 B가 필요
-}
+<div class="mermaid">
+graph LR
+    A["ServiceA<br>@Autowired B b"] --> B["ServiceB<br>@Autowired C c"]
+    B --> C["ServiceC<br>@Autowired A a"]
+    C --> A
 
-@Service
-public class B {
-    @Autowired C c;  // B는 C가 필요
-}
-
-@Service
-public class C {
-    @Autowired A a;  // C는 A가 필요 → 순환!
-}
-```
+    style A fill:#ffe0e0
+    style B fill:#ffe0e0
+    style C fill:#ffe0e0
+</div>
 
 ### Spring Boot 2.6+ 기본 동작
 
@@ -481,7 +497,7 @@ a → b → c → a
 
 **방법 1: 설계 변경 (가장 좋은 방법)**
 
-순환 참조는 대부분 **설계 문제**다. 공통 기능을 별도 컴포넌트로 추출한다.
+순환 참조는 대부분 **설계 문제**다. 공통 기능을 별도 컴포넌트로 추출하면 사이클이 끊어진다.
 
 ```java
 // 순환 참조 발생
@@ -525,6 +541,22 @@ spring.main.allow-circular-references=true
 ```
 
 이 옵션은 임시 해결책이며, 순환 참조의 근본 원인을 해결해야 한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 싱글톤 Bean에 상태 저장**
+
+싱글톤 Bean은 여러 요청이 공유한다. 인스턴스 변수에 요청별 데이터를 저장하면 동시성 문제가 발생한다. 요청별 데이터는 파라미터로 전달하거나 ThreadLocal을 사용한다.
+
+**실수 2: @PostConstruct에서 트랜잭션 사용**
+
+`@PostConstruct`는 컨테이너 초기화 단계에서 실행된다. 이 시점에 트랜잭션이 활성화되지 않을 수 있다. 초기 데이터 로딩은 `ApplicationReadyEvent` 리스너를 사용한다.
+
+**실수 3: Prototype Bean을 Singleton에 주입 후 매번 새 인스턴스 기대**
+
+앞서 설명한 Singleton+Prototype 혼용 문제다. `ObjectProvider`로 해결한다.
 
 ---
 
