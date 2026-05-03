@@ -9,6 +9,8 @@ toc_label: 목차
 
 Java는 클래스 안에 클래스를 선언할 수 있습니다. 이를 중첩 클래스(Nested Class)라고 하며, 종류에 따라 동작 방식과 사용 목적이 크게 다릅니다. 잘못 사용하면 메모리 누수의 원인이 되기도 하므로, 각각의 특성을 정확히 이해하는 것이 중요합니다.
 
+> **비유:** 중첩 클래스는 "건물 안의 방"입니다. Static 중첩 클래스는 건물과 독립적인 임대 사무실(열쇠만 있으면 누구든 출입)이고, 멤버 내부 클래스는 건물주 전용 방(건물주가 없으면 방 자체가 존재할 수 없음)입니다. 건물주 전용 방은 건물주가 이사 가도(GC 대상) 세입자(내부 클래스)가 열쇠를 쥐고 있으면 건물을 비울 수 없습니다(메모리 누수).
+
 ---
 
 ## 1. 중첩 클래스 종류 전체 구조
@@ -38,6 +40,8 @@ graph TD
 ---
 
 ## 2. Static 중첩 클래스 (Static Nested Class)
+
+> **비유:** Static 중첩 클래스는 대형 마트 안에 입점한 독립 매장입니다. 마트(외부 클래스) 건물 안에 있지만, 마트 사장(외부 인스턴스)의 허락 없이도 스스로 영업할 수 있습니다. 마트의 공용 시설(static 멤버)은 이용하지만, 마트 사장의 개인 사무실(인스턴스 멤버)에는 출입할 수 없습니다.
 
 ### 동작 원리
 
@@ -131,6 +135,8 @@ Person person = new Person.Builder()
 
 ## 3. 멤버 내부 클래스 (Member Inner Class)
 
+> **비유:** 멤버 내부 클래스는 부모님 집에 사는 성인 자녀입니다. 자녀(Inner)는 부모(Outer)의 냉장고(private 멤버)를 자유롭게 열 수 있지만, 부모 없이는 집 자체가 존재하지 않습니다. 문제는 자녀가 집 열쇠(`this$0`)를 쥐고 있는 한 부모가 이사(GC)를 갈 수 없다는 것입니다.
+
 ### 동작 원리
 
 멤버 내부 클래스는 컴파일러가 자동으로 외부 클래스 인스턴스에 대한 숨겨진 참조(`this$0`)를 필드로 추가합니다. `Inner` 인스턴스를 생성하려면 반드시 `Outer` 인스턴스가 먼저 있어야 하고, `outer.new Inner()` 라는 독특한 문법을 사용합니다. 이 숨겨진 참조가 메모리 누수의 핵심 원인입니다.
@@ -193,6 +199,8 @@ public class ScrollPane {
 
 ## 4. 지역 내부 클래스 (Local Inner Class)
 
+> **비유:** 지역 내부 클래스는 회의실에서만 쓰는 임시 화이트보드입니다. 회의(메서드)가 끝나면 화이트보드(클래스)는 치워지고, 회의실 밖에서는 그 화이트보드를 볼 수도 없습니다. 화이트보드에 적힌 내용은 회의 시작 시 배포된 자료(effectively final 변수)만 참조할 수 있습니다.
+
 ### 동작 원리
 
 메서드 내부에서 선언하는 클래스입니다. 해당 메서드 스코프 안에서만 사용할 수 있어 외부 공개 없이 특정 메서드 전용 로직을 캡슐화할 때 씁니다. 람다가 없던 시절에는 이 방식을 썼지만 현대에는 거의 사용하지 않습니다.
@@ -233,6 +241,8 @@ public void method() {
 ---
 
 ## 5. 익명 클래스 (Anonymous Class)
+
+> **비유:** 익명 클래스는 일회용 마스크입니다. 특정 상황(메서드 호출)에서 한 번 쓰고 버릴 구현이 필요할 때, 정식 클래스(재사용 가능한 천 마스크)를 만들 필요 없이 즉석에서 만들어 사용합니다. 이름이 없으므로 다른 곳에서 재사용할 수 없습니다.
 
 ### 동작 원리
 
@@ -280,6 +290,8 @@ Runnable r = new Runnable() {
 ---
 
 ## 6. 익명 클래스 → 람다 전환
+
+> **비유:** 익명 클래스에서 람다로의 전환은 편지에서 문자 메시지로의 전환과 같습니다. 편지(익명 클래스)는 봉투(클래스 선언), 인사말(`@Override`), 본문(실제 로직), 마무리 인사(중괄호)가 모두 필요하지만, 문자(람다)는 핵심 내용 한 줄이면 됩니다. 단, 문자는 한 가지 용건(추상 메서드 1개)만 전달할 수 있습니다.
 
 ### Java 8 이전 vs 이후
 
@@ -520,7 +532,181 @@ t.execute();
 
 ---
 
-## 9. 전체 요약
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
+
+### 시나리오 1: 이벤트 리스너 누수 (100 TPS)
+
+> **비유:** 호텔 객실 열쇠를 체크아웃 시 반납하지 않는 것과 같습니다. 열쇠(리스너)가 객실(Activity/컴포넌트)을 가리키고 있는 한, 호텔(JVM)은 그 객실을 다른 손님에게 내줄 수 없습니다.
+
+- **문제:** GUI 애플리케이션에서 화면 전환마다 익명 클래스로 이벤트 리스너를 등록하지만 제거하지 않으면, 이전 화면의 모든 객체가 GC되지 않아 메모리가 선형적으로 증가합니다. 100 TPS 환경에서 1시간이면 수천 개의 좀비 리스너가 누적됩니다.
+- **해결:** 리스너 등록과 제거를 `AutoCloseable` 패턴으로 쌍으로 묶고, `WeakReference` 기반 리스너 래퍼를 사용합니다. 또는 람다로 전환하되, 참조하는 외부 변수를 최소화합니다.
+- **근거:** 멤버 내부 클래스의 `this$0` 참조는 강참조이므로 GC Root에서 도달 가능한 한 외부 클래스 전체가 수거 불가능합니다.
+
+### 시나리오 2: 빌더 패턴 대규모 객체 생성 (10K TPS)
+
+> **비유:** 자동차 조립 라인에서 주문서(Builder)를 작성한 뒤 완성차(Person)를 찍어내는 것입니다. Builder가 static이므로 조립 라인은 공장(외부 클래스) 가동 여부와 무관하게 독립 운영됩니다.
+
+- **문제:** 초당 10,000개의 DTO를 생성하는 API 서버에서 Builder를 멤버 내부 클래스(non-static)로 만들면 매 Builder마다 외부 클래스 참조가 추가되어 객체 크기가 커지고 GC 압력이 증가합니다.
+- **해결:** Builder는 반드시 `static` 중첩 클래스로 선언합니다. 외부 인스턴스를 참조할 필요가 전혀 없으므로 `static`이 정확한 선택입니다.
+- **근거:** `static` 중첩 클래스는 `this$0` 참조가 없으므로 객체당 8바이트(참조 크기) 절약이며, GC 그래프가 단순해져 수거 속도가 빨라집니다.
+
+### 시나리오 3: NIO Selector + 콜백 핸들러 (100K 동시 연결)
+
+> **비유:** 10만 명이 동시에 전화를 거는 콜센터에서, 상담원(내부 클래스)이 고객 정보(외부 클래스)를 들고 있으면 상담이 끝나도 고객 카드를 폐기할 수 없습니다.
+
+- **문제:** NIO 서버에서 연결별 핸들러를 멤버 내부 클래스로 구현하면 핸들러가 서버 전체 객체를 참조합니다. 연결이 비정상 종료되어 핸들러가 정리되지 않으면 서버 객체가 GC 불가능해지고, 100K 동시 연결 환경에서 메모리가 폭발합니다.
+- **해결:** 핸들러를 `static` 중첩 클래스로 만들고, 필요한 의존성만 생성자로 주입합니다. 연결 종료 시 `SelectionKey.cancel()` + 핸들러 참조 null 처리를 반드시 수행합니다.
+- **근거:** 외부 참조를 끊으면 개별 핸들러가 독립적으로 GC 가능해져 메모리 누수 체인이 형성되지 않습니다.
+
+---
+</div>
+</div>
+</details>
+
+## 10. 실무에서 자주 하는 실수
+
+### 실수 1: static으로 선언해야 할 중첩 클래스를 non-static으로 선언
+
+```java
+// 위험: Node는 외부 인스턴스가 전혀 불필요한데 non-static으로 선언
+public class MyList<E> {
+    class Node<E> {  // 매 Node마다 MyList 참조 보유 → 메모리 낭비
+        E item;
+        Node<E> next;
+    }
+}
+
+// 해결: static으로 선언
+public class MyList<E> {
+    static class Node<E> {  // 외부 참조 없음 → 메모리 절약
+        E item;
+        Node<E> next;
+    }
+}
+```
+
+### 실수 2: 직렬화 시 내부 클래스 포함
+
+```java
+// 위험: 멤버 내부 클래스를 Serializable로 만들면
+// 외부 클래스 전체가 직렬화 대상이 됨
+public class Outer implements Serializable {
+    private transient Connection dbConn;  // 직렬화 불가 필드
+
+    class Inner implements Serializable {
+        // 직렬화 시 Outer(dbConn 포함)도 함께 직렬화 시도 → NotSerializableException
+    }
+}
+
+// 해결: static 중첩 클래스로 변경
+static class Inner implements Serializable {
+    // 외부 참조 없으므로 독립 직렬화 가능
+}
+```
+
+### 실수 3: 익명 클래스에서 this 혼동
+
+```java
+public class Button {
+    private String label = "Submit";
+
+    public void addListener() {
+        ActionListener listener = new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // this는 익명 클래스 인스턴스!
+                System.out.println(this.toString());  // 익명 클래스의 toString()
+                System.out.println(Button.this.label); // 외부 클래스 접근은 명시적으로
+            }
+        };
+    }
+}
+```
+
+### 실수 4: 콜백에서 외부 클래스 전체를 캡처
+
+```java
+// 위험: 람다가 this를 캡처하면 외부 클래스 전체가 생존
+public class HeavyService {
+    private byte[] cache = new byte[100_000_000];  // 100MB
+
+    public Runnable createTask() {
+        return () -> System.out.println(this.hashCode());
+        // this 캡처 → 100MB cache도 GC 불가
+    }
+}
+
+// 해결: 필요한 값만 지역 변수로 복사
+public Runnable createTask() {
+    int hash = this.hashCode();
+    return () -> System.out.println(hash);
+    // hash만 캡처 → HeavyService는 GC 가능
+}
+```
+
+### 실수 5: 중첩 클래스에서 외부 클래스와 동일한 필드명 사용
+
+```java
+// 혼란: 내부/외부 클래스에 같은 이름의 필드
+public class Outer {
+    private int value = 10;
+
+    class Inner {
+        private int value = 20;
+
+        void print() {
+            System.out.println(value);            // 20 (Inner.value)
+            System.out.println(this.value);        // 20 (Inner.value)
+            System.out.println(Outer.this.value);  // 10 (Outer.value)
+            // 이름 충돌로 Outer.this 없이는 외부 value에 접근 불가
+        }
+    }
+}
+// 해결: 필드명을 구분하거나, static 중첩 클래스로 전환하여 외부 접근 자체를 차단
+```
+
+---
+
+## 11. 면접 포인트
+
+### Q1: Static 중첩 클래스와 멤버 내부 클래스의 차이는?
+
+**A:** 핵심 차이는 외부 클래스 인스턴스에 대한 참조 보유 여부입니다. Static 중첩 클래스는 외부 참조가 없어 `new Outer.StaticNested()`로 독립 생성 가능하고, 외부의 static 멤버만 접근합니다. 멤버 내부 클래스는 컴파일러가 `this$0` 필드를 자동 추가하여 외부 인스턴스를 강참조하므로 `outer.new Inner()`로만 생성 가능하고, 외부의 모든 멤버에 접근합니다. 이 차이 때문에 멤버 내부 클래스는 메모리 누수 위험이 있습니다.
+
+### Q2: 멤버 내부 클래스가 메모리 누수를 일으키는 원리는?
+
+**A:** 멤버 내부 클래스는 컴파일 시 `this$0`라는 외부 클래스 참조 필드가 자동 추가됩니다. 내부 클래스 인스턴스가 GC Root에서 도달 가능한 곳(Thread, static 컬렉션 등)에 보관되면, `this$0`를 따라 외부 클래스 전체와 그 필드들이 GC 불가능해집니다. 해결책은 static 중첩 클래스 + `WeakReference` 조합이거나, 필요한 데이터만 복사하여 캡처하는 것입니다.
+
+### Q3: 익명 클래스와 람다의 차이점 3가지는?
+
+**A:** 첫째, `this` 의미가 다릅니다. 익명 클래스의 `this`는 익명 클래스 인스턴스, 람다의 `this`는 감싸는 외부 클래스입니다. 둘째, 익명 클래스는 새 스코프를 생성하여 외부와 같은 이름의 변수를 선언할 수 있지만, 람다는 감싸는 스코프를 그대로 사용하므로 변수명 충돌 시 컴파일 에러입니다. 셋째, 내부 구현이 다릅니다. 익명 클래스는 별도 `.class` 파일을 생성하고, 람다는 `invokedynamic` + `LambdaMetafactory`로 런타임에 동적 생성합니다.
+
+### Q4: 중첩 클래스를 사용하는 이유는?
+
+**A:** 세 가지 이점이 있습니다. 첫째, 캡슐화입니다. 외부에 노출할 필요 없는 구현 세부사항(예: `LinkedList`의 `Node`)을 숨깁니다. 둘째, 논리적 그룹핑입니다. 빌더 패턴처럼 특정 클래스와 밀접한 보조 클래스를 내부에 배치하여 코드 응집도를 높입니다. 셋째, 외부 멤버 접근입니다. 멤버 내부 클래스는 외부의 private 멤버에 자유롭게 접근할 수 있어 Iterator 같은 패턴에 유용합니다.
+
+### Q5: Effective Java에서 "멤버 클래스는 되도록 static으로 만들라"고 하는 이유는?
+
+**A:** non-static 멤버 클래스는 인스턴스마다 외부 참조(`this$0`)를 숨겨진 필드로 보유합니다. 이는 세 가지 비용을 수반합니다. 첫째, 참조 저장에 추가 메모리(8바이트)가 듭니다. 둘째, 외부 인스턴스의 GC를 방해하여 메모리 누수를 일으킬 수 있습니다. 셋째, 직렬화 시 외부 클래스까지 함께 직렬화되어 예상치 못한 예외가 발생합니다. 외부 인스턴스 접근이 실제로 필요한 경우가 아니라면 항상 `static`을 붙여야 합니다.
+
+---
+
+## 12. 전체 요약
 
 ```mermaid
 graph TD

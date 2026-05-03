@@ -688,7 +688,22 @@ public class PaymentService {
 
 ---
 
-## 10. 극한 시나리오: 11번가 블랙프라이데이
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 초당 10만 건의 주문이 들어올 때 분산 트랜잭션 처리:
 
@@ -713,6 +728,9 @@ graph TD
 이 규모에서 동기적 2PC를 사용하면 어떻게 될까요? 코디네이터 하나가 초당 10만 건을 조율하는 건 물리적으로 불가능합니다. 잠금 경합으로 DB가 멈춥니다. 비동기 Saga + Kafka 조합이 이 규모를 감당할 수 있는 유일한 현실적 선택입니다.
 
 ---
+</div>
+</div>
+</details>
 
 ## 핵심 패턴 선택 가이드
 

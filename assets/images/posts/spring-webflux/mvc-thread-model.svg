@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" font-family="Pretendard, -apple-system, sans-serif">
+  <defs>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.08"/>
+    </filter>
+    <linearGradient id="reqGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e3f2fd"/>
+      <stop offset="100%" stop-color="#bbdefb"/>
+    </linearGradient>
+    <linearGradient id="threadGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff3e0"/>
+      <stop offset="100%" stop-color="#ffe0b2"/>
+    </linearGradient>
+    <linearGradient id="waitGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffebee"/>
+      <stop offset="100%" stop-color="#ffcdd2"/>
+    </linearGradient>
+    <linearGradient id="resGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8f5e9"/>
+      <stop offset="100%" stop-color="#c8e6c9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-size="16" font-weight="700" fill="#1a1a1a">Spring MVC — Thread-per-Request 모델</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#888">각 요청마다 전용 스레드가 할당되어 I/O 완료까지 점유됨</text>
+
+  <!-- Row 1: 요청 1 -->
+  <rect x="30" y="80" width="110" height="44" rx="10" fill="url(#reqGrad)" stroke="#1976d2" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="85" y="106" text-anchor="middle" font-size="13" font-weight="600" fill="#1565c0">요청 1</text>
+
+  <line x1="140" y1="102" x2="200" y2="102" stroke="#90a4ae" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <rect x="200" y="80" width="140" height="44" rx="10" fill="url(#threadGrad)" stroke="#f57c00" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="270" y="106" text-anchor="middle" font-size="13" font-weight="600" fill="#e65100">Thread-1</text>
+
+  <line x1="340" y1="102" x2="430" y2="102" stroke="#ef5350" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="385" y="95" text-anchor="middle" font-size="10" fill="#c62828">DB 쿼리 대기</text>
+  <text x="385" y="115" text-anchor="middle" font-size="9" fill="#e53935" font-style="italic">블로킹 점유</text>
+
+  <rect x="430" y="80" width="160" height="44" rx="10" fill="url(#waitGrad)" stroke="#ef5350" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="510" y="100" text-anchor="middle" font-size="11" fill="#c62828">스레드 대기 중...</text>
+  <text x="510" y="116" text-anchor="middle" font-size="10" fill="#e57373">메모리 512KB~1MB 점유</text>
+
+  <line x1="590" y1="102" x2="650" y2="102" stroke="#66bb6a" stroke-width="2"/>
+
+  <rect x="650" y="80" width="100" height="44" rx="10" fill="url(#resGrad)" stroke="#43a047" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="700" y="106" text-anchor="middle" font-size="13" font-weight="600" fill="#2e7d32">응답 1</text>
+
+  <!-- Row 2: 요청 2 -->
+  <rect x="30" y="150" width="110" height="44" rx="10" fill="url(#reqGrad)" stroke="#1976d2" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="85" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="#1565c0">요청 2</text>
+
+  <line x1="140" y1="172" x2="200" y2="172" stroke="#90a4ae" stroke-width="2"/>
+
+  <rect x="200" y="150" width="140" height="44" rx="10" fill="url(#threadGrad)" stroke="#f57c00" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="270" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="#e65100">Thread-2</text>
+
+  <line x1="340" y1="172" x2="430" y2="172" stroke="#ef5350" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="385" y="165" text-anchor="middle" font-size="10" fill="#c62828">API 호출 대기</text>
+  <text x="385" y="185" text-anchor="middle" font-size="9" fill="#e53935" font-style="italic">블로킹 점유</text>
+
+  <rect x="430" y="150" width="160" height="44" rx="10" fill="url(#waitGrad)" stroke="#ef5350" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="510" y="170" text-anchor="middle" font-size="11" fill="#c62828">스레드 대기 중...</text>
+  <text x="510" y="186" text-anchor="middle" font-size="10" fill="#e57373">메모리 512KB~1MB 점유</text>
+
+  <line x1="590" y1="172" x2="650" y2="172" stroke="#66bb6a" stroke-width="2"/>
+
+  <rect x="650" y="150" width="100" height="44" rx="10" fill="url(#resGrad)" stroke="#43a047" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="700" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="#2e7d32">응답 2</text>
+
+  <!-- Row 3: 요청 N -->
+  <rect x="30" y="220" width="110" height="44" rx="10" fill="url(#reqGrad)" stroke="#1976d2" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="85" y="246" text-anchor="middle" font-size="13" font-weight="600" fill="#1565c0">요청 N</text>
+
+  <line x1="140" y1="242" x2="200" y2="242" stroke="#90a4ae" stroke-width="2"/>
+
+  <rect x="200" y="220" width="140" height="44" rx="10" fill="url(#threadGrad)" stroke="#f57c00" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="270" y="246" text-anchor="middle" font-size="13" font-weight="600" fill="#e65100">Thread-N</text>
+
+  <line x1="340" y1="242" x2="430" y2="242" stroke="#ef5350" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="385" y="235" text-anchor="middle" font-size="10" fill="#c62828">파일 I/O 대기</text>
+  <text x="385" y="255" text-anchor="middle" font-size="9" fill="#e53935" font-style="italic">블로킹 점유</text>
+
+  <rect x="430" y="220" width="160" height="44" rx="10" fill="url(#waitGrad)" stroke="#ef5350" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="510" y="240" text-anchor="middle" font-size="11" fill="#c62828">스레드 대기 중...</text>
+  <text x="510" y="256" text-anchor="middle" font-size="10" fill="#e57373">메모리 512KB~1MB 점유</text>
+
+  <line x1="590" y1="242" x2="650" y2="242" stroke="#66bb6a" stroke-width="2"/>
+
+  <rect x="650" y="220" width="100" height="44" rx="10" fill="url(#resGrad)" stroke="#43a047" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="700" y="246" text-anchor="middle" font-size="13" font-weight="600" fill="#2e7d32">응답 N</text>
+
+  <!-- Bottom warning -->
+  <rect x="150" y="285" width="500" height="30" rx="8" fill="#fff3e0" stroke="#ff9800" stroke-width="1"/>
+  <text x="400" y="305" text-anchor="middle" font-size="12" font-weight="600" fill="#e65100">&#9888; 동시 10,000 요청 = 10,000 스레드 = 약 5~10GB 메모리 점유</text>
+</svg>

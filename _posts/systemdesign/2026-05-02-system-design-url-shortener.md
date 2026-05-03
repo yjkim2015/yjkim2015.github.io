@@ -260,7 +260,22 @@ def redirect(short_code: str):
 
 ---
 
-## 극한 시나리오: 슈퍼볼 광고 순간
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 유명 방송에서 bit.ly 링크가 노출되면 순간 트래픽이 평상시 100배가 된다.
 
@@ -289,6 +304,9 @@ def preload_hot_urls():
 이 패턴이 없으면? Redis에도 초당 50만 요청이 몰린다. Redis는 빠르지만 무한하지 않다.
 
 ---
+</div>
+</div>
+</details>
 
 ## 설계 결정 요약
 

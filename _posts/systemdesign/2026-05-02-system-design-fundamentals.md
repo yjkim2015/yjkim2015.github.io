@@ -55,7 +55,7 @@ toc_label: 목차
 
 **왜 복잡한가**: 서버가 여러 대가 되는 순간 "상태(State) 공유" 문제가 생깁니다. 로컬 메모리에 세션을 저장하던 애플리케이션은 서버가 2대가 되는 순간, 로그인한 서버가 아닌 서버로 요청이 가면 세션을 잃어버립니다. **Redis 같은 분산 세션 저장소로 전환이 필수**입니다. 이걸 간과하고 수평 확장을 하면 사용자가 갑자기 로그아웃되는 장애가 납니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["1️⃣ 트래픽 증가 감지"] --> B{"2️⃣ 확장 전략 선택"}
     B --> C["3️⃣ 수직 확장\nScale Up"]
@@ -72,7 +72,7 @@ graph TD
     class A,B client
     class C,D,F server
     class E,G,H,I db
-</div>
+```
 
 ### 확장성 측정 지표
 
@@ -120,7 +120,7 @@ MTTR (Mean Time To Recovery): 평균 복구 시간
 
 MTBF = 100시간, MTTR = 1시간이면 가용성 99.01%입니다. MTTR을 0.1시간으로 줄이면 가용성 99.9%가 됩니다. **가용성을 높이는 방법은 두 가지입니다. 장애 자체를 덜 나게(MTBF 증가), 장애가 나도 빨리 복구되게(MTTR 감소).** 자동화된 롤백, 헬스체크, Auto Scaling이 모두 MTTR 감소를 위한 것입니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["1️⃣ 고가용성 목표 설정"] --> B["2️⃣ 이중화 Redundancy"]
     A --> C["2️⃣ 장애 감지 Monitoring"]
@@ -139,7 +139,7 @@ graph TD
     class A client
     class B,C,D,E,F,G server
     class H,I,J,K db
-</div>
+```
 
 ### 면접 포인트
 
@@ -155,7 +155,7 @@ graph TD
 
 왜 항상 강한 일관성을 쓰지 않을까요? 서울 서버에서 데이터를 썼을 때 뉴욕 서버에도 즉시 반영되려면, 서울이 뉴욕에게 "확인했어?"를 기다려야 합니다. 서울-뉴욕 왕복 지연은 150ms입니다. 모든 쓰기가 150ms씩 느려집니다. SNS 좋아요처럼 초당 수백만 건이 발생하는 연산에 강한 일관성을 적용하면 성능이 수십 배 저하됩니다.
 
-<div class="mermaid">
+```mermaid
 graph LR
     A["강한 일관성\nStrong"] --> B["순차적 일관성\nSequential"]
     B --> C["인과적 일관성\nCausal"]
@@ -168,7 +168,7 @@ graph LR
     classDef server fill:#e8f5e9,stroke:#388e3c
     class A,B client
     class C,D server
-</div>
+```
 
 | 일관성 수준 | 설명 | 실무 사용 예 |
 |------------|------|------------|
@@ -191,7 +191,7 @@ graph LR
 - **A (Availability)**: 모든 요청이 응답을 받음 (에러 포함)
 - **P (Partition Tolerance)**: 네트워크 분리가 발생해도 동작
 
-<div class="mermaid">
+```mermaid
 graph TD
     CAP(("CAP 정리\n3개 중 2개만 가능"))
     C["일관성\nConsistency\n모든 노드 동일 데이터"]
@@ -215,7 +215,7 @@ graph TD
     class C client
     class A server
     class P,CA,CP,AP db
-</div>
+```
 
 ### 왜 P를 항상 선택해야 하는가
 
@@ -270,7 +270,7 @@ E → L 또는 C 선택 (평상시)
 
 CAP만 알면 장애 시 선택만 이해하지만, 실무에서는 **정상 운영 중 일관성과 속도 사이의 선택**이 훨씬 더 자주 발생합니다. DynamoDB에서 강한 일관성 읽기를 사용하면 지연이 2배 증가합니다. 왜냐하면 강한 일관성은 다수의 복제본에서 확인해야 하기 때문입니다. PACELC는 이 현실적 트레이드오프를 포착합니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["1️⃣ 네트워크 분할 발생?"]
     A -->|"Yes — Partition"| B["2️⃣ P 상황"]
@@ -293,7 +293,7 @@ graph TD
     class A,B,C client
     class D,E,F,G server
     class H,I,J db
-</div>
+```
 
 | 시스템 | PACELC | 특징 |
 |--------|--------|------|
@@ -310,7 +310,7 @@ graph TD
 
 대형 마트의 계산대 안내원을 생각해 보세요. 손님들이 스스로 줄을 서는 대신, 안내원이 각 계산대의 대기 상황을 보고 "3번 계산대가 비었어요"라고 안내합니다. 서버가 1대일 때는 필요 없지만, 서버가 10대가 되는 순간 "어디로 보낼지"를 결정하는 로드밸런서가 필요합니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "클라이언트 계층"
         U1["사용자 1"]
@@ -345,7 +345,7 @@ graph TD
     class U1,U2,U3 client
     class LB,S1,S2,S3 server
     class DB db
-</div>
+```
 
 ### 로드밸런싱 알고리즘 상세 비교
 
@@ -394,7 +394,7 @@ WebSocket 같은 장기 연결에서 라운드 로빈은 비효율적입니다.
 적합: 세션 친화성(Sticky Session) 필요 시
 ```
 
-<div class="mermaid">
+```mermaid
 graph LR
     A["로드밸런싱\n알고리즘"]
     A --> B["Round Robin\n단순 순환"]
@@ -413,7 +413,7 @@ graph LR
     class A client
     class B,C,D,E server
     class F,G,H,I db
-</div>
+```
 
 ---
 
@@ -423,7 +423,7 @@ graph LR
 
 대부분의 웹 서비스는 읽기:쓰기 비율이 **80:20 또는 90:10**입니다. 쓰기는 마스터에, 읽기는 레플리카에 분산하면 DB 부하를 크게 줄입니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     W["1️⃣ 쓰기 요청\nINSERT/UPDATE/DELETE"] --> M[("2️⃣ 마스터 DB\nPrimary")]
     M -->|"3️⃣ 비동기 복제"| R1[("레플리카 1")]
@@ -440,7 +440,7 @@ graph TD
     class W,Q client
     class M server
     class R1,R2,R3 db
-</div>
+```
 
 **복제 지연(Replication Lag)을 반드시 고려해야 합니다.** 비동기 복제 시 마스터에 쓴 데이터가 레플리카에 반영되는 데 수백 ms ~ 수 초가 걸릴 수 있습니다. 회원가입 직후 프로필을 조회하면 레플리카에 아직 없을 수 있습니다. 이 경우 마스터에서 읽어야 합니다. 이 패턴을 "Write-after-Read Consistency"라고 합니다. 코드에서 이를 명시적으로 처리하지 않으면, 회원가입 직후 "존재하지 않는 사용자"라는 에러가 납니다.
 
@@ -448,7 +448,7 @@ graph TD
 
 도서관 책을 이름순으로 A-G는 1층, H-N은 2층, O-Z는 3층에 배치하는 것과 같습니다. 특정 책을 찾을 때 해당 층만 가면 됩니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     App["1️⃣ 애플리케이션"] --> SR["2️⃣ 샤드 라우터\n(어느 샤드로 보낼지 결정)"]
     SR --> S1[("3️⃣ 샤드 1\nUser ID 1~1000만")]
@@ -461,7 +461,7 @@ graph TD
     class App client
     class SR server
     class S1,S2,S3 db
-</div>
+```
 
 **샤딩 전략 비교:**
 
@@ -482,7 +482,7 @@ graph TD
 
 자주 가는 편의점을 생각해보세요. 매번 창고에서 물건을 꺼내오는 것보다 진열대(캐시)에 미리 꺼내두면 훨씬 빠릅니다. DB 조회는 수십 ms, Redis 캐시 조회는 수십 µs로 **100~1000배 빠릅니다**.
 
-<div class="mermaid">
+```mermaid
 graph LR
     A["1️⃣ 사용자 요청"] --> B{"2️⃣ 캐시 확인\nRedis"}
     B -->|"Cache Hit\n캐시 명중"| C["3️⃣ 캐시에서 즉시 반환\n수십 µs"]
@@ -496,7 +496,7 @@ graph LR
     class A client
     class B,C,E,F server
     class D db
-</div>
+```
 
 ### 캐시 계층 구조
 
@@ -509,7 +509,7 @@ L4 캐시: CDN 엣지 서버 (100ms~, 무한 확장)
 
 ### 캐시 전략 4가지
 
-<div class="mermaid">
+```mermaid
 graph TD
     A["캐시 전략 선택"]
     A --> B["Cache-Aside\nLazy Loading"]
@@ -528,7 +528,7 @@ graph TD
     class A client
     class B,C,D,E server
     class F,G,H,I db
-</div>
+```
 
 Write-Behind가 왜 위험할까요? 캐시에 먼저 쓰고 DB는 나중에 씁니다. 캐시 서버(Redis)가 죽으면, DB에 아직 반영 안 된 데이터가 사라집니다. 결제 금액이 캐시에만 있다가 사라지는 것입니다. 쓰기 속도가 중요하고 약간의 데이터 손실을 허용할 수 있는 경우에만 사용합니다.
 
@@ -564,7 +564,7 @@ public void updateUser(Long userId, UserRequest req) {
 
 원본 서버(서울)에서 모든 요청을 처리하면 미국 사용자는 150ms, 유럽 사용자는 200ms의 지연이 발생합니다. 빛의 속도 때문에 소프트웨어로 해결할 수 없는 한계입니다. CDN은 전 세계에 엣지 서버를 두고 콘텐츠를 캐싱해 **지리적 지연을 10~30ms로 줄입니다**.
 
-<div class="mermaid">
+```mermaid
 graph TD
     Origin["원본 서버\n서울 Origin"]
     subgraph "CDN 엣지 네트워크"
@@ -588,7 +588,7 @@ graph TD
     class U_US,U_UK,U_JP client
     class CDN_NY,CDN_LA,CDN_London,CDN_Tokyo server
     class Origin db
-</div>
+```
 
 **CDN에 적합한 콘텐츠**: 정적 파일(이미지, CSS, JS, 폰트), 동영상 스트리밍, 다운로드 파일. 이런 파일들은 사용자마다 다르지 않습니다. 10만 명이 같은 이미지를 요청해도 파일은 하나입니다.
 
@@ -602,7 +602,7 @@ graph TD
 
 식당에서 홀 직원이 주문을 받아 주방 주문통에 넣는 방식입니다. 주방이 아무리 바빠도 홀 직원은 주문을 계속 받을 수 있습니다. **생산자(Producer)와 소비자(Consumer)를 비동기로 분리**하는 것이 핵심입니다.
 
-<div class="mermaid">
+```mermaid
 graph LR
     subgraph "생산자 계층"
         P1["1️⃣ 주문 서비스"]
@@ -631,7 +631,7 @@ graph LR
     class P1,P2,P3 client
     class MQ server
     class C1,C2,C3 db
-</div>
+```
 
 **메시지 큐를 쓰지 않으면 어떤 장애가 날까요?**
 
@@ -647,7 +647,7 @@ graph LR
 
 ### 모놀리스 vs 마이크로서비스
 
-<div class="mermaid">
+```mermaid
 graph TD
     subgraph "모놀리스 아키텍처"
         M["하나의 큰 JAR/WAR\n사용자 + 주문 + 결제 + 배송\n모두 한 프로세스"]
@@ -670,7 +670,7 @@ graph TD
     class M client
     class US,OS server
     class PS,DS db
-</div>
+```
 
 | 특성 | 모놀리스 | 마이크로서비스 |
 |------|---------|--------------|
@@ -687,7 +687,7 @@ graph TD
 
 ## 12. 통합 아키텍처 — 실제 대규모 시스템
 
-<div class="mermaid">
+```mermaid
 graph TD
     User["1️⃣ 사용자"] --> DNS["DNS"]
     DNS --> CDN["CDN\n정적 파일 95% 처리"]
@@ -721,13 +721,13 @@ graph TD
     class User,DNS client
     class LB,WS1,WS2,WS3,Cache,MQ,Worker1,Worker2,CDN server
     class MasterDB,R1,R2,Storage,Search db
-</div>
+```
 
 ---
 
 ## 13. 시스템 설계 면접 4단계 프레임워크
 
-<div class="mermaid">
+```mermaid
 graph TD
     Step1["1️⃣ 요구사항 명확화\n5분"] --> Step2["2️⃣ 규모 추정\n5분"]
     Step2 --> Step3["3️⃣ 고수준 설계\n20-25분"]
@@ -744,7 +744,7 @@ graph TD
     class Step1,Step2 client
     class Step3,Step4 server
     class Q1,Q2,Q3,Q4 db
-</div>
+```
 
 면접에서 가장 많이 하는 실수는 요구사항 확인 없이 바로 설계로 뛰어드는 것입니다. "채팅 시스템 설계해보세요"라는 말에 바로 WebSocket을 그리기 시작하면 안 됩니다. 먼저 "사용자 수는요? 1:1만인가요 그룹도인가요? 메시지 보관은 필요한가요?"를 물어보세요.
 
@@ -775,11 +775,26 @@ DAU: 1억명
 
 ---
 
-## 14. 극한 시나리오: 넷플릭스 트래픽 — 인터넷의 15% 처리법
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 넷플릭스는 피크 시간에 인터넷 전체 트래픽의 15%를 차지합니다. 초당 수 TB의 데이터를 전 세계에 전달합니다. 일반 CDN으로는 비용이 천문학적이고 성능도 부족합니다.
 
-<div class="mermaid">
+```mermaid
 graph TD
     User["1억 5천만 구독자\n동시 2000만 스트리밍"] --> OCA["1️⃣ 오픈 커넥트 OCA\nISP에 직접 설치\n15,000+ 서버"]
 
@@ -813,7 +828,7 @@ graph TD
     class User client
     class OCA,AWS,Auth,Recommend,Transcode,Billing server
     class Cassandra,MySQL,ES,S3 db
-</div>
+```
 
 ### 넷플릭스의 5가지 핵심 설계 결정 — 왜 이 선택을 했나
 
@@ -828,6 +843,9 @@ graph TD
 5. **Circuit Breaker**: 추천 서비스가 느려져도 재생은 계속됩니다. 추천 대신 인기 콘텐츠를 보여주는 폴백(Fallback)이 동작합니다. "추천이 안 되면 재생도 안 된다"는 강한 결합을 없앤 것입니다.
 
 ---
+</div>
+</div>
+</details>
 
 ## 핵심 포인트 정리
 

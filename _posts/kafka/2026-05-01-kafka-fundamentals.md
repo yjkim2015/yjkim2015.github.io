@@ -515,6 +515,8 @@ graph LR
 
 **컨슈머가 읽을 수 있는 최대 offset**이다. ISR의 모든 복제본이 복제 완료한 offset까지만 컨슈머에게 노출된다.
 
+> **비유**: HW는 댐의 수위 표시선이다. 물(메시지)은 실제로 더 많이 들어왔지만, 하류(컨슈머)에 보내도 안전한 수위까지만 방류한다. 복제가 완료되지 않은 메시지를 컨슈머가 읽었는데 리더가 죽으면, 새 리더에는 그 메시지가 없어 "이미 읽은 메시지가 세상에서 사라지는" 문제가 생긴다. HW가 이것을 막는 안전 수위선이다.
+
 ```mermaid
 graph LR
     subgraph leader["Leader Partition"]
@@ -532,6 +534,8 @@ graph LR
 ## acks 설정과 트레이드오프
 
 `acks`는 프로듀서가 메시지 전송 성공을 판단하는 기준이다.
+
+> **비유**: acks는 택배 발송 확인 수준이다. `acks=0`은 택배를 문 앞에 놓고 가는 것(도착 확인 없음), `acks=1`은 경비실에 맡기는 것(건물까지 도착은 확인, 수신자 수령은 모름), `acks=all`은 수신자 본인이 서명하고 보관함에 넣을 때까지 확인하는 것(가장 느리지만 확실)이다.
 
 ### acks=0 (Fire and Forget)
 
@@ -646,46 +650,135 @@ min.insync.replicas=2  # ISR이 2개 미만이면 쓰기 거부
 
 ---
 
-## 극한 시나리오
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ### 시나리오 1: 파티션 수보다 컨슈머가 많은데 Lag이 쌓인다
+
+> **비유**: 고속도로 톨게이트가 3개(파티션)인데 요금 징수원을 6명(컨슈머) 배치했다. 3명은 할 일이 없이 대기한다. 차가 밀린다고 징수원을 더 투입해도 톨게이트가 3개뿐이면 처리량은 동일하다.
 
 ```
 상황: 파티션 3개, 컨슈머 6개 → 3개는 유휴 상태
       Lag이 계속 증가 → 컨슈머를 더 늘려도 효과 없음
 
-원인: 컨슈머 수가 파티션 수를 초과하면 초과분은 유휴 상태
-     → 병렬 처리 한계 = 파티션 수
+메커니즘:
+  Kafka는 파티션 하나를 그룹 내 컨슈머 하나에만 할당한다 (순서 보장을 위해).
+  파티션 수 = 병렬 처리의 물리적 상한선이다.
+  컨슈머가 아무리 많아도 파티션 수를 초과하면 초과분은 idle 상태로 리소스만 낭비한다.
 
-해결: 파티션 수를 먼저 늘린 후 컨슈머 증설
-     단, 키 기반 파티셔닝 사용 시 순서 보장이 깨질 수 있으므로
-     트래픽이 적은 시간대에 파티션 증가
+근거:
+  KafkaConsumer.poll() 호출 시 ConsumerCoordinator가 파티션 할당을 수행하며,
+  RangeAssignor/StickyAssignor 모두 파티션 수 > 컨슈머 수일 때만
+  하나의 컨슈머에 복수 파티션을 배정한다.
+
+해결:
+  1. 파티션 수를 먼저 늘린 후 컨슈머 증설
+  2. 키 기반 파티셔닝 사용 시, 파티션 증가 후 hash(key) % 파티션수 결과가
+     달라지므로 동일 키의 순서 보장이 일시적으로 깨진다
+  3. 트래픽이 적은 시간대에 파티션 증가, 키 재분배 영향이 허용 범위인지 사전 확인
 ```
 
 ### 시나리오 2: acks=all인데 메시지가 유실됐다
+
+> **비유**: 중요 서류를 보낼 때 "수신자 본인 확인 후 서명"(acks=all) 조건을 걸었다. 그런데 수신 가능한 사람이 사장 1명(리더)뿐이면, 사장 서명만으로 완료 처리된다. 사장이 서류를 들고 퇴근하다 분실하면? `min.insync.replicas=2`는 "최소 2명이 서명해야 접수 완료"라는 규칙이다. 사장 혼자만 남으면 접수 자체를 거부해서 분실을 원천 차단한다.
 
 ```
 상황: acks=all 설정, 브로커 3대 중 2대 장애
       ISR = {Leader만 남음}
       쓰기는 성공했는데 Leader도 장애 → 메시지 유실
 
-원인: acks=all이라도 ISR에 Leader만 남으면 Leader에만 복제하고 성공 반환
-      min.insync.replicas 미설정 시 이 상황이 발생
+메커니즘:
+  acks=all은 "ISR에 포함된 모든 레플리카가 복제 완료"를 의미한다.
+  ISR이 리더 하나로 축소되면 리더 자신만 확인하고 ACK를 반환한다.
+  이 상태에서 리더마저 죽으면 메시지가 어디에도 남지 않는다.
+
+  min.insync.replicas=2를 설정하면, ISR이 2개 미만일 때
+  NotEnoughReplicasException을 발생시켜 쓰기 자체를 거부한다.
+  → Producer는 에러를 받아 재시도하거나 장애 알림을 보낼 수 있다.
+
+근거:
+  Kafka 공식 문서 "acks=all guarantees that the record will not be lost
+  as long as at least one in-sync replica remains alive."
+  즉 ISR이 1개(리더만)면 리더 장애 시 유실이 설계상 허용된다.
 
 해결: acks=all + min.insync.replicas=2 조합 필수
-     ISR이 2개 미만이면 쓰기 자체를 거부하여 유실 방지
+     브로커 3대 기준: replication.factor=3, min.insync.replicas=2
+     → 1대 장애까지는 정상 쓰기, 2대 장애 시 쓰기 거부 (유실보다 가용성 포기)
 ```
 
 ### 시나리오 3: 컨슈머 재시작 후 메시지가 중복 처리됐다
+
+> **비유**: 시험 답안지를 작성하면서 "여기까지 검토 완료"라는 체크(오프셋 커밋)를 5분마다 한다. 4분 59초에 갑자기 퇴실당하면(크래시), 마지막 체크 이후 작성한 답안은 기록에 없다. 다시 입실하면 마지막 체크 시점부터 다시 작성해야 하고, 이미 쓴 답안을 또 쓰게 된다(중복 처리).
 
 ```
 상황: auto.commit=true, 처리 중 컨슈머 크래시
       자동 커밋 주기(5초) 직전에 크래시 → 커밋 안 됨
       재시작 후 마지막 커밋 오프셋부터 재처리 → 중복
 
-해결: 수동 커밋(MANUAL_IMMEDIATE)으로 처리 완료 후 커밋
-     컨슈머 비즈니스 로직에 멱등성 구현 (같은 메시지 두 번 처리해도 결과 동일)
+메커니즘:
+  enable.auto.commit=true일 때 KafkaConsumer.poll() 호출 시점에
+  이전 poll()에서 반환받은 오프셋을 자동 커밋한다.
+  즉 "메시지를 받았다"는 시점에 커밋하지 "처리 완료" 시점에 커밋하지 않는다.
+
+  auto.commit.interval.ms=5000(기본값) 동안 메시지를 처리하다 크래시하면,
+  마지막 자동 커밋 이후의 모든 메시지가 "처리 안 됨"으로 남아 재시작 시 재처리된다.
+
+  반대로 poll() 직후 자동 커밋되고 처리 중 크래시하면,
+  커밋은 됐지만 실제로는 처리 안 된 메시지가 유실된다.
+
+근거:
+  Kafka Consumer 설계 원칙: "at-least-once"가 기본.
+  exactly-once를 원하면 트랜잭션 + 멱등성이 필요하다.
+
+해결:
+  1. enable.auto.commit=false로 변경
+  2. 수동 커밋(ack.acknowledge())으로 처리 완료 후 커밋
+  3. 컨슈머 비즈니스 로직에 멱등성 구현:
+     - DB upsert (INSERT ON DUPLICATE KEY UPDATE)
+     - 메시지 ID 기반 중복 체크 테이블
+     - 상태 기계(state machine) 패턴으로 이미 처리된 상태 전이 무시
 ```
+
+---
+</div>
+</div>
+</details>
+
+## 실무에서 자주 하는 실수
+
+### 1. 파티션 수를 나중에 줄이려고 한 것
+
+파티션은 **늘리기만 가능하고 줄일 수 없다.** 처음에 파티션을 100개로 설정했다가 "과하다"고 판단해 줄이려 하면, 토픽을 삭제하고 재생성해야 한다. 기존 데이터가 전부 사라진다. 초기 설계 시 예상 처리량의 2~3배 정도로 여유 있게 잡되, 수백 개까지 과도하게 늘리지 않는 것이 핵심이다.
+
+### 2. acks=all만 설정하고 min.insync.replicas를 빠뜨린 것
+
+`acks=all`을 설정하면 "완벽하게 안전하다"고 착각하기 쉽다. 하지만 ISR이 리더 하나로 축소되면 `acks=all`이라도 리더 한 곳에만 쓰고 ACK를 반환한다. **반드시 `min.insync.replicas=2` 이상을 함께 설정**해야 리더 단독 쓰기를 방지할 수 있다.
+
+### 3. Consumer Group ID를 서비스 인스턴스마다 다르게 설정한 것
+
+같은 서비스의 인스턴스들이 서로 다른 `group.id`를 사용하면 **각 인스턴스가 모든 메시지를 독립적으로 소비**한다. 파티션 분산 처리가 아니라 브로드캐스트가 되어, 하나의 주문 메시지를 3개 인스턴스가 각각 처리하는 사고가 발생한다. 같은 역할의 컨슈머는 반드시 같은 `group.id`를 사용해야 한다.
+
+### 4. 메시지 키를 무작위로 설정한 것
+
+"키를 설정하면 좋다"는 말에 UUID 같은 랜덤 키를 넣으면, 파티셔닝의 의미가 사라진다. 키의 목적은 **같은 엔티티의 이벤트를 같은 파티션에 모아 순서를 보장**하는 것이다. 주문 서비스라면 `orderId`, 사용자 서비스라면 `userId`처럼 비즈니스 엔티티 식별자를 키로 사용해야 한다.
+
+### 5. log.retention.hours를 너무 짧게 설정한 것
+
+보관 기간을 1시간으로 설정했더니 주말 동안 신규 컨슈머를 배포한 뒤 월요일에 확인하니 금요일 데이터가 이미 삭제되어 재처리가 불가능했다. 기본값 7일(168시간)을 기준으로, 디스크 용량과 재처리 필요성을 고려해 결정해야 한다.
 
 ---
 

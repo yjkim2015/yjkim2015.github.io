@@ -1393,7 +1393,22 @@ String[] arr = toArray(stringList, String[]::new); // 메서드 참조로 깔끔
 
 ---
 
-## 극한 시나리오: 제네릭 설계의 실제 트레이드오프
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ### 타입 안전성 vs 유연성
 
@@ -1467,6 +1482,9 @@ public class TypeSafeEventBus {
 100K TPS 환경에서는 `CopyOnWriteArrayList`로 읽기(이벤트 발행)에 락을 걸지 않아 성능을 확보하고, `ConcurrentHashMap.computeIfAbsent`로 핸들러 등록의 원자성을 보장합니다.
 
 ---
+</div>
+</div>
+</details>
 
 ## 정리
 

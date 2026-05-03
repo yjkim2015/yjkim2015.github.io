@@ -409,7 +409,22 @@ getCLS((metric) => {
 
 ---
 
-## 9. 극한 시나리오 — 무한 리플로우 루프
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ```javascript
 // 이런 코드는 브라우저를 멈추게 합니다
@@ -435,6 +450,9 @@ const safeObserver = new ResizeObserver((entries) => {
 왜 rAF로 감싸면 해결될까요? 이유는 rAF 콜백은 다음 렌더링 프레임에 실행되기 때문에, 현재 ResizeObserver 사이클과 완전히 분리됩니다. 무한 루프가 끊어집니다.
 
 ---
+</div>
+</div>
+</details>
 
 ## 4번 다이어그램 - 렌더링 최적화 체크리스트
 

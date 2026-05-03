@@ -455,3 +455,245 @@ sequenceDiagram
     Note over App,Friends: 5️⃣ 비정상 종료 (앱 크래시)
     Note over Redis: 30초 후 TTL 만료 → 자동 오프라인
 ```
+
+### Presence 최적화 — 대규모에서의 팬아웃 문제
+
+친구가 100명이면 온라인 상태 변경 시 100번의 이벤트를 발행해야 합니다. DAU 5억 명이 평균 100명의 친구를 가지면 상태 변경 이벤트만 초당 수백만 건입니다.
+
+```
+해결 전략:
+1. Lazy Loading: 채팅방을 열 때만 상대방 상태를 조회 (실시간 구독 안 함)
+2. 구독 그룹 제한: 최근 대화한 20명만 실시간 상태 구독
+3. 배치 갱신: 상태 변경을 1초 단위로 묶어서 전파
+4. 그룹 채팅에서는 Presence 비활성화: 100명 그룹에서 개별 상태 표시 불필요
+```
+
+---
+
+## 8. 그룹 채팅 설계
+
+### 1:1 채팅과의 차이점
+
+그룹 채팅은 1:1 채팅의 단순한 확장이 아닙니다. 메시지 하나를 보내면 **최대 99명에게 동시에 전달**해야 하므로 팬아웃 문제가 핵심입니다.
+
+```mermaid
+sequenceDiagram
+    participant A as 사용자A
+    participant S1 as 채팅서버1
+    participant Kafka as Kafka
+    participant S2 as 채팅서버2
+    participant S3 as 채팅서버3
+    participant B as 사용자B (서버2)
+    participant C as 사용자C (서버3)
+    participant D as 사용자D (오프라인)
+    participant Push as Push서버
+
+    A->>S1: 1️⃣ WS: {"group":"G1","msg":"회의 5시입니다"}
+    S1->>S1: 2️⃣ 메시지 ID 생성, 그룹 멤버 조회 (Redis 캐시)
+    S1->>Kafka: 3️⃣ 그룹 메시지 발행 (topic: chat-group-G1)
+
+    par 팬아웃: 멤버별 라우팅
+        Kafka->>S2: 4️⃣ 사용자B 서버로 전달
+        S2->>B: 5️⃣ WS 전송
+        Kafka->>S3: 4️⃣ 사용자C 서버로 전달
+        S3->>C: 5️⃣ WS 전송
+        Kafka->>Push: 4️⃣ 사용자D 오프라인 → Push
+        Push->>D: 5️⃣ FCM/APNs
+    end
+```
+
+### 팬아웃 전략: Write-time vs Read-time
+
+```
+Write-time 팬아웃 (카카오톡 방식):
+  메시지 전송 시 각 멤버의 수신함에 메시지를 복사
+  장점: 읽기가 빠름 (자기 수신함만 조회)
+  단점: 쓰기 증폭 (100명 그룹이면 100배)
+  적합: 소규모 그룹 (최대 100명)
+
+Read-time 팬아웃 (Twitter Timeline 방식):
+  메시지는 원본 1개만 저장, 읽을 때 그룹 메시지를 조회
+  장점: 쓰기 효율적
+  단점: 읽기 시 조회 비용 증가
+  적합: 대규모 채널 (수만 명)
+
+카카오톡 선택: Write-time (그룹 최대 100명 제한이므로 쓰기 증폭 허용 가능)
+```
+
+### 읽음 확인 (그룹)
+
+1:1에서는 "읽음/안읽음"이 전부이지만, 그룹에서는 **100명 중 몇 명이 읽었는지** 추적해야 합니다.
+
+```
+데이터 구조 (Redis Hash):
+  Key: read:{message_id}
+  Field: {user_id}
+  Value: {read_timestamp}
+
+  예시:
+  read:msg_12345 → { "userB": 1717200000, "userC": 1717200005 }
+  읽지 않은 수 = 그룹 멤버 수 - Hash 크기
+
+최적화:
+  - 읽음 이벤트는 실시간 전파하지 않고 5초 배치로 묶어 전송
+  - 오래된 메시지(7일 이후)의 읽음 상태는 HBase로 아카이브
+```
+
+---
+
+## 9. 미디어 전송 설계
+
+### 이미지/동영상 전송 흐름
+
+텍스트 메시지와 달리 미디어 파일은 크기가 수 MB~수 GB입니다. WebSocket으로 직접 보내면 연결이 오래 점유되어 다른 메시지가 지연됩니다.
+
+```mermaid
+sequenceDiagram
+    participant A as 사용자A
+    participant S as 채팅서버
+    participant Upload as 업로드 서버
+    participant S3 as Object Storage (S3)
+    participant CDN as CDN
+    participant B as 사용자B
+
+    A->>Upload: 1️⃣ HTTP POST /upload (multipart, 10MB 이미지)
+    Upload->>Upload: 2️⃣ 이미지 검증 (크기, 포맷, 악성코드 스캔)
+    Upload->>Upload: 3️⃣ 썸네일 생성 (200×200)
+    Upload->>S3: 4️⃣ 원본 + 썸네일 저장
+    S3-->>Upload: 5️⃣ URL 반환
+    Upload-->>A: 6️⃣ {"media_url": "cdn.kakao.com/img/abc123"}
+
+    A->>S: 7️⃣ WS: {"type":"image","media_url":"...","thumbnail_url":"..."}
+    S->>B: 8️⃣ WS: 메시지 전달 (썸네일 URL만 포함)
+
+    B->>CDN: 9️⃣ 썸네일 로드 (즉시)
+    B->>CDN: 🔟 원본 로드 (탭 시 lazy load)
+```
+
+### 미디어 최적화 전략
+
+```
+1. 업로드와 메시지를 분리:
+   미디어는 HTTP로 업로드 서버에, 메시지는 WebSocket으로 채팅 서버에
+   → WebSocket 연결을 대용량 파일 전송으로 점유하지 않음
+
+2. 썸네일 즉시, 원본 지연 로드:
+   채팅 목록에서는 200×200 썸네일만 표시 (수 KB)
+   사용자가 탭하면 원본(수 MB) 로드 → 대역폭 90% 절감
+
+3. CDN 캐싱:
+   자주 공유되는 이미지는 CDN 엣지에 캐싱
+   원본 S3까지 갈 필요 없이 가까운 CDN에서 응답
+
+4. 파일 크기 제한:
+   이미지: 최대 20MB
+   동영상: 최대 300MB (업로드 후 서버 측 트랜스코딩)
+   해상도 자동 조정: 원본 보존 + 저해상도 버전 생성
+
+5. 만료 정책:
+   1:1 미디어: 영구 보관
+   그룹 미디어: 1년 후 S3 Glacier로 이동 (비용 절감)
+```
+
+---
+
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
+
+### 시나리오 1: 서버 장애 시 메시지 유실 방지
+
+```
+상황: 사용자A가 메시지를 보냈고 채팅서버1이 Kafka에 발행 직후 크래시
+      사용자B의 채팅서버2는 Kafka에서 메시지를 소비해서 B에게 전달 완료
+      하지만 채팅서버1이 죽었으므로 A에게 전송 확인(1체크)을 못 보냄
+
+방어:
+  1. 클라이언트 측 재시도: A의 앱이 ACK를 못 받으면 client_id(UUID)와 함께
+     재전송. 서버는 client_id로 중복 감지 → 멱등성 보장
+  2. Kafka에 이미 저장됐으므로 B에게는 정상 전달됨
+  3. A가 재연결하면 미전송 확인 메시지 일괄 전달
+```
+
+### 시나리오 2: 네트워크 파티션 — 멀티 데이터센터 분리
+
+```
+상황: 한국 IDC와 미국 IDC 간 네트워크 단절
+      한국 사용자끼리는 정상, 미국 사용자끼리도 정상
+      한국 → 미국 메시지가 전달 안 됨
+
+방어:
+  1. 각 IDC에 독립 Kafka 클러스터 + MirrorMaker2로 cross-DC 복제
+  2. 네트워크 복구 시 MirrorMaker2가 밀린 메시지를 순서대로 동기화
+  3. 사용자에게 "일부 메시지가 지연될 수 있습니다" UI 표시
+  4. 메시지 ID가 Snowflake(타임스탬프 기반)이므로 동기화 후 정렬 가능
+```
+
+### 시나리오 3: 초대형 그룹 메시지 폭풍 — 팬아웃 폭발
+
+```
+상황: 100명 그룹에서 80명이 동시에 메시지 전송 (새해 자정 인사)
+      1초에 80건 × 99명 팬아웃 = 7,920건의 전달 이벤트
+      그룹이 수만 개면 팬아웃이 초당 수백만 건으로 폭발
+
+방어:
+  1. 메시지 배치: 같은 그룹의 메시지를 100ms 윈도우로 묶어 한 번에 팬아웃
+  2. 그룹 크기별 전략 분리:
+     - 소규모(~20명): Write-time 팬아웃 (각 멤버 수신함에 복사)
+     - 대규모(20~100명): 그룹 채널 기반 구독 (멤버가 채널을 poll)
+  3. 핫 그룹 감지: 초당 메시지 수가 임계값 초과 시 rate limiting 적용
+  4. 클라이언트 측 배치 렌더링: 수백 건의 메시지를 한 번에 받아 묶어 표시
+```
+
+### 시나리오 4: 카카오 사태 재발 — 단일 데이터센터 장애
+
+```
+상황: 메인 데이터센터 화재/정전으로 전체 서비스 마비
+      2022년 카카오 127시간 장애의 재현
+
+방어:
+  1. Active-Active 멀티 DC: 최소 2개 데이터센터에서 동시 서빙
+  2. DNS 기반 페일오버: DC1 장애 시 DNS가 DC2로 자동 전환 (TTL 60초)
+  3. 데이터 동기화: Kafka MirrorMaker2로 DC 간 실시간 복제
+  4. 정기 DR 훈련: 분기 1회 DR 전환 훈련으로 실제 전환 시간 검증
+  5. 핵심 데이터 3중 복제: 메시지는 2개 DC + S3 백업
+
+비용 vs 리스크:
+  Active-Active는 인프라 비용 2배이지만,
+  127시간 장애의 비즈니스 손실(광고 수익, 사용자 이탈)에 비하면 보험료 수준
+```
+
+---
+</div>
+</div>
+</details>
+
+## 11. 핵심 설계 결정 요약
+
+| 설계 항목 | 선택 | 이유 |
+|-----------|------|------|
+| 실시간 프로토콜 | WebSocket | 양방향, 저지연, 서버 push 가능 |
+| 로드밸런서 | L4 TCP | WebSocket 연결 유지 (L7은 HTTP 종료) |
+| 메시지 라우팅 | Kafka | 내구성, 순서 보장, 700K QPS 처리 |
+| 메시지 저장소 | HBase | 쓰기 최적화(LSM Tree), 수평 확장, PB 스케일 |
+| 관계형 데이터 | MySQL | 사용자/그룹 정보, 강한 일관성 |
+| 메시지 ID | Snowflake | 시간순 정렬, 분산 생성, 초당 419만 TPS |
+| 온라인 상태 | Redis TTL | 30초 TTL로 자동 만료, 빠른 조회 |
+| 미디어 저장 | S3 + CDN | 비용 효율적, 글로벌 배포, 내구성 99.999999999% |
+| 그룹 팬아웃 | Write-time | 그룹 최대 100명 제한으로 쓰기 증폭 허용 |
+| 읽음 확인 | Redis Hash | 멤버별 읽음 시각 추적, 빠른 카운팅 |
+| Push 알림 | FCM/APNs | 오프라인 사용자 도달, 플랫폼 표준 |
+| 고가용성 | Active-Active 멀티 DC | 단일 DC 장애 시에도 서비스 유지 |

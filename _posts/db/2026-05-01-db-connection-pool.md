@@ -36,6 +36,8 @@ DB 커넥션을 맺는 것은 생각보다 비싸다. TCP 연결, 인증, 세션
 
 Spring Boot 2.x+의 기본 커넥션 풀. "빠른 커넥션 풀" 표방.
 
+> **비유:** HikariCP는 공항의 렌터카 카운터와 같습니다. 차량(커넥션)이 미리 세차·정비(초기화)된 상태로 주차장(ConcurrentBag)에 대기합니다. 고객(스레드)이 도착하면 서류 확인 없이 키만 건네주고(ThreadLocal 캐시), 반납 시 다음 고객에게 바로 넘깁니다. 차가 오래되면(maxLifetime) 신차로 교체하고, 녹슨 차(유효하지 않은 커넥션)는 정비 점검(keepalive-time)에서 걸러냅니다.
+
 ```mermaid
 graph TD
     subgraph "HikariCP"
@@ -68,6 +70,21 @@ graph TD
 4. connection.close(): 실제 종료 아님 → 풀에 반납
 5. 유휴 시간 > idleTimeout → 커넥션 닫고 풀에서 제거
 6. 생존 시간 > maxLifetime → 커넥션 교체 (DB 서버 재연결 강제 종료 방어)
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> 생성: Pool 초기화 / 신규 생성
+    생성 --> 대기: 풀에 등록
+    대기 --> 사용중: getConnection()
+    사용중 --> 대기: close() (반납)
+    대기 --> 헬스체크: keepalive-time 도래
+    헬스체크 --> 대기: SELECT 1 성공
+    헬스체크 --> 폐기: 응답 없음
+    대기 --> 폐기: idleTimeout 초과
+    사용중 --> 폐기: maxLifetime 초과 (반납 시)
+    폐기 --> 생성: minimumIdle 미달 시 재생성
+    폐기 --> [*]: 풀 충분
 ```
 
 ---
@@ -112,6 +129,8 @@ spring:
 
 가장 많이 틀리는 부분이다. 풀이 크다고 좋은 게 아니다.
 
+> **비유**: 식당 주방을 떠올려 보세요. 주방이 4명 정원인데 요리사를 20명 넣으면 서로 부딪히고 도마 교대하느라 요리 속도가 오히려 느려집니다. 4명이 번갈아 쉬면서 효율적으로 일하는 것이 최적입니다. 커넥션 풀도 마찬가지로, CPU 코어 수에 맞춰 **동시에 의미 있게 일할 수 있는 만큼만** 커넥션을 유지하는 것이 핵심입니다.
+
 ### HikariCP 공식 공식
 
 ```
@@ -155,6 +174,29 @@ TPS 기반 계산:
 ## 커넥션 풀 관련 장애 패턴
 
 ### 1. 커넥션 풀 고갈 (Pool Exhaustion)
+
+```mermaid
+sequenceDiagram
+    participant T1 as 스레드 1~10
+    participant Pool as HikariCP (size=10)
+    participant DB as MySQL
+    participant API as 외부 API
+
+    T1->>Pool: getConnection() x 10
+    Pool->>DB: 10개 커넥션 전부 대여
+    Note over T1: @Transactional 내부에서<br/>외부 API 호출 (3초 소요)
+    T1->>API: HTTP 호출 (블로킹)
+
+    rect rgb(255, 230, 230)
+        Note over Pool: 남은 커넥션: 0개
+        T1->>Pool: 스레드 11~200 대기열 진입
+        Note over Pool: pending 스레드 190개<br/>connectionTimeout 30초 카운트다운
+    end
+
+    API-->>T1: 3초 후 응답
+    T1->>Pool: close() 반납
+    Pool-->>T1: 대기 스레드에 커넥션 재배분
+```
 
 ```
 증상:
@@ -242,6 +284,25 @@ Connection leak detection triggered for
 ```
 
 ### 3. 데드락 (Deadlock)
+
+> **비유**: 좁은 골목에서 두 트럭이 마주 보고 진입한 상황입니다. A 트럭은 "B가 후진해줘야 내가 지나간다"고 기다리고, B 트럭도 "A가 먼저 비켜야 한다"고 기다립니다. 아무도 양보하지 않으면 둘 다 영원히 멈춰 있습니다. 커넥션 풀 데드락도 정확히 이 구조입니다.
+
+```mermaid
+sequenceDiagram
+    participant TA as 스레드 A
+    participant Pool as HikariCP (size=1)
+    participant TB as 스레드 B (REQUIRES_NEW)
+
+    TA->>Pool: getConnection() - 커넥션 1 획득
+    Note over TA: @Transactional 시작
+    TA->>TA: orderRepository.save()
+    TA->>TB: auditService.log() 호출
+    TB->>Pool: getConnection() 요청
+    Note over Pool: 남은 커넥션 0개
+    TB-->>TB: 대기 (connectionTimeout까지)
+    Note over TA,TB: 데드락 발생!<br/>A는 B 완료 대기<br/>B는 커넥션 대기
+    TB-->>TB: 30초 후 SQLException (timeout)
+```
 
 ```
 커넥션 풀 데드락 (HikariCP):
@@ -394,7 +455,22 @@ spring:
 
 ---
 
-## 극한 시나리오
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ### 시나리오 1: 트래픽 스파이크로 풀 고갈
 
@@ -449,3 +525,55 @@ DB 서버 설정 확인:
 3. 서비스 계층별 DB 분리 (MSA):
    각 서비스가 자체 DB를 가져 총 커넥션 수 분산
 ```
+
+### 시나리오 4: 커넥션 누수가 서서히 시스템을 죽이는 경우
+
+```
+상황:
+  - 특정 예외 경로에서 connection.close()가 호출되지 않음
+  - 평소에는 문제없지만, 특정 입력값에서만 예외 발생
+  - 하루 10건 정도 → 10개 커넥션 누수 → 풀 전체 고갈까지 1일
+
+타임라인:
+  09:00  풀 10/10 정상
+  12:00  누적 누수 3건 → 가용 7개 (아직 체감 없음)
+  18:00  누적 누수 7건 → 가용 3개 (응답 지연 시작)
+  21:00  누적 누수 10건 → 가용 0개 → 전체 장애
+
+특히 위험한 이유:
+  - leak-detection-threshold 설정이 없으면 로그조차 안 남음
+  - 모니터링에서 active 커넥션만 보면 "사용 중"으로 보여 정상 판단
+  - 재시작하면 일시적으로 해소되어 원인 파악 지연
+
+방어:
+  1. leak-detection-threshold: 2000 (필수 설정)
+  2. hikaricp_connections_active 가 maximumPoolSize의 80% 이상이면 알림
+  3. try-with-resources를 코드 리뷰 필수 항목으로 지정
+  4. 통합 테스트에서 테스트 종료 후 active 커넥션 0 검증
+```
+
+### 시나리오 5: maxLifetime 미설정으로 새벽 장애
+
+```
+상황:
+  - maxLifetime 기본값 30분 사용, DB 서버 wait_timeout=28800(8시간)
+  - 하지만 DB 앞에 AWS NLB(Network Load Balancer)가 있음
+  - NLB idle timeout = 350초 (약 6분)
+
+문제 발생 과정:
+  1. 새벽 2시~6시: 트래픽 0 → 모든 커넥션 유휴 상태
+  2. NLB가 350초 유휴 연결을 끊음 (TCP RST)
+  3. HikariCP는 이 사실을 모름 (소켓이 끊긴 걸 감지 못함)
+  4. 06시 첫 요청 → 죽은 커넥션으로 쿼리 시도 → Connection reset 오류
+  5. 연쇄적으로 여러 커넥션이 죽어있어 수십 건 오류 발생
+
+방어:
+  hikari:
+    keepalive-time: 30000    # 30초마다 유휴 커넥션에 ping → NLB 유휴 감지 방지
+    max-lifetime: 300000     # 5분 (NLB 350초보다 짧게) → 커넥션 선제 교체
+    connection-test-query: SELECT 1  # JDBC4 미지원 시 사용 전 검증
+```
+</div>
+</div>
+</details>
+

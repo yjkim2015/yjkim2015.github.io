@@ -501,7 +501,22 @@ spring:
 
 ---
 
-## 극한 시나리오
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ### 시나리오 1: 하위 서비스 전체 다운
 
@@ -540,3 +555,7 @@ public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
 ### 시나리오 4: 카나리 배포 중 설정 변경
 
 Weight Predicate를 사용한 카나리 배포 중 설정을 동적으로 변경하려면 Actuator의 `/actuator/gateway/refresh`를 호출한다. 단, 설정 변경 중 일시적으로 두 비율의 합이 100%를 벗어날 수 있으므로 주의가 필요하다.
+</div>
+</div>
+</details>
+

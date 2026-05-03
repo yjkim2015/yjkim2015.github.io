@@ -107,6 +107,8 @@ erDiagram
 
 ## 관계 유형
 
+> **비유**: 관계 유형은 사람 간의 관계와 같습니다. **1:1**은 주민등록증과 사람의 관계(한 사람에 하나의 주민등록증), **1:N**은 부모와 자녀의 관계(한 부모가 여러 자녀를 가짐), **N:M**은 SNS 친구 관계(여러 사람이 서로 여러 명과 친구)입니다. 관계를 파악할 때 "A 하나가 B를 몇 개 가질 수 있는가?"를 양방향으로 물어보면 됩니다.
+
 ### 1:1 (일대일)
 
 한 엔티티가 다른 엔티티 하나와만 연결됩니다.
@@ -183,6 +185,28 @@ CREATE TABLE enrollments (
 
 ## 식별 관계 vs 비식별 관계
 
+> **비유**: **식별 관계**는 호텔 객실 번호와 같습니다. "305호"라는 번호는 "3층"이라는 부모 정보 없이는 의미가 없습니다(3층 + 05호 = 305호). 반면 **비식별 관계**는 택배 송장번호와 주문의 관계입니다. 택배는 자체 송장번호(PK)로 독립적으로 추적되며, 어떤 주문에서 나왔는지는 참조 정보(FK)일 뿐입니다.
+
+```mermaid
+erDiagram
+    ORDER {
+        bigint order_id PK
+    }
+    ORDER_ITEM_식별 {
+        bigint order_id PK_FK
+        int item_seq PK
+        string 설명 "부모PK가 자식PK에 포함"
+    }
+    DELIVERY_비식별 {
+        bigint delivery_id PK
+        bigint order_id FK
+        string 설명 "자체PK 독립적"
+    }
+
+    ORDER ||--|{ ORDER_ITEM_식별 : "식별관계 (실선)"
+    ORDER ||--o{ DELIVERY_비식별 : "비식별관계 (점선)"
+```
+
 ### 식별 관계 (Identifying Relationship)
 
 자식 엔티티의 기본키에 부모의 FK가 포함됩니다. 부모 없이 자식이 존재할 수 없습니다.
@@ -221,6 +245,8 @@ CREATE TABLE deliveries (
 ---
 
 ## 물리적 모델링
+
+> **비유**: 논리적 모델링이 "3층 건물, 각 층 4개 방, 엘리베이터 1대"라는 설계도면이라면, 물리적 모델링은 "벽돌 두께 20cm, 배관 PVC 50mm, 엘리베이터 현대 600kg"처럼 실제 자재와 규격을 정하는 시공 도면입니다. 데이터 타입은 자재 선택, 인덱스는 복도와 계단 배치, 파티션은 층별 분리에 해당합니다.
 
 **"실제 DBMS에서 어떻게 구현할까"**를 결정합니다. 인덱스, 파티션, 데이터 타입, 기본값을 정합니다.
 
@@ -369,7 +395,22 @@ END;
 
 ---
 
-## 극한 시나리오
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ### 시나리오: 대용량 주문 테이블 설계
 
@@ -405,4 +446,117 @@ ORDER BY o.ordered_at DESC LIMIT 20;
 -- 해결: 복합 인덱스 추가
 CREATE INDEX idx_status_ordered_at ON orders (status, ordered_at);
 -- 0.02초로 단축
+```
+
+### 시나리오: N:M 관계 연결 테이블이 괴물로 성장
+
+```
+문제:
+  - 상품-태그 N:M 관계 → product_tags 연결 테이블
+  - 초기: 상품 1만 × 태그 50 → 50만 행 (쾌적)
+  - 1년 후: 상품 500만 × 태그 2,000 → 1억 행
+  - 태그 기반 상품 검색 쿼리가 5초 이상 소요
+
+원인 분석:
+  - 연결 테이블에 인덱스가 (product_id, tag_id)만 존재
+  - "tag_id = 123인 상품 목록" 쿼리는 tag_id 선두 인덱스가 없어 풀스캔
+  - 태그별 상품 수 편차 극심 (인기 태그 1개에 100만 상품)
+
+해결:
+  1. 역방향 인덱스 추가: INDEX idx_tag_product (tag_id, product_id)
+  2. 인기 태그는 별도 캐시 (Redis Sorted Set)
+  3. 연결 테이블 파티션 (tag_id 해시 기반)
+  4. 비활성 상품-태그 관계 주기적 아카이빙
+```
+
+### 시나리오: 계층형 카테고리 깊이 폭발
+
+```
+문제:
+  - 인접 목록 방식으로 카테고리 관리
+  - 운영팀이 카테고리를 10단계 깊이로 생성
+  - 재귀 CTE로 전체 트리 조회 → 재귀 깊이 제한(MySQL 기본 1000)에는 안 걸리지만
+  - 매 페이지 로딩마다 재귀 쿼리 실행 → 200ms 소요
+
+해결:
+  1. 클로저 테이블 전환: 조회 O(1) JOIN으로 단축
+  2. 카테고리 깊이 제한 (비즈니스 규칙: 최대 5단계)
+  3. 카테고리 트리를 Redis에 캐시 (변경 시에만 갱신)
+  4. Materialized Path 방식 병행: path = "/1/3/7/15" 로 LIKE 검색 지원
+```
+
+---
+</div>
+</div>
+</details>
+
+## 실무에서 자주 하는 실수
+
+### 실수 1: 모든 관계를 식별 관계로 설계
+
+```
+문제:
+  - 식별 관계를 남용하면 복합 PK가 3~4단계 전파
+  - 예: 회사 → 부서 → 팀 → 사원
+  - 사원 PK = (company_id, dept_id, team_id, emp_seq)
+  - JOIN할 때마다 4개 컬럼을 전부 명시해야 함
+
+영향:
+  - 인덱스 크기 폭증 (4개 컬럼 복합 인덱스)
+  - 리팩토링 시 PK 변경이 전체 하위 테이블로 전파
+  - ORM 매핑이 극도로 복잡해짐 (@EmbeddedId 중첩)
+
+원칙:
+  - 비식별 관계 + 대리키(AUTO_INCREMENT)를 기본으로 사용
+  - 식별 관계는 "부모 없이 자식이 의미 없는 경우"에만 적용
+    (예: 주문-주문항목, 게시글-댓글)
+```
+
+### 실수 2: NULL 허용 컬럼 남용
+
+```
+문제:
+  - 빠른 개발을 위해 대부분 컬럼을 NULL 허용으로 설정
+  - 시간이 지나면 "이 NULL은 미입력인지, 해당없음인지, 0인지" 구분 불가
+
+실제 사례:
+  - discount_rate DECIMAL NULL
+  - NULL = 할인 없음? 할인율 미정? 무료?
+  - 코드에서 NULL 체크 누락 → NullPointerException
+
+원칙:
+  - 기본은 NOT NULL + DEFAULT 값 지정
+  - NULL이 명확한 비즈니스 의미를 가질 때만 허용
+  - NULL 허용 시 반드시 COMMENT에 "NULL = 미설정" 등 의미 명시
+```
+
+### 실수 3: 이력/로그 테이블에 FK 거는 실수
+
+```
+문제:
+  - order_history 테이블에 order_id FK 설정
+  - 주문 삭제 시 → FK 제약으로 삭제 불가 또는 CASCADE로 이력까지 삭제
+
+원인:
+  - 이력 테이블은 "그 시점의 스냅샷"이므로 원본과 독립적이어야 함
+  - FK가 있으면 원본 데이터 정리(아카이빙, 삭제)가 불가능
+
+원칙:
+  - 이력/감사(audit) 테이블에는 FK를 걸지 않음
+  - 대신 컬럼명과 COMMENT로 참조 관계를 문서화
+  - 이력 테이블은 INSERT-only (UPDATE/DELETE 없음) 원칙
+```
+
+### 실수 4: VARCHAR 크기를 대충 잡는 실수
+
+```
+문제:
+  - 이름: VARCHAR(500), 이메일: VARCHAR(1000), 주소: VARCHAR(2000)
+  - "넉넉하게 잡자"는 심리 → InnoDB 행 크기 65,535byte 제한에 걸림
+  - 여러 VARCHAR(2000) 컬럼이 있으면 테이블 생성 자체가 실패
+
+원칙:
+  - 이름: VARCHAR(100), 이메일: VARCHAR(255), 전화번호: VARCHAR(20)
+  - 실제 데이터 최대 길이 + 20~30% 여유로 설정
+  - 길이가 가변적이면 TEXT 타입 사용 (별도 페이지에 저장)
 ```

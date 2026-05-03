@@ -92,6 +92,8 @@ graph TD
 
 ## 3. LocalDate, LocalTime, LocalDateTime
 
+> **비유:** `LocalDate`는 벽에 걸린 달력입니다. "5월 1일"이라고 적혀 있을 뿐, 서울인지 뉴욕인지 신경 쓰지 않습니다. `LocalTime`은 벽시계이고, `LocalDateTime`은 달력과 벽시계를 나란히 놓은 것입니다. 시간대(시차) 정보가 없어서 "어느 나라 기준인지"는 모릅니다.
+
 `LocalDate`는 시간대 개념이 없는 날짜만의 표현입니다. 내부적으로 연·월·일을 `int` 필드 3개로 저장하며, 모든 메서드는 새 객체를 반환합니다. 이 덕분에 다수의 스레드가 동일한 `LocalDate` 인스턴스를 공유해도 절대 안전합니다.
 
 ### LocalDate — 날짜만
@@ -183,6 +185,8 @@ dt.isAfter(LocalDateTime.now())
 ---
 
 ## 4. ZonedDateTime, OffsetDateTime, Instant
+
+> **비유:** `Instant`는 세계 표준시(그리니치 천문대)에 걸린 원자시계입니다. 전 세계 어디서 보더라도 같은 순간을 가리킵니다. `ZonedDateTime`은 그 원자시계 옆에 "서울 +9시간", "뉴욕 -4시간" 같은 현지 시각 변환표를 붙여놓은 것입니다. `OffsetDateTime`은 변환표에서 도시 이름을 떼고 "+09:00"이라는 숫자만 남긴 것입니다.
 
 ### 시간대 처리 동작 원리
 
@@ -286,6 +290,8 @@ Instant stored = userInput.toInstant();  // UTC로 변환 후 저장
 
 ## 5. Period vs Duration
 
+> **비유:** `Period`는 "3개월 후에 만나요"처럼 달력 위에서 손가락으로 칸을 세는 것입니다. 2월(28일)과 3월(31일)의 길이가 달라도 달력이 알아서 처리합니다. `Duration`은 스톱워치입니다. 버튼을 누른 순간부터 정확히 몇 초가 흘렀는지만 측정하며, 달력이 어떻게 생겼는지는 관심이 없습니다.
+
 ### 동작 원리 비교
 
 `Period`는 달력(calendar) 기반입니다. "3개월 후"를 계산할 때 실제 달력을 따라가므로 윤년과 월의 일수 차이를 자동으로 반영합니다. `Duration`은 물리적 시간 기반입니다. "3시간 후"는 정확히 10800초 후입니다. 서머타임(DST)도 무시합니다.
@@ -364,6 +370,8 @@ graph LR
 ---
 
 ## 6. DateTimeFormatter — 포맷팅/파싱
+
+> **비유:** `DateTimeFormatter`는 통역사입니다. 컴퓨터가 이해하는 날짜 객체를 사람이 읽을 수 있는 문자열로 번역하고(`format`), 반대로 사람이 쓴 문자열을 컴퓨터 날짜 객체로 번역합니다(`parse`). `SimpleDateFormat`은 한 번에 한 사람만 통역할 수 있는 통역사이고(스레드 안전 X), `DateTimeFormatter`는 동시에 여러 사람을 통역할 수 있는 AI 통역기입니다(스레드 안전 O).
 
 ### 동작 원리
 
@@ -452,6 +460,8 @@ LocalDate.now().format(enFormatter);  // May 1, 2026
 
 ## 7. 시간대(ZoneId) 처리
 
+> **비유:** 시간대는 같은 영화를 다른 상영관에서 동시에 상영하는 것과 같습니다. 서울 상영관에서는 "14:30 시작"이라고 적혀 있고, 뉴욕 상영관에서는 "01:30 시작"이라고 적혀 있지만 실제로는 같은 순간에 상영이 시작됩니다. `ZoneId`는 상영관 이름표이고, `Instant`는 "영화가 시작되는 절대적 순간"입니다.
+
 ### 한국 시간 처리
 
 ```java
@@ -486,6 +496,8 @@ Duration d = Duration.ofHours(25);  // 항상 25*3600초
 ---
 
 ## 8. 불변 객체 설계와 날짜 API
+
+> **비유:** 불변 객체는 인쇄된 달력입니다. 벽에 걸린 달력에 "5월 1일"이라고 인쇄되어 있으면 누가 펜으로 덧쓰더라도 원본 인쇄는 변하지 않습니다. 반면 가변 객체는 화이트보드 달력입니다. 누군가 지우개로 지우고 다시 쓰면 모든 사람이 바뀐 내용을 보게 됩니다.
 
 ### java.time이 불변인 이유
 
@@ -543,6 +555,8 @@ LocalDateTime ldt = cal.toInstant()
 
 ## 9. 자주 쓰는 날짜 연산 모음
 
+> **비유:** 날짜 연산 유틸리티는 스마트폰 캘린더 앱의 "빠른 이동" 기능입니다. "이번 달 마지막 날", "다음 금요일", "D-Day 계산" 등을 손가락 한 번으로 찾는 것처럼, `TemporalAdjusters`는 복잡한 달력 계산을 한 줄의 메서드 호출로 해결합니다.
+
 ```java
 // 이번 달 첫날 / 마지막날
 LocalDate firstDay = LocalDate.now().withDayOfMonth(1);
@@ -574,7 +588,130 @@ start.datesUntil(end).forEach(System.out::println);  // Java 9+
 
 ---
 
-## 10. 전체 요약
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
+
+### 시나리오 1: 글로벌 예약 시스템 (100 TPS)
+
+> **비유:** 전 세계 지사가 하나의 회의실 예약 게시판을 공유하는 것과 같습니다. 서울 지사가 "오후 2시"라고 쓰고 뉴욕 지사가 "오후 2시"라고 쓰면 실제로는 14시간 차이가 나는 전혀 다른 시간입니다.
+
+- **문제:** 서울, 도쿄, 뉴욕, 런던에서 동시에 예약 요청이 들어올 때 시간대를 `LocalDateTime`으로 저장하면 "서울 14:00"과 "뉴욕 14:00"이 같은 시간으로 저장됩니다.
+- **해결:** 모든 예약을 `Instant`(UTC)로 변환하여 저장하고, 표시할 때만 사용자의 `ZoneId`로 변환합니다. DB 컬럼은 `TIMESTAMP WITH TIME ZONE`을 사용합니다.
+- **근거:** UTC 단일 기준으로 통일하면 DST 전환, 시간대 정책 변경에도 데이터 정합성이 유지됩니다.
+
+### 시나리오 2: 금융 거래 타임스탬프 (10K TPS)
+
+> **비유:** 증권거래소의 주문 접수 도장과 같습니다. 밀리초 단위로 도장이 찍히는데, 도장 시계가 서로 다르면 "먼저 주문한 사람"을 판별할 수 없습니다.
+
+- **문제:** 초당 10,000건의 거래가 발생할 때 `System.currentTimeMillis()`의 밀리초 해상도로는 같은 타임스탬프가 수십~수백 건 겹칩니다.
+- **해결:** `Instant.now()`의 나노초 정밀도를 사용하고, NTP 동기화된 서버 시각 + 단조 증가 시퀀스를 조합하여 유일한 순서를 보장합니다.
+- **근거:** `Instant`는 내부적으로 `epochSecond`(long) + `nanos`(int)를 저장하므로 이론상 나노초 단위 구분이 가능합니다.
+
+### 시나리오 3: 대규모 배치 스케줄러 (100K 건/일)
+
+> **비유:** 100만 명에게 생일 축하 문자를 보내는 자동 발송 시스템입니다. 시간대를 무시하면 한국 사용자에게 새벽 3시에 문자가 도착합니다.
+
+- **문제:** 매일 10만 건의 예약 작업(알림, 정산, 보고서)이 각기 다른 시간대의 사용자를 대상으로 실행됩니다. DST 전환일에 1시간이 사라지거나 중복되면서 작업이 누락되거나 이중 실행됩니다.
+- **해결:** 스케줄러 내부는 `ZonedDateTime`으로 "다음 실행 시각"을 계산하되, 실행 여부 판단은 `Instant` 비교로 합니다. DST 전환으로 건너뛴 시간대는 즉시 실행, 중복 시간대는 첫 번째만 실행하는 규칙을 명시합니다.
+- **근거:** `ZonedDateTime.plusDays(1)`은 DST를 자동 반영하지만, `Duration.ofDays(1)`은 항상 86400초이므로 DST 전환일에 23시간 또는 25시간이 됩니다.
+
+---
+</div>
+</div>
+</details>
+
+## 11. 실무에서 자주 하는 실수
+
+### 실수 1: SimpleDateFormat을 static으로 공유
+
+```java
+// 위험: SimpleDateFormat은 내부 Calendar를 공유 → 스레드 안전 X
+private static final SimpleDateFormat SDF = new SimpleDateFormat("yyyy-MM-dd");
+
+// 해결: DateTimeFormatter는 불변이므로 static 공유 안전
+private static final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+```
+
+### 실수 2: LocalDateTime으로 글로벌 시각 저장
+
+```java
+// 위험: 시간대 정보가 없어 서버 이전 시 시각이 틀어짐
+LocalDateTime eventTime = LocalDateTime.now();  // 어느 나라 시간인지 불명
+
+// 해결: Instant 또는 ZonedDateTime 사용
+Instant eventTime = Instant.now();  // UTC 절대 시각
+```
+
+### 실수 3: plusDays(1)과 Duration.ofDays(1) 혼동
+
+```java
+ZonedDateTime zdt = ZonedDateTime.of(2026, 3, 8, 1, 0, 0, 0, ZoneId.of("America/New_York"));
+
+// 달력 기준 하루 (DST 반영 → 23시간일 수 있음)
+ZonedDateTime next1 = zdt.plusDays(1);
+
+// 물리적 24시간 (DST 무시 → 시각이 1시간 밀릴 수 있음)
+ZonedDateTime next2 = zdt.plus(Duration.ofDays(1));
+```
+
+### 실수 4: 날짜 연산 결과를 재할당하지 않음
+
+```java
+LocalDate date = LocalDate.of(2026, 5, 1);
+date.plusDays(10);  // 반환값 무시! date는 여전히 5월 1일
+date = date.plusDays(10);  // 올바른 사용
+```
+
+### 실수 5: 월(Month)이 1 기준인데 0 기준으로 착각
+
+```java
+// Date/Calendar 습관으로 java.time에서도 0 기준 사용
+LocalDate wrong = LocalDate.of(2026, 4, 1);   // 4월 (의도는 5월)
+LocalDate right = LocalDate.of(2026, 5, 1);   // 5월
+LocalDate safe  = LocalDate.of(2026, Month.MAY, 1);  // Month 상수로 실수 방지
+```
+
+---
+
+## 12. 면접 포인트
+
+### Q1: Date/Calendar 대신 java.time을 쓰는 이유는?
+
+**A:** 세 가지입니다. 첫째, `java.time`은 불변(Immutable)이라 멀티스레드 환경에서 안전합니다. 둘째, 월이 1부터 시작하고 `Month` 열거형을 제공해 직관적입니다. 셋째, `DateTimeFormatter`가 스레드 안전하므로 `static final`로 공유할 수 있어 `SimpleDateFormat`의 동시성 버그를 원천 차단합니다.
+
+### Q2: Instant와 LocalDateTime의 차이는?
+
+**A:** `Instant`는 UTC 기준 절대 시각(epoch 초+나노초)으로 전 세계 어디서나 같은 순간을 나타냅니다. `LocalDateTime`은 시간대 정보가 없는 "벽시계 시각"으로, 서울 14:00과 뉴욕 14:00을 구분할 수 없습니다. DB 저장이나 서버 간 통신에는 `Instant`, 사용자 UI 표시에는 `ZonedDateTime`을 사용합니다.
+
+### Q3: Period와 Duration의 차이는?
+
+**A:** `Period`는 달력 기반(년/월/일)으로 "3개월 후"를 계산할 때 2월(28일)과 3월(31일)의 차이를 자동 반영합니다. `Duration`은 물리적 시간 기반(초/나노초)으로 정확히 N초 후를 계산하며 DST를 무시합니다. `LocalDate` 연산에는 `Period`, 성능 측정이나 `Instant` 연산에는 `Duration`을 사용합니다.
+
+### Q4: ZonedDateTime에서 DST 전환 시 어떻게 동작하나요?
+
+**A:** `ZonedDateTime.plusHours(1)`은 DST 전환을 자동 처리합니다. 예를 들어 미국 동부 시간 기준 3월 둘째 일요일 02:00에 시계가 03:00으로 점프하는데, `plusHours(1)`은 이를 반영하여 올바른 현지 시각을 반환합니다. 반면 `Duration.ofHours(1)`을 더하면 물리적 3600초만 더하므로 현지 시각이 예상과 다를 수 있습니다.
+
+### Q5: DateTimeFormatter를 static final로 선언해도 안전한 이유는?
+
+**A:** `DateTimeFormatter`는 내부 상태가 없는 불변 객체이기 때문입니다. `format()`과 `parse()` 호출 시 스레드 로컬 변수만 사용하므로 여러 스레드가 동시에 호출해도 간섭이 없습니다. 반면 `SimpleDateFormat`은 내부에 `Calendar` 인스턴스를 공유하므로 동시 호출 시 날짜가 뒤섞이는 버그가 발생합니다.
+
+---
+
+## 13. 전체 요약
 
 ```mermaid
 graph TD

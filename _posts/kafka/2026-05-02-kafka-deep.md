@@ -169,6 +169,8 @@ acks=1: 리더만 확인 (중간)
 acks=all: 모든 ISR 레플리카 확인 (가장 안전, 느림)
 ```
 
+> **비유**: acks 설정은 소포 배송 보험 등급입니다. `acks=0`은 보험 없이 보내는 것(분실해도 보상 없음), `acks=1`은 중간 거점 도착까지만 추적하는 것(거점에서 최종 배달 중 분실 가능), `acks=all`은 수취인 서명까지 확인하는 등기 우편(가장 느리지만 분실 시 즉시 파악)입니다.
+
 `acks=0`은 "불을 질러놓고 확인 안 하는 것"입니다. 브로커가 죽으면 메시지는 사라집니다. 로그성 데이터에는 괜찮지만, 주문/결제 데이터에 이걸 쓰면 돈이 사라집니다.
 
 `acks=1`은 위험한 중간 지점입니다. 리더가 받았는데 팔로워에 복제되기 전에 리더가 죽으면? 새 리더로 페일오버되는 순간 메시지가 유실됩니다. "리더 확인했으니 안전하겠지"라고 방심하다가 장애 나는 패턴입니다.
@@ -361,6 +363,8 @@ graph TD
 
 ISR은 "지금 리더와 동기화된 레플리카 목록"입니다. `acks=all`은 ISR 내 모든 레플리카가 쓰기를 완료해야 성공으로 처리합니다.
 
+> **비유**: ISR은 마라톤 페이스메이커 그룹입니다. 선두 주자(리더)를 따라잡고 있는 주자들만 ISR에 남고, 뒤처진 주자는 탈락합니다. 선두가 갑자기 기권하면 ISR 안에서만 다음 선두를 뽑습니다. 뒤처진 주자에게 선두를 맡기면 기록(데이터)이 누락되기 때문입니다.
+
 왜 ISR이 중요할까요? 팔로워2가 네트워크 문제로 복제가 느려지면 ISR에서 제거됩니다. 이 상태에서 `acks=all`이면 ISR(리더+팔로워1)만 확인하면 되므로 쓰기가 계속 가능합니다. 팔로워2가 복구되면 자동으로 재동기화 후 ISR에 재합류합니다.
 
 이걸 잘못 설정하면 어떤 장애가 날까요? `min.insync.replicas=3`인데 브로커 1대가 죽으면 ISR이 2개뿐이라 `acks=all` 쓰기가 전부 실패합니다. 서비스 전체 장애입니다. 브로커 3대 클러스터에서 `min.insync.replicas=2`로 설정하는 게 브로커 1대 장애를 허용하면서 안전성을 유지하는 표준 설정입니다.
@@ -467,7 +471,9 @@ BACKWARD 호환성이란 "새 스키마로 이전 데이터를 읽을 수 있어
 
 ## 9. Kafka Streams — Kafka 위에서 실시간 처리
 
-Kafka Streams는 별도 시스템(Flink, Spark) 없이 Kafka 클러스터 안에서 실시간 스트림 처리를 수행합니다. 비유하자면 수도관 안에 정수 필터를 내장한 것입니다. 물이 관을 지나가면서 동시에 정제됩니다.
+Kafka Streams는 별도 시스템(Flink, Spark) 없이 Kafka 클러스터 안에서 실시간 스트림 처리를 수행합니다.
+
+> **비유**: Kafka Streams는 공장의 컨베이어 벨트 위에 설치된 자동 검수기입니다. 제품(메시지)이 벨트를 타고 흘러가면서 불량품 걸러내기(filter), 포장 바꾸기(map), 수량 세기(aggregate)가 벨트 위에서 바로 일어납니다. 별도 검수 창고(Flink, Spark 클러스터)로 옮기지 않아도 됩니다.
 
 ```java
 @Configuration
@@ -518,6 +524,8 @@ public class OrderStreamProcessor {
 ## 10. 데드 레터 큐 (DLQ) — 처리 실패한 메시지의 생명 보험
 
 메시지를 처리하다 실패하면 어떻게 해야 할까요? 그냥 버리면 데이터 유실, 무한 재시도하면 서비스 마비입니다. DLQ는 "3번 시도해도 안 되면 격리 병동으로 보내자"는 접근입니다.
+
+> **비유**: DLQ는 우체국의 반송 보관함입니다. 주소가 틀리거나 수취 거부된 편지(처리 실패 메시지)를 그냥 버리면 중요한 서류가 사라지고, 같은 주소로 무한 재배달하면 배달원(컨슈머)이 다른 편지를 배달하지 못합니다. 반송 보관함(DLQ)에 모아두면 나중에 관리자가 원인을 파악하고 재발송할 수 있습니다.
 
 ```java
 @Service
@@ -713,7 +721,24 @@ graph TD
 
 ---
 
-## 14. 극한 시나리오: Kafka 장애 복구
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
+
+### 시나리오 1: 브로커 장애 — 리더 페일오버
 
 ```mermaid
 graph TD
@@ -741,6 +766,102 @@ replica.lag.time.max.ms=10000           # 10초 지연 시 ISR 제거
 unclean.leader.election.enable=false    # 금융: 데이터 무결성 우선
 # unclean.leader.election.enable=true   # 일반: 가용성 우선 (약간의 메시지 유실 허용)
 ```
+
+### 시나리오 2: Poison Pill — 하나의 메시지가 전체 파이프라인을 멈춘다
+
+> **비유**: 컨베이어 벨트에 규격 외 부품이 하나 올라오면 자동 검수기가 계속 "불량" 판정을 내리며 멈춘다. 뒤에 쌓이는 정상 부품 수천 개가 전부 정체된다.
+
+```
+상황: JSON 파싱이 불가능한 메시지가 토픽에 하나 유입됨
+      컨슈머가 이 메시지를 처리할 때마다 JsonParseException 발생
+      재시도 → 다시 실패 → 재시도 무한 반복
+      뒤에 쌓인 정상 메시지 수만 건이 처리되지 못함
+      Consumer Lag이 폭증, 다운스트림 서비스 전체 지연
+
+메커니즘:
+  Kafka 컨슈머는 파티션 내에서 순서대로 처리한다.
+  offset 1234에서 실패하면, 이 메시지를 넘기지 않는 한
+  offset 1235 이후는 영원히 처리되지 않는다.
+
+해결:
+  1. DLQ 패턴: 3회 재시도 후 실패하면 별도 토픽(*.DLQ)으로 이동
+  2. RetryableException vs NonRetryableException 구분:
+     재시도해도 의미 없는 에러(잘못된 포맷)는 즉시 DLQ로
+  3. Spring Kafka의 DeadLetterPublishingRecoverer + DefaultErrorHandler 활용
+```
+
+### 시나리오 3: 컨슈머 리밸런싱 폭풍 — 주기적 Stop-the-World
+
+> **비유**: 축구 경기 중 5분마다 감독이 포지션을 재배치한다. 재배치하는 동안 모든 선수가 멈추고 지시를 기다린다. 상대팀(메시지)은 계속 공격하는데 아군은 움직이지 못한다.
+
+```
+상황: 컨슈머 처리 시간이 max.poll.interval.ms(기본 300초)를 초과
+      Kafka가 해당 컨슈머를 "죽었다"고 판단 → 강제 리밸런싱
+      리밸런싱 중 모든 컨슈머가 일시 정지 (Stop-the-World)
+      처리 시간이 긴 메시지가 주기적으로 들어오면 리밸런싱이 반복
+
+메커니즘:
+  ConsumerCoordinator는 max.poll.interval.ms 내에 다음 poll()이
+  호출되지 않으면 해당 컨슈머를 그룹에서 제거한다.
+  파티션이 재배정되면서 처리 중이던 메시지의 오프셋이 커밋되지 않아
+  중복 처리도 동시에 발생한다.
+
+해결:
+  1. max.poll.records를 줄여 한 번에 적게 가져오기
+  2. max.poll.interval.ms를 처리 시간에 맞게 늘리기
+  3. 무거운 처리는 별도 스레드풀로 비동기 처리 후 수동 커밋
+  4. Static Group Membership(group.instance.id) 사용으로
+     일시적 연결 끊김에 리밸런싱 방지
+```
+
+### 시나리오 4: 디스크 가득 참 — 브로커 무응답
+
+> **비유**: 도서관 서고가 꽉 차서 새 책을 들일 수 없다. 반납(로그 삭제)은 정해진 시간(retention)에만 하는데, 새 책(메시지)은 계속 들어온다. 서고가 터지면 사서(브로커)가 업무를 중단한다.
+
+```
+상황: 브로커 디스크 사용률 100% 도달
+      새 메시지 쓰기 실패, Producer에 TimeoutException 반환
+      해당 브로커가 리더인 모든 파티션이 쓰기 불가
+      ISR에서 제거되며 연쇄 장애로 확산
+
+메커니즘:
+  Kafka는 log.retention.hours/bytes 설정에 따라 오래된 세그먼트를
+  주기적으로(log.retention.check.interval.ms, 기본 300초) 삭제한다.
+  유입 속도가 삭제 속도보다 빠르거나, retention이 너무 길면 디스크가 찬다.
+
+해결:
+  1. log.retention.bytes로 파티션당 최대 크기 제한
+  2. 디스크 사용률 80% 알림 설정 (Prometheus + Alertmanager)
+  3. log.dirs를 여러 디스크에 분산 설정
+  4. 압축(compression.type=lz4) 적용으로 저장 공간 절약
+```
+
+---
+</div>
+</div>
+</details>
+
+## 실무에서 자주 하는 실수
+
+### 1. Consumer에서 auto.commit을 켠 채로 운영한 것
+
+개발 환경에서는 편리하지만, 프로덕션에서 `enable.auto.commit=true`는 메시지 유실과 중복 처리의 원인입니다. poll() 호출 시점에 이전 배치를 자동 커밋하므로, 처리 중 장애가 나면 "커밋됐지만 처리 안 된" 메시지가 유실됩니다. **프로덕션에서는 반드시 수동 커밋**을 사용하고, 처리 완료 후 `ack.acknowledge()`를 호출해야 합니다.
+
+### 2. Transactional ID 없이 Exactly-Once를 기대한 것
+
+`enable.idempotence=true`만 설정하면 단일 Producer 세션 내에서 중복 방지가 됩니다. 하지만 Producer가 재시작되면 새 세션이므로 중복이 발생할 수 있습니다. 진정한 Exactly-Once를 위해서는 `transactional.id`를 설정하고, `kafkaTemplate.executeInTransaction()`으로 원자적 발행을 해야 합니다. Consumer 쪽에서도 `isolation.level=read_committed`를 설정해야 아직 커밋되지 않은 트랜잭션의 메시지를 읽지 않습니다.
+
+### 3. 스키마 변경을 Schema Registry 없이 진행한 것
+
+Producer가 필드를 추가/삭제/타입 변경하면서 Consumer에 알리지 않으면 런타임 역직렬화 에러가 발생합니다. 트래픽이 많은 시간대에 이 에러가 터지면 Consumer Lag이 폭증합니다. **Avro/Protobuf + Schema Registry**를 사용하면 호환되지 않는 스키마 변경을 배포 전에 차단할 수 있습니다.
+
+### 4. Kafka Streams의 State Store를 백업하지 않은 것
+
+Kafka Streams의 집계(aggregate), 조인(join)은 로컬 RocksDB(State Store)에 상태를 저장합니다. 컨테이너가 재시작되면 changelog 토픽에서 상태를 복원하는데, 상태가 크면 복원에 수십 분이 걸립니다. `num.standby.replicas=1`을 설정해 대기 복제본을 유지하면 페일오버 시 즉시 사용 가능합니다.
+
+### 5. DLQ 토픽을 모니터링하지 않은 것
+
+DLQ로 메시지를 보내놓고 아무도 확인하지 않으면, 처리 실패한 메시지가 조용히 쌓입니다. 결제 실패, 재고 차감 실패 같은 중요 메시지가 DLQ에 묻히면 비즈니스 손실로 이어집니다. **DLQ 토픽의 메시지 수를 Prometheus 메트릭으로 수집하고, 1건이라도 유입되면 Slack/PagerDuty 알림**을 보내야 합니다.
 
 ---
 

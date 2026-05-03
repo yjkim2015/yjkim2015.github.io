@@ -449,7 +449,22 @@ kubectl rollout restart deployment/myapp-deployment -n production
 
 ---
 
-## 극한 시나리오
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ### 시나리오 1: 배포 중 서비스 다운 — Pod 0개 순간 발생
 
@@ -501,3 +516,7 @@ kubectl get secret db-secret -o jsonpath='{.data.password}' | base64 --decode
 ```
 
 운영 환경에서는 RBAC으로 Secret 조회 권한을 제한하고, Sealed Secrets 또는 AWS Secrets Manager 연동을 사용해야 한다.
+</div>
+</div>
+</details>
+

@@ -911,7 +911,22 @@ PostgreSQL이 다른 RDBMS와 차별화되는 핵심 기능은 네 가지로 요
 
 ---
 
-## 14. 극한 시나리오
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ### 시나리오 1: 일 1억 건 트랜잭션 처리 (결제 시스템)
 
@@ -943,6 +958,9 @@ ORDER BY trx_started ASC;
 UNDO_RETENTION보다 오래 걸리는 쿼리가 실행 중에 필요한 Undo 블록이 덮어쓰여 발생한다. 응급 처치는 `UNDO_RETENTION`을 늘리고 `GUARANTEE` 옵션을 활성화하는 것이다. 근본적 해결은 쿼리를 최적화하거나 Undo Tablespace 크기를 충분히 늘리는 것이다.
 
 ---
+</div>
+</div>
+</details>
 
 ## 15. 실무에서 자주 하는 실수
 

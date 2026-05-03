@@ -89,6 +89,8 @@ public class LoggingAspect {
 
 ## 2. 핵심 용어
 
+> **비유:** AOP 용어를 병원에 비유하면 이해가 쉽다. **Aspect**는 "진료과"(예: 내과)이고, **Advice**는 "진료 행위"(혈압 측정, 처방)이며, **Pointcut**은 "진료 대상"(40세 이상 환자)이고, **JoinPoint**는 "진료 시점"(환자가 접수한 순간)이다. **Weaving**은 "진료과를 병원 시스템에 등록"하는 과정이다.
+
 ### Aspect
 
 횡단 관심사를 모듈화한 것. Advice + Pointcut의 조합이다. 클래스 하나로 선언하며 `@Aspect` 어노테이션을 붙인다.
@@ -222,7 +224,11 @@ Spring AOP는 런타임 Weaving을 사용한다. 애플리케이션이 구동될
 
 ---
 
+> **비유:** Pointcut 표현식은 택배 배송 조건표와 같다. "서울 강남구 아파트만 배송"처럼 `execution(* com.example.service.*.*(..))`은 "service 패키지 안의 모든 메서드에만 적용"이라는 조건이다. 조건을 넓히면 모든 택배에 적용되고, 좁히면 특정 고객에게만 적용된다.
+
 ## 3. Spring AOP vs AspectJ
+
+> **비유:** Spring AOP와 AspectJ의 차이는 보안 검색 방식의 차이다. Spring AOP는 건물 입구에 경비원(프록시)을 세워 출입을 통제하는 방식이고, AspectJ는 건물 설계도(바이트코드) 자체를 수정해서 모든 방에 잠금장치를 심는 방식이다. 경비원 방식은 간편하지만 입구만 감시 가능하고, 설계도 수정 방식은 복잡하지만 어디든 적용 가능하다.
 
 | 구분 | Spring AOP | AspectJ |
 |------|-----------|---------|
@@ -243,6 +249,8 @@ public class AopConfig { }
 ---
 
 ## 4. 프록시 기반 AOP 동작 원리
+
+> **비유:** 프록시는 연예인의 매니저와 같다. 팬(클라이언트)이 연예인(실제 Bean)에게 직접 접근하지 못하고, 매니저(프록시)를 통해야 한다. 매니저는 스케줄 확인(Before Advice), 미팅 진행(실제 메서드 실행), 후속 정리(After Advice)를 대신 처리한다. 팬은 매니저가 끼어 있는지조차 모른다.
 
 Spring AOP의 핵심은 **프록시 패턴**이다. 클라이언트가 `OrderService`를 요청하면 Spring은 실제 `OrderService` 대신 프록시 객체를 주입한다. 클라이언트는 프록시를 통해 메서드를 호출하고, 프록시가 Advice를 실행한 뒤 실제 메서드에 위임한다.
 
@@ -338,6 +346,8 @@ graph TD
 ---
 
 ## 5. @Transactional의 AOP 동작 원리
+
+> **비유:** `@Transactional`은 은행의 금고 담당 직원과 같다. 고객(개발자)이 "이 돈을 이체해 주세요"라고 말하면, 직원(TransactionInterceptor)이 금고를 열고(트랜잭션 시작), 이체를 실행하고, 성공하면 금고를 닫고(커밋), 실패하면 원래대로 되돌린다(롤백). 고객은 금고 잠금 장치를 직접 다루지 않아도 된다.
 
 `@Transactional`은 Spring AOP의 대표적인 활용 사례다. 개발자가 `@Transactional`을 붙이면 Spring은 해당 Bean을 프록시로 감싸고, `TransactionInterceptor`라는 Around Advice를 적용한다.
 
@@ -473,6 +483,8 @@ Spring 컨텍스트 밖에서 생성한 객체는 Bean이 아니므로 프록시
 
 ## 7. Advice 실행 순서
 
+> **비유:** 여러 Aspect의 실행 순서는 러시아 마트료시카 인형과 같다. 가장 바깥 인형(낮은 Order)이 먼저 열리고, 안쪽 인형이 차례로 열린 뒤, 핵심(실제 메서드)에 도달한다. 돌아올 때는 안쪽부터 닫히며 바깥쪽으로 나온다. Security(Order 1) → Transaction(Order 2) → Logging(Order 3) → 실제 메서드 → Logging 후처리 → Transaction 후처리 → Security 후처리 순서다.
+
 여러 Aspect가 같은 JoinPoint에 적용될 때 `@Order`로 순서를 제어한다. 숫자가 낮을수록 먼저 실행된다.
 
 ```java
@@ -541,6 +553,68 @@ public class MyAspect {
 **실수 3: 같은 메서드에 중복 Advice 적용**
 
 여러 Aspect가 같은 메서드에 적용될 때 `@Order`를 명시하지 않으면 순서가 비결정적이다. 보안 검사가 트랜잭션보다 나중에 실행되면 인증 전에 DB 작업이 시작될 수 있다.
+
+---
+
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
+
+### 시나리오 1: Self-Invocation으로 @Transactional이 무시되어 데이터 정합성 붕괴
+
+주문 서비스에서 `createOrder()` 내부에서 `this.deductStock()`을 호출한다. `deductStock()`에 `@Transactional(propagation = REQUIRES_NEW)`를 붙였지만, self-invocation이므로 프록시를 거치지 않는다. 결과적으로 주문과 재고 차감이 같은 트랜잭션에서 실행되고, 주문 실패 시 재고 차감까지 롤백되어야 하지만 이미 커밋된 상태다. 운영 환경에서 재고가 음수가 되는 사고로 이어진다. 반드시 별도 Bean으로 분리해야 한다.
+
+### 시나리오 2: @Around Advice에서 proceed() 호출 누락
+
+커스텀 캐시 Aspect를 만들 때 캐시 히트 시 캐시값을 반환하고, 캐시 미스 시 `joinPoint.proceed()`를 호출해야 한다. 그런데 캐시 미스 분기에서 `proceed()`를 빠뜨리면 실제 메서드가 실행되지 않고 `null`이 반환된다. 서비스 50개에 적용된 Aspect이므로 전체 서비스가 `null` 반환 상태가 된다. `@Around`를 작성할 때는 모든 분기에서 `proceed()`가 호출되는지 반드시 확인해야 한다.
+
+### 시나리오 3: Aspect 순서 미지정으로 인증 전에 DB 작업 실행
+
+`SecurityAspect`와 `TransactionAspect`에 `@Order`를 명시하지 않았다. Spring이 비결정적 순서로 Aspect를 적용하여, 트랜잭션이 먼저 시작된 후 보안 검사가 실행된다. 인증 실패 시 트랜잭션 롤백이 발생하지만, 이미 DB 커넥션을 점유한 상태다. 동시 요청이 많으면 인증 실패 요청들이 DB 커넥션 풀을 고갈시켜 정상 요청까지 영향을 받는다. 보안 Aspect는 항상 `@Order(1)`로 가장 먼저 실행되도록 설정해야 한다.
+
+### 시나리오 4: Pointcut 범위가 너무 넓어 성능 저하
+
+`execution(* com.example..*(..))` 처럼 최상위 패키지 전체를 대상으로 로깅 Aspect를 적용했다. DTO 생성자, getter/setter, 유틸리티 메서드까지 모두 AOP가 적용되어 초당 수만 건의 불필요한 로그가 생성된다. GC 압박이 증가하고 응답 시간이 30% 이상 느려진다. Pointcut은 항상 최소 범위로 지정하고, `within()`이나 `@annotation()`으로 대상을 명확히 한정해야 한다.
+
+---
+</div>
+</div>
+</details>
+
+## 면접 포인트
+
+**Q1. Spring AOP는 어떤 방식으로 동작하는가?**
+
+Spring AOP는 런타임에 프록시 객체를 생성하여 동작한다. Spring Boot 2.0+ 기본값은 CGLIB 프록시로, 대상 클래스의 서브클래스를 바이트코드 조작으로 생성한다. 인터페이스가 있고 `proxy-target-class=false`이면 JDK Dynamic Proxy를 사용한다. 클라이언트가 Bean을 호출하면 프록시가 Advice를 실행한 뒤 실제 메서드에 위임한다.
+
+**Q2. Self-Invocation 문제란 무엇이고 어떻게 해결하는가?**
+
+같은 클래스 내에서 `this.method()`로 호출하면 프록시를 거치지 않고 실제 객체를 직접 호출한다. 따라서 해당 메서드에 붙은 `@Transactional`, `@Cacheable` 등 AOP 기반 어노테이션이 동작하지 않는다. 해결법은 (1) 메서드를 별도 Bean으로 분리하거나, (2) `AopContext.currentProxy()`로 프록시를 직접 참조하는 것이다. 실무에서는 Bean 분리가 권장된다.
+
+**Q3. @Transactional에서 Checked Exception이 발생하면 롤백되는가?**
+
+기본적으로 롤백되지 않는다. Spring의 `@Transactional`은 `RuntimeException`과 `Error`에 대해서만 자동 롤백한다. `IOException` 같은 Checked Exception에 대해 롤백하려면 `@Transactional(rollbackFor = Exception.class)`를 명시해야 한다.
+
+**Q4. JDK Dynamic Proxy와 CGLIB의 차이는?**
+
+JDK Dynamic Proxy는 인터페이스를 구현하는 프록시를 생성하므로 인터페이스 타입으로만 주입 가능하다. CGLIB은 대상 클래스의 서브클래스를 생성하므로 구체 클래스 타입으로도 주입 가능하지만, `final` 클래스/메서드에는 적용 불가하다. Spring Boot 2.0+에서는 CGLIB이 기본값이다.
+
+**Q5. @Around와 @Before/@After의 차이는?**
+
+`@Around`는 실제 메서드 실행을 직접 제어(`proceed()` 호출)하므로 반환값 변경, 예외 가로채기, 실행 여부 결정이 가능하다. `@Before`/@After`는 메서드 실행 전/후에 부가 로직만 삽입하며 실행 흐름을 제어할 수 없다. `@Transactional`은 내부적으로 `@Around`로 구현된다.
 
 ---
 

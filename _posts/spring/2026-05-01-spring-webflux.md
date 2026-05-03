@@ -23,15 +23,7 @@ C10K 문제(Client 10,000 Problem)는 1999년 Dan Kegel이 제기한 문제로, 
 
 전통적인 Spring MVC는 **thread-per-request** 모델을 사용합니다. 요청 하나당 스레드 하나를 할당하고, 그 스레드가 요청 처리 완료까지 블로킹됩니다.
 
-```mermaid
-graph LR
-    R1[요청 1] --> T1[Thread-1]
-    R2[요청 2] --> T2[Thread-2]
-    RN[요청 N] --> TN[Thread-N]
-    T1 -->|"DB 쿼리 대기 블로킹"| A1[응답]
-    T2 -->|"외부 API 대기 블로킹"| A2[응답]
-    TN -->|"파일 I/O 대기 블로킹"| AN[응답]
-```
+![Spring MVC Thread-per-Request 모델](/assets/images/posts/spring-webflux/mvc-thread-model.svg)
 
 문제는 스레드가 I/O 대기 중에도 메모리(기본 512KB~1MB)를 점유하며, 컨텍스트 스위칭 비용이 발생한다는 점입니다. 동시 요청이 10,000개라면 10,000개의 스레드가 필요하고, 이는 수 GB의 메모리를 소비합니다.
 
@@ -1246,27 +1238,44 @@ class UserServiceTest {
 
 ### MVC vs WebFlux 벤치마크
 
-아래는 개략적인 시나리오별 성능 특성입니다. 실제 수치는 환경에 따라 달라집니다.
+아래는 개략적인 시나리오별 성능 특성이다. 실제 수치는 환경에 따라 달라진다.
+
+#### 시나리오 1: 외부 API 호출 (응답 지연 100ms)
+
+> **비유:** 식당에서 주문을 받는 웨이터가 200명(MVC 스레드)이면 201번째 손님부터 줄을 서야 한다. WebFlux는 웨이터 4명이 주문만 받고 주방에 넘긴 뒤 바로 다음 손님을 받으므로, 동시에 수천 명을 처리한다.
+
+| 동시 사용자 | Spring MVC (TPS) | Spring WebFlux (TPS) | 차이 |
+|------------|-----------------|---------------------|------|
+| 10명 | 95 | 98 | 동등 |
+| 100명 | 520 | 580 | 동등 |
+| 500명 | 1,200 | 2,800 | **2.3배** |
+| 1,000명 | 700 (스레드 포화) | 3,100 | **4.4배** |
+| 2,000명 | 500 (GC 압박) | 3,200 | **6.4배** |
+| 5,000명 | 300 (타임아웃 증가) | 3,100 | **10배** |
+| 10,000명 | 실패 (OOM 위험) | 2,900 | **MVC 불가** |
+
+**메모리 사용량 (동시 1,000명 기준):** Spring MVC ~2GB vs WebFlux ~300MB (**6.7배 절약**)
 
 ```mermaid
-graph TD
-    subgraph S1["시나리오: 외부 API 호출 (응답 지연 100ms)"]
-        U10["동시 10명<br>MVC: 95 TPS / WebFlux: 98 TPS"]
-        U100["동시 100명<br>MVC: 520 TPS / WebFlux: 580 TPS"]
-        U500["동시 500명<br>MVC: 1,200 TPS / WebFlux: 2,800 TPS"]
-        U1K["동시 1,000명<br>MVC: 700 TPS (스레드 포화) / WebFlux: 3,100 TPS"]
-        U2K["동시 2,000명<br>MVC: 500 TPS (GC 압박) / WebFlux: 3,200 TPS"]
-        U5K["동시 5,000명<br>MVC: 300 TPS (타임아웃↑) / WebFlux: 3,100 TPS"]
-        U10K["동시 10,000명<br>MVC: 실패 (OOM 위험) / WebFlux: 2,900 TPS"]
-        MEM["메모리 (1,000 동시 요청)<br>Spring MVC: ~2GB / WebFlux: ~300MB"]
-    end
-    subgraph S2["시나리오: 단순 CPU 연산 (DB 없음)"]
-        C10["동시 10명<br>MVC: 9,800 TPS / WebFlux: 9,200 TPS"]
-        C100["동시 100명<br>MVC: 48,000 TPS / WebFlux: 44,000 TPS"]
-        C500["동시 500명<br>MVC: 52,000 TPS / WebFlux: 50,000 TPS"]
-        NOTE["CPU 집약 작업에서는 MVC가 약간 유리하거나 동등"]
-    end
+xychart-beta
+    title "외부 API 호출 시 동시 사용자별 TPS 비교"
+    x-axis ["10명", "100명", "500명", "1K명", "2K명", "5K명", "10K명"]
+    y-axis "TPS (처리량)" 0 --> 3500
+    bar [95, 520, 1200, 700, 500, 300, 0]
+    bar [98, 580, 2800, 3100, 3200, 3100, 2900]
 ```
+
+핵심은 **동시 500명을 넘어서는 순간** MVC는 스레드 풀이 포화되어 성능이 급락하지만, WebFlux는 이벤트 루프 기반이라 안정적으로 유지된다는 점이다.
+
+#### 시나리오 2: 단순 CPU 연산 (DB 없음)
+
+| 동시 사용자 | Spring MVC (TPS) | Spring WebFlux (TPS) | 차이 |
+|------------|-----------------|---------------------|------|
+| 10명 | 9,800 | 9,200 | MVC 약간 우세 |
+| 100명 | 48,000 | 44,000 | MVC 약간 우세 |
+| 500명 | 52,000 | 50,000 | 동등 |
+
+CPU 집약 작업에서는 MVC가 약간 유리하거나 동등하다. WebFlux의 이점은 **I/O 대기가 많을 때** 극대화된다.
 
 ### 언제 WebFlux가 유리한가?
 
@@ -1286,7 +1295,22 @@ WebFlux가 불리한 경우는 다음과 같습니다.
 
 ---
 
-## 9. 극한 시나리오
+<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<summary class="extreme-scenario-summary">
+<span class="extreme-scenario-icon">🔥</span>
+<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
+<span class="extreme-scenario-toggle"></span>
+</summary>
+<div class="extreme-scenario-body">
+<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-7225106491387870"
+     data-ad-slot="0000000000"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+</div>
+<div class="extreme-scenario-content" markdown="1">
 
 ### 9-1. 블로킹 코드가 이벤트 루프에 들어갔을 때
 
@@ -1566,6 +1590,9 @@ Mono<String> result = ReactiveSecurityContextHolder.getContext()
 ```
 
 ---
+</div>
+</div>
+</details>
 
 ## 10. WebFlux vs Virtual Thread
 
