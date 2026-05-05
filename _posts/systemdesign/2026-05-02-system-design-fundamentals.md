@@ -775,21 +775,14 @@ DAU: 1억명
 
 ---
 
-<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<details class="extreme-scenario-details">
 <summary class="extreme-scenario-summary">
 <span class="extreme-scenario-icon">🔥</span>
 <span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
 <span class="extreme-scenario-toggle"></span>
 </summary>
 <div class="extreme-scenario-body">
-<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
-<ins class="adsbygoogle"
-     style="display:block"
-     data-ad-client="ca-pub-7225106491387870"
-     data-ad-slot="0000000000"
-     data-ad-format="auto"
-     data-full-width-responsive="true"></ins>
-</div>
+
 <div class="extreme-scenario-content" markdown="1">
 
 넷플릭스는 피크 시간에 인터넷 전체 트래픽의 15%를 차지합니다. 초당 수 TB의 데이터를 전 세계에 전달합니다. 일반 CDN으로는 비용이 천문학적이고 성능도 부족합니다.

@@ -305,21 +305,14 @@ def get_feed_cursor(user_id: int, cursor_post_id: int = None, size: int = 20):
 
 ---
 
-<details class="extreme-scenario-details" ontoggle="if(this.open){var ad=this.querySelector('.extreme-scenario-ad');if(ad&&!ad.dataset.loaded){ad.dataset.loaded='1';(adsbygoogle=window.adsbygoogle||[]).push({});}}">
+<details class="extreme-scenario-details">
 <summary class="extreme-scenario-summary">
 <span class="extreme-scenario-icon">🔥</span>
 <span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
 <span class="extreme-scenario-toggle"></span>
 </summary>
 <div class="extreme-scenario-body">
-<div class="extreme-scenario-ad" style="text-align:center; margin-bottom:1.5em;">
-<ins class="adsbygoogle"
-     style="display:block"
-     data-ad-client="ca-pub-7225106491387870"
-     data-ad-slot="0000000000"
-     data-ad-format="auto"
-     data-full-width-responsive="true"></ins>
-</div>
+
 <div class="extreme-scenario-content" markdown="1">
 
 BTS가 게시글을 올릴 때 7000만 팔로워 피드를 즉시 업데이트하려면 70초가 걸린다(초당 100만 건 처리 시). 하이브리드 전략으로:

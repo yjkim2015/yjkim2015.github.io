@@ -2,25 +2,19 @@
 
 <!-- insert favicons. use https://realfavicongenerator.net/ -->
 
-<!-- Google AdSense (수동 광고만, 자동광고 비활성화) -->
+<!-- Google AdSense (하단 광고만) -->
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7225106491387870" crossorigin="anonymous"></script>
 <script>
-  // 자동광고(Auto Ads) 비활성화 — 수동 배치(사이드바+하단)만 사용
+  // 자동광고 차단 — footer 광고만 허용
   (function() {
     var observer = new MutationObserver(function(mutations) {
       mutations.forEach(function(mutation) {
         mutation.addedNodes.forEach(function(node) {
-          if (node.nodeType === 1) {
-            // Google이 자동 삽입하는 인피드/인아티클 광고 제거
-            if (node.classList && (node.classList.contains('adsbygoogle-noablate') ||
-                node.getAttribute('data-ad-format') === 'autorelaxed' ||
-                node.getAttribute('data-ad-format') === 'fluid')) {
-              // 사이드바/푸터 내부가 아닌 자동 삽입 광고만 제거
-              var parent = node.parentElement;
-              var inSidebar = parent && parent.closest('.sidebar-ad, .footer-ad, .sidebar');
-              if (!inSidebar) {
-                node.remove();
-              }
+          if (node.nodeType === 1 && node.tagName === 'INS' && node.classList.contains('adsbygoogle')) {
+            var inFooter = node.closest('.footer-ad, .page__footer');
+            if (!inFooter) {
+              node.style.display = 'none';
+              node.remove();
             }
           }
         });
