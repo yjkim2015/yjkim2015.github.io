@@ -19,42 +19,6 @@
   {%- endcase -%}
 {% endif %}
 
-<!-- Mermaid: body 끝에서 로드하여 DOM 준비 후 렌더링 -->
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"></script>
-<script>
-(function() {
-  // 코드블록 중 mermaid 문법인 것을 pre.mermaid로 변환
-  var kw = /^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|xychart|mindmap|timeline|quadrantChart|gitGraph|sankey)/;
-  document.querySelectorAll('div.highlighter-rouge pre code, pre.highlight code').forEach(function(code) {
-    var t = code.textContent.trim();
-    if (kw.test(t)) {
-      var pre = document.createElement('pre');
-      pre.className = 'mermaid';
-      pre.textContent = t;
-      var wrap = code.closest('div.highlighter-rouge') || code.closest('figure.highlight');
-      if (wrap && wrap.parentNode) wrap.parentNode.replaceChild(pre, wrap);
-    }
-  });
-  // 초기화 + 렌더링
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: 'base',
-    themeVariables: {
-      primaryColor: '#dcedc8', primaryBorderColor: '#7cb342', primaryTextColor: '#1b5e20',
-      secondaryColor: '#e1f5fe', secondaryBorderColor: '#039be5', secondaryTextColor: '#01579b',
-      tertiaryColor: '#fff3e0', tertiaryBorderColor: '#fb8c00', tertiaryTextColor: '#e65100',
-      lineColor: '#546e7a', mainBkg: '#f1f8e9', nodeBorder: '#7cb342',
-      fontSize: '15px', fontFamily: 'Pretendard, -apple-system, sans-serif',
-      actorBkg: '#e8f5e9', actorBorder: '#43a047', actorTextColor: '#1b5e20',
-      noteBkgColor: '#fff9c4', noteBorderColor: '#f9a825', noteTextColor: '#5d4037'
-    },
-    flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: true },
-    sequence: { mirrorActors: true, useMaxWidth: true }
-  });
-  mermaid.run();
-})();
-</script>
-
 <script>
 // Reading progress bar
 (function() {
@@ -70,26 +34,24 @@
   update();
 })();
 
-// 접기/펼치기 자동 변환 (극한 시나리오 + 면접 포인트)
+// 극한 시나리오 이후의 모든 h2를 접기/펼치기로 변환 + 광고
 (function() {
   var content = document.querySelector('.page__content');
   if (!content) return;
 
-  var sections = [
-    { keywords: ['극한 시나리오', '극한시나리오'], icon: '\uD83D\uDD25', label: '\uADF9\uD55C \uC2DC\uB098\uB9AC\uC624 \u2014 \uD074\uB9AD\uD558\uC5EC \uD3BC\uCE58\uAE30', cls: 'extreme-scenario' },
-    { keywords: ['면접 포인트', '면접포인트'], icon: '\uD83C\uDFAF', label: '\uBA74\uC811 \uD3EC\uC778\uD2B8 \u2014 \uD074\uB9AD\uD558\uC5EC \uD3BC\uCE58\uAE30', cls: 'interview-point' }
-  ];
+  var headings = Array.from(content.querySelectorAll('h2'));
+  var foundExtreme = false;
 
-  var headings = content.querySelectorAll('h2');
   headings.forEach(function(h2) {
     var text = h2.textContent || '';
-    var matched = null;
-    sections.forEach(function(sec) {
-      sec.keywords.forEach(function(kw) {
-        if (text.indexOf(kw) !== -1) matched = sec;
-      });
-    });
-    if (!matched) return;
+
+    // 극한 시나리오를 만나면 플래그 ON
+    if (text.indexOf('극한 시나리오') !== -1 || text.indexOf('극한시나리오') !== -1) {
+      foundExtreme = true;
+    }
+
+    // 극한 시나리오 포함, 그 이후 모든 h2를 접기/펼치기로
+    if (!foundExtreme) return;
 
     var siblings = [];
     var next = h2.nextElementSibling;
@@ -100,20 +62,19 @@
     if (siblings.length === 0) return;
 
     var details = document.createElement('details');
-    details.className = matched.cls + '-details';
+    details.className = 'extreme-scenario-details';
     var summary = document.createElement('summary');
-    summary.className = matched.cls + '-summary';
-    summary.innerHTML = '<span class="' + matched.cls + '-icon">' + matched.icon + '</span>' +
-      '<span class="' + matched.cls + '-label">' + matched.label + '</span>' +
-      '<span class="' + matched.cls + '-toggle"></span>';
+    summary.className = 'extreme-scenario-summary';
+    summary.innerHTML = '<span class="extreme-scenario-icon">\uD83D\uDD25</span>' +
+      '<span class="extreme-scenario-label">' + text + ' \u2014 \uD074\uB9AD\uD558\uC5EC \uD3BC\uCE58\uAE30</span>' +
+      '<span class="extreme-scenario-toggle"></span>';
     details.appendChild(summary);
 
     var body = document.createElement('div');
-    body.className = matched.cls + '-body';
+    body.className = 'extreme-scenario-body';
 
-    // 수동 광고 (펼칠 때 1회)
+    // in-article 광고 (펼칠 때 1회 로드)
     var adDiv = document.createElement('div');
-    adDiv.className = matched.cls + '-ad';
     adDiv.style.cssText = 'text-align:center;margin-bottom:1.5em;';
     adDiv.innerHTML = '<ins class="adsbygoogle" style="display:block; text-align:center;" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843"></ins>';
     body.appendChild(adDiv);
