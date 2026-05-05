@@ -698,15 +698,18 @@ pre.mermaid {
   border: 1px solid #d4ead4;
   border-radius: 14px;
   padding: 2em 1.5em;
-  margin: 0 auto;
+  margin: 2em auto;
   text-align: center;
   overflow-x: auto;
   box-shadow: 0 4px 20px rgba(26,137,23,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  min-height: 200px;
 
   svg {
-    max-width: 100%;
-    height: auto;
-    font-size: 15px !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 150px;
+    font-size: 16px !important;
   }
 }
 
