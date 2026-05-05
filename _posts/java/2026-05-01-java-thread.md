@@ -2029,15 +2029,8 @@ synchronized (syncLock) { // 데드락 가능
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 100 TPS (소규모 서비스)
 
@@ -2110,10 +2103,6 @@ metrics.computeIfAbsent("api.calls", k -> new LongAdder()).increment();
 100K TPS 이상에서는 단일 JVM의 한계를 넘어 **메시지 큐(Kafka, RabbitMQ)** 와 **분산 캐시(Redis)** 로 상태를 외부화하는 아키텍처가 필요합니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 정리
 
 Java 스레드와 동시성 프로그래밍의 핵심을 표로 정리합니다.

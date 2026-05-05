@@ -582,15 +582,8 @@ buildCache {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 테스트 순서에 따라 통과/실패가 달라진다
 
@@ -655,10 +648,6 @@ docker volume prune -f --filter "label=org.testcontainers=true"
 CI 환경에서는 파이프라인의 `post` 단계에 이 정리 스크립트를 추가하여, 테스트 성공/실패와 무관하게 항상 실행되도록 설정하는 것이 안전하다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 실수 1: H2로 통합 테스트를 대체한다

@@ -601,15 +601,8 @@ graph LR
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: SLO 99.9%인데 사용자 불만이 폭주한다
 
@@ -680,10 +673,6 @@ groups:
 **이 코드의 핵심:** `record` 규칙으로 SLI를 사전 계산하면, 대시보드나 알림 규칙에서 이 시계열을 바로 참조할 수 있다. 매번 30일치 데이터를 집계하는 무거운 쿼리 대신, 미리 계산된 값을 읽기만 하면 된다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 1. SLO를 100%로 설정한다

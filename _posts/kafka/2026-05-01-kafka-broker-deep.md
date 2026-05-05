@@ -505,15 +505,8 @@ export KAFKA_JVM_PERFORMANCE_OPTS="-server \
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 브로커 재시작 중 파티션 리더 쏠림
 
@@ -545,7 +538,3 @@ ZooKeeper 클러스터 앙상블을 3대 이상으로 구성
 throttle 적용으로 재할당 속도 제한 (과도한 I/O 방지)
 재할당 완료 후 verify 명령으로 검증
 ```
-</div>
-</div>
-</details>
-

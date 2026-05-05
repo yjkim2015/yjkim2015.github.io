@@ -430,15 +430,8 @@ public class KafkaProducerConfig {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: ACK=ALL인데 브로커 1대 장애 발생 중 메시지 전송
 
@@ -478,7 +471,3 @@ max.block.ms를 짧게 설정 (빠른 실패)
 비동기 전송 + 예외 처리로 Kafka 지연이 서비스를 블로킹하지 않도록 설계
 Circuit Breaker 패턴 적용 (Kafka 연결 실패 시 fallback)
 ```
-</div>
-</div>
-</details>
-

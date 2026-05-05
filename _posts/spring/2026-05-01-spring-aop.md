@@ -556,15 +556,8 @@ public class MyAspect {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: Self-Invocation으로 @Transactional이 무시되어 데이터 정합성 붕괴
 
@@ -583,10 +576,6 @@ public class MyAspect {
 `execution(* com.example..*(..))` 처럼 최상위 패키지 전체를 대상으로 로깅 Aspect를 적용했다. DTO 생성자, getter/setter, 유틸리티 메서드까지 모두 AOP가 적용되어 초당 수만 건의 불필요한 로그가 생성된다. GC 압박이 증가하고 응답 시간이 30% 이상 느려진다. Pointcut은 항상 최소 범위로 지정하고, `within()`이나 `@annotation()`으로 대상을 명확히 한정해야 한다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 면접 포인트
 
 **Q1. Spring AOP는 어떤 방식으로 동작하는가?**

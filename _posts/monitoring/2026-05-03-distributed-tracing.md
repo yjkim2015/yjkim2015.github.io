@@ -524,15 +524,8 @@ service:
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: Trace ID가 중간에 끊어진다
 
@@ -574,10 +567,6 @@ service:
 3. 불필요한 내부 Span을 제거한다 (모든 private 메서드에 Span을 만들 필요는 없다)
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 1. 모든 메서드에 Span을 만든다

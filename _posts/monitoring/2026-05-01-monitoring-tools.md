@@ -391,15 +391,8 @@ P2 (다음 근무일):
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 메트릭은 정상인데 사용자 불만 폭발
 
@@ -464,7 +457,3 @@ inhibit_rules:
       alertname: 'HighLatency'
     equal: ['job']
 ```
-</div>
-</div>
-</details>
-

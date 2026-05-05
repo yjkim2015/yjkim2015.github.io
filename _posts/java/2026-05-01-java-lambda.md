@@ -675,15 +675,8 @@ for (int i = 0; i < 1000000; i++) {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 이벤트 필터링 파이프라인 (100 TPS)
 
@@ -710,10 +703,6 @@ for (int i = 0; i < 1000000; i++) {
 - **근거:** 비캡처링 람다는 JVM이 싱글톤 인스턴스로 최적화하므로 GC 대상이 되지 않습니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 12. 실무에서 자주 하는 실수
 
 ### 실수 1: 람다 안에서 체크 예외를 던지려고 함

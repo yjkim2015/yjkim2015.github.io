@@ -1308,15 +1308,8 @@ System.out.println(immutable.size()); // 4 — 변경 없음
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 100 TPS (소규모 서비스)
 
@@ -1392,10 +1385,6 @@ ConcurrentHashMap<String, Object> getShard(String key) {
 100K TPS를 넘으면 인메모리 컬렉션의 한계를 인식해야 합니다. 세션은 Redis, 메시지는 Kafka, 통계 집계는 별도 스트림 처리 플랫폼(Flink, Spark)으로 외부화하는 아키텍처가 필요합니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 요약
 
 Java 컬렉션 프레임워크는 **인터페이스-구현체 분리 원칙**을 따르므로, 변수 타입은 인터페이스(`List`, `Map`, `Set`)로 선언하고 구현체는 필요에 따라 교체하는 것이 좋은 설계입니다.

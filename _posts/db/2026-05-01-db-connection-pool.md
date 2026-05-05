@@ -455,15 +455,8 @@ spring:
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 트래픽 스파이크로 풀 고갈
 
@@ -566,7 +559,3 @@ DB 서버 설정 확인:
     max-lifetime: 300000     # 5분 (NLB 350초보다 짧게) → 커넥션 선제 교체
     connection-test-query: SELECT 1  # JDBC4 미지원 시 사용 전 검증
 ```
-</div>
-</div>
-</details>
-

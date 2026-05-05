@@ -516,15 +516,8 @@ sequenceDiagram
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: @Async 전파 누락으로 traceId 소실
 
@@ -545,10 +538,6 @@ sequenceDiagram
 Producer에서 `record.headers().add("X-Trace-Id", traceId.getBytes())`로 헤더를 추가하고, Consumer에서 헤더를 읽어 `MDC.put("traceId", traceId)`로 복원하면 전체 흐름이 연결된다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 10. 실무에서 자주 하는 실수
 
 ### 실수 1: MDC.clear() 미호출

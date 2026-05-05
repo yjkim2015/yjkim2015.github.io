@@ -445,15 +445,8 @@ const safe = Object.create(null);
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ```javascript
 function Animal() {}
@@ -490,10 +483,6 @@ Array.prototype.first = function() {
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 정리 — 프로토타입 핵심 개념
 
 ```mermaid

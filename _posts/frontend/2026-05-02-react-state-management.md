@@ -460,15 +460,8 @@ function Parent() {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### Context 값이 바뀔 때마다 전체 트리가 리렌더링된다
 
@@ -502,7 +495,3 @@ queryClient.invalidateQueries({ queryKey: ['users'] });
 ```
 
 상태 관리의 핵심은 **"이 상태를 어디에 두어야 하는가?"** 를 결정하는 것입니다. 로컬 상태는 `useState`, 서버 상태는 `React Query`, 전역 UI 상태는 `Zustand` 또는 `Context`. 이 세 가지 분류만 확실히 이해해도 대부분의 상태 관리 문제를 해결할 수 있습니다. 과도한 라이브러리 도입보다 올바른 상태 분류가 훨씬 중요합니다.
-</div>
-</div>
-</details>
-

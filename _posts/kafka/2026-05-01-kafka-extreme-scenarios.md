@@ -765,15 +765,8 @@ props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ```
 프로듀서 설정:
@@ -809,10 +802,6 @@ props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 시나리오별 빠른 참조
 
 | 시나리오 | 핵심 위험 | 방어 방법 |

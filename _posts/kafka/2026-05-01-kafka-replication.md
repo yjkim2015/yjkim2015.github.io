@@ -371,15 +371,8 @@ kafka-topics.sh --bootstrap-server kafka:9092 \
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오: ISR 축소 중 min.insync.replicas 위반
 
@@ -404,7 +397,3 @@ flowchart TD
 ```
 
 금융/결제 시스템은 반드시 내구성을 우선해야 한다. 일시적 장애 허용보다 데이터 정확성이 더 중요하다.
-</div>
-</div>
-</details>
-

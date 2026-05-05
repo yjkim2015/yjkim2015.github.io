@@ -775,15 +775,8 @@ DAU: 1억명
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 넷플릭스는 피크 시간에 인터넷 전체 트래픽의 15%를 차지합니다. 초당 수 TB의 데이터를 전 세계에 전달합니다. 일반 CDN으로는 비용이 천문학적이고 성능도 부족합니다.
 
@@ -836,10 +829,6 @@ graph TD
 5. **Circuit Breaker**: 추천 서비스가 느려져도 재생은 계속됩니다. 추천 대신 인기 콘텐츠를 보여주는 폴백(Fallback)이 동작합니다. "추천이 안 되면 재생도 안 된다"는 강한 결합을 없앤 것입니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 핵심 포인트 정리
 
 | 개념 | 핵심 트레이드오프 | 언제 선택 | 주의사항 |

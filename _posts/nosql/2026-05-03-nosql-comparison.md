@@ -330,15 +330,8 @@ public class OrderService {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 트래픽 1,000 TPS → 100,000 TPS 성장
 
@@ -381,10 +374,6 @@ public class OrderService {
 **Neo4j:** 속성(property) 추가는 스키마 변경 없이 가능하다. 그래프 DB는 노드/관계에 자유롭게 속성을 추가할 수 있다. 다만 속성에 인덱스를 걸어야 하는 경우, `CREATE INDEX`가 백그라운드로 실행되며 대규모 그래프에서는 수 분이 소요될 수 있다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 6. 실무에서 자주 하는 실수
 
 ### 실수 1: "NoSQL이니까 설계 안 해도 된다"

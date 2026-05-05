@@ -658,15 +658,8 @@ Kotlin을 사용 중이다
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 100만 동시 요청 처리
 
@@ -789,10 +782,6 @@ public class PinningBenchmark {
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 11. 마이그레이션 가이드
 
 ### 단계별 마이그레이션

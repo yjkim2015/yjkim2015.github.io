@@ -1393,15 +1393,8 @@ String[] arr = toArray(stringList, String[]::new); // 메서드 참조로 깔끔
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 타입 안전성 vs 유연성
 
@@ -1475,10 +1468,6 @@ public class TypeSafeEventBus {
 100K TPS 환경에서는 `CopyOnWriteArrayList`로 읽기(이벤트 발행)에 락을 걸지 않아 성능을 확보하고, `ConcurrentHashMap.computeIfAbsent`로 핸들러 등록의 원자성을 보장합니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 정리
 
 제네릭을 올바르게 사용하면 다음 이점을 얻습니다.

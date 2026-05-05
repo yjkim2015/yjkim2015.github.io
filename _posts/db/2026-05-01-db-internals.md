@@ -597,15 +597,8 @@ WHERE phone = '01012345678'  -- 문자열로 비교 → 인덱스 사용 가능
 
 <br>
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 쿼리가 갑자기 10배 느려진 경우
 
@@ -668,10 +661,6 @@ WHERE name LIKE '%undo%';
 `duration_sec`이 300초(5분)를 넘는 트랜잭션이 있다면 즉시 원인을 파악하고, 필요하면 `KILL` 명령으로 강제 종료한다. 배치 처리 시에는 트랜잭션을 작게 나눠서 커밋하는 습관이 중요하다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 1. ANALYZE TABLE 누락 후 성능 저하 방치

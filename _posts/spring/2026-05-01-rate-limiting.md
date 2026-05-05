@@ -843,15 +843,8 @@ public class TieredRateLimiter {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: Redis 장애 시 Rate Limiter 동작
 
@@ -958,10 +951,6 @@ graph LR
 | 로컬+Redis 하이브리드 | 높음 | ~0.5ms | 고성능 + 정확도 균형 |
 
 ---
-</div>
-</div>
-</details>
-
 ## 정리
 
 ```mermaid

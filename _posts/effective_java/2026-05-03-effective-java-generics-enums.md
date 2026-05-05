@@ -498,15 +498,8 @@ public boolean equals(Object o) { // 올바른 시그니처
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: raw type으로 인한 운영 장애
 
@@ -548,10 +541,6 @@ ordinal로 2차원 배열을 만들어 상태 전이 테이블을 구성하면, 
 비트 필드로 권한을 관리하던 시스템에서 권한 수가 64개를 초과하면, `long` 하나로 표현이 불가능해집니다. 실무에서 이런 상황은 마이크로서비스의 권한 체계가 점진적으로 확장될 때 흔히 발생합니다. 처음에는 `READ`, `WRITE`, `DELETE` 등 10여 개로 시작하지만, 서비스가 성장하면서 리소스별 세분화 권한이 추가되어 64개를 넘기게 됩니다. 이 시점에서 `long` 비트 필드는 **설계 한계에 도달**하며, `long[]` 배열로 확장하려면 모든 비트 연산 코드를 수정해야 합니다. `EnumSet`은 내부적으로 원소가 64개 이하일 때 `RegularEnumSet`(long 하나), 초과 시 `JumboEnumSet`(long 배열)으로 자동 전환하므로, 클라이언트 코드 변경 없이 원소 수에 제한 없이 확장됩니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 | 실수 | 올바른 방법 |

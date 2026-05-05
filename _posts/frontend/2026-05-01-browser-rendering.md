@@ -516,15 +516,8 @@ document.getElementById('todoList').addEventListener('click', (e) => {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 **문제**: 10,000개 DOM 노드 → 렌더 트리 거대화 → 스크롤 시 Reflow 폭발 → 프레임 드랍
 
@@ -565,10 +558,6 @@ class VirtualList {
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 핵심 포인트 정리
 
 | 단계 | 역할 | 트리거 |

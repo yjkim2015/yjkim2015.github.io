@@ -655,15 +655,8 @@ public class MemberService {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 11.1 관리자 API와 일반 API에 서로 다른 보안 적용
 
@@ -727,10 +720,6 @@ public class MultiSecurityConfig {
 `securityMatcher`가 없으면 모든 요청에 이 체인이 적용됩니다. `securityMatcher("/admin/**")`를 붙이면 `/admin/**` 패턴에 해당하는 요청만 이 체인을 사용합니다. 요청이 어느 체인에 해당하는지는 `@Order` 순서대로 `securityMatcher`와 매칭해봅니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 12. 전체 인증 흐름 정리
 
 ```mermaid

@@ -427,15 +427,8 @@ class Dessert {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 불변 클래스의 성능 함정
 
@@ -467,10 +460,6 @@ class ColorPoint extends Point { Color color; }
 두 인터페이스가 같은 시그니처의 `default` 메서드를 제공하면 **컴파일 에러**가 발생합니다. 이는 자바의 **다이아몬드 문제** 방지 메커니즘입니다. 구현 클래스에서 해당 메서드를 재정의하고, `InterfaceA.super.method()` 형태로 원하는 인터페이스의 구현을 명시적으로 선택해야 합니다. 만약 인터페이스 하나가 `default`이고 다른 하나가 `abstract`라면, `abstract`가 우선하여 구현 클래스에서 반드시 구현해야 합니다. 이 규칙을 모르면 라이브러리 업그레이드 시 **기존에 컴파일되던 코드가 갑자기 에러**를 내는 상황을 만나게 됩니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 | 실수 | 올바른 방법 |

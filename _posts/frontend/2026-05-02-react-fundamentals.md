@@ -327,15 +327,8 @@ const ExpensiveComponent = React.memo(function({ data, onClick }) {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ```jsx
 // 무한 루프 1: useEffect에 의존성 배열 없음
@@ -367,10 +360,6 @@ useEffect(() => {
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 정리
 
 ```mermaid

@@ -658,15 +658,8 @@ public class UserService {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 핫 샤드 발생 시 대응
 
@@ -703,10 +696,6 @@ graph LR
 Phase 4에서 읽기 트래픽을 점진적으로(10% → 50% → 100%) 이전하므로 문제 발생 시 즉시 롤백이 가능하다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 1. 샤딩을 너무 일찍 도입

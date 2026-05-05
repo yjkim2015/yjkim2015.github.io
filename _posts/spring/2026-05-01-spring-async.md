@@ -425,15 +425,8 @@ public class NotificationService {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 스레드 풀 고갈
 
@@ -463,10 +456,6 @@ public class NotificationService {
 → `@TransactionalEventListener(phase = AFTER_COMMIT)` 패턴으로 커밋 완료 후 실행을 보장한다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무 체크리스트
 
 ```

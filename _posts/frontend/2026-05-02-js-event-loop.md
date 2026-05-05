@@ -514,15 +514,8 @@ self.onmessage = (event) => {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ```javascript
 // 위험! 브라우저를 완전히 멈춥니다
@@ -553,10 +546,6 @@ flowchart LR
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 11. Node.js 이벤트 루프 — 브라우저와의 차이
 
 Node.js는 libuv를 사용하며 이벤트 루프 단계가 더 세분화됩니다.

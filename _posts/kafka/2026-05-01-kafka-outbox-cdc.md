@@ -462,15 +462,8 @@ WHERE status = 'PENDING';
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: Message Relay 프로세스 장기 중단
 
@@ -504,7 +497,3 @@ Relay 배치 크기 증가 (findTop100 → findTop1000)
 CDC 방식으로 전환 (폴링 DB 부하 제거)
 Outbox 파티셔닝 (PostgreSQL 파티션 테이블로 오래된 데이터 분리)
 ```
-</div>
-</div>
-</details>
-

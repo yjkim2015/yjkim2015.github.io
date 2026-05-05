@@ -612,15 +612,8 @@ JOIN information_schema.innodb_trx r ON r.trx_id = w.requesting_trx_id;
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 초당 10,000 쿼리에서 인덱스 하나로 서비스 중단
 
@@ -672,10 +665,6 @@ WHERE TABLE_NAME = 'orders' AND COLUMN_NAME = 'status'\G
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 10. 실무 쿼리 튜닝 체크리스트
 
 아래 8단계는 슬로우 쿼리를 발견했을 때부터 해결까지의 체계적인 접근법이다. 각 단계를 순서대로 진행하되, 힌트 적용(7단계)은 근본 원인을 해결한 후에도 문제가 남아 있을 때만 사용한다.

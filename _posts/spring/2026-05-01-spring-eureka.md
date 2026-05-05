@@ -261,15 +261,8 @@ Eureka Client 로컬 캐시
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: Eureka Server 전체 장애
 
@@ -295,10 +288,6 @@ public void outOfService() {
 일관성이 중요한 경우 Consul(CP), ZooKeeper(CP)를 대안으로 고려할 수 있다.
 
 ---
-</div>
-</div>
-</details>
-
 ## Kubernetes 환경에서 Eureka
 
 K8s 내부 통신에는 K8s Service(ClusterIP)가 자체 Service Discovery를 제공한다. 단일 K8s 클러스터에서는 Eureka 없이 K8s Service를 사용하는 것이 권장된다. 하이브리드(온프레미스 + 클라우드) 또는 멀티 클러스터 환경에서는 Eureka가 여전히 유효하다.

@@ -33,6 +33,44 @@
   window.addEventListener('scroll', update, { passive: true });
   update();
 })();
+
+// 극한 시나리오 접기/펼치기 자동 변환
+(function() {
+  var content = document.querySelector('.page__content');
+  if (!content) return;
+  var headings = content.querySelectorAll('h2');
+  headings.forEach(function(h2) {
+    if (h2.textContent.indexOf('극한 시나리오') === -1 &&
+        h2.textContent.indexOf('극한시나리오') === -1) return;
+
+    // h2 다음부터 다음 h2 전까지의 모든 요소를 수집
+    var siblings = [];
+    var next = h2.nextElementSibling;
+    while (next && next.tagName !== 'H2') {
+      siblings.push(next);
+      next = next.nextElementSibling;
+    }
+    if (siblings.length === 0) return;
+
+    // details 생성
+    var details = document.createElement('details');
+    details.className = 'extreme-scenario-details';
+    var summary = document.createElement('summary');
+    summary.className = 'extreme-scenario-summary';
+    summary.innerHTML = '<span class="extreme-scenario-icon">🔥</span>' +
+      '<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>' +
+      '<span class="extreme-scenario-toggle"></span>';
+    details.appendChild(summary);
+
+    var body = document.createElement('div');
+    body.className = 'extreme-scenario-body';
+    siblings.forEach(function(el) { body.appendChild(el); });
+    details.appendChild(body);
+
+    // h2를 details로 교체
+    h2.parentNode.replaceChild(details, h2);
+  });
+})();
 </script>
 {% endif %}
 

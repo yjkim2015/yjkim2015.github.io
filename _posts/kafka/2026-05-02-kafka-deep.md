@@ -721,15 +721,8 @@ graph TD
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 브로커 장애 — 리더 페일오버
 
@@ -830,10 +823,6 @@ unclean.leader.election.enable=false    # 금융: 데이터 무결성 우선
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 1. Consumer에서 auto.commit을 켠 채로 운영한 것

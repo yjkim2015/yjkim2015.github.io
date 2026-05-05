@@ -787,15 +787,8 @@ GitHub Actions에서 Docker Layer 캐시를 활용하려면 `cache-from`/`cache-
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: Matrix 조합 폭발 — 빌드 시간 2시간 초과
 
@@ -825,10 +818,6 @@ OS 3개 x Java 4개 x DB 3개 = 36개 Job이 병렬 실행된다. GitHub-hosted 
 3. `permissions` 키로 GITHUB_TOKEN의 권한을 최소화한다: `permissions: contents: read`.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 실수 1: GITHUB_TOKEN 권한을 과도하게 부여

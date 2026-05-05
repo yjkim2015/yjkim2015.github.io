@@ -525,15 +525,8 @@ public class GatewayCacheConfig {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 서버 20대, Redis Cluster 3대, CDN을 운영하는 서비스에 100K TPS가 들어오는 상황을 분석해보자.
 
@@ -624,10 +617,6 @@ public class L1CacheWarmup implements ApplicationRunner {
 **이 코드의 핵심:** Redis의 Sorted Set에 캐시 접근 횟수를 기록해두고, 서버 시작 시 상위 1,000개를 L1에 미리 로드한다. 이렇게 하면 서버 시작 직후에도 L1 Hit Rate가 높다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 캐시 모니터링 — Hit Rate가 생명이다
 
 멀티 레이어 캐싱을 구축했으면 각 계층의 Hit Rate를 반드시 모니터링해야 한다. Hit Rate가 떨어지면 하위 계층에 부하가 몰리고, 이는 곧 장애로 이어진다.

@@ -449,15 +449,8 @@ kubectl rollout restart deployment/myapp-deployment -n production
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 배포 중 서비스 다운 — Pod 0개 순간 발생
 
@@ -509,7 +502,3 @@ kubectl get secret db-secret -o jsonpath='{.data.password}' | base64 --decode
 ```
 
 운영 환경에서는 RBAC으로 Secret 조회 권한을 제한하고, Sealed Secrets 또는 AWS Secrets Manager 연동을 사용해야 한다.
-</div>
-</div>
-</details>
-

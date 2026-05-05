@@ -234,15 +234,8 @@ ENDPOINT_LIMITS = {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ```mermaid
 graph TD
@@ -275,10 +268,6 @@ class AdaptiveRateLimiter:
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 핵심 설계 결정 요약
 
 | 결정 | 선택 | 이유 |

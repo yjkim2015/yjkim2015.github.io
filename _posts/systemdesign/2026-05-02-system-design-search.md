@@ -298,15 +298,8 @@ def search_with_cache(query: str) -> list:
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 갑자기 "BTS 컴백"이 검색어 1위가 되는 순간을 실시간으로 감지한다:
 
@@ -339,10 +332,6 @@ def get_trending(self, limit: int = 10) -> list:
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 전체 아키텍처
 
 ```mermaid

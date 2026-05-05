@@ -570,15 +570,8 @@ class UserServiceIntegrationTest {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 실제 Spring AOP가 동작하는 방식을 직접 구현:
 
@@ -613,10 +606,6 @@ UserService proxied = (UserService) factory.getProxy();
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 10. Spring 6 변경점 요약
 
 | 항목 | Spring 5 | Spring 6 |

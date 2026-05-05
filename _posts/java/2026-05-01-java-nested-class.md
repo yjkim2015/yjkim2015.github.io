@@ -532,15 +532,8 @@ t.execute();
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 이벤트 리스너 누수 (100 TPS)
 
@@ -567,10 +560,6 @@ t.execute();
 - **근거:** 외부 참조를 끊으면 개별 핸들러가 독립적으로 GC 가능해져 메모리 누수 체인이 형성되지 않습니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 10. 실무에서 자주 하는 실수
 
 ### 실수 1: static으로 선언해야 할 중첩 클래스를 non-static으로 선언

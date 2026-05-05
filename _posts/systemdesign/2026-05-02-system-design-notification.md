@@ -266,15 +266,8 @@ def should_send_now(user_id: str, priority: str) -> bool:
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ```mermaid
 graph TD
@@ -290,10 +283,6 @@ graph TD
 **왜 속도 제한이 필요한가?** APNs/FCM은 초당 처리 한도가 있다. 한도 초과 시 IP 차단 → 모든 푸시 불가. 초당 1만 건 이하로 제어해서 차단을 피한다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 핵심 설계 결정 요약
 
 | 결정 | 선택 | 이유 |

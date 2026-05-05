@@ -395,15 +395,8 @@ END;
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오: 대용량 주문 테이블 설계
 
@@ -479,10 +472,6 @@ CREATE INDEX idx_status_ordered_at ON orders (status, ordered_at);
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 실수 1: 모든 관계를 식별 관계로 설계

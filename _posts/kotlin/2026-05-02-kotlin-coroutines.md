@@ -390,15 +390,8 @@ launch {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 4개의 외부 서비스를 호출해서 대시보드를 구성하는 API가 있다.
 
@@ -457,10 +450,6 @@ class DashboardService(
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## Spring WebFlux + 코루틴
 
 Spring WebFlux는 Reactive Streams(Mono/Flux) 기반이지만, 코루틴과 통합하면 훨씬 직관적인 코드가 된다.

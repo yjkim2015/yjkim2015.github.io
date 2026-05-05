@@ -1048,15 +1048,8 @@ java -Xmx8g \
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 100 TPS — G1GC 기본 설정으로 충분
 
@@ -1157,10 +1150,6 @@ graph TD
 100K TPS에서는 GC 튜닝 이전에 애플리케이션 코드에서 불필요한 객체 생성을 줄이는 것이 선행되어야 합니다. JFR(Java Flight Recorder)로 어느 코드가 가장 많은 객체를 생성하는지 프로파일링한 후 최적화하는 순서가 효과적입니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 정리
 
 ```mermaid

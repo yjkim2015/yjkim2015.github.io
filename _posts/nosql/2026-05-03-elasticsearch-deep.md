@@ -583,15 +583,8 @@ Elasticsearch는 JVM 위에서 동작하므로 힙 설정이 성능에 직접적
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 초당 10만 건 로그 인덱싱
 
@@ -659,10 +652,6 @@ POST /_aliases
 **이 시나리오의 핵심:** Alias가 없으면 무중단 전환이 불가능하다. 처음부터 alias를 통해 접근하는 설계가 되어 있어야 한다. Reindex는 원본 인덱스를 읽기만 하므로 기존 검색 서비스에 영향을 주지 않는다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 9. 실무에서 자주 하는 실수
 
 ### 실수 1: 모든 필드를 text 타입으로 설정

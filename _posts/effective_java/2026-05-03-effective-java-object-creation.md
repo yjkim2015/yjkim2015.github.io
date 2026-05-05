@@ -369,15 +369,8 @@ static void copy(String src, String dst) throws IOException {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 빌더에 필수 필드 누락
 
@@ -411,10 +404,6 @@ public NutritionFacts build() {
 방어 방법으로는 `WeakHashMap`(키가 더 이상 참조되지 않으면 엔트리 자동 제거), `LinkedHashMap.removeEldestEntry()`(가장 오래된 엔트리 자동 퇴출), 또는 `Caffeine` 같은 캐시 라이브러리의 TTL/최대 크기 설정이 있습니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 | 실수 | 올바른 방법 |

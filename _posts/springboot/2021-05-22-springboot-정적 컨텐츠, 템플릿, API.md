@@ -246,15 +246,8 @@ public class MemberApiController {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: @ResponseBody 없이 객체 반환
 
@@ -322,10 +315,6 @@ resources/static/hello.html 파일이 존재하면서
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무 체크리스트
 
 ```

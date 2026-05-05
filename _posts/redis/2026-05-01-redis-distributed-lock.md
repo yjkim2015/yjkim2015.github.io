@@ -684,15 +684,8 @@ Martin Kleppmann(DDIA 저자)은 Redlock의 안전성에 의문을 제기했다:
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 락 보유 중 프로세스 크래시
 
@@ -896,10 +889,6 @@ sequenceDiagram
 **해결 3**: G1GC/ZGC 등 STW가 짧은 GC 사용
 
 ---
-</div>
-</div>
-</details>
-
 ## 11. 전체 선택 가이드
 
 ```mermaid

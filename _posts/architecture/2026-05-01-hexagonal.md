@@ -616,15 +616,8 @@ Adapter = 구현체. "어떻게"를 정의.
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 헥사고날 아키텍처에서 Stripe → 토스페이먼츠 교체:
 
@@ -670,10 +663,6 @@ class PaymentService {
 레이어드 아키텍처였다면? 서비스 레이어 전반에 걸쳐 Stripe SDK 호출 코드가 퍼져 있어 대규모 수정이 필요합니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 핵심 포인트 정리
 
 ```

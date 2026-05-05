@@ -306,15 +306,8 @@ public int compareTo(Other o) {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: equals는 같은데 hashCode가 다를 때
 
@@ -361,10 +354,6 @@ treeSet.size(); // 1 (compareTo로 비교 → 값이 같으므로 같은 객체)
 새벽 3시에 장애가 발생했는데, 로그에 `Order@3f2a1c`만 찍혀 있다면 어떤 주문인지 알 수 없습니다. `toString`이 `Order{id=12345, status=PAYMENT_FAILED, amount=50000}`을 반환했다면 즉시 원인을 파악할 수 있습니다. 실무에서 이 문제가 치명적인 이유는, 장애 발생 시 로그가 유일한 단서인 경우가 대부분이기 때문입니다. 특히 분산 시스템에서 객체가 여러 서비스를 거치면서 직렬화/역직렬화되면, 중간 로그에 찍힌 `toString` 출력이 **트랜잭션 추적의 핵심 단서**가 됩니다. 주문 ID, 상태, 금액 같은 정보가 없으면 수천 건의 로그 속에서 문제 주문을 특정하기 위해 DB 쿼리를 반복해야 하며, 이로 인해 MTTR(평균 복구 시간)이 수십 분에서 수 시간으로 늘어납니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 | 실수 | 올바른 방법 |

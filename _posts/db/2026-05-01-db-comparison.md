@@ -911,15 +911,8 @@ PostgreSQL이 다른 RDBMS와 차별화되는 핵심 기능은 네 가지로 요
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 일 1억 건 트랜잭션 처리 (결제 시스템)
 
@@ -951,10 +944,6 @@ ORDER BY trx_started ASC;
 UNDO_RETENTION보다 오래 걸리는 쿼리가 실행 중에 필요한 Undo 블록이 덮어쓰여 발생한다. 응급 처치는 `UNDO_RETENTION`을 늘리고 `GUARANTEE` 옵션을 활성화하는 것이다. 근본적 해결은 쿼리를 최적화하거나 Undo Tablespace 크기를 충분히 늘리는 것이다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 15. 실무에서 자주 하는 실수
 
 ### 실수 1: MySQL에서 PK 없는 테이블 생성

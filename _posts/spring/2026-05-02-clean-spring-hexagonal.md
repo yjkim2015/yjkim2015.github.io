@@ -680,15 +680,8 @@ public class OrderEventHandler {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ```java
 // 순수 도메인 테스트 — Spring 의존성 0개
@@ -717,10 +710,6 @@ class PureOrderDomainTest {
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 8. 계층형 vs 헥사고날 비교
 
 | 항목 | 계층형 아키텍처 | 헥사고날 아키텍처 |

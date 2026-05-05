@@ -1295,15 +1295,8 @@ WebFlux가 불리한 경우는 다음과 같습니다.
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 9-1. 블로킹 코드가 이벤트 루프에 들어갔을 때
 
@@ -1583,10 +1576,6 @@ Mono<String> result = ReactiveSecurityContextHolder.getContext()
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 10. WebFlux vs Virtual Thread
 
 ### Java 21 Virtual Thread 개요

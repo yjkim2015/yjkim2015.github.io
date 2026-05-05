@@ -588,15 +588,8 @@ start.datesUntil(end).forEach(System.out::println);  // Java 9+
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 글로벌 예약 시스템 (100 TPS)
 
@@ -623,10 +616,6 @@ start.datesUntil(end).forEach(System.out::println);  // Java 9+
 - **근거:** `ZonedDateTime.plusDays(1)`은 DST를 자동 반영하지만, `Duration.ofDays(1)`은 항상 86400초이므로 DST 전환일에 23시간 또는 25시간이 됩니다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 11. 실무에서 자주 하는 실수
 
 ### 실수 1: SimpleDateFormat을 static으로 공유

@@ -468,15 +468,8 @@ sequenceDiagram
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오: 아이돌 컴백 공지 순간
 
@@ -503,10 +496,6 @@ BTS가 신보 링크를 트위터에 올렸다. 순간적으로 평상시의 100
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 핵심 포인트 정리
 
 | 개념 | 한 줄 요약 | 언제 사용 |

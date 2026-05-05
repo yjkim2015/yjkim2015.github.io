@@ -226,15 +226,8 @@ spring:
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 뷰 이름 대신 전체 경로 반환
 
@@ -294,10 +287,6 @@ public String hello(Model model) {
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무 체크리스트
 
 ```

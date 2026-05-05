@@ -608,15 +608,8 @@ public class ExternalApiService {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ```java
 @Service
@@ -656,10 +649,6 @@ public class RealtimeOrderProcessor {
 ```
 
 ---
-</div>
-</div>
-</details>
-
 ## 13. 테스트
 
 ```java

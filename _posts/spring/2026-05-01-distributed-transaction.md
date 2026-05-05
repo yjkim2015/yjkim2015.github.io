@@ -438,15 +438,8 @@ graph TD
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: 보상 트랜잭션도 실패하면?
 
@@ -488,7 +481,3 @@ Try는 성공했지만 서버가 재시작되면 Confirm/Cancel이 실행되지 
 2. 스케줄러로 PENDING 상태가 오래된 예약 자동 Cancel
 3. Try 결과를 DB에 저장해 서버 재시작 후 상태 복구
 ```
-</div>
-</div>
-</details>
-

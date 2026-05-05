@@ -631,15 +631,8 @@ void 결제_완료된_주문은_취소할_수_없다() {
 
 ---
 
-<details class="extreme-scenario-details">
-<summary class="extreme-scenario-summary">
-<span class="extreme-scenario-icon">🔥</span>
-<span class="extreme-scenario-label">극한 시나리오 — 클릭하여 펼치기</span>
-<span class="extreme-scenario-toggle"></span>
-</summary>
-<div class="extreme-scenario-body">
 
-<div class="extreme-scenario-content" markdown="1">
+## 극한 시나리오
 
 ### 시나리오 1: Mock이 실제 동작과 다르게 설정되어 프로덕션 장애 발생
 
@@ -713,10 +706,6 @@ class JpaOrderRepositoryTest extends OrderRepositoryContract {
 4️⃣ **MockitoSession 사용:** `MockitoSession`을 사용하면 각 테스트 종료 시 자동으로 Mock 상태를 검증하고 정리하여, 메모리 누수를 방지한다.
 
 ---
-</div>
-</div>
-</details>
-
 ## 실무에서 자주 하는 실수
 
 ### 실수 1: Stub과 Mock을 구분하지 않는다
