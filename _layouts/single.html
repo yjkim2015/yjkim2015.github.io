@@ -31,6 +31,17 @@ layout: default
       </footer>
 
       {% include post_pagination.html %}
+
+      <!-- 하단 광고 -->
+      <div class="footer-ad" style="text-align:center; margin:3em 0 2em; padding:1.5em; background:#f9fafb; border-radius:12px; border:1px solid #eee;">
+        <ins class="adsbygoogle"
+             style="display:block"
+             data-ad-client="ca-pub-7225106491387870"
+             data-ad-slot="0000000000"
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      </div>
     </article>
 
 
@@ -45,6 +56,17 @@ layout: default
       <div class="toc-sticky">
         <div class="toc-title">{{ page.toc_label | default: "목차" }}</div>
         {% include toc.html sanitize=true html=content h_min=1 h_max=6 class="toc__menu" %}
+
+        <!-- 사이드 광고 -->
+        <div style="margin-top:2em;">
+          <ins class="adsbygoogle"
+               style="display:block"
+               data-ad-client="ca-pub-7225106491387870"
+               data-ad-slot="0000000000"
+               data-ad-format="auto"
+               data-full-width-responsive="true"></ins>
+          <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+        </div>
       </div>
     </aside>
     {% endif %}

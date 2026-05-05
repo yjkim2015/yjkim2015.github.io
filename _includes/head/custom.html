@@ -32,20 +32,24 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"></script>
     <script>
       document.addEventListener('DOMContentLoaded', function() {
-        // Jekyll renders ```mermaid as <div class="language-mermaid"><pre><code>
-        // Convert them to <pre class="mermaid"> for mermaid.js to find
-        document.querySelectorAll('.language-mermaid .highlight code, .language-mermaid code').forEach(function(code) {
-          var pre = document.createElement('pre');
-          pre.className = 'mermaid';
-          pre.textContent = code.textContent;
-          var container = code.closest('.language-mermaid') || code.closest('.highlighter-rouge');
-          if (container) {
-            container.parentNode.replaceChild(pre, container);
+        // Jekyll renders ```mermaid as <div class="language-*"><pre><code>
+        // Convert ALL code blocks containing mermaid syntax to <pre class="mermaid">
+        var mermaidKeywords = /^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|xychart|mindmap|timeline|quadrantChart|gitGraph|sankey)/;
+        document.querySelectorAll('div.highlighter-rouge pre code, pre.highlight code').forEach(function(code) {
+          var text = code.textContent.trim();
+          if (mermaidKeywords.test(text)) {
+            var pre = document.createElement('pre');
+            pre.className = 'mermaid';
+            pre.textContent = text;
+            var container = code.closest('div.highlighter-rouge') || code.closest('figure.highlight');
+            if (container && container.parentNode) {
+              container.parentNode.replaceChild(pre, container);
+            }
           }
         });
 
         mermaid.initialize({
-          startOnLoad: true,
+          startOnLoad: false,
           theme: 'base',
           themeVariables: {
             /* 노드 색상 — 부드럽고 구분 쉬운 파스텔 */
@@ -105,6 +109,9 @@
             useMaxWidth: true
           }
         });
+
+        // 변환된 .mermaid 요소들을 렌더링
+        mermaid.run();
       });
     </script>
     <style>

@@ -34,16 +34,27 @@
   update();
 })();
 
-// 극한 시나리오 접기/펼치기 자동 변환
+// 접기/펼치기 자동 변환 (극한 시나리오 + 면접 포인트)
 (function() {
   var content = document.querySelector('.page__content');
   if (!content) return;
+
+  var sections = [
+    { keywords: ['극한 시나리오', '극한시나리오'], icon: '\uD83D\uDD25', label: '\uADF9\uD55C \uC2DC\uB098\uB9AC\uC624 \u2014 \uD074\uB9AD\uD558\uC5EC \uD3BC\uCE58\uAE30', cls: 'extreme-scenario' },
+    { keywords: ['면접 포인트', '면접포인트'], icon: '\uD83C\uDFAF', label: '\uBA74\uC811 \uD3EC\uC778\uD2B8 \u2014 \uD074\uB9AD\uD558\uC5EC \uD3BC\uCE58\uAE30', cls: 'interview-point' }
+  ];
+
   var headings = content.querySelectorAll('h2');
   headings.forEach(function(h2) {
     var text = h2.textContent || '';
-    if (text.indexOf('극한 시나리오') === -1 && text.indexOf('극한시나리오') === -1) return;
+    var matched = null;
+    sections.forEach(function(sec) {
+      sec.keywords.forEach(function(kw) {
+        if (text.indexOf(kw) !== -1) matched = sec;
+      });
+    });
+    if (!matched) return;
 
-    // h2 다음부터 다음 h2 전까지의 모든 요소를 수집
     var siblings = [];
     var next = h2.nextElementSibling;
     while (next && next.tagName !== 'H2') {
@@ -52,22 +63,21 @@
     }
     if (siblings.length === 0) return;
 
-    // details 생성
     var details = document.createElement('details');
-    details.className = 'extreme-scenario-details';
+    details.className = matched.cls + '-details';
     var summary = document.createElement('summary');
-    summary.className = 'extreme-scenario-summary';
-    summary.innerHTML = '<span class="extreme-scenario-icon">\uD83D\uDD25</span>' +
-      '<span class="extreme-scenario-label">\uADF9\uD55C \uC2DC\uB098\uB9AC\uC624 \u2014 \uD074\uB9AD\uD558\uC5EC \uD3BC\uCE58\uAE30</span>' +
-      '<span class="extreme-scenario-toggle"></span>';
+    summary.className = matched.cls + '-summary';
+    summary.innerHTML = '<span class="' + matched.cls + '-icon">' + matched.icon + '</span>' +
+      '<span class="' + matched.cls + '-label">' + matched.label + '</span>' +
+      '<span class="' + matched.cls + '-toggle"></span>';
     details.appendChild(summary);
 
     var body = document.createElement('div');
-    body.className = 'extreme-scenario-body';
+    body.className = matched.cls + '-body';
 
-    // 수동 광고 삽입 (펼칠 때 1회 로드)
+    // 수동 광고 (펼칠 때 1회)
     var adDiv = document.createElement('div');
-    adDiv.className = 'extreme-scenario-ad';
+    adDiv.className = matched.cls + '-ad';
     adDiv.style.cssText = 'text-align:center;margin-bottom:1.5em;';
     adDiv.innerHTML = '<ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7225106491387870" data-ad-slot="0000000000" data-ad-format="auto" data-full-width-responsive="true"></ins>';
     body.appendChild(adDiv);
@@ -75,7 +85,6 @@
     siblings.forEach(function(el) { body.appendChild(el); });
     details.appendChild(body);
 
-    // 펼칠 때 광고 로드
     details.addEventListener('toggle', function() {
       if (details.open && !adDiv.dataset.loaded) {
         adDiv.dataset.loaded = '1';
@@ -83,7 +92,6 @@
       }
     });
 
-    // h2를 details로 교체
     h2.parentNode.replaceChild(details, h2);
   });
 })();
