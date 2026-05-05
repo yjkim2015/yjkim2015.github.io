@@ -471,7 +471,7 @@ spec:
 
 **이 코드의 핵심:**
 - `clusters` Generator가 ArgoCD에 등록된 클러스터 중 `env: production` 라벨이 있는 것만 선택한다.
-- `{{name}}`, `{{server}}`, `{{metadata.labels.region}}`이 각 클러스터의 값으로 치환되어 Application이 자동 생성된다.
+- {% raw %}`{{name}}`{% endraw %}, {% raw %}`{{server}}`{% endraw %}, {% raw %}`{{metadata.labels.region}}`{% endraw %}이 각 클러스터의 값으로 치환되어 Application이 자동 생성된다.
 
 > **비유:** ApplicationSet은 우편물 대량 발송이다. 수신자 명단(클러스터 목록)과 편지 템플릿(Application)을 주면, 이름과 주소만 바꿔서 자동으로 모든 수신자에게 발송한다.
 

