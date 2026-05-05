@@ -264,6 +264,83 @@ Flux.concat(flux1, flux2)
 // A, B, 1, 2 (항상 이 순서)
 ```
 
+**concatMap — 비동기 변환 (순서 보장, 직렬)**
+
+```java
+Flux.just("user1", "user2", "user3")
+    .concatMap(userId -> fetchUserFromDB(userId))  // 순서 보장
+    .subscribe(user -> System.out.println(user));
+```
+
+**switchMap — 최신 값만 (검색 자동완성에 유용)**
+
+```java
+Flux<SearchResult> searchResults = searchInput
+    .switchMap(query -> searchService.search(query)); // 이전 요청은 취소
+```
+
+**필터링 연산자**
+
+```java
+Flux<Integer> numbers = Flux.range(1, 20);
+
+numbers.filter(n -> n % 2 == 0)    // 짝수만
+       .take(5)                      // 앞에서 5개
+       .skip(2)                      // 앞에서 2개 스킵
+       .takeLast(3)                  // 뒤에서 3개
+       .distinct()                   // 중복 제거
+       .distinctUntilChanged()       // 연속 중복만 제거
+       .elementAt(3)                 // 3번째 원소 (Mono)
+       .next()                       // 첫 번째 원소 (Mono)
+```
+
+**집계 연산자**
+
+```java
+Flux<Integer> flux = Flux.range(1, 5);
+
+Mono<Integer> sum = flux.reduce(0, Integer::sum);  // 15
+Mono<List<Integer>> list = flux.collectList();      // [1,2,3,4,5]
+Mono<Long> count = flux.count();                    // 5
+
+// groupBy
+Flux<GroupedFlux<String, User>> grouped = userFlux
+    .groupBy(user -> user.getCity());
+
+grouped.flatMap(group -> group
+    .count()
+    .map(count -> group.key() + ": " + count)
+).subscribe(System.out::println);
+
+// window — N개씩 묶음
+flux.window(3)
+    .flatMap(window -> window.collectList())
+    .subscribe(System.out::println);
+// [1, 2, 3], [4, 5]
+
+// buffer — N개씩 List로
+flux.buffer(3)
+    .subscribe(System.out::println);
+// [1, 2, 3], [4, 5]
+```
+
+**결합 연산자 추가 — zipWith, combineLatest, scan**
+
+```java
+// zipWith
+Mono<UserProfile> profile = userMono
+    .zipWith(ordersMono)
+    .map(tuple -> UserProfile.of(tuple.getT1(), tuple.getT2()));
+
+// combineLatest — 둘 중 하나라도 값 방출 시 최신값 결합
+Flux.combineLatest(flux1, flux2, (v1, v2) -> v1 + "," + v2);
+
+// scan — 누적 값
+Flux<Integer> runningSum = Flux.range(1, 5)
+    .scan(0, Integer::sum);
+// 0, 1, 3, 6, 10, 15
+```
+
 **switchIfEmpty — 빈 Publisher 대체**
 
 ```java
@@ -1573,6 +1650,47 @@ Mono<String> result = ReactiveSecurityContextHolder.getContext()
     .map(SecurityContext::getAuthentication)
     .map(Authentication::getName)
     .flatMap(username -> userService.findByUsername(username));
+```
+
+### 9-10. Kafka 실시간 주문 스트림 처리
+
+여러 연산자를 조합한 실전 파이프라인 예시입니다. Kafka에서 주문을 수신하여 회원별 배치 처리 후 알림을 발송합니다.
+
+```java
+@Service
+public class RealtimeOrderProcessor {
+
+    // Kafka → 주문 스트림 → DB 저장 → 알림 발송
+    public Flux<ProcessedOrder> processOrderStream(Flux<KafkaMessage<Order>> kafkaStream) {
+        return kafkaStream
+            .map(KafkaMessage::value)                     // Kafka 메시지에서 주문 추출
+            .filter(order -> order.getStatus() == OrderStatus.NEW)
+            .groupBy(Order::getMemberId)                   // 회원별로 그룹핑
+            .flatMap(memberOrders ->
+                memberOrders
+                    .buffer(Duration.ofSeconds(1))          // 1초 단위로 배치
+                    .filter(batch -> !batch.isEmpty())
+                    .flatMap(batch -> processBatch(batch))
+            )
+            .doOnNext(order -> metricsService.recordProcessed())
+            .doOnError(e -> metricsService.recordError());
+    }
+
+    private Mono<ProcessedOrder> processBatch(List<Order> orders) {
+        return Flux.fromIterable(orders)
+            .flatMap(order ->
+                orderRepository.save(order)
+                    .flatMap(saved ->
+                        notificationService.sendPush(saved.getMemberId(), "주문 처리 완료")
+                            .thenReturn(ProcessedOrder.from(saved))
+                    )
+            )
+            .collectList()
+            .flatMap(processed ->
+                Mono.just(processed.get(0)) // 배치 대표 반환
+            );
+    }
+}
 ```
 
 ---

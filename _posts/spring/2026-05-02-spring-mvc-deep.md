@@ -855,3 +855,112 @@ flowchart LR
 | `Interceptor` | Spring MVC 계층 처리 | handler instanceof HandlerMethod 체크 필수 |
 | PRG 패턴 | POST 후 redirect | 안 하면 새로고침 시 중복 제출 |
 | `@ExceptionHandler` | 예외 전역 처리 | Exception.class에서 내부 정보 노출 금지 |
+
+---
+
+## 14. @Controller vs @RestController
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Controller
+@ResponseBody  // 이것이 유일한 차이
+public @interface RestController { }
+```
+
+`@RestController = @Controller + @ResponseBody`이다. `@ResponseBody`가 붙으면 반환값을 ViewResolver에 보내지 않고 `HttpMessageConverter`로 직렬화해서 응답 Body에 직접 쓴다.
+
+```mermaid
+graph TD
+    A["컨트롤러 반환값 (OrderResponse 객체)"] --> B["HttpMessageConverter 선택\nAccept 헤더와 반환 타입으로 결정"]
+    B --> C1["MappingJackson2HttpMessageConverter\nJava 객체 → JSON"]
+    B --> C2["StringHttpMessageConverter\nString → text/plain"]
+    B --> C3["ByteArrayHttpMessageConverter\nbyte[] → application/octet-stream"]
+    C1 --> D["HTTP Response Body"]
+    C2 --> D
+    C3 --> D
+```
+
+---
+
+## 15. 조건부 매핑 — URL 외 조건으로 핸들러를 선택하는 방법
+
+```java
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+
+    // 쿼리 파라미터, 헤더, Content-Type, Accept를 조건으로 매핑할 수 있다
+    @GetMapping(value = "/search",
+                params = "type=recent",        // 쿼리 파라미터 조건
+                headers = "X-API-Version=2",   // 헤더 조건
+                consumes = "application/json", // Content-Type 조건
+                produces = "application/json") // Accept 조건
+    public List<Order> searchOrders() { ... }
+}
+```
+
+같은 URL이라도 API 버전 헤더나 Content-Type에 따라 다른 핸들러로 라우팅할 수 있다. 이 기능은 API 버저닝 전략에서 유용하다.
+
+---
+
+## 16. 전통적 Spring MVC의 설정 구조 (레거시 참고)
+
+Spring Boot 이전의 전통적인 Spring MVC 프로젝트는 XML 기반 설정을 사용했다. Spring Boot가 이 모든 것을 자동 설정으로 대체했지만, 레거시 프로젝트를 이해하려면 이 구조를 알아야 한다.
+
+### 16.1 설정 파일 로딩 순서
+
+```mermaid
+graph TD
+    START["1️⃣ Tomcat 구동"]
+    WEBXML["2️⃣ web.xml 로딩\n웹 프로젝트 전체 설정"]
+    ROOT["3️⃣ root-context.xml 로딩\n스프링 환경 설정\n(DB, 서비스, 레포지토리 빈)"]
+    SERVLET["4️⃣ dispatcher-servlet 초기화\nservlet-context.xml 로딩\n(컨트롤러, ViewResolver, 정적 리소스)"]
+    READY["5️⃣ 요청 수신 준비 완료\nlocalhost:8080 오픈"]
+
+    START --> WEBXML --> ROOT --> SERVLET --> READY
+```
+
+### 16.2 두 개의 ApplicationContext 계층 구조
+
+전통적 Spring MVC는 두 개의 스프링 컨텍스트를 계층 구조로 관리한다.
+
+```mermaid
+graph TD
+    ROOT_CTX["Root ApplicationContext\n(root-context.xml)\nDB 설정, Service, Repository\n웹과 무관한 빈들"]
+    SERVLET_CTX["Servlet ApplicationContext\n(servlet-context.xml)\nController, ViewResolver\n웹 관련 빈들"]
+
+    ROOT_CTX -->|"부모 컨텍스트"| SERVLET_CTX
+```
+
+Servlet Context는 Root Context의 빈을 참조할 수 있지만 반대는 불가능하다(부모→자식 단방향). `@Transactional`이 있는 Service는 반드시 Root Context에 등록해야 트랜잭션 프록시가 올바르게 생성된다. Servlet Context에 Service가 스캔되면 `@Transactional`이 작동하지 않는 경우가 발생한다.
+
+### 16.3 Spring Boot에서의 변화
+
+```mermaid
+graph LR
+    OLD["전통 Spring MVC"]
+    NEW["Spring Boot"]
+
+    OLD --> O1["web.xml 직접 작성"]
+    OLD --> O2["servlet-context.xml 직접 작성"]
+    OLD --> O3["Tomcat 별도 설치/배포"]
+
+    NEW --> N1["@SpringBootApplication\n자동 설정"]
+    NEW --> N2["application.yml\n필요한 것만 오버라이드"]
+    NEW --> N3["내장 Tomcat\njar 파일 하나로 실행"]
+```
+
+```java
+// Spring Boot: 위의 모든 XML 설정을 이 한 줄로 대체한다
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+```
+
+### 16.4 레거시 트러블슈팅 — 한국어 깨짐
+
+web.xml에 `CharacterEncodingFilter`가 없거나 DispatcherServlet 이후에 등록된 경우 POST 파라미터의 한글이 `???`로 깨진다. 필터 등록 순서는 `CharacterEncodingFilter`가 가장 먼저여야 한다.

@@ -886,3 +886,134 @@ flowchart TD
 | @Repository | 예외를 DataAccessException으로 변환 | 서비스 레이어가 특정 DB 기술에 종속 |
 
 Spring IoC/DI의 핵심은 "객체가 스스로 의존관계를 만들지 않고, 외부(컨테이너)가 주입해 준다"는 것입니다. 이를 통해 느슨한 결합, 테스트 용이성, 유연한 설계가 가능해집니다.
+
+---
+
+## 14. 추가 심화 개념
+
+### 14.1 IoC는 Spring만의 기술이 아니다
+
+IoC는 여러 곳에서 이미 사용되고 있는 범용적인 원리이다.
+
+```mermaid
+graph TD
+    IOC["IoC 제어의 역전"]
+    IOC --> SERVLET["서블릿\n개발자가 실행 시점을 제어 못함\n컨테이너가 적절한 시점에 doGet() 호출"]
+    IOC --> TEMPLATE["템플릿 메소드 패턴\n추상 메소드를 언제 호출할지는\n슈퍼클래스가 결정"]
+    IOC --> FRAMEWORK["프레임워크\n개발자 코드를 프레임워크가 호출\n(라이브러리는 개발자가 호출)"]
+    IOC --> SPRING["Spring IoC 컨테이너\n빈 생성/관계설정/생명주기 관리"]
+```
+
+서블릿의 `doGet()`, `doPost()`는 개발자가 직접 호출하지 않는다. 서블릿 컨테이너(Tomcat)가 적절한 시점에 호출한다. 프레임워크와 라이브러리의 차이도 IoC에 있다. 라이브러리는 개발자 코드가 라이브러리를 호출하지만, 프레임워크는 프레임워크가 개발자 코드를 호출한다.
+
+### 14.2 컴파일 타임 의존관계 vs 런타임 의존관계
+
+DI의 핵심은 컴파일 타임에는 구체 클래스를 모르고, 런타임에 컨테이너가 연결해 준다는 것이다. 두 클래스 A, B가 있을 때 A가 B를 사용한다면 A는 B에 의존한다. B가 변하면 A에 영향을 미치지만, A가 변해도 B는 영향을 받지 않는다. 이 **방향성**을 이해하는 것이 DI 설계의 출발점이다.
+
+```mermaid
+graph TD
+    subgraph "컴파일 타임 (코드상 의존관계)"
+        SVC1["UserService"]
+        IFACE["UserRepository (인터페이스)"]
+        SVC1 -->|"의존"| IFACE
+        NOTE1["구체 클래스 모름\n인터페이스만 앎"]
+    end
+
+    subgraph "런타임 (스프링이 연결)"
+        SVC2["UserService 인스턴스"]
+        IMPL["MySQLUserRepository 인스턴스"]
+        CTX["스프링 컨테이너"]
+        CTX -->|"1️⃣ MySQLUserRepository 생성"| IMPL
+        CTX -->|"2️⃣ UserService 생성 + 주입"| SVC2
+        SVC2 -->|"3️⃣ 실제 사용"| IMPL
+    end
+```
+
+### 14.3 의존관계 검색 (DL, Dependency Lookup)
+
+DI는 컨테이너가 능동적으로 주입하는 방식이고, DL은 객체가 직접 컨테이너에서 빈을 꺼내는 방식이다.
+
+```java
+// 의존관계 주입 (DI) — 외부에서 주입받음 (권장)
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+}
+
+// 의존관계 검색 (DL) — 직접 꺼냄 (진입점에서만 사용)
+public class UserService {
+    public UserService() {
+        ApplicationContext context =
+            new AnnotationConfigApplicationContext(AppConfig.class);
+        this.userRepository = context.getBean("userRepository", UserRepository.class);
+    }
+}
+```
+
+DL이 필요한 경우는 `main()` 메서드처럼 Spring 컨테이너 밖에 있어서 DI를 받을 수 없는 진입점이다. 일반 비즈니스 코드에서는 항상 DI를 사용해야 한다.
+
+### 14.4 Lombok @RequiredArgsConstructor로 보일러플레이트 제거
+
+```java
+@Service
+@RequiredArgsConstructor // final 필드에 대한 생성자 자동 생성
+public class UserService {
+    private final UserRepository userRepository; // @Autowired 없이 자동 주입
+}
+```
+
+`@RequiredArgsConstructor`는 `final` 필드만 모아서 생성자를 자동 생성한다. 생성자가 하나뿐이면 `@Autowired`가 생략되므로, 결과적으로 생성자 주입 코드를 전혀 작성하지 않아도 된다.
+
+### 14.5 BeanFactory의 Lazy Loading vs ApplicationContext의 Eager Loading
+
+`BeanFactory`는 `getBean()`이 호출되는 시점에 처음으로 빈 인스턴스를 생성하는 지연 로딩(Lazy Loading) 방식이다. 메모리 효율은 좋지만 첫 호출 시 지연이 발생하고, 설정 오류가 런타임까지 발견되지 않는다. `ApplicationContext`는 컨테이너 시작 시점에 모든 싱글톤 빈을 미리 생성하는 즉시 로딩(Eager Loading) 방식이다. 시작이 약간 느려지지만 설정 오류를 시작 시점에 즉시 발견할 수 있다.
+
+### 14.6 빈 이름 충돌
+
+```java
+@Configuration
+public class AppConfig {
+    @Bean
+    public UserRepository userRepository() {
+        return new MemoryUserRepository();
+    }
+}
+
+@Configuration
+public class TestConfig {
+    @Bean
+    public UserRepository userRepository() { // 이름 충돌!
+        return new JpaUserRepository();
+    }
+}
+// Spring Boot에서는 기본적으로 오류 발생
+// spring.main.allow-bean-definition-overriding=true 로 명시적으로 허용 가능
+```
+
+### 14.7 실무 실수 — @PostConstruct에서 트랜잭션 사용
+
+`@PostConstruct`는 컨테이너 초기화 단계에서 실행된다. 이 시점에 트랜잭션이 활성화되지 않을 수 있다. 초기 데이터 로딩은 `ApplicationReadyEvent` 리스너를 사용하는 것이 안전하다.
+
+### 14.8 순환 참조 임시 우회 방법 (비권장)
+
+```java
+// 방법 1: @Lazy — 실제 사용 시점까지 지연 로딩
+@Service
+public class A {
+    private final B b;
+
+    @Autowired
+    public A(@Lazy B b) {
+        this.b = b;
+    }
+}
+
+// 방법 2: application.properties 설정 (임시방편, 비권장)
+// spring.main.allow-circular-references=true
+```
+
+이들은 증상 완화이지 근본 해결이 아니다. 순환 참조는 설계 문제의 신호이므로 컴포넌트 분리로 해결해야 한다.
