@@ -8,7 +8,13 @@ layout: default
 
     <div class="posts-grid">
       {% assign target_year = page.year | append: "" %}
-    {% assign year_posts = site.posts | where_exp: "post", "post.date | date: '%Y' == target_year" %}
+      {% assign year_posts = "" | split: "" %}
+      {% for post in site.posts %}
+        {% assign post_year = post.date | date: "%Y" %}
+        {% if post_year == target_year %}
+          {% assign year_posts = year_posts | push: post %}
+        {% endif %}
+      {% endfor %}
       {% for post in year_posts %}
         {% include archive-single.html type="card" %}
       {% endfor %}
