@@ -29,9 +29,21 @@
 
 <!-- end custom head snippets -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"></script>
     <script>
       document.addEventListener('DOMContentLoaded', function() {
+        // Jekyll renders ```mermaid as <div class="language-mermaid"><pre><code>
+        // Convert them to <pre class="mermaid"> for mermaid.js to find
+        document.querySelectorAll('.language-mermaid .highlight code, .language-mermaid code').forEach(function(code) {
+          var pre = document.createElement('pre');
+          pre.className = 'mermaid';
+          pre.textContent = code.textContent;
+          var container = code.closest('.language-mermaid') || code.closest('.highlighter-rouge');
+          if (container) {
+            container.parentNode.replaceChild(pre, container);
+          }
+        });
+
         mermaid.initialize({
           startOnLoad: true,
           theme: 'base',
