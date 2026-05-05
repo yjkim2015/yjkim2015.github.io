@@ -1,5 +1,5 @@
 ---
-title: "Redis 분산 락 완전 가이드 — 원리부터 Redlock까지"
+title: "Redis 분산 락 원리부터 Redlock까지"
 categories:
 - REDIS
 toc: true

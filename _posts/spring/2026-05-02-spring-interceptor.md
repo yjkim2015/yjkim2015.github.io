@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Spring Interceptor 완전 가이드 — Filter와의 차이부터 실전까지"
+title: "Spring Interceptor Filter와의 차이부터 실전까지"
 date: 2026-05-02
 categories: SPRING
 ---

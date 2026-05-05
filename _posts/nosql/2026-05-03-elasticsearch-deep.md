@@ -1,5 +1,5 @@
 ---
-title: "Elasticsearch 완전 가이드 — 역인덱스부터 클러스터 운영까지"
+title: "Elasticsearch 역인덱스부터 클러스터 운영까지"
 categories:
 - NOSQL
 tags: [Elasticsearch, Lucene, 역인덱스, 검색엔진, Spring Data Elasticsearch, Nori]

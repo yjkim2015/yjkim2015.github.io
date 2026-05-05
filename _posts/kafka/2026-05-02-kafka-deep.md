@@ -1,5 +1,5 @@
 ---
-title: "Kafka 완전 가이드 — 가장 쉽고 깊게"
+title: "Kafka 가장 쉽고 깊게"
 categories:
 - KAFKA
 toc: true

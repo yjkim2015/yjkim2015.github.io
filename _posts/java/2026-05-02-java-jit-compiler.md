@@ -1,5 +1,5 @@
 ---
-title: "JVM JIT 컴파일러 완전 가이드 — Cold Start부터 최적화까지"
+title: "JVM JIT 컴파일러 Cold Start부터 최적화까지"
 categories:
 - JAVA
 toc: true

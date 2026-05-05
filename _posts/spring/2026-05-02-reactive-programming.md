@@ -1,5 +1,5 @@
 ---
-title: "리액티브 프로그래밍 완전 가이드"
+title: "리액티브 프로그래밍 "
 categories:
 - SPRING
 toc: true

@@ -1,5 +1,5 @@
 ---
-title: "MongoDB 완전 가이드 — 언제 Document DB를 쓰고, 어떻게 설계하는가"
+title: "MongoDB 언제 Document DB를 쓰고, 어떻게 설계하는가"
 categories:
 - NOSQL
 toc: true

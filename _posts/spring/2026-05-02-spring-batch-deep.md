@@ -1,5 +1,5 @@
 ---
-title: "Spring Batch 완전 가이드 — Chunk vs Tasklet"
+title: "Spring Batch Chunk vs Tasklet"
 categories:
 - BATCH
 toc: true

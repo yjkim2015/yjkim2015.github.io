@@ -1,5 +1,5 @@
 ---
-title: "사이드카 패턴 완전 가이드 — MSA 핵심 인프라 패턴"
+title: "사이드카 패턴 MSA 핵심 인프라 패턴"
 categories:
 - ARCHITECTURE
 toc: true

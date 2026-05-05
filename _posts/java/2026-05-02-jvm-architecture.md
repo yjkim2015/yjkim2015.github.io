@@ -1,5 +1,5 @@
 ---
-title: "JVM 아키텍처 완전 가이드 — 메모리 구조부터 GC까지"
+title: "JVM 아키텍처 메모리 구조부터 GC까지"
 categories:
 - JAVA
 toc: true
