@@ -439,6 +439,7 @@ spec:
 
 ApplicationSet의 Generator가 클러스터 목록, Git 디렉토리 목록, JSON 파일 등에서 파라미터를 읽어와 Application 템플릿에 주입한다. 새 클러스터를 추가하거나 새 서비스 디렉토리를 만들면 Application이 자동 생성된다.
 
+{% raw %}
 ```yaml
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -466,6 +467,7 @@ spec:
           prune: true
           selfHeal: true
 ```
+{% endraw %}
 
 **이 코드의 핵심:**
 - `clusters` Generator가 ArgoCD에 등록된 클러스터 중 `env: production` 라벨이 있는 것만 선택한다.

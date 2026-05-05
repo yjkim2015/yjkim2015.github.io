@@ -406,6 +406,7 @@ graph LR
 
 `annotations`에 `runbook_url`을 포함하는 것이 매우 중요하다. 새벽 3시에 알림을 받은 온콜 엔지니어가 잠이 덜 깬 상태에서도 Runbook을 따라 문제를 해결할 수 있어야 한다.
 
+{% raw %}
 ```yaml
 groups:
   - name: golden-signals
@@ -439,6 +440,7 @@ groups:
           description: "이 속도면 24시간 안에 월간 Budget 전량 소진"
           runbook_url: "https://wiki.example.com/runbooks/error-budget-burn"
 ```
+{% endraw %}
 
 **이 코드의 핵심:** `ErrorBudgetBurnRate` 알림은 Google SRE 책에서 소개된 **Burn Rate** 기법이다. 14.4배는 "1시간의 에러율이 계속되면 24시간 안에 30일치 Budget을 전량 소진한다"는 의미다. 단순히 "Budget 50% 남음"보다 "이 속도면 내일 0%"가 더 긴급함을 잘 전달한다.
 

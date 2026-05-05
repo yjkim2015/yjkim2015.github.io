@@ -150,6 +150,7 @@ graph TD
     style CTX fill:#3498db,color:#fff
 ```
 
+{% raw %}
 ```jsx
 const ThemeContext = createContext({ theme: 'light', toggleTheme: () => {} });
 
@@ -180,9 +181,11 @@ function ThemedButton() {
   );
 }
 ```
+{% endraw %}
 
 ### Context 성능 주의
 
+{% raw %}
 ```jsx
 // 문제: value 객체가 매 렌더링마다 새로 생성 → 모든 구독자 리렌더링
 function BadProvider({ children }) {
@@ -209,6 +212,7 @@ function GoodProviders({ children }) {
 }
 // theme만 바뀌면 ThemeContext 구독자만 리렌더링, UserContext 구독자는 스킵
 ```
+{% endraw %}
 
 ---
 

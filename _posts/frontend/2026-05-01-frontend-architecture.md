@@ -603,6 +603,7 @@ function Dashboard({ isAdmin }) {
 | FID/INP | 첫 입력 반응 시간 | < 100ms | 100~300ms | > 300ms |
 | CLS | 레이아웃 이동 누적 점수 | < 0.1 | 0.1~0.25 | > 0.25 |
 
+{% raw %}
 ```tsx
 // LCP 개선: Hero 이미지에 priority 설정 → preload link 자동 생성
 <Image src="/hero.jpg" priority alt="히어로" width={1200} height={600} />
@@ -628,6 +629,7 @@ const worker = new Worker(new URL('./workers/calculation.js', import.meta.url));
 worker.postMessage({ data: largeDataset });
 worker.onmessage = (e) => setResult(e.data);
 ```
+{% endraw %}
 
 ---
 

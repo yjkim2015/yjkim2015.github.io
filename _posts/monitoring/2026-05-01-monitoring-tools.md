@@ -101,6 +101,7 @@ scrape_configs:
 
 ### 알림 규칙
 
+{% raw %}
 ```yaml
 # alert_rules.yml
 groups:
@@ -136,6 +137,7 @@ groups:
         annotations:
           summary: "Pod 재시작 감지: {{ $labels.pod }}"
 ```
+{% endraw %}
 
 ### PromQL 주요 쿼리
 
