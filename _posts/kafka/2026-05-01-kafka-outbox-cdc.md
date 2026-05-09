@@ -50,8 +50,8 @@ graph TD
 
 ```mermaid
 flowchart TD
-    APP["@Transactional: order저장+outbox저장(원자적)"]
-    APP -->|"DB 커밋"| RELAY["Relay: outbox 폴링/CDC → Kafka 발행"]
+    APP["@Transactional: or"]
+    APP -->|"DB 커밋"| RELAY["Relay: outbox 폴링/C"]
     RELAY --> KAFKA["Kafka Topic"]
 ```
 
@@ -161,9 +161,9 @@ DB의 변경 이력(binlog, WAL 등)을 실시간으로 캡처하여 다른 시�
 
 ```mermaid
 flowchart LR
-    DB["MySQL / PostgreSQL\n(binlog / WAL 생성)"]
-    DEB["Debezium Connector\n(binlog/WAL 실시간 읽기)"]
-    KAFKA["Kafka Topic\n(변경 이벤트 스트림)"]
+    DB["MySQL / PostgreSQL"]
+    DEB["Debezium Connector"]
+    KAFKA["Kafka Topic\n(변경 이"]
     DB -->|"binlog / WAL"| DEB
     DEB -->|"이벤트 발행"| KAFKA
     style DB fill:#3498db,color:#fff
@@ -208,8 +208,8 @@ Debezium은 Kafka Connect 위에서 동작하는 CDC 커넥터다. DB의 binlog/
 flowchart TD
     subgraph "Kafka Connect"
         subgraph "Debezium Connector"
-            READER["binlog/WAL Reader\n(DB 변경 감지)"]
-            SMT["Event Transformation\n(SMT 적용 가능)"]
+            READER["binlog/WAL Reader\"]
+            SMT["Event Transformati"]
             READER --> SMT
         end
     end
@@ -284,7 +284,7 @@ flowchart TD
     Q1 -->|코드변경불가| LEGACY["직접 CDC"]
     Q1 -->|대규모| Q2{"레이턴시"}
     Q2 -->|수백ms 허용| POLL
-    Q2 -->|수십ms| CDC["Outbox + Debezium CDC"]
+    Q2 -->|수십ms| CDC["Outbox + Debezium"]
 ```
 
 ---

@@ -82,11 +82,11 @@ Remember Me 토큰 검증이 실패하는 경우와 그 처리 방식입니다.
 flowchart TD
     A["remember-me 쿠키"] --> B["autoLogin()"]
     B --> C{"토큰 유효?"}
-    C -- "만료/불일치" --> D["onLoginFail()\n쿠키 삭제 → null"]
+    C -- "만료/불일치" --> D["onLoginFail()\n쿠키"]
     C -- "사용자 없음" --> D
     C -- "유효" --> E["RememberMeToken 생성"]
     D --> F["로그인 페이지 리다이렉트"]
-    E --> G["AuthenticationManager"]
+    E --> G["AuthenticationMana"]
     G --> F2["SecurityContext 저장"]
 ```
 

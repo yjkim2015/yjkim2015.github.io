@@ -154,7 +154,7 @@ graph TD
     C2 -->|"YES"| Q["큐에 추가 (기다림)"]
     C2 -->|"NO"| C3{"maxPoolSize 미만?"}
     C3 -->|"YES"| T2["임시 스레드 추가 생성"]
-    C3 -->|"NO"| REJ["RejectedExecutionHandler 실행"]
+    C3 -->|"NO"| REJ["RejectedExecutionH"]
     style REJ fill:#f88,stroke:#c00,color:#000
     style T1 fill:#8f8,stroke:#080,color:#000
     style T2 fill:#8f8,stroke:#080,color:#000

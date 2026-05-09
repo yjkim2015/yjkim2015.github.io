@@ -171,9 +171,9 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 
 ```mermaid
 graph TD
-    S1["A 삽입(hash→3): [_][_][_][A][_]"]
-    S2["B 삽입(hash→3, 충돌→Linear Probe): [_][_][_][A][B]"]
-    S3["A GC 수거 후: [_][_][_][null키/값 stale][B]"]
+    S1["A 삽입(hash→3): [_]["]
+    S2["B 삽입(hash→3, 충돌→Li"]
+    S3["A GC 수거 후: [_][_]["]
     S1 --> S2 --> S3
 ```
 
@@ -193,7 +193,7 @@ graph TD
 graph TD
     TL["ThreadLocal(강참조)"] -.->|"WeakRef key"| ENTRY["Entry"]
     ENTRY --> VAL["value(강참조)"]
-    NULL["tl=null → GC 수거"] --> LEAK["key=null, value 잔존 → 누수!"]
+    NULL["tl=null → GC 수거"] --> LEAK["key=null, value 잔존"]
     REMOVE["remove() 호출"] --> CLEAN["Entry 완전 제거"]
 ```
 
@@ -705,12 +705,12 @@ public CompletableFuture<Result> processAsync() {
 ```mermaid
 graph TD
     TL["ThreadLocal 핵심 정리"]
-    TL --> STORAGE["저장: Thread.threadLocals (ThreadLocalMap, 배열 해시맵)"]
-    TL --> WEAKREF["키=WeakRef, value=강참조 → 키 GC 수거 후 value 잔류"]
-    WEAKREF --> LEAK["메모리 누수: 스레드 풀 재사용 시 stale entry 누적"]
-    LEAK --> FIX["해결: finally { remove() } 필수"]
-    TL --> INHERIT["자식 전파: InheritableThreadLocal / 풀=TransmittableThreadLocal"]
-    TL --> VTHREAD["Virtual Thread: ScopedValue (Java 21+, 불변 자동 해제)"]
+    TL --> STORAGE["저장: Thread.threadL"]
+    TL --> WEAKREF["키=WeakRef, value=강"]
+    WEAKREF --> LEAK["메모리 누수: 스레드 풀 재사용"]
+    LEAK --> FIX["해결: finally { remo"]
+    TL --> INHERIT["자식 전파: Inheritable"]
+    TL --> VTHREAD["Virtual Thread: Sc"]
 ```
 
 ThreadLocal은 올바르게 사용하면 동기화 없이 스레드 안전성을 확보하는 강력한 도구입니다. 핵심은 **사용 후 반드시 `remove()` 호출**하는 것입니다. 특히 스레드 풀 환경에서는 이를 소홀히 하면 값 오염과 메모리 누수라는 두 가지 위험이 동시에 발생합니다.

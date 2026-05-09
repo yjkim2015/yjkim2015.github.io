@@ -25,11 +25,11 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    ATOMS["Atoms: Button, Input, Icon"]
-    MOLECULES["Molecules: SearchBar, FormField"]
-    ORGANISMS["Organisms: Header, ProductCard"]
-    TEMPLATES["Templates: PageLayout"]
-    PAGES["Pages: ProductListPage"]
+    ATOMS["Atoms: Button, Inp"]
+    MOLECULES["Molecules: SearchB"]
+    ORGANISMS["Organisms: Header,"]
+    TEMPLATES["Templates: PageLay"]
+    PAGES["Pages: ProductList"]
     ATOMS --> MOLECULES --> ORGANISMS --> TEMPLATES --> PAGES
 ```
 
@@ -40,7 +40,7 @@ graph TD
 ```mermaid
 flowchart TD
     A["컴포넌트 분리 고려"] --> B{"재사용 가능한가?"}
-    B -->|"예"| C["분리 — 다른 곳에서도 쓸 수 있음"]
+    B -->|"예"| C["분리 — 다른 곳에서도 쓸 수 있"]
     B -->|"아니오"| D{"너무 큰가? 150줄 이상"}
     D -->|"예"| E["기능 단위로 분리"]
     D -->|"아니오"| F{"여러 책임을 갖는가?"}
@@ -113,7 +113,7 @@ graph TD
     COMPONENT["컴포넌트"] -->|"훅 사용"| HOOKS["커스텀 훅"]
     HOOKS -->|"데이터 요청"| REACT_QUERY["React Query / SWR"]
     REACT_QUERY -->|"API 호출"| API_LAYER["API Layer"]
-    API_LAYER -->|"HTTP 요청"| HTTP_CLIENT["HTTP 클라이언트 axios/fetch"]
+    API_LAYER -->|"HTTP 요청"| HTTP_CLIENT["HTTP 클라이언트 axios/f"]
     HTTP_CLIENT -->|"네트워크"| SERVER["백엔드 서버"]
     style API_LAYER fill:#3498db,color:#fff
     style HTTP_CLIENT fill:#f39c12,color:#fff
@@ -179,13 +179,13 @@ export function useProducts(params?: { category?: string }) {
 ```mermaid
 graph TD
     STATE["상태 분류"] --> LOCAL["로컬 상태<br>컴포넌트 내부만"]
-    STATE --> SHARED["공유 상태<br>여러 컴포넌트가 사용"]
+    STATE --> SHARED["공유 상태<br>여러 컴포넌트가"]
     STATE --> SERVER["서버 상태<br>API 데이터"]
     STATE --> URL["URL 상태<br>라우터 파라미터"]
-    LOCAL --> USESTATE["useState, useReducer"]
+    LOCAL --> USESTATE["useState, useReduc"]
     SHARED --> CONTEXT["Context / Zustand"]
     SERVER --> RQ["React Query / SWR"]
-    URL --> ROUTER["React Router / Next.js Router"]
+    URL --> ROUTER["React Router / Nex"]
     style LOCAL fill:#2ecc71,color:#fff
     style SERVER fill:#e74c3c,color:#fff
 ```
@@ -268,9 +268,9 @@ graph TD
 graph TD
     SHELL["Shell App 앱 컨테이너"]
     SHELL --> AUTH["Auth MFE<br>팀 A"]
-    SHELL --> PRODUCTS["Products MFE<br>팀 B"]
+    SHELL --> PRODUCTS["Products MFE<br>팀"]
     SHELL --> CART["Cart MFE<br>팀 C"]
-    SHELL --> CHECKOUT["Checkout MFE<br>팀 D"]
+    SHELL --> CHECKOUT["Checkout MFE<br>팀"]
     AUTH -.->|"독립 배포"| AUTH
     PRODUCTS -.->|"독립 배포"| PRODUCTS
     CART -.->|"독립 배포"| CART

@@ -35,7 +35,7 @@ graph LR
     Refill["매초 2개 토큰 보충"] --> Bucket["버킷\n현재: 7개"]
     Request["요청 도착"] --> Check{"토큰 있나?"}
     Check -->|"Yes: 1개 소비"| Allow["허용"]
-    Check -->|"No: 0개"| Deny["429 Too Many Requests"]
+    Check -->|"No: 0개"| Deny["429 Too Many Reque"]
     Bucket --> Check
 ```
 
@@ -144,7 +144,7 @@ graph TD
     User["사용자: 분당 100건 한도"]
     Req1["요청 60건"] --> S1["서버 1\n카운터: 60"]
     Req2["요청 60건"] --> S2["서버 2\n카운터: 60"]
-    Problem["문제: 실제 120건인데\n각 서버는 60건으로 판단 → 모두 허용"]
+    Problem["문제: 실제 120건인데\n각 서"]
 ```
 
 **해결: 중앙화된 Redis**로 카운터를 공유한다.
@@ -187,7 +187,7 @@ graph LR
     Client["클라이언트"] --> MW["Rate Limiter 미들웨어"]
     MW --> Redis["Redis 클러스터"]
     MW -->|"허용"| API["API 서버"]
-    MW -->|"거부"| Resp["429 Too Many Requests\nRetry-After: 60"]
+    MW -->|"거부"| Resp["429 Too Many Reque"]
 ```
 
 429 응답 헤더에 제한 정보를 담아야 클라이언트가 올바르게 재시도할 수 있다:
@@ -209,10 +209,10 @@ Retry-After: 60              → 재시도 가능까지 대기 초
 
 ```mermaid
 graph TD
-    Req["요청"] --> L1["L1: IP 레벨\n초당 100건/IP\n봇 DDoS 차단"]
-    L1 --> L2["L2: API 키 레벨\n시간당 1000건/키\n무료 플랜 제한"]
-    L2 --> L3["L3: 엔드포인트별\n/login: 분당 5건\n브루트포스 방지"]
-    L3 --> L4["L4: 사용자 티어\n유료 플랜 더 많이"]
+    Req["요청"] --> L1["L1: IP 레벨\n초당 100건"]
+    L1 --> L2["L2: API 키 레벨\n시간당"]
+    L2 --> L3["L3: 엔드포인트별\n/login"]
+    L3 --> L4["L4: 사용자 티어\n유료 플랜"]
     L4 --> API["API 서버"]
 ```
 
@@ -238,10 +238,10 @@ ENDPOINT_LIMITS = {
 
 ```mermaid
 graph TD
-    DDoS["봇넷\n1만 IP × 초당 1000건\n= 총 1000만 QPS"] --> CF["Cloudflare\n네트워크 레벨 차단\n(1ms 응답)"]
+    DDoS["봇넷\n1만 IP × 초당 100"] --> CF["Cloudflare\n네트워크 레"]
     CF --> WAF["AWS WAF\nL7 규칙 매칭"]
     WAF --> LB["로드밸런서\n연결 수 제한"]
-    LB --> AppRL["애플리케이션\nRate Limiter\nRedis 기반"]
+    LB --> AppRL["애플리케이션\nRate Limit"]
     AppRL --> API["API 서버\n정상 트래픽만 도달"]
 ```
 

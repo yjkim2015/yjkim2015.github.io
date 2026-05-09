@@ -34,7 +34,7 @@ public class Car {
 ```mermaid
 graph TD
     A["Car (싱글톤)"] -->|"new Engine() 고착"| B["Engine (특정 구현)"]
-    C["테스트"] -->|"Engine을 Mock으로 교체 불가"| A
+    C["테스트"] -->|"Engine을 Mock으로 교체"| A
     D["V8 엔진 사용하고 싶다면?"] -->|"Car 소스 코드 수정 필요!"| A
     style B fill:#ff6b6b,color:#fff
 ```
@@ -198,7 +198,7 @@ public class CarService {
 
 ```mermaid
 graph TD
-    A["의존 객체 주입\nnew 직접 생성 금지"] --> B["장점\n유연성·재사용성·테스트"]
+    A["의존 객체 주입\nnew 직접 생"] --> B["장점\n유연성·재사용성·테스트"]
     A --> C["주입 방식"]
     C --> D["생성자 주입 권장"]
     C --> E["정적 팩토리 / 빌더"]

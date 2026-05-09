@@ -45,14 +45,14 @@ public class WordList {
 
 ```mermaid
 graph TD
-    A["compareTo 4대 규약"] --> B["대칭성\n(Antisymmetry)"]
-    A --> C["추이성\n(Transitivity)"]
+    A["compareTo 4대 규약"] --> B["대칭성\n(Antisymmetry"]
+    A --> C["추이성\n(Transitivity"]
     A --> D["반사성\n(Consistency)"]
     A --> E["equals와 일관성\n(권고)"]
-    B --> B1["sgn(x.compareTo(y))\n== -sgn(y.compareTo(x))"]
+    B --> B1["sgn(x.compareTo(y)"]
     C --> C1["x>y, y>z 이면\nx>z"]
-    D --> D1["x.compareTo(y)==0이면\n모든 z에 대해\nx와 z의 순서 == y와 z의 순서"]
-    E --> E1["compareTo==0이면\nequals도 true 권장\n(필수 아님)"]
+    D --> D1["x.compareTo(y)==0이"]
+    E --> E1["compareTo==0이면\neq"]
     style E fill:#ffd43b
 ```
 
@@ -202,9 +202,9 @@ graph TD
     B -->|"Yes (대부분)"| C["Comparable 구현"]
     B -->|"No"| D["구현 불필요"]
     C --> E["compareTo 구현 방법"]
-    E --> F["단순: 핵심 필드부터\nType.compare() 사용"]
-    E --> G["복잡: Comparator 체이닝\n(Java 8+)"]
-    E --> H["절대 금지: 값의 차\n(정수 오버플로 위험)"]
+    E --> F["단순: 핵심 필드부터\nType."]
+    E --> G["복잡: Comparator 체이닝"]
+    E --> H["절대 금지: 값의 차\n(정수 오"]
     style F fill:#51cf66,color:#fff
     style G fill:#51cf66,color:#fff
     style H fill:#ff6b6b,color:#fff

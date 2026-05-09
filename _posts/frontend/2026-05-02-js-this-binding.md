@@ -209,9 +209,9 @@ boundIntroduce('대전');
 
 ```mermaid
 graph TD
-    A["명시적 바인딩"] --> B["call(thisArg, a, b) - 즉시호출, 쉼표인자"]
-    A --> C["apply(thisArg, [a,b]) - 즉시호출, 배열인자"]
-    A --> D["bind(thisArg, a) - 새함수반환, 나중호출"]
+    A["명시적 바인딩"] --> B["call(thisArg, a, b"]
+    A --> C["apply(thisArg, [a,"]
+    A --> D["bind(thisArg, a) -"]
 ```
 
 ### 실용적인 예제
@@ -256,11 +256,11 @@ console.log(kim.name); // '김민준'
 
 ```mermaid
 flowchart LR
-    A["new Person('김민준', 25) 호출"] --> B["새 빈 객체 {} 생성"]
+    A["new Person('김민준',"] --> B["새 빈 객체 {} 생성"]
     B --> C["this = 새 객체로 설정"]
-    C --> D["생성자 함수 실행<br>this.name = '김민준'<br>this.age = 25"]
-    D --> E["명시적 반환값 없으면<br>this 반환"]
-    E --> F["kim = { name: '김민준', age: 25 }"]
+    C --> D["생성자 함수 실행<br>this."]
+    D --> E["명시적 반환값 없으면<br>thi"]
+    E --> F["kim = { name: '김민준"]
     style C fill:#e74c3c,color:#fff
     style F fill:#2ecc71,color:#fff
 ```
@@ -296,7 +296,7 @@ graph TD
     A["화살표 함수"] --> B["자신의 this 없음"]
     B --> C["렉시컬 스코프의 this 사용"]
     C --> D["정의된 시점의 this 캡처"]
-    D --> E["call/apply/bind로 변경 불가"]
+    D --> E["call/apply/bind로 변"]
     style A fill:#9b59b6,color:#fff
     style E fill:#e74c3c,color:#fff
 ```
@@ -477,9 +477,9 @@ graph TD
     PROBLEM["this 손실 문제"] --> P1["패턴 1: 클로저"]
     PROBLEM --> P2["패턴 2: bind"]
     PROBLEM --> P3["패턴 3: 화살표 함수"]
-    P1 --> P1D["const self = this<br>self로 참조"]
-    P2 --> P2D["setTimeout(fn.bind(this), 0)<br>즉시 고정"]
-    P3 --> P3D["setTimeout(() => ..., 0)<br>렉시컬 this"]
+    P1 --> P1D["const self = this<"]
+    P2 --> P2D["setTimeout(fn.bind"]
+    P3 --> P3D["setTimeout(() => ."]
     P3 --> BEST["권장"]
     style BEST fill:#2ecc71,color:#fff
     style P3 fill:#9b59b6,color:#fff
@@ -590,7 +590,7 @@ flowchart TD
     D -->|예| D1["지정 값"]
     D -->|아니오| E{"obj.method()?"}
     E -->|예| E1["obj"]
-    E -->|아니오| F1["엄격: undefined / 비엄격: window"]
+    E -->|아니오| F1["엄격: undefined / 비엄"]
 ```
 
 이 5단계 체크리스트만 있으면 어떤 `this` 문제도 해결할 수 있습니다.

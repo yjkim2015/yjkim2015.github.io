@@ -58,8 +58,8 @@ void startEngine() {
 ```mermaid
 graph TD
     A["예외 선택 기준"] --> B{"인수 값에 상관없이\n항상 실패했을까?"}
-    B -- 예 --> C["IllegalStateException\n객체 상태 자체의 문제\n(덱에 카드가 부족)"]
-    B -- 아니오 --> D["IllegalArgumentException\n인수 값이 잘못됨\n(요청한 수가 너무 큼)"]
+    B -- 예 --> C["IllegalStateExcept"]
+    B -- 아니오 --> D["IllegalArgumentExc"]
     style C fill:#f39c12,color:#fff
     style D fill:#51cf66,color:#fff
 ```

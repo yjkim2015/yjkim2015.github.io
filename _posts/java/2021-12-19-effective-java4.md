@@ -96,9 +96,9 @@ public class MathUtils {
 
 ```mermaid
 graph TD
-    A["private 생성자 효과"] --> B["외부 클래스에서\nnew MathUtils() 불가"]
-    A --> C["하위 클래스 생성 불가\n상위 생성자 접근 차단"]
-    A --> D["컴파일러 기본 생성자\n자동 생성 방지"]
+    A["private 생성자 효과"] --> B["외부 클래스에서\nnew Math"]
+    A --> C["하위 클래스 생성 불가\n상위 생"]
+    A --> D["컴파일러 기본 생성자\n자동 생성"]
     style A fill:#4a9eff,color:#fff
 ```
 
@@ -156,9 +156,9 @@ graph TD
     A["유틸리티 클래스 인스턴스화 방지"] --> B["방법"]
     A --> C["주의사항"]
     B --> B1["private 생성자 명시"]
-    B --> B2["AssertionError throw (선택)"]
+    B --> B2["AssertionError thr"]
     B --> B3["의도를 설명하는 주석 추가"]
-    C --> C1["abstract 클래스는 충분하지 않음\n하위 클래스로 우회 가능"]
+    C --> C1["abstract 클래스는 충분하지"]
     C --> C2["부수 효과: 상속도 불가능해짐"]
 ```
 

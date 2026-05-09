@@ -19,7 +19,7 @@ toc_label: 목차
 graph LR
     A["map.get(key)"] -->|"1. hashCode() 호출"| B["버킷 번호 계산"]
     B -->|"2. 해당 버킷으로 이동"| C["버킷 내 엔트리들"]
-    C -->|"3. equals()로 정확한 항목 확인"| D["값 반환"]
+    C -->|"3. equals()로 정확한 항"| D["값 반환"]
 ```
 
 **만약 hashCode가 equals와 불일치하면?** `put(k, v)` 시 사용한 키와 `get(k)` 시 사용한 키가 논리적으로 같아도(equals=true) hashCode가 다르면 서로 다른 버킷을 바라보게 됩니다. `get`은 영원히 그 항목을 찾지 못합니다.
@@ -31,11 +31,11 @@ graph LR
 ```mermaid
 graph TD
     A["hashCode 3대 규약"] --> B["일관성\n(Consistency)"]
-    A --> C["equals-hashCode 연동\n가장 중요!"]
-    A --> D["다른 객체는 다른 hashCode\n(권고)"]
-    B --> B1["같은 실행 내에서\n항상 같은 값 반환"]
-    C --> C1["equals가 true면\nhashCode도 반드시 같아야 함"]
-    D --> D1["다르면 성능 저하\n(O(1) → O(n))"]
+    A --> C["equals-hashCode 연동"]
+    A --> D["다른 객체는 다른 hashCode"]
+    B --> B1["같은 실행 내에서\n항상 같은 값"]
+    C --> C1["equals가 true면\nhas"]
+    D --> D1["다르면 성능 저하\n(O(1) →"]
     style C fill:#ff6b6b,color:#fff
     style C1 fill:#ff6b6b,color:#fff
 ```
@@ -197,10 +197,10 @@ System.out.println(p1.hashCode() == p2.hashCode());  // true
 ```mermaid
 graph TD
     A["equals 재정의"] -->|"반드시 함께"| B["hashCode 재정의"]
-    B --> C["같은 객체 → 같은 hashCode"]
-    C --> D["HashMap/HashSet 정상 동작"]
-    E["hashCode만 같고 equals가 다른 경우"] --> F["해시 충돌 — 성능 저하만"]
-    G["equals가 같은데 hashCode가 다른 경우"] --> H["치명적 버그!\n컬렉션에서 조회 불가"]
+    B --> C["같은 객체 → 같은 hashCod"]
+    C --> D["HashMap/HashSet 정상"]
+    E["hashCode만 같고 equal"] --> F["해시 충돌 — 성능 저하만"]
+    G["equals가 같은데 hashCo"] --> H["치명적 버그!\n컬렉션에서 조회"]
     style G fill:#ff6b6b,color:#fff
     style H fill:#ff6b6b,color:#fff
     style D fill:#51cf66,color:#fff

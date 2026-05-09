@@ -54,10 +54,10 @@ for (Stamp stamp : stamps) {
 
 ```mermaid
 graph TD
-    A["Collection stamps (로 타입)"] --> B["stamps.add(new Coin())"]
+    A["Collection stamps"] --> B["stamps.add(new Coi"]
     B --> C["경고만 출력\n컴파일 성공"]
-    C --> D["런타임: ClassCastException\n원인 코드와 오류 위치가 멀리 떨어짐"]
-    E["Collection<Stamp> stamps"] --> F["stamps.add(new Coin())"]
+    C --> D["런타임: ClassCastExce"]
+    E["Collection<Stamp>"] --> F["stamps.add(new Coi"]
     F --> G["컴파일 오류!\n즉시 발견"]
     style D fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff
@@ -108,8 +108,8 @@ static void safeAdd(List<Object> list, Object o) {
 
 ```mermaid
 graph TD
-    A["List (로 타입)"] --> B["List<String> 전달 가능\n→ 타입 안전성 없음"]
-    C["List<Object>"] --> D["List<String> 전달 불가\n→ 컴파일 오류로 타입 안전 보장"]
+    A["List (로 타입)"] --> B["List<String> 전달 가능"]
+    C["List<Object>"] --> D["List<String> 전달 불가"]
     style B fill:#ff6b6b,color:#fff
     style D fill:#51cf66,color:#fff
 ```
@@ -190,11 +190,11 @@ if (o instanceof Set) {         // 로 타입으로 검사
 
 ```mermaid
 graph TD
-    A["List<E>"] --> B["제네릭 타입\n(Generic Type)"]
-    C["List<String>"] --> D["매개변수화 타입\n(Parameterized Type)"]
+    A["List<E>"] --> B["제네릭 타입\n(Generic T"]
+    C["List<String>"] --> D["매개변수화 타입\n(Paramet"]
     E["List"] --> F["로 타입\n(Raw Type)"]
-    G["List<?>"] --> H["비한정적 와일드카드 타입\n(Unbounded Wildcard Type)"]
-    I["List<? extends Number>"] --> J["한정적 와일드카드 타입\n(Bounded Wildcard Type)"]
+    G["List<?>"] --> H["비한정적 와일드카드 타입\n(Un"]
+    I["List<? extends Num"] --> J["한정적 와일드카드 타입\n(Bou"]
     style F fill:#ff6b6b,color:#fff
     style D fill:#51cf66,color:#fff
     style H fill:#51cf66,color:#fff

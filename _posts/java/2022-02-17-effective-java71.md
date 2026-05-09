@@ -102,8 +102,8 @@ if (obj.actionPermitted(args)) {
 
 ```mermaid
 graph TD
-    A["검사 예외 회피 방법"] --> B["Optional 반환\n예외 없이 결과 유무로 처리\n단점: 부가 정보 제공 불가"]
-    A --> C["상태 검사 메서드로 분리\nactionPermitted + action\n더 유연하고 사용하기 편함"]
+    A["검사 예외 회피 방법"] --> B["Optional 반환\n예외 없이"]
+    A --> C["상태 검사 메서드로 분리\nact"]
     B --> D{"부가 정보 필요?"}
     D -- 예 --> E["검사 예외 유지"]
     D -- 아니오 --> B

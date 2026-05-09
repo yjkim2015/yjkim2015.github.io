@@ -78,7 +78,7 @@ System.out.println(plantsByLifeCycle);
 graph TD
     A["EnumMap 장점"] --> B["키가 열거 타입\n타입 안전 보장"]
     A --> C["내부는 배열로 구현\n성능 동등"]
-    A --> D["toString이 키 이름 제공\n출력 레이블 불필요"]
+    A --> D["toString이 키 이름 제공\"]
     A --> E["열거 타입 순서 변경\n영향 없음"]
     style A fill:#51cf66,color:#fff
 ```
@@ -188,8 +188,8 @@ public enum Phase {
 graph TD
     A["새 상태 추가 시"] --> B["ordinal 배열 방식"]
     A --> C["EnumMap 방식"]
-    B --> D["Phase에 1개\nTransition에 2개\n배열 16개로 교체\n순서 오기입 시 런타임 오류"]
-    C --> E["Phase에 1개\nTransition에 2개\n끝 — 나머지 자동 처리"]
+    B --> D["Phase에 1개\nTransit"]
+    C --> E["Phase에 1개\nTransit"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#51cf66,color:#fff
 ```

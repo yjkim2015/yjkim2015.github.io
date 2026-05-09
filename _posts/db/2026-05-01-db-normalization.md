@@ -304,7 +304,7 @@ graph LR
 
 ```mermaid
 flowchart TD
-    START["성능 문제\n→ EXPLAIN 분석"] --> INDEX{"인덱스로 해결?"}
+    START["성능 문제\n→ EXPLAIN 분"] --> INDEX{"인덱스로 해결?"}
     INDEX -->|"예"| ADD_IDX["인덱스 추가"]
     INDEX -->|"아니오"| CACHE{"캐시로 해결?"}
     CACHE -->|"예"| ADD_CACHE["Redis 캐시"]

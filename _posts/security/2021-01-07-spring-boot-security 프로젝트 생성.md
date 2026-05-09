@@ -137,12 +137,12 @@ Spring Security는 여러 필터로 구성된 체인 구조로 동작합니다. 
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["SecurityContextPersistenceFilter\n(보안 컨텍스트 로드)"]
-    B --> C["UsernamePasswordAuthenticationFilter\n(폼 로그인 처리)"]
-    C --> D["RememberMeAuthenticationFilter\n(자동 로그인 처리)"]
-    D --> E["AnonymousAuthenticationFilter\n(익명 사용자 처리)"]
-    E --> F["ExceptionTranslationFilter\n(예외 처리)"]
-    F --> G["FilterSecurityInterceptor\n(인가 결정)"]
+    A["HTTP 요청"] --> B["SecurityContextPer"]
+    B --> C["UsernamePasswordAu"]
+    C --> D["RememberMeAuthenti"]
+    D --> E["AnonymousAuthentic"]
+    E --> F["ExceptionTranslati"]
+    F --> G["FilterSecurityInte"]
     G --> H["컨트롤러"]
 ```
 

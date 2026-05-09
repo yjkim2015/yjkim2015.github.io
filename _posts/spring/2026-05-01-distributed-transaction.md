@@ -20,10 +20,10 @@ date: 2026-05-01
 
 ```mermaid
 graph LR
-    OS["Order Service\nINSERT orders → DB A"]
-    IS["Inventory Service\nUPDATE inventory → DB B"]
-    PS["Payment Service\nINSERT payments → DB C"]
-    FAIL["하나라도 실패하면?\nDB A 커밋됨\nDB B·C 롤백\n→ 데이터 불일치 발생"]
+    OS["Order Service\nINS"]
+    IS["Inventory Service\"]
+    PS["Payment Service\nI"]
+    FAIL["하나라도 실패하면?\nDB A 커"]
     OS -->|"성공"| IS -->|"성공"| PS -->|"실패"| FAIL
     style FAIL fill:#f88,stroke:#c00,color:#000
 ```
@@ -369,14 +369,14 @@ outbox 레코드 저장과 주문 저장이 같은 트랜잭션이므로 둘 다
 ```mermaid
 graph TD
     START(["시작"]) --> Q1{"강한 일관성 필요?"}
-    Q1 -->|YES| R1["서비스 경계 재설계(단일 트랜잭션)"]
+    Q1 -->|YES| R1["서비스 경계 재설계(단일 트랜잭션"]
     Q1 -->|NO| SAGA["Saga 패턴"]
     SAGA --> Q3{"흐름 단순?"}
-    Q3 -->|YES| CHOREO["Choreography(이벤트 기반)"]
-    Q3 -->|NO| ORCH["Orchestration(중앙 제어)"]
+    Q3 -->|YES| CHOREO["Choreography(이벤트 기"]
+    Q3 -->|NO| ORCH["Orchestration(중앙 제"]
     SAGA --> Q4{"원자적 발행 필요?"}
     Q4 -->|YES| OUTBOX["Outbox Pattern"]
-    OUTBOX --> BEST["권장: Saga+Kafka+Outbox"]
+    OUTBOX --> BEST["권장: Saga+Kafka+Out"]
 ```
 
 ### 패턴별 특성 비교

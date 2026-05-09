@@ -24,8 +24,8 @@ toc_label: 목차
 ```mermaid
 graph TD
     S1[".java"] -->|"컴파일"| B1[".class"] -->|"JVM 로딩"| E1["실행(타입 고정)"]
-    JVM["실행 중 JVM"] -->|"getClass()/forName()"| META["Class 메타데이터"]
-    META -->|"invoke()/newInstance()"| OP["동적 조회/호출"]
+    JVM["실행 중 JVM"] -->|"getClass()/forName"| META["Class 메타데이터"]
+    META -->|"invoke()/newInstan"| OP["동적 조회/호출"]
 ```
 
 ### 왜 필요한가?
@@ -552,17 +552,12 @@ public class Validator {
 
 ```mermaid
 graph TD
-    INVOKE["Method.invoke(obj, args) 호출"]
-    CHECK["1. 접근 제어 검사
-    setAccessible(false)이면 매번 수행"]
-    ARRAY["2. 가변인수 배열 생성
-    Object... args → new Object[]"]
-    BOX["3. 오토박싱
-    int → Integer 등 기본형 래핑"]
-    DISPATCH["4. 동적 디스패치
-    JIT 인라이닝 불가"]
-    WRAP["5. 예외 래핑
-    실제 예외 → InvocationTargetException"]
+    INVOKE["Method.invoke(obj,"]
+    CHECK["1. 접근 제어 검사"]
+    ARRAY["2. 가변인수 배열 생성"]
+    BOX["3. 오토박싱"]
+    DISPATCH["4. 동적 디스패치"]
+    WRAP["5. 예외 래핑"]
     INVOKE --> CHECK --> ARRAY --> BOX --> DISPATCH --> WRAP
 ```
 
@@ -1040,12 +1035,12 @@ try {
 
 ```mermaid
 graph TD
-    REFLECT["java.lang.reflect"] --> CLASS["Class&lt;T&gt; (forName/.class/getClass)"]
-    CLASS --> FIELD["Field (get/set, setAccessible)"]
-    CLASS --> METHOD["Method (invoke, setAccessible)"]
-    CLASS --> CONSTRUCTOR["Constructor (newInstance)"]
-    CLASS --> PROXY["Proxy (newProxyInstance, 동적 프록시)"]
-    REFLECT --> INVOKE["java.lang.invoke (MethodHandles.Lookup, findVirtual/findStatic)"]
+    REFLECT["java.lang.reflect"] --> CLASS["Class&lt;T&gt; (fo"]
+    CLASS --> FIELD["Field (get/set, se"]
+    CLASS --> METHOD["Method (invoke, se"]
+    CLASS --> CONSTRUCTOR["Constructor (newIn"]
+    CLASS --> PROXY["Proxy (newProxyIns"]
+    REFLECT --> INVOKE["java.lang.invoke ("]
 ```
 
 ### 핵심 정리

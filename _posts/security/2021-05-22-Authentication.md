@@ -44,11 +44,11 @@ public interface Authentication extends Principal, Serializable {
 
 ```mermaid
 flowchart TD
-    A["Authentication 객체"] --> B["principal\n인증 전: 사용자 아이디(String)\n인증 후: UserDetails 객체"]
-    A --> C["credentials\n비밀번호 등 자격증명\n인증 완료 후 보안을 위해 null 처리"]
-    A --> D["authorities\n인증된 사용자의 권한 목록\n예: ROLE_USER, ROLE_ADMIN"]
-    A --> E["details\n인증 부가 정보\n예: IP 주소, 세션 ID, 요청 파라미터"]
-    A --> F["authenticated\n인증 완료 여부\ntrue/false"]
+    A["Authentication 객체"] --> B["principal\n인증 전: 사"]
+    A --> C["credentials\n비밀번호"]
+    A --> D["authorities\n인증된 사"]
+    A --> E["details\n인증 부가 정보\"]
+    A --> F["authenticated\n인증"]
 ```
 
 ### principal (주체)

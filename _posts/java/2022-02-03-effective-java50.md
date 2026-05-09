@@ -81,9 +81,9 @@ public Date end()   { return new Date(end.getTime()); }
 
 ```mermaid
 graph TD
-    A["Period 불변 보호"] --> B["생성자\n방어적 복사 후 유효성 검사\nclone 사용 금지"]
-    A --> C["접근자\n방어적 복사본 반환\nclone 사용 가능\n(하지만 생성자 권장)"]
-    B --> D["TOCTOU 공격 방지\n복사 → 검사 순서 필수"]
+    A["Period 불변 보호"] --> B["생성자\n방어적 복사 후 유효성"]
+    A --> C["접근자\n방어적 복사본 반환\nc"]
+    B --> D["TOCTOU 공격 방지\n복사 →"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
 ```

@@ -98,9 +98,9 @@ val confirmedOrder = pendingOrder.copy(status = OrderStatus.CONFIRMED)
 
 ```mermaid
 graph TD
-    Java["Java\n모든 참조 타입이 null 가능\n→ 런타임에야 NPE 발생"] --> Problem["NullPointerException\n스택 트레이스로 추적\n새벽 3시 장애"]
-    Kotlin["Kotlin\nnon-null: String\nnullable: String?"] --> Compile["컴파일 타임 체크\n?. 연산자 강제"]
-    Compile --> Safe["런타임 NPE 발생 불가\n(!! 연산자 남용 제외)"]
+    Java["Java\n모든 참조 타입이 nu"] --> Problem["NullPointerExcepti"]
+    Kotlin["Kotlin\nnon-null:"] --> Compile["컴파일 타임 체크\n?. 연산자"]
+    Compile --> Safe["런타임 NPE 발생 불가\n(!!"]
 ```
 
 Kotlin의 타입 시스템은 null 가능 여부를 타입에 인코딩한다. `String`은 null이 될 수 없고, `String?`는 될 수 있다. 컴파일러가 이걸 강제한다.
@@ -237,11 +237,11 @@ val member = memberRepository.findByIdOrThrow(1L)  // null이면 즉시 예외
 graph TD
     ScopeFn["스코프 함수"] --> LambdaResult["반환값: 람다 결과"]
     ScopeFn --> ReceiverResult["반환값: 수신 객체 자신"]
-    LambdaResult --> Let["let\n수신 객체를 it으로\nnull 체크 + 변환에 사용"]
-    LambdaResult --> Run["run\n수신 객체를 this로\n여러 연산 후 결과 반환"]
-    LambdaResult --> With["with\n수신 객체를 this로\n인자로 전달하는 형태"]
-    ReceiverResult --> Apply["apply\n수신 객체를 this로\n초기화 빌더 패턴"]
-    ReceiverResult --> Also["also\n수신 객체를 it으로\n부수 효과 (로깅 등)"]
+    LambdaResult --> Let["let\n수신 객체를 it으로\n"]
+    LambdaResult --> Run["run\n수신 객체를 this로\"]
+    LambdaResult --> With["with\n수신 객체를 this로"]
+    ReceiverResult --> Apply["apply\n수신 객체를 this"]
+    ReceiverResult --> Also["also\n수신 객체를 it으로\"]
 ```
 
 ```kotlin
@@ -352,12 +352,12 @@ JPA 엔티티는 `data class`로 만들면 안 된다. `equals`와 `hashCode`가
 
 ```mermaid
 flowchart TD
-    A["Java 프로젝트"] --> B["1단계: 새 파일은 Kotlin으로 작성\nJava-Kotlin 공존 가능"]
-    B --> C["2단계: DTO, Value Object를 data class로\n가장 안전하고 효과 큰 변환"]
-    C --> D["3단계: 서비스 계층 변환\nnull safety + scope function 도입"]
-    D --> E["4단계: 컨트롤러 변환\n생성자 주입 간결화"]
-    E --> F["완전한 Kotlin 프로젝트\nbuild.gradle.kts로 전환"]
-    B -->|"양방향 호출 가능"| G["@JvmStatic, @JvmField\nJava에서 Kotlin 호출 지원"]
+    A["Java 프로젝트"] --> B["1단계: 새 파일은 Kotlin으"]
+    B --> C["2단계: DTO, Value Ob"]
+    C --> D["3단계: 서비스 계층 변환\nnu"]
+    D --> E["4단계: 컨트롤러 변환\n생성자"]
+    E --> F["완전한 Kotlin 프로젝트\nb"]
+    B -->|"양방향 호출 가능"| G["@JvmStatic, @JvmFi"]
 ```
 
 Java에서 Kotlin 코드를 호출할 때 추가 어노테이션이 필요한 경우:

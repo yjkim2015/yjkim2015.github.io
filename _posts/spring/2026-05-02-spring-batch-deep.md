@@ -416,9 +416,9 @@ public JdbcCursorItemReader<Order> orderReader(
 ```mermaid
 graph TD
     A[Master Step] -->|"파티션 생성"| B[Partitioner]
-    B --> C["Worker Step 1: ID 1~100000"]
-    B --> D["Worker Step 2: ID 100001~200000"]
-    B --> E["Worker Step 3: ID 200001~300000"]
+    B --> C["Worker Step 1: ID"]
+    B --> D["Worker Step 2: ID"]
+    B --> E["Worker Step 3: ID"]
     B --> F["Worker Step N: ..."]
     C --> G["각자 독립적으로 처리"]
     D --> G

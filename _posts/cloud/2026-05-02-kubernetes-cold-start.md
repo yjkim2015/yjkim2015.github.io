@@ -220,11 +220,11 @@ DaemonSet이 모든 노드에서 성공하면 배포 시 이미지 풀링 시간
 
 ```mermaid
 graph TD
-    Start["Pod 시작"] --> SP["startupProbe\n기동 완료 확인\n실패 시 재시작"]
-    SP -->|"성공"| LP["livenessProbe\n프로세스 생존 확인\n실패 시 재시작"]
-    SP -->|"성공"| RP["readinessProbe\n트래픽 수신 가능 확인\n실패 시 Service에서 제거"]
+    Start["Pod 시작"] --> SP["startupProbe\n기동 완"]
+    SP -->|"성공"| LP["livenessProbe\n프로세"]
+    SP -->|"성공"| RP["readinessProbe\n트래"]
     LP -->|"실패"| Restart["컨테이너 재시작"]
-    RP -->|"실패"| Remove["Endpoint 제거\n재시작 없음"]
+    RP -->|"실패"| Remove["Endpoint 제거\n재시작 없"]
     RP -->|"성공"| Traffic["트래픽 수신"]
 ```
 
@@ -526,7 +526,7 @@ kubectl get pods -o json | jq -r '
 ```mermaid
 graph LR
     Measure["Cold Start 측정"] --> B{"병목 원인"}
-    B -->|"이미지"| ImageOpt["멀티스테이지 빌드\nPre-pull DaemonSet"]
+    B -->|"이미지"| ImageOpt["멀티스테이지 빌드\nPre-pul"]
     B -->|"JVM"| JvmOpt["GraalVM / CDS"]
     B -->|"Probe"| ProbeOpt["startupProbe 최적화"]
     B -->|"트래픽 예측"| Cron["CronHPA"]

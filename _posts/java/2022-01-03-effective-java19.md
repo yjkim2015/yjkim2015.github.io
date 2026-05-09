@@ -17,10 +17,10 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["상속용 클래스 설계 원칙"] --> B["재정의 가능 메서드의\n자기 사용 패턴 문서화"]
-    A --> C["내부적으로 어떤 메서드가\n어느 메서드를 호출하는지 명시"]
-    A --> D["protected hook 메서드를\n잘 선별해 공개"]
-    B --> E["@implSpec 태그로\nJavadoc 자동 생성"]
+    A["상속용 클래스 설계 원칙"] --> B["재정의 가능 메서드의\n자기 사용"]
+    A --> C["내부적으로 어떤 메서드가\n어느"]
+    A --> D["protected hook 메서드"]
+    B --> E["@implSpec 태그로\nJav"]
     style A fill:#4a9eff,color:#fff
 ```
 
@@ -85,11 +85,11 @@ protected void removeRange(int fromIndex, int toIndex) { ... }
 
 ```mermaid
 graph LR
-    A["list.subList(2, 5).clear()"] --> B["AbstractList.clear()"]
-    B --> C["removeRange(2, 5) 호출"]
+    A["list.subList(2, 5)"] --> B["AbstractList.clear"]
+    B --> C["removeRange(2, 5)"]
     C --> D{"removeRange\n재정의했나?"}
-    D -->|"No (기본 구현)"| E["각 원소마다 iterator.remove\n→ O(n²) 성능"]
-    D -->|"Yes (ArrayList 등)"| F["배열 복사로 한 번에 제거\n→ O(n) 성능"]
+    D -->|"No (기본 구현)"| E["각 원소마다 iterator.re"]
+    D -->|"Yes (ArrayList 등)"| F["배열 복사로 한 번에 제거\n→"]
     style E fill:#ff6b6b,color:#fff
     style F fill:#51cf66,color:#fff
 ```
@@ -169,11 +169,11 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    A["clone() / readObject()"] --> B["내부적으로 재정의 가능 메서드를\n호출해서는 안 됨"]
+    A["clone() / readObje"] --> B["내부적으로 재정의 가능 메서드를\"]
     B --> C["readObject의 경우"]
     B --> D["clone의 경우"]
-    C --> C1["하위 클래스 상태가 미처\n역직렬화되기 전에\n재정의한 메서드가 호출됨"]
-    D --> D1["복제본 상태 수정 전에\n재정의한 메서드가 호출됨"]
+    C --> C1["하위 클래스 상태가 미처\n역직렬"]
+    D --> D1["복제본 상태 수정 전에\n재정의한"]
     style C1 fill:#ff6b6b,color:#fff
     style D1 fill:#ff6b6b,color:#fff
 ```
@@ -233,11 +233,11 @@ public class Base {
 
 ```mermaid
 graph TD
-    A["상속용 클래스를 만들어야 한다면"] --> B["자기 사용 패턴 모두 @implSpec 문서화"]
-    A --> C["필요한 hook은 protected로 공개\n(직접 하위 클래스 만들어 검증)"]
-    A --> D["생성자에서 재정의 가능 메서드\n절대 호출 금지"]
-    A --> E["clone/readObject에서도\n재정의 가능 메서드 호출 금지"]
-    F["상속할 이유가 없다면"] --> G["final 클래스 또는\nprivate 생성자로 상속 금지"]
+    A["상속용 클래스를 만들어야 한다면"] --> B["자기 사용 패턴 모두 @implS"]
+    A --> C["필요한 hook은 protecte"]
+    A --> D["생성자에서 재정의 가능 메서드\n"]
+    A --> E["clone/readObject에서"]
+    F["상속할 이유가 없다면"] --> G["final 클래스 또는\npriv"]
     style D fill:#ff6b6b,color:#fff
     style E fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff

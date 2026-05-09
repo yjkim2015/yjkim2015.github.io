@@ -180,9 +180,9 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     IN[원본 영상] --> SP["GOP 단위 분할"]
-    SP --> V["코덱 변환\nH.264/H.265/AV1"]
+    SP --> V["코덱 변환\nH.264/H.265"]
     SP --> AU["오디오 추출\nAAC 인코딩"]
-    V --> R["360p·720p·1080p·4K 병렬 인코딩"]
+    V --> R["360p·720p·1080p·4K"]
     R & AU --> MX["세그먼트 병합\n썸네일·워터마크"]
     MX --> OUT["S3 저장"]
 ```

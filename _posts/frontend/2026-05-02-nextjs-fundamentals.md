@@ -24,10 +24,10 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    CSR["CSR: 빈 HTML + JS 번들 → 브라우저에서 DOM 생성 (초기 느림)"]
-    SSR["SSR: 요청마다 서버 HTML 생성 → 최신 데이터, 서버 부하"]
-    SSG["SSG: 빌드 시 HTML 생성 → CDN 배포, 매우 빠름"]
-    ISR["ISR: SSG + 주기적 재생성 → 속도와 신선도 균형"]
+    CSR["CSR: 빈 HTML + JS 번"]
+    SSR["SSR: 요청마다 서버 HTML"]
+    SSG["SSG: 빌드 시 HTML 생성"]
+    ISR["ISR: SSG + 주기적 재생성"]
     CSR --- SSR
     SSG --- ISR
 ```
@@ -48,11 +48,11 @@ Next.js 13에서 App Router가 도입되었습니다. Pages Router는 기존 방
 ```mermaid
 graph LR
     PR["pages/"] --> PI["index.js → /"]
-    PR --> PB["blog/[id].js → /blog/:id"]
-    PR --> PA["api/users.js → /api/users"]
+    PR --> PB["blog/[id].js → /bl"]
+    PR --> PA["api/users.js → /ap"]
     AR["app/ (권장)"] --> AI["page.tsx → /"]
-    AR --> AB["blog/[id]/page.tsx → /blog/:id"]
-    AR --> ARO["layout / loading / error.tsx"]
+    AR --> AB["blog/[id]/page.tsx"]
+    AR --> ARO["layout / loading /"]
 ```
 
 App Router의 가장 큰 변화는 **서버 컴포넌트**입니다. 모든 컴포넌트가 기본적으로 서버에서만 실행됩니다. 클라이언트에서 실행이 필요한 컴포넌트만 `'use client'`를 선언합니다.
@@ -107,10 +107,10 @@ function LikeButton({ postId, initialCount }) {
 ```mermaid
 graph LR
     SC["서버 컴포넌트 (기본값)"]
-    CC["클라이언트 컴포넌트 (use client)"]
-    SC --> SC1["DB접근 / API키안전 / 번들0"]
-    SC --> SC2["useState·useEffect·이벤트 불가"]
-    CC --> CC1["useState·useEffect·브라우저API 가능"]
+    CC["클라이언트 컴포넌트 (use cl"]
+    SC --> SC1["DB접근 / API키안전 / 번들"]
+    SC --> SC2["useState·useEffect"]
+    CC --> CC1["useState·useEffect"]
     CC --> CC2["번들에 포함됨"]
 ```
 
@@ -165,10 +165,10 @@ export async function generateStaticParams() {
 
 ```mermaid
 graph TD
-    ROOT["app/layout.tsx (루트)"] --> HOME["page.tsx /"]
+    ROOT["app/layout.tsx (루트"] --> HOME["page.tsx /"]
     ROOT --> BLOG["blog/layout.tsx"]
-    BLOG --> BP["blog/page.tsx /blog"] & BD["blog/slug/page.tsx /blog/:slug"]
-    ROOT --> SP["loading.tsx / error.tsx / not-found.tsx"]
+    BLOG --> BP["blog/page.tsx /blo"] & BD["blog/slug/page.tsx"]
+    ROOT --> SP["loading.tsx / erro"]
 ```
 
 ```

@@ -26,8 +26,8 @@ List<Object> objectList = new ArrayList<Long>();  // 컴파일 오류!
 
 ```mermaid
 graph TD
-    A["Long[] → Object[] 대입"] --> B["컴파일 성공\n하지만 잘못된 타입 삽입 시\n런타임 ArrayStoreException"]
-    C["List<Long> → List<Object> 대입"] --> D["컴파일 오류\n즉시 발견"]
+    A["Long[] → Object[]"] --> B["컴파일 성공\n하지만 잘못된 타입"]
+    C["List<Long> → List<"] --> D["컴파일 오류\n즉시 발견"]
     style B fill:#ff6b6b,color:#fff
     style D fill:#51cf66,color:#fff
 ```
@@ -147,10 +147,10 @@ public class Chooser<T> {
 
 ```mermaid
 graph TD
-    A["배열"] --> A1["공변\nSub[]은 Super[]의 하위 타입"]
+    A["배열"] --> A1["공변\nSub[]은 Super[]"]
     A --> A2["실체화\n런타임에 타입 정보 유지"]
     A --> A3["런타임에 타입 오류 발견"]
-    B["제네릭"] --> B1["불공변\nList<Sub>은 List<Super>의 하위 타입 아님"]
+    B["제네릭"] --> B1["불공변\nList<Sub>은 Li"]
     B --> B2["소거\n런타임에 타입 정보 삭제"]
     B --> B3["컴파일타임에 타입 오류 발견"]
     style A3 fill:#ff6b6b,color:#fff

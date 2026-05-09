@@ -23,9 +23,9 @@ Spring Security는 **Servlet Filter 체인**으로 구현된다. HTTP 요청이 
 ```mermaid
 graph TD
     A["HTTP 요청"] --> B["Servlet Container"]
-    B --> C["DelegatingFilterProxy<br>Servlet Filter이지만 Spring Bean처럼 동작"]
-    C -->|"ApplicationContext에서<br>FilterChainProxy Bean 위임"| D["FilterChainProxy<br>Spring Bean, SecurityFilterChain 목록 관리"]
-    D -->|"요청 URL에 맞는 SecurityFilterChain 선택"| E["SecurityFilterChain<br>보안 필터 목록 (순서대로 실행)"]
+    B --> C["DelegatingFilterPr"]
+    C -->|"ApplicationContext"| D["FilterChainProxy<b"]
+    D -->|"요청 URL에 맞는 Securit"| E["SecurityFilterChai"]
     E --> F["DispatcherServlet"]
     F --> G["Controller"]
 ```
@@ -120,11 +120,11 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    AM["AuthenticationManager"] -->|"구현체"| PM["ProviderManager"]
-    PM -->|"순회"| AP1["DaoAuthenticationProvider<br>(username/password)"]
-    PM --> AP2["JwtAuthenticationProvider<br>(JWT 커스텀)"]
-    PM --> AP3["OAuth2LoginAuthenticationProvider<br>(OAuth2)"]
-    PM --> AP4["AnonymousAuthenticationProvider"]
+    AM["AuthenticationMana"] -->|"구현체"| PM["ProviderManager"]
+    PM -->|"순회"| AP1["DaoAuthenticationP"]
+    PM --> AP2["JwtAuthenticationP"]
+    PM --> AP3["OAuth2LoginAuthent"]
+    PM --> AP4["AnonymousAuthentic"]
 ```
 
 `DaoAuthenticationProvider`가 가장 기본적인 구현체다. `UserDetailsService`에서 사용자를 로드하고, `PasswordEncoder`로 비밀번호를 검증한다.
@@ -184,13 +184,13 @@ public class CustomUserDetails implements UserDetails {
 graph TD
     subgraph "요청 1 - Thread-1"
         A1["FilterChainProxy"] -->|"SecurityContext 생성"| B1["ThreadLocal 저장"]
-        B1 --> C1["Controller → SecurityContextHolder.getContext()<br>→ Thread-1의 SecurityContext"]
+        B1 --> C1["Controller → Secur"]
     end
     subgraph "요청 2 - Thread-2"
         A2["FilterChainProxy"] -->|"SecurityContext 생성"| B2["ThreadLocal 저장"]
-        B2 --> C2["Controller → SecurityContextHolder.getContext()<br>→ Thread-2의 SecurityContext"]
+        B2 --> C2["Controller → Secur"]
     end
-    C1 --- NOTE["각 Thread가 독립적인 SecurityContext 보유 → Thread 안전"]
+    C1 --- NOTE["각 Thread가 독립적인 Sec"]
     C2 --- NOTE
 ```
 

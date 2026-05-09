@@ -54,7 +54,7 @@ SMS:          100만 건/일 →  11 QPS
 ```mermaid
 graph TD
     Svc["마이크로서비스"] --> API["알림 API GW"]
-    API --> P0["Kafka: critical/high"]
+    API --> P0["Kafka: critical/hi"]
     API --> P2["Kafka: normal/low"]
     P0 --> Push["푸시 워커"] --> APNs["APNs/FCM"]
     P0 --> SMS["SMS 워커"] --> Twilio["Twilio/Nexmo"]
@@ -137,10 +137,10 @@ class DeduplicationService:
 ```mermaid
 graph TD
     Notif["알림 요청"] --> Classify{"우선순위 분류"}
-    Classify -->|"P0: 보안/결제"| P0["Kafka: critical<br>전용 워커 10개"]
-    Classify -->|"P1: 주문/배송"| P1["Kafka: high<br>전용 워커 5개"]
-    Classify -->|"P2: 소셜/댓글"| P2["Kafka: normal<br>공유 워커"]
-    Classify -->|"P3: 마케팅"| P3["Kafka: low<br>공유 워커"]
+    Classify -->|"P0: 보안/결제"| P0["Kafka: critical<br"]
+    Classify -->|"P1: 주문/배송"| P1["Kafka: high<br>전용"]
+    Classify -->|"P2: 소셜/댓글"| P2["Kafka: normal<br>공"]
+    Classify -->|"P3: 마케팅"| P3["Kafka: low<br>공유 워"]
 ```
 
 왜 같은 큐를 쓰면 안 되는가? 블랙프라이데이에 P3(마케팅) 알림 수천만 건이 쌓이면, 그 뒤에 들어온 P0(결제 완료) 알림이 수십 분 후에야 전달된다. **토픽 분리 + 전용 워커**로 P0는 항상 10초 이내를 보장한다.
@@ -238,9 +238,9 @@ def should_send_now(user_id: str, priority: str) -> bool:
 
 ```mermaid
 graph TD
-    Marketing["마케팅팀: 1억명 캠페인 발송"] --> Segment["사용자 세그먼트 추출<br>(DB 쿼리)"]
+    Marketing["마케팅팀: 1억명 캠페인 발송"] --> Segment["사용자 세그먼트 추출<br>(DB"]
     Segment --> Batch["1000명씩 10만 배치 분할"]
-    Batch --> Kafka["Kafka: notifications-low<br>초당 1만 건 발행 (속도 제한)"]
+    Batch --> Kafka["Kafka: notificatio"]
     Kafka --> Workers["워커 100개 병렬 처리"]
     Workers --> APNs["APNs: 초당 1만건"]
     Workers --> FCM["FCM: 초당 1만건"]

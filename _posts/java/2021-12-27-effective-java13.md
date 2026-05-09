@@ -19,11 +19,11 @@ toc_label: 목차
 graph TD
     A["Cloneable 인터페이스"] -->|"메서드 없음\n(마커 인터페이스)"| B["구현 여부만 표시"]
     C["Object.clone()"] -->|"protected 메서드"| D["실제 복사 동작"]
-    B --> E["Cloneable 구현 시:\nclone() → 필드 복사 수행"]
-    B --> F["미구현 시:\nclone() → CloneNotSupportedException"]
+    B --> E["Cloneable 구현 시:\nc"]
+    B --> F["미구현 시:\nclone() →"]
     style A fill:#ffd43b
     style C fill:#4a9eff,color:#fff
-    note["clone()이 Cloneable이 아닌 Object에 있는 이상한 구조"]
+    note["clone()이 Cloneable"]
 ```
 
 **이것은 인터페이스의 이례적인 사용입니다.** 일반적으로 인터페이스 구현은 "이 클래스가 해당 기능을 제공한다"는 선언인데, `Cloneable`은 **상위 클래스(`Object`)의 `protected` 메서드 동작 방식을 변경**합니다. 따라서 이 패턴은 절대 따라 하지 마세요.
@@ -85,9 +85,9 @@ copy.push("C");  // 원본 Stack의 elements도 변경됨!
 
 ```mermaid
 graph TD
-    A["original (Stack)"] -->|"참조"| C["elements 배열\n[A, B, null...]"]
-    B["copy (Stack) — 얕은 복사"] -->|"같은 배열 참조"| C
-    B -->|"push(C)"| D["copy가 C를 씀\n→ 원본도 영향받음!"]
+    A["original (Stack)"] -->|"참조"| C["elements 배열\n[A, B"]
+    B["copy (Stack) — 얕은"] -->|"같은 배열 참조"| C
+    B -->|"push(C)"| D["copy가 C를 씀\n→ 원본도"]
     style D fill:#ff6b6b,color:#fff
 ```
 
@@ -187,15 +187,15 @@ public static Stack newInstance(Stack original) {
 
 ```mermaid
 graph TD
-    A["복사 생성자 vs Cloneable"] --> B["복사 생성자/팩토리"]
+    A["복사 생성자 vs Cloneabl"] --> B["복사 생성자/팩토리"]
     A --> C["Cloneable/clone"]
-    B --> B1["생성자를 정상 사용\n(언어 규칙에 맞음)"]
+    B --> B1["생성자를 정상 사용\n(언어 규칙"]
     B --> B2["final 필드 문제 없음"]
     B --> B3["검사 예외 불필요"]
-    B --> B4["인터페이스 타입 인수 가능\n(변환 생성자 활용)"]
-    C --> C1["생성자 없이 객체 생성\n(언어 모순)"]
+    B --> B4["인터페이스 타입 인수 가능\n(변"]
+    C --> C1["생성자 없이 객체 생성\n(언어"]
     C --> C2["final 필드 할당 불가"]
-    C --> C3["CloneNotSupportedException 처리 필요"]
+    C --> C3["CloneNotSupportedE"]
     style B fill:#51cf66,color:#fff
     style C fill:#ff6b6b,color:#fff
 ```
@@ -228,11 +228,11 @@ Set<String> treeSet = new TreeSet<>(hashSet);  // 자동 정렬된 TreeSet으로
 ```mermaid
 graph TD
     A["객체 복사 방법 선택"] --> B{"Cloneable 이미\n구현된 클래스 확장?"}
-    B -->|"Yes"| C["clone() 올바르게 구현\n(깊은 복사 주의)"]
-    B -->|"No"| D["복사 생성자 또는 복사 팩토리 사용"]
+    B -->|"Yes"| C["clone() 올바르게 구현\n("]
+    B -->|"No"| D["복사 생성자 또는 복사 팩토리 사"]
     D --> D1["훨씬 안전하고 유연함"]
     C --> E{"가변 필드 있음?"}
-    E -->|"Yes"| F["깊은 복사 필수\nelements.clone() 등"]
+    E -->|"Yes"| F["깊은 복사 필수\nelements"]
     E -->|"No"| G["super.clone()으로 충분"]
     style D fill:#51cf66,color:#fff
     style D1 fill:#51cf66,color:#fff

@@ -124,7 +124,7 @@ ol.add("문자열");
 flowchart TD
     A["제네릭 메서드"] --> B["컴파일 타임 타입 추론"]
     B --> C["형변환 불필요"]
-    C --> D["ClassCastException 원천 차단"]
+    C --> D["ClassCastException"]
     E["비제네릭 메서드"] --> F["Object 반환"]
     F --> G["클라이언트가 형변환"]
     G --> H["런타임 에러 위험"]
@@ -236,12 +236,12 @@ static <T> List<T> flatten(List<? extends T>... lists) {
 
 ```mermaid
 flowchart LR
-    A["Favorites 컨테이너"] --> B["put(String.class, '자바')"]
-    A --> C["put(Integer.class, 42)"]
-    A --> D["put(Class.class, Favorites.class)"]
-    B --> E["키: Class<String>, 값: String"]
-    C --> F["키: Class<Integer>, 값: Integer"]
-    D --> G["키: Class<Class>, 값: Class"]
+    A["Favorites 컨테이너"] --> B["put(String.class,"]
+    A --> C["put(Integer.class,"]
+    A --> D["put(Class.class, F"]
+    B --> E["키: Class<String>,"]
+    C --> F["키: Class<Integer>,"]
+    D --> G["키: Class<Class>, 값"]
 ```
 
 아래 코드에서 `Class<T>` 객체를 키로 사용합니다. `String.class`의 타입은 `Class<String>`이므로, `put`과 `get`에서 타입 안전성이 자연스럽게 보장됩니다.
@@ -390,8 +390,8 @@ public void applyStyles(Set<Style> styles) {
 
 ```mermaid
 flowchart LR
-    A["ordinal 인덱싱"] -->|"배열[plant.lifeCycle.ordinal()]"| B["타입 안전 없음"]
-    C["EnumMap"] -->|"map.get(LifeCycle.ANNUAL)"| D["타입 안전 + 성능"]
+    A["ordinal 인덱싱"] -->|"배열[plant.lifeCycle"| B["타입 안전 없음"]
+    C["EnumMap"] -->|"map.get(LifeCycle."| D["타입 안전 + 성능"]
     D --> E["내부적으로 배열 사용 → O(1)"]
 ```
 

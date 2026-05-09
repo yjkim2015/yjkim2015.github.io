@@ -21,11 +21,11 @@ Spring Security의 AnonymousAuthenticationFilter가 바로 이 역할입니다. 
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["폼/RememberMe 필터"] --> D["AnonymousAuthenticationFilter"]
+    A["HTTP 요청"] --> B["폼/RememberMe 필터"] --> D["AnonymousAuthentic"]
     D --> E{"Authentication 존재?"}
     E -->|있음| F["필터 통과"]
-    E -->|없음| G["AnonymousAuthenticationToken 생성\nROLE_ANONYMOUS"] --> H["SecurityContextHolder 저장"]
-    F & H --> J["FilterSecurityInterceptor\n접근 권한 결정"]
+    E -->|없음| G["AnonymousAuthentic"] --> H["SecurityContextHol"]
+    F & H --> J["FilterSecurityInte"]
 ```
 
 핵심은 이 필터가 인증 객체를 **새로 생성하거나 덮어쓰지 않는다**는 점입니다. SecurityContext에 이미 Authentication 객체가 있으면 아무것도 하지 않습니다. 오직 Authentication이 없을 때만 익명 인증 토큰을 생성합니다.

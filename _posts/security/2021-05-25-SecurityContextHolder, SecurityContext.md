@@ -19,14 +19,14 @@ toc_label: 목차
 
 ```mermaid
 flowchart TD
-    A["SecurityContextHolder\n(전역 접근 API)"] --> B["저장 전략\n(Storage Strategy)"]
-    B --> C["MODE_THREADLOCAL\n스레드당 독립된 SecurityContext\n(기본값)"]
-    B --> D["MODE_INHERITABLETHREADLOCAL\n부모/자식 스레드 간 SecurityContext 공유"]
-    B --> E["MODE_GLOBAL\n애플리케이션 전체에서 단일 SecurityContext"]
-    C --> F["SecurityContext\n(Authentication 보관)"]
+    A["SecurityContextHol"] --> B["저장 전략\n(Storage St"]
+    B --> C["MODE_THREADLOCAL\n"]
+    B --> D["MODE_INHERITABLETH"]
+    B --> E["MODE_GLOBAL\n애플리케이"]
+    C --> F["SecurityContext\n("]
     D --> F
     E --> F
-    F --> G["Authentication\n(사용자 정보 + 권한)"]
+    F --> G["Authentication\n(사"]
 ```
 
 ## SecurityContext

@@ -46,9 +46,9 @@ try (Stream<String> words = new Scanner(file).tokens()) {
 graph TD
     A["핵심 수집기 5종"] --> B["toList()\n리스트로 수집"]
     A --> C["toSet()\n집합으로 수집"]
-    A --> D["toMap(keyMapper, valueMapper)\n맵으로 수집"]
-    A --> E["groupingBy(classifier)\n분류 함수로 그룹화"]
-    A --> F["joining(delimiter)\nCharSequence 스트림 연결"]
+    A --> D["toMap(keyMapper, v"]
+    A --> E["groupingBy(classif"]
+    A --> F["joining(delimiter)"]
     style A fill:#4a9eff,color:#fff
 ```
 

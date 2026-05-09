@@ -639,15 +639,15 @@ System.out.println(stringList.getClass()); // class java.util.ArrayList
 ```mermaid
 graph LR
   subgraph "컴파일 타임"
-    SRC["List&lt;String&gt; list\nlist.add('hello')\nString s = list.get(0)"]
+    SRC["List&lt;String&gt;"]
   end
   subgraph "컴파일러 처리"
-    CHECK["1. 타입 검사\n(List&lt;String&gt;에 Integer 금지)"]
-    ERASE["2. 타입 소거\n(List&lt;String&gt; → List)"]
-    CAST["3. 캐스팅 삽입\n(list.get(0) → (String)list.get(0))"]
+    CHECK["1. 타입 검사\n(List&lt"]
+    ERASE["2. 타입 소거\n(List&lt"]
+    CAST["3. 캐스팅 삽입\n(list.g"]
   end
   subgraph "런타임 바이트코드"
-    BC["List list\nlist.add('hello')\nString s = (String)list.get(0)"]
+    BC["List list\nlist.ad"]
   end
   SRC --> CHECK --> ERASE --> CAST --> BC
 ```

@@ -27,9 +27,9 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    DOG["dog 객체<br>name: '멍멍이'<br>age: 3"]
-    ANIMAL_PROTO["Animal.prototype<br>speak()<br>eat()"]
-    OBJ_PROTO["Object.prototype<br>toString()<br>hasOwnProperty()"]
+    DOG["dog 객체<br>name: '멍"]
+    ANIMAL_PROTO["Animal.prototype<b"]
+    OBJ_PROTO["Object.prototype<b"]
     NULL[null]
     DOG -->|"[[Prototype]]"| ANIMAL_PROTO
     ANIMAL_PROTO -->|"[[Prototype]]"| OBJ_PROTO
@@ -73,10 +73,10 @@ flowchart TD
     A["dog.speak() 호출"] --> B{"dog에<br>speak가 있나?"}
     B -->|"예"| C["dog.speak() 실행"]
     B -->|"아니오"| D{"Animal.prototype에<br>speak가 있나?"}
-    D -->|"예"| E["Animal.prototype.speak.call(dog) 실행"]
+    D -->|"예"| E["Animal.prototype.s"]
     D -->|"아니오"| F{"Object.prototype에<br>speak가 있나?"}
-    F -->|"예"| G["Object.prototype.speak 실행"]
-    F -->|"아니오"| H["null — undefined 반환"]
+    F -->|"예"| G["Object.prototype.s"]
+    F -->|"아니오"| H["null — undefined 반"]
     style C fill:#2ecc71,color:#fff
     style E fill:#3498db,color:#fff
     style H fill:#e74c3c,color:#fff
@@ -191,11 +191,11 @@ pureObject.key = 'value';
 ```mermaid
 graph LR
     subgraph "프로토타입 방식"
-        PF["function Animal(name)"]
-        PP["Animal.prototype.speak"]
+        PF["function Animal(na"]
+        PP["Animal.prototype.s"]
     end
     subgraph "클래스 방식"
-        CC["class Animal { speak() {} }"]
+        CC["class Animal { spe"]
     end
     PF -.->|"동일한 결과"| CC
     PP -.->|"동일한 결과"| CC
@@ -288,9 +288,9 @@ console.log(buddy instanceof Animal);          // true
 ```mermaid
 graph BT
     BUDDY["buddy\nname:'버디'"]
-    GR["GoldenRetriever.prototype\nfetch()"]
-    DOG["Dog.prototype\nbark()"]
-    OBJ["Object.prototype\nhasOwnProperty()"]
+    GR["GoldenRetriever.pr"]
+    DOG["Dog.prototype\nbar"]
+    OBJ["Object.prototype\n"]
     NULL[null]
     BUDDY -->|__proto__| GR -->|__proto__| DOG -->|__proto__| OBJ -->|__proto__| NULL
     style BUDDY fill:#e74c3c,color:#fff

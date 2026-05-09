@@ -22,11 +22,11 @@ toc_label: 목차
 ```mermaid
 flowchart TD
     A["HTTP 요청"] --> B{"세션에\nSecurityContext?"}
-    B -- "있음" --> C["세션 로드\n→ ThreadLocal"]
-    B -- "없음" --> D["빈 Context 생성\n→ ThreadLocal"]
+    B -- "있음" --> C["세션 로드\n→ ThreadLoc"]
+    B -- "없음" --> D["빈 Context 생성\n→ Th"]
     C & D --> E["필터체인 + 컨트롤러"]
-    E --> F["SecurityContext\n→ 세션 저장"]
-    F --> G["clearContext()\n→ HTTP 응답"]
+    E --> F["SecurityContext\n→"]
+    F --> G["clearContext()\n→"]
 ```
 
 ## 사용자 유형별 처리 방식
@@ -131,10 +131,10 @@ http
 
 ```mermaid
 flowchart LR
-    A["JWT 요청"] --> B["SecurityContextPersistenceFilter\n빈 SecurityContext 생성\n(세션 미사용)"]
-    B --> C["JwtAuthenticationFilter\n토큰 검증 후 Authentication 설정"]
+    A["JWT 요청"] --> B["SecurityContextPer"]
+    B --> C["JwtAuthenticationF"]
     C --> D["컨트롤러\n(인증된 상태로 처리)"]
-    D --> E["응답 완료\nclearContext()\n세션에 저장 안 함"]
+    D --> E["응답 완료\nclearContex"]
 ```
 
 ## Spring Security 6에서의 변경

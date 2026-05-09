@@ -147,11 +147,11 @@ private void notifyElementAdded(E element) {
 
 ```mermaid
 graph TD
-    A["동기화 블록 안 외계인 메서드 문제"] --> B["ConcurrentModificationException\n순회 중 리스트 수정"]
-    A --> C["교착 상태\n메인 락 보유 + 배경 스레드 대기"]
-    B --> D["해결: 스냅샷 복사\nnew ArrayList<>(observers)\n락 밖에서 순회"]
+    A["동기화 블록 안 외계인 메서드 문"] --> B["ConcurrentModifica"]
+    A --> C["교착 상태\n메인 락 보유 + 배"]
+    B --> D["해결: 스냅샷 복사\nnew Ar"]
     C --> D
-    D --> E["더 나은 해결:\nCopyOnWriteArrayList\n수정 시 전체 복사, 읽기는 락 없음"]
+    D --> E["더 나은 해결:\nCopyOnWr"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#ff6b6b,color:#fff
     style D fill:#f39c12,color:#fff

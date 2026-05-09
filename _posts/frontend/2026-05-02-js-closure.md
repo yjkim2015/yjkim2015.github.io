@@ -79,7 +79,7 @@ outer();
 ```mermaid
 flowchart LR
     A["outer() 호출"] --> B["count=0 생성"] --> C["inner 반환"] --> D["outer 제거"]
-    D --> F["inner가 count 참조중 - 유지!"]
+    D --> F["inner가 count 참조중 -"]
     FN["inner 함수"] -.->|"참조"| ENV["렉시컬 환경 count=0"]
 ```
 
@@ -220,8 +220,8 @@ console.log(TodoModule.getPending());
 
 ```mermaid
 graph TD
-    PRIV["private: todos, nextId, validate()"]
-    PUB["public API: add(), complete(), getAll(), getPending()"]
+    PRIV["private: todos, ne"]
+    PUB["public API: add(),"]
     PUB -->|"클로저로 접근"| PRIV
 ```
 
@@ -370,11 +370,11 @@ const getFirst = createHeavyResource();
 graph TD
     subgraph "메모리 누수"
         GF["getFirst 함수"] -->|"클로저 참조"| LD["largeData (4MB)"]
-        LD --> D["실제 사용: largeData[0] 하나뿐"]
+        LD --> D["실제 사용: largeData[0"]
         D --> WASTE["나머지 999,999개 낭비"]
     end
     subgraph "해결책"
-        GF2["getFirst2 함수"] -->|"클로저 참조"| FIRST["first = largeData[0]만 보관"]
+        GF2["getFirst2 함수"] -->|"클로저 참조"| FIRST["first = largeData["]
         FIRST --> LD2["largeData 원본 GC 가능"]
     end
     style WASTE fill:#e74c3c,color:#fff

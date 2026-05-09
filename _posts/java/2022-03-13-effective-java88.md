@@ -103,10 +103,10 @@ private void readObject(ObjectInputStream s)
 
 ```mermaid
 graph TD
-    A["readObject 안전하게 작성"] --> B["방어적 복사\n가변 참조 필드를 새 객체로 복사\nclone() 사용 금지"]
-    A --> C["유효성 검사\nInvalidObjectException 던지기\n복사 이후에 수행"]
-    A --> D["재정의 가능 메서드 호출 금지\n하위 클래스 상태 미완성 상태에서 호출됨"]
-    B --> E["순서: 방어적 복사 → 불변식 검사"]
+    A["readObject 안전하게 작성"] --> B["방어적 복사\n가변 참조 필드를"]
+    A --> C["유효성 검사\nInvalidObj"]
+    A --> D["재정의 가능 메서드 호출 금지\n"]
+    B --> E["순서: 방어적 복사 → 불변식 검"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff

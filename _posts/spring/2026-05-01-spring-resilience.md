@@ -246,13 +246,13 @@ public Result callService(Request request) {
 ```mermaid
 graph LR
     REQ["요청"] --> BH["Bulkhead\n동시성 제한"]
-    BH --> RL["Rate Limiter\n속도 제한"]
-    RL --> CB["Circuit Breaker\n회로 차단"]
+    BH --> RL["Rate Limiter\n속도 제"]
+    RL --> CB["Circuit Breaker\n회"]
     CB --> RT["Retry\n재시도"]
     RT --> SVC["실제 서비스 호출"]
     SVC -->|"실패"| RT
     RT -->|"최대 재시도 초과"| CB
-    CB -->|"실패율 임계치 초과"| OPEN["OPEN 상태\nfallback 실행"]
+    CB -->|"실패율 임계치 초과"| OPEN["OPEN 상태\nfallback"]
 ```
 
 ---

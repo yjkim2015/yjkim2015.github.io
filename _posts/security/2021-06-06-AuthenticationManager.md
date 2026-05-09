@@ -110,8 +110,8 @@ public Authentication authenticate(Authentication authentication) throws Authent
 
 ```mermaid
 flowchart TD
-    A["인증 요청"] --> B["자식 ProviderManager\n(특정 URL 전용)"]
-    B -- "처리 실패" --> C["부모 ProviderManager\n(전역 공통)"]
+    A["인증 요청"] --> B["자식 ProviderManager"]
+    B -- "처리 실패" --> C["부모 ProviderManager"]
     C -- "처리 실패" --> D["인증 최종 실패"]
     B -- "처리 성공" --> E["인증 완료"]
     C -- "처리 성공" --> E
@@ -245,11 +245,11 @@ providerManager.setEraseCredentialsAfterAuthentication(true);  // 기본값: tru
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["SecurityFilter\n→ ProviderManager"]
-    B --> C["DaoProvider\nUserDetailsService+PasswordEncoder"]
+    A["HTTP 요청"] --> B["SecurityFilter\n→"]
+    B --> C["DaoProvider\nUserD"]
     B --> D["RememberMeProvider"]
-    C -->|성공| E["Authentication 생성\n→ SecurityContext"]
-    C -->|실패| F["AuthenticationException\n→ FailureHandler"]
+    C -->|성공| E["Authentication 생성\"]
+    C -->|실패| F["AuthenticationExce"]
     D -->|성공| E
 ```
 

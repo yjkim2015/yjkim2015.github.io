@@ -161,10 +161,10 @@ public final class Complex {
 
 ```mermaid
 flowchart TD
-    A["상속 방식"] --> B["InstrumentedHashSet extends HashSet"]
+    A["상속 방식"] --> B["InstrumentedHashSe"]
     B --> C["HashSet 내부 구현에 의존"]
-    C --> D["addAll이 add를 호출하면 중복 카운트!"]
-    E["컴포지션 방식"] --> F["InstrumentedSet has-a Set"]
+    C --> D["addAll이 add를 호출하면"]
+    E["컴포지션 방식"] --> F["InstrumentedSet ha"]
     F --> G["ForwardingSet이 위임"]
     G --> H["내부 구현에 독립적"]
 ```
@@ -392,7 +392,7 @@ flowchart TD
     A --> C["비정적 멤버 클래스"]
     A --> D["익명 클래스"]
     A --> E["지역 클래스"]
-    C --> F["바깥 인스턴스 참조 보유 → 메모리 누수 위험"]
+    C --> F["바깥 인스턴스 참조 보유 → 메모"]
     B --> G["바깥 인스턴스 독립 → 안전"]
 ```
 

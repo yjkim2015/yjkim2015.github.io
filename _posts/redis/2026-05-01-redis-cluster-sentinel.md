@@ -199,7 +199,7 @@ Redis Cluster는 **16384개의 해시 슬롯**으로 키를 분산한다.
 
 ```mermaid
 graph LR
-    KEY["'user:123'"] -->|"CRC16('user:123') % 16384"| SLOT["슬롯 번호 계산"]
+    KEY["'user:123'"] -->|"CRC16('user:123')"| SLOT["슬롯 번호 계산"]
     SLOT -->|"0 ~ 5460"| MA["마스터 A"]
     SLOT -->|"5461 ~ 10922"| MB["마스터 B"]
     SLOT -->|"10923 ~ 16383"| MC["마스터 C"]
@@ -383,10 +383,10 @@ public LettuceClientConfigurationBuilderCustomizer lettuceCustomizer() {
 ```mermaid
 graph TD
     START(["요구사항 분석"]) --> Q1{"데이터가 단일 서버<br>메모리에 들어가는가?"}
-    Q1 -->|"NO (TB급)"| CLUSTER["클러스터 모드<br>— 수평 확장 필요"]
+    Q1 -->|"NO (TB급)"| CLUSTER["클러스터 모드<br>— 수평 확장"]
     Q1 -->|"YES"| Q2{"운영 환경인가?<br>(마스터 장애 시 자동 복구 필요)"}
-    Q2 -->|"YES"| SENTINEL["센티넬 모드<br>— 자동 페일오버"]
-    Q2 -->|"NO (개발/테스트)"| SINGLE["싱글 모드<br>— 간단, 빠른 설정"]
+    Q2 -->|"YES"| SENTINEL["센티넬 모드<br>— 자동 페일오"]
+    Q2 -->|"NO (개발/테스트)"| SINGLE["싱글 모드<br>— 간단, 빠른"]
     style CLUSTER fill:#88f,stroke:#00c,color:#000
     style SENTINEL fill:#8f8,stroke:#080,color:#000
     style SINGLE fill:#ff8,stroke:#880,color:#000

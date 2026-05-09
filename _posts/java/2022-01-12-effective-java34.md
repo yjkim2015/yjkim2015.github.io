@@ -45,10 +45,10 @@ public enum Orange { NAVEL, TEMPLE, BLOOD }
 
 ```mermaid
 graph TD
-    A["열거 타입의 장점"] --> B["컴파일타임 타입 안전성\nApple 자리에 Orange 불가"]
-    A --> C["각자의 이름공간\nApple.FUJI, Orange.NAVEL"]
-    A --> D["상수 값 변경해도\n재컴파일 불필요"]
-    A --> E["toString으로 의미 있는 출력"]
+    A["열거 타입의 장점"] --> B["컴파일타임 타입 안전성\nAppl"]
+    A --> C["각자의 이름공간\nApple.FU"]
+    A --> D["상수 값 변경해도\n재컴파일 불필"]
+    A --> E["toString으로 의미 있는 출"]
     A --> F["values()로 전체 순회 가능"]
     A --> G["메서드와 필드 추가 가능"]
     style A fill:#51cf66,color:#fff
@@ -212,8 +212,8 @@ enum PayrollDay {
 graph TD
     A["상수 집합이 필요하다면"] --> B["열거 타입 사용"]
     B --> C["단순 상수 집합: 기본 enum"]
-    B --> D["상수마다 다른 동작: 상수별 메서드 구현"]
-    B --> E["상수 그룹 간 공유 로직: 전략 열거 타입 패턴"]
+    B --> D["상수마다 다른 동작: 상수별 메서"]
+    B --> E["상수 그룹 간 공유 로직: 전략"]
     style B fill:#51cf66,color:#fff
 ```
 

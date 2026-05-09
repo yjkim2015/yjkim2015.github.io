@@ -113,10 +113,10 @@ public short getLineNum()  { return lineNum; }
 graph TD
     A["toString 재정의 여부"] --> B["재정의 안 함"]
     A --> C["재정의 함"]
-    B --> B1["로그: PhoneNumber@1f6a7b9\n→ 디버깅 불가"]
+    B --> B1["로그: PhoneNumber@1f"]
     B --> B2["예외 메시지: 의미없는 해시코드"]
     B --> B3["테스트 실패 메시지 이해 불가"]
-    C --> C1["로그: 707-867-5309\n→ 즉시 이해 가능"]
+    C --> C1["로그: 707-867-5309\n"]
     C --> C2["예외 메시지: 명확한 값 표시"]
     C --> C3["테스트 실패 시 원인 즉시 파악"]
     style B fill:#ff6b6b,color:#fff

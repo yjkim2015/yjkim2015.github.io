@@ -195,10 +195,10 @@ PUT /products
 
 ```mermaid
 flowchart LR
-    INPUT["원본 텍스트\n'무선 블루투스 이어폰'"] --> CF["1️⃣ Character Filter\nHTML 제거 등"]
-    CF --> TK["2️⃣ Tokenizer\n형태소 분리"]
-    TK --> TF["3️⃣ Token Filter\n소문자, 불용어"]
-    TF --> TERMS["토큰\n무선 | 블루투스 | 이어폰"]
+    INPUT["원본 텍스트\n'무선 블루투스 이"] --> CF["1️⃣ Character Filt"]
+    CF --> TK["2️⃣ Tokenizer\n형태소"]
+    TK --> TF["3️⃣ Token Filter\n"]
+    TF --> TERMS["토큰\n무선 | 블루투스 | 이어"]
 ```
 
 ### 4-3. Nori: 한국어 형태소 분석기
@@ -518,10 +518,10 @@ POST /products/_forcemerge?max_num_segments=1
 
 ```mermaid
 flowchart TD
-    Q1{"예상 데이터 크기?"} --> |"< 30GB"| S1["1 Primary + 1 Replica"]
-    Q1 --> |"30~150GB"| S3["3~5 Primary + 1 Replica"]
-    Q1 --> |"150GB~1TB"| S10["5~20 Primary + 1 Replica"]
-    Q1 --> |"> 1TB"| ILM["시계열 → ILM 롤오버\n비시계열 → 20~50 Primary"]
+    Q1{"예상 데이터 크기?"} --> |"< 30GB"| S1["1 Primary + 1 Repl"]
+    Q1 --> |"30~150GB"| S3["3~5 Primary + 1 Re"]
+    Q1 --> |"150GB~1TB"| S10["5~20 Primary + 1 R"]
+    Q1 --> |"> 1TB"| ILM["시계열 → ILM 롤오버\n비시계"]
 ```
 
 ### 7-4. JVM Heap 설정
@@ -671,9 +671,9 @@ graph TB
         CL --> N2["Node 2\nData"]
         CL --> N3["Node 3\nData"]
         N2 --> IDX["Index = 논리 단위"]
-        IDX --> SH["Shard = Lucene Index"]
+        IDX --> SH["Shard = Lucene Ind"]
         SH --> SEG["Segment = 불변 역인덱스"]
-        SEG --> II["역인덱스\nTerm → Posting List"]
+        SEG --> II["역인덱스\nTerm → Posti"]
     end
 ```
 

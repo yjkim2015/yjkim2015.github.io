@@ -69,11 +69,11 @@ Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
 
 ```mermaid
 graph TD
-    A["스레드 스케줄러 의존 문제"] --> B["바쁜 대기\nwhile(true) 검사\nCPU 낭비"]
-    A --> C["Thread.yield\n플랫폼마다 효과 다름\n테스트 불가"]
-    A --> D["스레드 우선순위\n자바에서 이식성 최악\n임시방편"]
-    B --> E["올바른 해결\nBlockingQueue/CountDownLatch\n블로킹으로 대기"]
-    C --> F["올바른 해결\n실행 가능 스레드 수\n자체를 줄이기"]
+    A["스레드 스케줄러 의존 문제"] --> B["바쁜 대기\nwhile(true)"]
+    A --> C["Thread.yield\n플랫폼마"]
+    A --> D["스레드 우선순위\n자바에서 이식성"]
+    B --> E["올바른 해결\nBlockingQu"]
+    C --> F["올바른 해결\n실행 가능 스레드"]
     D --> F
     style B fill:#ff6b6b,color:#fff
     style C fill:#ff6b6b,color:#fff

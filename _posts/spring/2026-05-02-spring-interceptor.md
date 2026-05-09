@@ -128,10 +128,10 @@ public class AuthInterceptor implements HandlerInterceptor {
 graph TB
     A[HTTP 요청] --> B["Filter Chain"]
     B --> C[DispatcherServlet]
-    C --> D["Interceptor preHandle (순서)"]
+    C --> D["Interceptor preHan"]
     D --> E[Controller]
     E --> F["AOP Before/After"]
-    E --> G["Interceptor postHandle·afterCompletion (역순)"]
+    E --> G["Interceptor postHa"]
     G --> H[HTTP 응답]
 ```
 
@@ -142,11 +142,11 @@ flowchart TD
     A["횡단 관심사 구현 필요"] --> B{"Spring Bean 접근 필요?"}
     B -->|"아니오"| C{"모든 요청에 적용?"}
     B -->|"예"| D{"URL 기반 제어 필요?"}
-    C -->|"예"| E["Filter 사용\n인코딩, CORS, 보안 헤더"]
-    C -->|"아니오"| F["Filter 사용\n특정 경로만 매핑"]
-    D -->|"예"| G["Interceptor 사용\n인증, 로깅, 성능 측정"]
+    C -->|"예"| E["Filter 사용\n인코딩, CO"]
+    C -->|"아니오"| F["Filter 사용\n특정 경로만"]
+    D -->|"예"| G["Interceptor 사용\n인증"]
     D -->|"아니오"| H{"메서드 레벨 제어?"}
-    H -->|"예"| I["AOP 사용\n트랜잭션, 캐싱, 메서드 로깅"]
+    H -->|"예"| I["AOP 사용\n트랜잭션, 캐싱,"]
     H -->|"아니오"| G
 ```
 
@@ -1080,7 +1080,7 @@ graph TD
     A["요청 (최적화 전)"] --> B["로깅"] --> C["인증"] --> D["RateLimit"] --> E["성능"] --> F["Controller"]
     A2["요청 (최적화 후)"] --> G{"경로 분기"}
     G -->|"/public"| H["성능만 → Controller"]
-    G -->|"/api"| I["로깅+인증+RL+성능 → Controller"]
+    G -->|"/api"| I["로깅+인증+RL+성능 → Cont"]
     G -->|"/internal"| J["인증만 → Controller"]
 ```
 

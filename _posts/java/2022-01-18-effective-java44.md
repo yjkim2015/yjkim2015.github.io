@@ -55,12 +55,12 @@ BiPredicate<Map<K,V>, Map.Entry<K,V>>  // 동일한 구조
 
 ```mermaid
 graph TD
-    A["기본 6종"] --> B["UnaryOperator\n입출력 타입 동일\nT → T"]
-    A --> C["BinaryOperator\n입출력 타입 동일\nT,T → T"]
-    A --> D["Predicate\n조건 검사\nT → boolean"]
-    A --> E["Function\n입출력 타입 다름\nT → R"]
-    A --> F["Supplier\n값 제공\n() → T"]
-    A --> G["Consumer\n값 소비\nT → void"]
+    A["기본 6종"] --> B["UnaryOperator\n입출력"]
+    A --> C["BinaryOperator\n입출"]
+    A --> D["Predicate\n조건 검사\n"]
+    A --> E["Function\n입출력 타입 다"]
+    A --> F["Supplier\n값 제공\n()"]
+    A --> G["Consumer\n값 소비\nT"]
     style A fill:#4a9eff,color:#fff
 ```
 
@@ -96,10 +96,10 @@ IntUnaryOperator f = x -> x + 1;            // int 사용
 
 ```mermaid
 graph TD
-    A["전용 함수형 인터페이스\n직접 작성 기준"] --> B["API에서 자주 쓰이며\n이름이 용도를 잘 설명"]
-    A --> C["구현하는 쪽이 반드시\n지켜야 할 규약 존재"]
-    A --> D["유용한 디폴트 메서드가\n여러 개 필요"]
-    B --> E["Comparator<T> 예시\n구조는 ToIntBiFunction과 같지만\n독자 인터페이스로 존재"]
+    A["전용 함수형 인터페이스\n직접 작"] --> B["API에서 자주 쓰이며\n이름이"]
+    A --> C["구현하는 쪽이 반드시\n지켜야 할"]
+    A --> D["유용한 디폴트 메서드가\n여러 개"]
+    B --> E["Comparator<T> 예시\n"]
     style E fill:#51cf66,color:#fff
 ```
 

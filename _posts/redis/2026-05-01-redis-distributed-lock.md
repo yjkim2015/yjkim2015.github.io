@@ -124,7 +124,7 @@ private void releaseLock(String key, String value) {
 ```mermaid
 flowchart TD
     A1["GET lock"] --> A2{"내 값?"}
-    A2 -->|Yes| A3["DEL lock(비원자, 타 프로세스 침범 위험)"]
+    A2 -->|Yes| A3["DEL lock(비원자, 타 프로"]
     A2 -->|No| A4["중단"]
     B1["EVAL Lua(원자)"] --> B2{"GET+비교+DEL"}
     B2 -->|성공| B3["1 반환"]

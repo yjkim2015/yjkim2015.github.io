@@ -125,7 +125,7 @@ graph TD
     C --> E["📄 Main.java"]
     C --> F["📁 service"]
     F --> G["📄 UserService.java"]
-    F --> H["📄 OrderService.java"]
+    F --> H["📄 OrderService.jav"]
 ```
 
 ```java
@@ -285,12 +285,12 @@ Spring의 `@Transactional`, `@Cacheable`이 동적 프록시로 동작한다.
 flowchart TD
     Q{"어떤 문제?"}
     Q --> A1["Adapter: 인터페이스 연결"]
-    Q --> B1["Decorator: 기능 동적 추가"]
+    Q --> B1["Decorator: 기능 동적 추"]
     Q --> C1["Facade: 복잡계 단순화"]
     Q --> D1["Composite: 트리구조 관리"]
-    Q --> E1["Flyweight: 객체 메모리절약"]
+    Q --> E1["Flyweight: 객체 메모리절"]
     Q --> F1["Proxy: 접근제어/부가기능"]
-    Q --> G1["Bridge: 추상화·구현 독립확장"]
+    Q --> G1["Bridge: 추상화·구현 독립확"]
 ```
 
 ---

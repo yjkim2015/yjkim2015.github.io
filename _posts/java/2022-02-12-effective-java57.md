@@ -83,10 +83,10 @@ for (Iterator<Element> i2 = c2.iterator(); i.hasNext(); ) {  // 컴파일 오류
 
 ```mermaid
 graph TD
-    A["지역변수 범위 최소화"] --> B["처음 쓰일 때 선언\n사전 선언 금지"]
-    A --> C["선언과 동시에 초기화\n정보 부족하면 선언도 미룸"]
-    A --> D["while보다 for\n반복변수 범위가 루프로 제한\n복사-붙여넣기 버그 예방"]
-    A --> E["메서드를 작게 유지\n한 기능만 집중\n관련 없는 변수와 섞이지 않음"]
+    A["지역변수 범위 최소화"] --> B["처음 쓰일 때 선언\n사전 선언"]
+    A --> C["선언과 동시에 초기화\n정보 부족"]
+    A --> D["while보다 for\n반복변수"]
+    A --> E["메서드를 작게 유지\n한 기능만"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff

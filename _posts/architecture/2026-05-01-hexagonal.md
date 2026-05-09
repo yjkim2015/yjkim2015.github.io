@@ -59,11 +59,11 @@ Adapter(구현체)가 기술을 다룬다.
 
 ```mermaid
 graph LR
-    HTTP["HTTP/CLI/Test\n(Driving Side)"]
-    AS["Application Service\n+ Domain Model"]
-    DB["DB/MQ/API\n(Driven Side)"]
-    HTTP -->|"Inbound Port/Adapter"| AS
-    AS -->|"Outbound Port/Adapter"| DB
+    HTTP["HTTP/CLI/Test\n(Dr"]
+    AS["Application Servic"]
+    DB["DB/MQ/API\n(Driven"]
+    HTTP -->|"Inbound Port/Adapt"| AS
+    AS -->|"Outbound Port/Adap"| DB
 ```
 
 ---
@@ -98,11 +98,11 @@ graph LR
 
 ```mermaid
 graph LR
-    WA["Web Adapter\n(Controller)"]
-    IP["Inbound Port\n(UseCase Interface)"]
-    AS["Application Service"]
-    OP["Outbound Port\n(Repository Interface)"]
-    DA["DB Adapter\n(JpaRepository)"]
+    WA["Web Adapter\n(Cont"]
+    IP["Inbound Port\n(Use"]
+    AS["Application Servic"]
+    OP["Outbound Port\n(Re"]
+    DA["DB Adapter\n(JpaRe"]
     WA -->|"1️⃣ depends on"| IP
     IP -->|"2️⃣ implemented by"| AS
     AS -->|"3️⃣ depends on"| OP
@@ -272,9 +272,9 @@ public class OrderPersistenceAdapter implements OrderRepository {
 ```mermaid
 graph TD
     subgraph "테스트 레벨"
-        UT["단위 테스트\nApplication Service\nDB 불필요, Port Mock 사용\n빠름 (ms 단위)"]
-        IT["통합 테스트\nAdapter 레벨\nDB/Kafka 실제 사용\n중간 속도"]
-        E2E["E2E 테스트\nHTTP 요청 → DB 확인\n전체 플로우 검증\n느림"]
+        UT["단위 테스트\nApplicatio"]
+        IT["통합 테스트\nAdapter 레벨"]
+        E2E["E2E 테스트\nHTTP 요청 →"]
     end
     UT -->|"70%"| IT
     IT -->|"20%"| E2E
@@ -343,12 +343,12 @@ class OrderServiceTest {
 
 ```mermaid
 graph TD
-    WA["Web Adapter\n@RestController"] -->|HTTP 요청| IP["Inbound Port\nPlaceOrderUseCase"]
-    IP --> UC["Application Service\n(UseCase 구현)"]
-    UC --> E["Domain\nEntity/VO/Aggregate/Event"]
-    UC --> OP["Outbound Port\nOrderRepository"]
-    PA["Persistence Adapter\nJpaRepository"] -->|구현| OP
-    MA["Messaging Adapter\nKafkaPublisher"] -->|구현| OP
+    WA["Web Adapter\n@Rest"] -->|HTTP 요청| IP["Inbound Port\nPlac"]
+    IP --> UC["Application Servic"]
+    UC --> E["Domain\nEntity/VO/"]
+    UC --> OP["Outbound Port\nOrd"]
+    PA["Persistence Adapte"] -->|구현| OP
+    MA["Messaging Adapter\"] -->|구현| OP
 ```
 
 - DDD의 **Domain Layer**가 헥사고날의 **Application Core** 내부에 위치

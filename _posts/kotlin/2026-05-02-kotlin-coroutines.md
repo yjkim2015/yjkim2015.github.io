@@ -24,16 +24,16 @@ toc_label: 목차
 ```mermaid
 graph TD
     subgraph "전통적 스레드 모델 — 동시 요청 1000개"
-        T1["Thread 1\n~1MB 스택\nDB 응답 대기 중..."]
-        T2["Thread 2\n~1MB 스택\nHTTP 응답 대기 중..."]
-        T3["Thread 3~1000\n~1MB 스택\n대기 중..."]
-        Mem1["총 메모리: ~1GB\n실제 CPU 사용: 8코어만"]
+        T1["Thread 1\n~1MB 스택\"]
+        T2["Thread 2\n~1MB 스택\"]
+        T3["Thread 3~1000\n~1M"]
+        Mem1["총 메모리: ~1GB\n실제 CP"]
     end
     subgraph "코루틴 모델 — 동시 요청 1000개"
-        C1["Coroutine 1~1000\n수십 KB 힙 메모리"]
-        Pool["Thread Pool\n8~16개 스레드만"]
+        C1["Coroutine 1~1000\n"]
+        Pool["Thread Pool\n8~16개"]
         C1 --> Pool
-        Mem2["총 메모리: ~수십 MB\nCPU 사용: 전체 코어 활용"]
+        Mem2["총 메모리: ~수십 MB\nCPU"]
     end
 ```
 
@@ -164,9 +164,9 @@ suspend fun fetchUserDataResilient(userId: Long): UserData = supervisorScope {
 
 ```mermaid
 graph TD
-    D["Dispatchers"] --> IO["Dispatchers.IO\nI/O 작업\nDB, HTTP, File\n기본 64개 스레드"]
-    D --> Default["Dispatchers.Default\nCPU 집중 작업\n이미지 처리, 정렬, 암호화\nCPU 코어 수만큼 스레드"]
-    D --> Main["Dispatchers.Main\nUI 업데이트 (Android)\n테스트에서 가끔 사용"]
+    D["Dispatchers"] --> IO["Dispatchers.IO\nI/"]
+    D --> Default["Dispatchers.Defaul"]
+    D --> Main["Dispatchers.Main\n"]
 ```
 
 ```kotlin
@@ -545,9 +545,9 @@ flowchart TD
     Normal["일반 함수"] -->|runBlocking| Scope["코루틴 스코프"]
     Scope -->|launch| Job["Job (결과 없음)"]
     Scope -->|async/await| Deferred["Deferred (결과 있음)"]
-    SuspendFn["suspend fun"] -->|IO| IOPool["I/O 풀\nDB·HTTP·File"]
+    SuspendFn["suspend fun"] -->|IO| IOPool["I/O 풀\nDB·HTTP·Fil"]
     SuspendFn -->|Default| CPUPool["CPU 풀\n계산·변환"]
-    Flow["Flow/StateFlow/SharedFlow"] -->|"emit → collect"| Consume["소비·변환"]
+    Flow["Flow/StateFlow/Sha"] -->|"emit → collect"| Consume["소비·변환"]
 ```
 
 ---

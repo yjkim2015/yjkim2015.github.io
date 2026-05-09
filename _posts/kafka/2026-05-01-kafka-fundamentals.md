@@ -41,10 +41,10 @@ graph LR
         P1[Producer] --> Q[Queue] --> C1["Consumer (소비 후 삭제)"]
     end
     subgraph kafka["Kafka"]
-        P2[Producer] --> LOG["Log: msg0, msg1, msg2, msg3 ..."]
-        LOG --> CA["Consumer A (offset: 3)"]
-        LOG --> CB["Consumer B (offset: 1)"]
-        LOG --> CC["Consumer C (offset: 3)"]
+        P2[Producer] --> LOG["Log: msg0, msg1, m"]
+        LOG --> CA["Consumer A (offset"]
+        LOG --> CB["Consumer B (offset"]
+        LOG --> CC["Consumer C (offset"]
     end
 ```
 
@@ -62,9 +62,9 @@ Kafka 클러스터를 구성하는 **개별 서버 노드**다. 각 브로커는
 
 ```mermaid
 graph TD
-    B1["Broker1: P0-Leader, P1-Follower"]
-    B2["Broker2: P1-Leader, P2-Follower"]
-    B3["Broker3: P2-Leader, P0-Follower"]
+    B1["Broker1: P0-Leader"]
+    B2["Broker2: P1-Leader"]
+    B3["Broker3: P2-Leader"]
 ```
 
 브로커의 주요 역할:
@@ -81,11 +81,11 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph topic["Topic: order-events"]
-        P0["Partition 0: order#1, order#5 ..."]
-        P1["Partition 1: order#2, order#6 ..."]
-        P2["Partition 2: order#3, order#7 ..."]
-        P3["Partition 3: order#4, order#8 ..."]
+    subgraph topic["Topic: order-event"]
+        P0["Partition 0: order"]
+        P1["Partition 1: order"]
+        P2["Partition 2: order"]
+        P3["Partition 3: order"]
     end
 ```
 
@@ -103,7 +103,7 @@ graph LR
 
 ```mermaid
 graph LR
-    subgraph log["Partition 0 — 물리적 로그 파일 (append only)"]
+    subgraph log["Partition 0 — 물리적"]
         O0["offset=0\nmsg_A"]
         O1["offset=1\nmsg_B"]
         O2["offset=2\nmsg_C"]
@@ -194,8 +194,8 @@ graph LR
         P1[P1] --> C2[Consumer 2]
         P2[P2] --> C3[Consumer 3]
         P3[P3] --> C4[Consumer 4]
-        IDLE1["Consumer 5 — 유휴 idle"]
-        IDLE2["Consumer 6 — 유휴 idle"]
+        IDLE1["Consumer 5 — 유휴 id"]
+        IDLE2["Consumer 6 — 유휴 id"]
     end
 ```
 
@@ -218,7 +218,7 @@ graph LR
         O5["offset=5\nmsg_F"]
         O0 --> O1 --> O2 --> O3 --> O4 --> O5
     end
-    COMMIT["Consumer committed offset = 4\n다음 poll 시 offset=4부터 시작"] -.-> O4
+    COMMIT["Consumer committed"] -.-> O4
 ```
 
 ### Offset 커밋 방식
@@ -297,7 +297,7 @@ graph TD
     ZK1["ZK1(Leader)"] <--> ZK2["ZK2"]
     ZK2 <--> ZK3["ZK3"]
     ZK1 <--> ZK3
-    META["메타데이터(브로커목록/파티션리더/ISR)"]
+    META["메타데이터(브로커목록/파티션리더/"]
     ZK1 & ZK2 & ZK3 --- META
     META --> B1["Broker1"] & B2["Broker2"]
 ```
@@ -320,12 +320,12 @@ Kafka 2.8에서 Early Access, 3.3에서 Production Ready로 발표된 **ZooKeepe
 
 ```mermaid
 graph TD
-    subgraph kraft["KRaft Quorum Controller"]
-        C1["Controller 1 (Active)"] <--> C2["Controller 2 (Standby)"]
-        C2 <--> C3["Controller 3 (Standby)"]
+    subgraph kraft["KRaft Quorum Contr"]
+        C1["Controller 1 (Acti"] <--> C2["Controller 2 (Stan"]
+        C2 <--> C3["Controller 3 (Stan"]
         C1 <--> C3
     end
-    C1 & C2 & C3 --- META["__cluster_metadata\nRaft 합의"]
+    C1 & C2 & C3 --- META["__cluster_metadata"]
 ```
 
 **KRaft의 장점:**
@@ -373,13 +373,13 @@ Kafka의 저장 구조는 **append-only log**를 기반으로 한다. 이것이 
 
 ```mermaid
 graph LR
-    subgraph seg1["세그먼트 1: offset 0 ~ 999,999"]
-        S1LOG[".log: msg0 ~ msg999999"]
-        S1IDX[".index: offset→position 매핑"]
+    subgraph seg1["세그먼트 1: offset 0 ~"]
+        S1LOG[".log: msg0 ~ msg99"]
+        S1IDX[".index: offset→pos"]
     end
-    subgraph seg2["세그먼트 2: offset 1,000,000 ~ (현재 active)"]
-        S2LOG[".log: msg1000000 ~ 최신msg ← 쓰기 중"]
-        S2IDX[".index: offset→position 매핑"]
+    subgraph seg2["세그먼트 2: offset 1,0"]
+        S2LOG[".log: msg1000000 ~"]
+        S2IDX[".index: offset→pos"]
     end
     seg1 --> seg2
 ```
@@ -396,7 +396,7 @@ graph LR
         RW1["seek → write"] --> RW2["seek → write"] --> RW3["seek → write"]
     end
     subgraph seq["Kafka append-only"]
-        SW["sequential write →→→→→→→→→→→→→→→→→→→→"]
+        SW["sequential write →"]
     end
 ```
 
@@ -453,13 +453,13 @@ ISR은 리더 파티션과 **동기화 상태가 최신인 팔로워 집합**이
 ```mermaid
 graph LR
     subgraph partition["Partition 0 복제 구조"]
-        L["Leader — Broker 1\noffset: 0,1,2,3 (최신)"]
-        F1["Follower — Broker 2\noffset: 0,1,2,3 (최신, ISR 포함)"]
-        F2["Follower — Broker 3\noffset: 0,1,2 (1개 뒤처짐, ISR 제외)"]
+        L["Leader — Broker 1\"]
+        F1["Follower — Broker"]
+        F2["Follower — Broker"]
         L -->|복제| F1
         L -->|복제| F2
     end
-    ISR["ISR = Broker1 (Leader) + Broker2"]
+    ISR["ISR = Broker1 (Lea"]
 ```
 
 팔로워가 ISR에서 제외되는 조건:
@@ -477,9 +477,9 @@ graph LR
     subgraph leader["Leader Partition"]
         O0[offset 0] --> O1[offset 1] --> O2[offset 2] --> O3[offset 3] --> O4[offset 4] --> O5[offset 5]
     end
-    HW["High Watermark = 3\nConsumer는 offset 3까지만 읽을 수 있음\noffset 4,5는 불가시"] -.-> O3
-    F1["Follower 1: offset 0~4 복제 완료"] -.-> O4
-    F2["Follower 2: offset 0~3 복제 완료"] -.-> O3
+    HW["High Watermark = 3"] -.-> O3
+    F1["Follower 1: offset"] -.-> O4
+    F2["Follower 2: offset"] -.-> O3
 ```
 
 > **왜 HW가 필요한가?** 리더가 offset 5까지 썼지만 팔로워가 3까지만 복제했다고 하자. 컨슈머가 4, 5를 읽은 뒤 리더가 죽으면, 새 리더(팔로워)에는 4, 5가 없다. HW는 "모든 ISR이 가진 안전한 범위"만 컨슈머에게 보여줘서 이 문제를 방지한다.
@@ -570,9 +570,9 @@ public class KafkaProducerConfig {
 
 ```mermaid
 graph TD
-    P0["acks=0: Producer → Broker (유실 가능, 성능최고)"]
-    P1["acks=1: Producer → Leader → ACK (리더다운시 유실)"]
-    PA["acks=all: Producer → Leader → Follower ISR → ACK (안정성최고)"]
+    P0["acks=0: Producer →"]
+    P1["acks=1: Producer →"]
+    PA["acks=all: Producer"]
     ACKS["acks 설정"]
     ACKS -->|"성능최고"| P0
     ACKS -->|"균형"| P1

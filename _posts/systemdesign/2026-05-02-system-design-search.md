@@ -30,8 +30,8 @@ graph TD
     Query["검색어: '파이썬 머신러닝'"] --> Tokenize["1. 토크나이저: 단어 분리"]
     Tokenize --> T1["'파이썬'"]
     Tokenize --> T2["'머신러닝'"]
-    T1 --> Idx1["역인덱스 조회 → [문서1, 문서2]"]
-    T2 --> Idx2["역인덱스 조회 → [문서1, 문서3]"]
+    T1 --> Idx1["역인덱스 조회 → [문서1, 문서"]
+    T2 --> Idx2["역인덱스 조회 → [문서1, 문서"]
     Idx1 --> Inter["2. 교집합 계산 → [문서1]"]
     Idx2 --> Inter
     Inter --> Rank["3. 랭킹 (BM25)"]
@@ -64,12 +64,12 @@ graph TD
 
 ```mermaid
 graph TD
-    Source["문서 소스\n(웹 크롤러/DB/파일)"] --> Kafka["Kafka 문서 큐"]
+    Source["문서 소스\n(웹 크롤러/DB/파"] --> Kafka["Kafka 문서 큐"]
     Kafka --> Parser["파서\nHTML/PDF → 텍스트"]
     Parser --> Tokenizer["토크나이저\n단어 분리"]
     Tokenizer --> Normalizer["정규화\n소문자 변환, 어간 추출"]
     Normalizer --> Builder["역인덱스 빌더"]
-    Builder --> ES["Elasticsearch\n역인덱스 저장"]
+    Builder --> ES["Elasticsearch\n역인덱"]
 ```
 
 ```python
@@ -381,10 +381,10 @@ def search_with_cache(query: str) -> list:
 
 ```mermaid
 graph LR
-    Searches["모든 검색 요청"] --> Kafka["Kafka\nsearch-events"]
+    Searches["모든 검색 요청"] --> Kafka["Kafka\nsearch-even"]
     Kafka --> Flink["Flink\n5분 슬라이딩 윈도우"]
     Flink --> TrendCalc["급증 감지\n이전 대비 3배 이상"]
-    TrendCalc --> Redis["Redis Sorted Set\n실시간 트렌딩"]
+    TrendCalc --> Redis["Redis Sorted Set\n"]
     Redis --> API["트렌딩 API"]
 ```
 

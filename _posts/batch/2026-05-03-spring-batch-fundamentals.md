@@ -34,7 +34,7 @@ flowchart TD
     A["JobLauncher"] --> B["Job"]
     B --> C["Step(s)"]
     C -->|"Tasklet"| F["단일 작업"]
-    C -->|"Chunk"| G["Reader → Processor → Writer"]
+    C -->|"Chunk"| G["Reader → Processor"]
     B --- J[("JobRepository")]
 ```
 
@@ -59,11 +59,11 @@ Job은 하나 이상의 Step으로 구성되며, Step의 실행 순서와 조건
 
 ```mermaid
 flowchart LR
-    A["Job: 일일정산"] --> B["JobInstance\ndate=2026-05-03"]
-    A --> C["JobInstance\ndate=2026-05-02"]
-    B --> D["JobExecution #1\nFAILED"]
-    B --> E["JobExecution #2\nCOMPLETED"]
-    C --> F["JobExecution #1\nCOMPLETED"]
+    A["Job: 일일정산"] --> B["JobInstance\ndate="]
+    A --> C["JobInstance\ndate="]
+    B --> D["JobExecution #1\nF"]
+    B --> E["JobExecution #2\nC"]
+    C --> F["JobExecution #1\nC"]
 ```
 
 JobInstance가 COMPLETED 상태이면, 같은 파라미터로 다시 실행할 수 없습니다. 이것은 **같은 작업을 중복 실행하지 않도록** 보호하는 장치입니다.
@@ -117,8 +117,8 @@ Chunk 모델은 Spring Batch의 **핵심 처리 패턴**입니다. 데이터를 
 ```mermaid
 flowchart LR
     subgraph "하나의 Chunk 트랜잭션"
-        A["ItemReader\n1건씩 read()"] -->|"chunk-size만큼 반복"| B["ItemProcessor\n1건씩 process()"]
-        B -->|"List로 모아서"| C["ItemWriter\nwrite(List)"]
+        A["ItemReader\n1건씩 re"] -->|"chunk-size만큼 반복"| B["ItemProcessor\n1건씩"]
+        B -->|"List로 모아서"| C["ItemWriter\nwrite("]
     end
     C -->|"커밋 후 다음 chunk"| A
 ```

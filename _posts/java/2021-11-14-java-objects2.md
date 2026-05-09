@@ -21,11 +21,11 @@ Java에서는 **타입 상속**으로 다형성을 구현합니다.
 
 ```mermaid
 graph TD
-    A["타입 상속 두 가지"] --> B["인터페이스 상속\n타입 정의만 상속\nimplements"]
-    A --> C["구현 상속\n코드까지 상속\nextends"]
-    B --> B1["다중 구현 가능\n여러 인터페이스 implements"]
+    A["타입 상속 두 가지"] --> B["인터페이스 상속\n타입 정의만 상"]
+    A --> C["구현 상속\n코드까지 상속\nex"]
+    B --> B1["다중 구현 가능\n여러 인터페이스"]
     B --> B2["결합도 낮음 ✓"]
-    C --> C1["단일 상속만 가능\nextends는 하나"]
+    C --> C1["단일 상속만 가능\nextends"]
     C --> C2["결합도 높음 — 주의 필요"]
 ```
 
@@ -100,10 +100,10 @@ public class DataFlowController {
 
 ```mermaid
 graph LR
-    A["ByteSource 인터페이스\nbyte[] read()"] --> B["FileDataReader"]
+    A["ByteSource 인터페이스\n"] --> B["FileDataReader"]
     A --> C["HttpDataReader"]
-    A --> D["SocketDataReader (나중에 추가)"]
-    E["DataFlowController"] -->|"ByteSource 타입으로만 사용"| A
+    A --> D["SocketDataReader ("]
+    E["DataFlowController"] -->|"ByteSource 타입으로만 사"| A
     style A fill:#4a9eff,color:#fff
 ```
 
@@ -152,9 +152,9 @@ public class DataFlowController {
 
 ```mermaid
 graph TD
-    A["ByteSourceFactory\n생성 결정 책임"] --> B["FileDataReader"]
+    A["ByteSourceFactory\"] --> B["FileDataReader"]
     A --> C["HttpDataReader"]
-    D["DataFlowController\n흐름 제어 책임"] -->|"getByteSource() 요청"| A
+    D["DataFlowController"] -->|"getByteSource() 요청"| A
     A -->|"ByteSource 반환"| D
     style A fill:#4a9eff,color:#fff
     style D fill:#2ecc71,color:#fff
@@ -259,9 +259,9 @@ void testDataFlowController() {
 
 ```mermaid
 graph TD
-    A["추상화 적용 기준"] --> B["변화 가능성 높음\n→ 인터페이스 도입"]
-    A --> C["변화 가능성 낮음\n→ 콘크리트 클래스 직접 사용"]
-    B --> B1["외부 시스템 연동 (DB, HTTP, 파일)"]
+    A["추상화 적용 기준"] --> B["변화 가능성 높음\n→ 인터페이스"]
+    A --> C["변화 가능성 낮음\n→ 콘크리트"]
+    B --> B1["외부 시스템 연동 (DB, HTT"]
     B --> B2["비즈니스 규칙이 자주 바뀌는 부분"]
     C --> C1["단순 유틸리티 메서드"]
     C --> C2["변경될 이유가 없는 내부 구현"]
@@ -273,13 +273,13 @@ graph TD
 
 ```mermaid
 graph TD
-    A["다형성 & 추상화 핵심"] --> B["다형성\n한 객체가 여러 타입으로 동작"]
-    A --> C["추상 타입\n공통 개념을 인터페이스로 추출"]
-    A --> D["팩토리 패턴\n객체 생성 책임 분리"]
-    A --> E["Program to Interface\n인터페이스 타입으로 프로그래밍"]
-    B --> B1["인터페이스 상속: 다중 구현 가능\n구현 상속: 단일만 가능"]
-    C --> C1["요구사항 추가 시 기존 코드 수정 최소화"]
-    D --> D1["DataFlowController와 ByteSourceFactory 책임 분리"]
+    A["다형성 & 추상화 핵심"] --> B["다형성\n한 객체가 여러 타입으로"]
+    A --> C["추상 타입\n공통 개념을 인터페이"]
+    A --> D["팩토리 패턴\n객체 생성 책임 분"]
+    A --> E["Program to Interfa"]
+    B --> B1["인터페이스 상속: 다중 구현 가능"]
+    C --> C1["요구사항 추가 시 기존 코드 수정"]
+    D --> D1["DataFlowController"]
     E --> E1["Mock 객체로 독립 테스트 가능"]
 ```
 

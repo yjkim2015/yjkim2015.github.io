@@ -31,10 +31,10 @@ date: 2026-05-03
 
 ```mermaid
 flowchart TD
-    A["반사성: x.equals(x) == true"] --> B["대칭성: x.equals(y) == y.equals(x)"]
-    B --> C["추이성: x=y, y=z → x=z"]
-    C --> D["일관성: 변경 없으면 항상 같은 결과"]
-    D --> E["null-아님: x.equals(null) == false"]
+    A["반사성: x.equals(x) ="] --> B["대칭성: x.equals(y) ="]
+    B --> C["추이성: x=y, y=z → x="]
+    C --> D["일관성: 변경 없으면 항상 같은"]
+    D --> E["null-아님: x.equals("]
 ```
 
 각 속성을 자세히 살펴보겠습니다.
@@ -108,9 +108,9 @@ public boolean equals(Object o) {
 
 ```mermaid
 flowchart LR
-    A["a.equals(b) == true"] -->|"필수"| B["a.hashCode() == b.hashCode()"]
-    C["a.hashCode() == b.hashCode()"] -->|"필수 아님"| D["a.equals(b) 참일 수도 거짓일 수도"]
-    E["a.equals(b) == false"] -->|"권장"| F["a.hashCode() != b.hashCode()"]
+    A["a.equals(b) == tru"] -->|"필수"| B["a.hashCode() == b."]
+    C["a.hashCode() == b."] -->|"필수 아님"| D["a.equals(b) 참일 수도"]
+    E["a.equals(b) == fal"] -->|"권장"| F["a.hashCode() != b."]
 ```
 
 핵심 규칙을 정리하면 다음과 같습니다.
@@ -203,8 +203,8 @@ flowchart TD
     A["Cloneable 구현"] --> B["clone() 재정의"]
     B --> C{"가변 상태가 있는가?"}
     C -->|"없음 (불변)"| D["super.clone() 반환"]
-    C -->|"있음"| E["super.clone() + 가변 필드 깊은 복사"]
-    E --> F["배열은 clone(), 나머지는 재귀 복사"]
+    C -->|"있음"| E["super.clone() + 가변"]
+    E --> F["배열은 clone(), 나머지는"]
 ```
 
 배열을 가진 Stack 클래스의 `clone`을 올바르게 구현하려면 배열 필드도 별도로 복제해야 합니다. `super.clone()`만 호출하면 원본과 복제본이 같은 배열을 참조하게 되어, 한쪽을 수정하면 다른 쪽도 영향받습니다.
@@ -253,8 +253,8 @@ public static Yum newInstance(Yum yum) { ... }
 ```mermaid
 flowchart LR
     A["x.compareTo(y) > 0"] -->|"대칭성"| B["y.compareTo(x) < 0"]
-    C["x.compareTo(y) > 0, y.compareTo(z) > 0"] -->|"추이성"| D["x.compareTo(z) > 0"]
-    E["x.compareTo(y) == 0"] -->|"권장"| F["x.equals(y) == true"]
+    C["x.compareTo(y) > 0"] -->|"추이성"| D["x.compareTo(z) > 0"]
+    E["x.compareTo(y) =="] -->|"권장"| F["x.equals(y) == tru"]
 ```
 
 자바 8부터는 **비교자 생성 메서드(Comparator construction methods)**를 사용하면 `compareTo`를 간결하게 구현할 수 있습니다. 약간의 성능 저하가 있지만, 가독성이 크게 향상됩니다.

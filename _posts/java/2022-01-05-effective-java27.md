@@ -38,9 +38,9 @@ Set<Lark> exaltation = new HashSet<>();  // 컴파일러가 Lark 추론
 ```mermaid
 graph TD
     A["비검사 경고"] --> B{"제거했나?"}
-    B -->|"Yes"| C["타입 안전성 보장\nClassCastException 없음"]
-    B -->|"No (무시)"| D["런타임 ClassCastException 위험"]
-    B -->|"SuppressWarnings로 숨김\n(안전 확인 없이)"| E["거짓 보안 인식\n진짜 위험한 경고도 묻혀버림"]
+    B -->|"Yes"| C["타입 안전성 보장\nClassCa"]
+    B -->|"No (무시)"| D["런타임 ClassCastExcep"]
+    B -->|"SuppressWarnings로"| E["거짓 보안 인식\n진짜 위험한 경"]
     style C fill:#51cf66,color:#fff
     style D fill:#ff6b6b,color:#fff
     style E fill:#ff6b6b,color:#fff
@@ -101,8 +101,8 @@ T[] result = (T[]) Arrays.copyOf(elements, size, a.getClass());
 
 ```mermaid
 graph TD
-    A["@SuppressWarnings 적용 위치"] --> B["변수 선언\n(가장 좁은 범위 — 선호)"]
-    A --> C["짧은 메서드나 생성자\n(비검사 코드가 전체에 해당할 때)"]
+    A["@SuppressWarnings"] --> B["변수 선언\n(가장 좁은 범위 —"]
+    A --> C["짧은 메서드나 생성자\n(비검사"]
     A --> D["클래스 전체\n(절대 금지!)"]
     style B fill:#51cf66,color:#fff
     style C fill:#ffd43b

@@ -67,8 +67,8 @@ graph LR
         N3 --> N4["노드D\n(hash=270)"]
         N4 --> N1
     end
-    K1["key1\nhash=45 → 노드B"] -.-> N2
-    K2["key2\nhash=200 → 노드D"] -.-> N4
+    K1["key1\nhash=45 → 노드"] -.-> N2
+    K2["key2\nhash=200 → 노"] -.-> N4
 ```
 
 ### 가상 노드 (Virtual Nodes)
@@ -339,9 +339,9 @@ graph TD
     R["루트 해시\nH(H1+H2)"] --> H1["H1\nH(A+B)"]
     R --> H2["H2\nH(C+D)"]
     H1 --> A["Leaf A\nkeys 0-25%"]
-    H1 --> B["Leaf B\nkeys 25-50%"]
-    H2 --> C["Leaf C\nkeys 50-75%"]
-    H2 --> D["Leaf D\nkeys 75-100%"]
+    H1 --> B["Leaf B\nkeys 25-50"]
+    H2 --> C["Leaf C\nkeys 50-75"]
+    H2 --> D["Leaf D\nkeys 75-10"]
 ```
 
 두 노드의 루트 해시가 같으면 → 완전히 동일. 다르면 자식 노드로 내려가며 어느 범위에서 불일치가 생겼는지 `O(log N)` 만에 찾는다. **전체 데이터 비교 없이 불일치 범위만 전송.**
@@ -361,8 +361,8 @@ graph TD
 ```mermaid
 graph LR
     W["쓰기 요청"] --> WAL["WAL\n(디스크, 순차)"]
-    WAL --> MEM["MemTable\n(메모리, 정렬된 트리)"]
-    MEM -->|"임계값 초과"| L0["L0 SSTable\n(디스크, 불변)"]
+    WAL --> MEM["MemTable\n(메모리, 정렬"]
+    MEM -->|"임계값 초과"| L0["L0 SSTable\n(디스크,"]
     L0 -->|"Compaction"| L1["L1 SSTables"]
     L1 -->|"Compaction"| L2["L2 SSTables"]
 ```
@@ -582,10 +582,10 @@ class TTLManager:
 graph TD
     Client["클라이언트"] --> LB["로드밸런서"]
     LB --> Coord["코디네이터 1~N"]
-    Coord --> Ring["Consistent Hash Ring"]
-    Ring --> D1["데이터노드1\nRocksDB+WAL"]
-    Ring --> D2["데이터노드2\nRocksDB+WAL"]
-    Ring --> D3["데이터노드3\nRocksDB+WAL"]
+    Coord --> Ring["Consistent Hash Ri"]
+    Ring --> D1["데이터노드1\nRocksDB+WA"]
+    Ring --> D2["데이터노드2\nRocksDB+WA"]
+    Ring --> D3["데이터노드3\nRocksDB+WA"]
     D1 <-->|"Gossip"| D2 <-->|"Gossip"| D3 <-->|"Gossip"| D1
 ```
 
@@ -654,7 +654,7 @@ KV 스토어 → 외부: 아웃바운드 최소화
 
 ```mermaid
 graph LR
-    Fan1M["팬 100만명\n초당 동시 조회"] --> HotKey["artist:BTS:info\n단일 노드\n한계 초과"]
+    Fan1M["팬 100만명\n초당 동시 조회"] --> HotKey["artist:BTS:info\n단"]
     HotKey --> CRASH["노드 다운\n또는 지연 폭발"]
 ```
 

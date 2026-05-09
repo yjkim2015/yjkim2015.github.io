@@ -121,7 +121,7 @@ graph TD
     Client["모바일/웹"] -->|WebSocket| LB["L4 TCP LB"]
     LB --> CS["채팅 서버 1~N"]
     CS --> Kafka["Kafka → 워커 → HBase"]
-    CS --> Redis["Redis\n(Presence·서버 매핑)"]
+    CS --> Redis["Redis\n(Presence·서"]
     CS --> UserSvc["사용자/그룹 MySQL"]
     CS --> Push["Push → APNs·FCM"]
 ```
@@ -153,14 +153,14 @@ A가 서버1에, B가 서버2에 연결되어 있을 때 어떻게 메시지를 
 
 ```mermaid
 graph TD
-    Problem["문제: A는 서버1, B는 서버2\n어떻게 B에게 전달?"]
+    Problem["문제: A는 서버1, B는 서버2"]
     Problem --> Sol1["방법1: 서버간 직접 P2P 통신"]
     Problem --> Sol2["방법2: Redis Pub/Sub"]
     Problem --> Sol3["방법3: Kafka 메시지 큐"]
-    Sol1 --> D1["단점: N×(N-1) 연결 필요\n1500대면 225만개 연결\n서버 추가 시 전체 재연결"]
-    Sol2 --> D2["Redis Pub/Sub\n채널 구독 방식\n빠르지만 메시지 유실 가능\n소규모 적합"]
-    Sol3 --> D3["Kafka\n내구성+확장성+순서 보장\n약간의 지연 추가\n대규모 적합"]
-    Sol3 --> Rec["추천: Kafka\n(700K QPS 처리 가능)"]
+    Sol1 --> D1["단점: N×(N-1) 연결 필요\"]
+    Sol2 --> D2["Redis Pub/Sub\n채널"]
+    Sol3 --> D3["Kafka\n내구성+확장성+순서"]
+    Sol3 --> Rec["추천: Kafka\n(700K Q"]
 ```
 
 ---
@@ -171,13 +171,13 @@ graph TD
 
 ```mermaid
 graph TD
-    Snow["Snowflake ID\n64비트 정수"]
-    Snow --> T["41비트: 타임스탬프(ms)\n약 69년 사용 가능"]
-    Snow --> M["10비트: 머신 ID\n최대 1024대 서버"]
-    Snow --> S["12비트: 시퀀스\n같은 ms에 4096개 생성"]
-    T --> Benefit1["시간순 정렬 가능\n(정렬 = ID 비교)"]
-    M --> Benefit2["전역 유일성 보장\n(서버별 독립 생성)"]
-    S --> Benefit3["초당 4096 × 1024 = 419만 TPS"]
+    Snow["Snowflake ID\n64비트"]
+    Snow --> T["41비트: 타임스탬프(ms)\n약"]
+    Snow --> M["10비트: 머신 ID\n최대 10"]
+    Snow --> S["12비트: 시퀀스\n같은 ms에"]
+    T --> Benefit1["시간순 정렬 가능\n(정렬 = I"]
+    M --> Benefit2["전역 유일성 보장\n(서버별 독립"]
+    S --> Benefit3["초당 4096 × 1024 = 4"]
 ```
 
 ```java
@@ -252,9 +252,9 @@ Snowflake ID는 **각 서버(Worker)가 독립적으로 생성**하므로 워커
 
 ```mermaid
 graph TD
-    A["채팅 메시지 저장소 선택\n최근 N개·미읽음·초당 23만 쓰기"] --> B{"DB 선택"}
-    B -->|"Write 최적화·수평 확장"| C["HBase/Cassandra\nLSM Tree·시간 조회 최적화"]
-    B -->|"복잡 JOIN·강한 일관성"| D["MySQL\n수십 PB·쓰기 병목 주의"]
+    A["채팅 메시지 저장소 선택\n최근"] --> B{"DB 선택"}
+    B -->|"Write 최적화·수평 확장"| C["HBase/Cassandra\nL"]
+    B -->|"복잡 JOIN·강한 일관성"| D["MySQL\n수십 PB·쓰기 병목"]
 ```
 
 ### HBase 스키마 설계

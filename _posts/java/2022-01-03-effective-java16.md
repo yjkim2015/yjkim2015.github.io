@@ -152,8 +152,8 @@ public final class Time {
 ```mermaid
 graph TD
     A["필드 공개 여부 결정"] --> B{"public 클래스인가?"}
-    B -->|"Yes"| C["반드시 private + 접근자 사용"]
-    B -->|"No (package-private 또는 private 중첩)"| D["필드 직접 공개 가능\n(수정 범위 제한됨)"]
+    B -->|"Yes"| C["반드시 private + 접근자"]
+    B -->|"No (package-privat"| D["필드 직접 공개 가능\n(수정 범"]
     C --> E["장점"]
     E --> E1["내부 표현 변경 자유"]
     E --> E2["불변식 보장"]

@@ -26,9 +26,9 @@ toc_label: 목차
 ```mermaid
 graph TD
     subgraph "테스트 피라미드"
-        E2E["E2E 테스트<br>느림, 비용 높음, 자주 깨짐<br>적게 작성 10%"]
-        INT["통합 테스트<br>중간 속도, 중간 비용<br>적당히 20%"]
-        UNIT["단위 테스트<br>빠름, 비용 낮음, 안정적<br>많이 작성 70%"]
+        E2E["E2E 테스트<br>느림, 비용"]
+        INT["통합 테스트<br>중간 속도, 중"]
+        UNIT["단위 테스트<br>빠름, 비용 낮"]
     end
     UNIT --> INT
     INT --> E2E
@@ -362,9 +362,9 @@ describe('쇼핑 플로우', () => {
 ```mermaid
 graph TD
     ROOT["테스트 원칙"]
-    ROOT --> FIRST["FIRST: Fast/Isolated/Repeatable/Self-validating/Timely"]
-    ROOT --> RTL["RTL: 구현세부사항X, 사용자행동 테스트, 접근성셀렉터"]
-    ROOT --> GOOD["좋은 테스트: 실패이유명확, 유지보수쉬움, 빠른피드백"]
+    ROOT --> FIRST["FIRST: Fast/Isolat"]
+    ROOT --> RTL["RTL: 구현세부사항X, 사용자행"]
+    ROOT --> GOOD["좋은 테스트: 실패이유명확, 유지"]
 ```
 
 ```javascript

@@ -20,9 +20,9 @@ date: 2026-05-03
 ```mermaid
 graph TD
     subgraph "테스트 피라미드"
-        E2E["E2E 테스트\n느림 · 비쌈 · 실제 환경\n전체 시나리오 검증"]
-        INT["통합 테스트\n중간 속도 · 실제 DB/MQ\n컴포넌트 간 협력 검증"]
-        UNIT["단위 테스트\n빠름 · 격리 · Mock\n개별 로직 검증"]
+        E2E["E2E 테스트\n느림 · 비쌈 ·"]
+        INT["통합 테스트\n중간 속도 · 실제"]
+        UNIT["단위 테스트\n빠름 · 격리 ·"]
     end
     E2E --> INT --> UNIT
     style E2E fill:#f88,stroke:#c00,color:#000
@@ -44,9 +44,9 @@ Spring Boot는 테스트 범위에 따라 다른 어노테이션을 제공한다
 
 ```mermaid
 graph LR
-    A["@SpringBootTest\n전체 컨텍스트\n실제 Bean 전부 로딩"]
-    B["@WebMvcTest\nController+MockMvc\nService=@MockBean"]
-    C["@DataJpaTest\nJPA+내장DB\n@Transactional 자동"]
+    A["@SpringBootTest\n전"]
+    B["@WebMvcTest\nContr"]
+    C["@DataJpaTest\nJPA+"]
     A --- B --- C
 ```
 
@@ -203,8 +203,8 @@ flowchart TD
     Q1{"무엇을 테스트?"}
     Q1 -->|JPA 쿼리| A["@DataJpaTest (빠름)"]
     Q1 -->|HTTP 요청/응답| B["@WebMvcTest (빠름)"]
-    Q1 -->|여러 계층 협력| C["@SpringBootTest (느림)"]
-    Q1 -->|단일 클래스| D["@ExtendWith Mockito (가장 빠름)"]
+    Q1 -->|여러 계층 협력| C["@SpringBootTest (느"]
+    Q1 -->|단일 클래스| D["@ExtendWith Mockit"]
 ```
 
 ---
@@ -470,12 +470,12 @@ Spring Boot는 동일한 설정의 ApplicationContext를 캐싱한다. `@MockBea
 
 ```mermaid
 flowchart TD
-    A["테스트 클래스 A\n@SpringBootTest\n@MockBean UserService"] --> CTX1["Context 1"]
-    B["테스트 클래스 B\n@SpringBootTest\n@MockBean UserService"] --> CTX1
-    C["테스트 클래스 C\n@SpringBootTest\n@MockBean OrderService"] --> CTX2["Context 2"]
-    D["테스트 클래스 D\n@WebMvcTest"] --> CTX3["Context 3"]
+    A["테스트 클래스 A\n@Spring"] --> CTX1["Context 1"]
+    B["테스트 클래스 B\n@Spring"] --> CTX1
+    C["테스트 클래스 C\n@Spring"] --> CTX2["Context 2"]
+    D["테스트 클래스 D\n@WebMvc"] --> CTX3["Context 3"]
     CTX1 -->|"같은 설정 = 캐시 히트"| FAST["빠름"]
-    CTX2 -->|"다른 MockBean = 새 컨텍스트"| SLOW["느림"]
+    CTX2 -->|"다른 MockBean = 새 컨텍"| SLOW["느림"]
     CTX3 -->|"다른 어노테이션 = 새 컨텍스트"| SLOW
     style FAST fill:#8f8,stroke:#080,color:#000
     style SLOW fill:#f88,stroke:#c00,color:#000

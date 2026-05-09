@@ -365,10 +365,10 @@ String[] nameArr = names.stream().toArray(String[]::new);
 
 ```mermaid
 graph TD
-    A["메서드 레퍼런스 4종"] --> B["1️⃣ Class::staticMethod\n정적 메서드 참조\nInteger::parseInt"]
-    A --> C["2️⃣ instance::method\n특정 인스턴스 참조\nSystem.out::println"]
-    A --> D["3️⃣ Class::instanceMethod\n임의 인스턴스 참조\nString::toUpperCase"]
-    A --> E["4️⃣ Class::new\n생성자 참조\nArrayList::new"]
+    A["메서드 레퍼런스 4종"] --> B["1️⃣ Class::staticM"]
+    A --> C["2️⃣ instance::meth"]
+    A --> D["3️⃣ Class::instanc"]
+    A --> E["4️⃣ Class::new\n생성"]
 ```
 
 ---
@@ -801,12 +801,12 @@ list.forEach(System.out::println);
 
 ```mermaid
 graph TD
-    A["람다 핵심 포인트"] --> B["1️⃣ 함수형 인터페이스의 인스턴스\n추상 메서드 1개인 인터페이스"]
-    A --> C["2️⃣ 타입 추론\n대입 컨텍스트에서 타입 결정"]
-    A --> D["3️⃣ effectively final\n캡처한 지역 변수는 변경 불가"]
-    A --> E["4️⃣ this\n람다 안의 this는 감싸는 클래스를 가리킴"]
-    A --> F["5️⃣ 메서드 레퍼런스\n이름 있는 메서드를 람다로 참조"]
-    A --> G["6️⃣ java.util.function\n43개의 표준 함수형 인터페이스"]
-    A --> H["7️⃣ 내부 구현\ninvokedynamic + LambdaMetafactory"]
-    A --> I["8️⃣ 성능\n비캡처링 람다는 재사용 최적화 가능"]
+    A["람다 핵심 포인트"] --> B["1️⃣ 함수형 인터페이스의 인스턴"]
+    A --> C["2️⃣ 타입 추론\n대입 컨텍스트"]
+    A --> D["3️⃣ effectively fi"]
+    A --> E["4️⃣ this\n람다 안의 th"]
+    A --> F["5️⃣ 메서드 레퍼런스\n이름 있"]
+    A --> G["6️⃣ java.util.func"]
+    A --> H["7️⃣ 내부 구현\ninvoked"]
+    A --> I["8️⃣ 성능\n비캡처링 람다는 재"]
 ```

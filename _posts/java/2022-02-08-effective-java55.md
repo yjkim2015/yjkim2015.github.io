@@ -84,11 +84,11 @@ opt.ifPresent(n -> System.out.println("안녕하세요, " + n));
 
 ```mermaid
 graph TD
-    A["Optional<T> 처리"] --> B["orElse(기본값)\n항상 기본값 생성됨"]
-    A --> C["orElseGet(Supplier)\n기본값을 지연 생성\n비용 클 때 유리"]
-    A --> D["orElseThrow(Supplier)\n없으면 예외\n반드시 있어야 할 때"]
-    A --> E["get()\n항상 있다고 확신할 때만\nNoSuchElementException 위험"]
-    A --> F["ifPresent(Consumer)\n있을 때만 동작"]
+    A["Optional<T> 처리"] --> B["orElse(기본값)\n항상 기본"]
+    A --> C["orElseGet(Supplier"]
+    A --> D["orElseThrow(Suppli"]
+    A --> E["get()\n항상 있다고 확신할"]
+    A --> F["ifPresent(Consumer"]
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff
     style E fill:#ff6b6b,color:#fff
@@ -165,11 +165,11 @@ OptionalDouble average = OptionalDouble.of(3.14);
 graph TD
     A["Optional 사용 판단"] --> B{"반환 타입인가?"}
     B -- 예 --> C{"기본형인가?"}
-    C -- 예 --> D["OptionalInt / Long / Double\n박싱 비용 없음"]
+    C -- 예 --> D["OptionalInt / Long"]
     C -- 아니오 --> E{"컨테이너 타입인가?\nList, Set, Map, 배열"}
-    E -- 예 --> F["빈 컨테이너 반환\nOptional 불필요"]
+    E -- 예 --> F["빈 컨테이너 반환\nOptiona"]
     E -- 아니오 --> G["Optional<T> 적합"]
-    B -- 아니오 --> H["필드·매개변수·컬렉션 원소\n= Optional 금지"]
+    B -- 아니오 --> H["필드·매개변수·컬렉션 원소\n="]
     style D fill:#51cf66,color:#fff
     style G fill:#51cf66,color:#fff
     style F fill:#f39c12,color:#fff

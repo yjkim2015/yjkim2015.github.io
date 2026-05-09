@@ -452,7 +452,7 @@ graph TD
     Q1 -->|중복 없는 집합| Q2{"집합 연산?"}
     Q1 -->|순위·점수 정렬| ZSET["Sorted Set"]
     Q1 -->|필드별 객체| HASH["Hash"]
-    Q1 -->|불리언·유니크·메시지·위치| OTHER["Bitmap/HLL/Stream/Geo"]
+    Q1 -->|불리언·유니크·메시지·위치| OTHER["Bitmap/HLL/Stream/"]
     Q2 -->|Yes| SET["Set"]
     Q2 -->|No| STRING
 ```

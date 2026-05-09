@@ -18,7 +18,7 @@ toc_label: 목차
 ```mermaid
 graph LR
     SEND["send(record)"] --> SER["Serializer"] --> PART["Partitioner"]
-    PART --> ACC["RecordAccumulator(배치)"]
+    PART --> ACC["RecordAccumulator("]
     ACC -->|"ready batches"| SENDER["Sender"]
     SENDER --> NC["NetworkClient"] --> BROKERS["Brokers"]
 ```
@@ -29,10 +29,10 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph acc["RecordAccumulator — 파티션별 deque"]
+    subgraph acc["RecordAccumulator"]
         subgraph p0["Partition 0 deque"]
-            B1["ProducerBatch 1 (꽉 참, 전송 대기)\nmsg1 ~ msg100 — batch.size 초과"]
-            B2["ProducerBatch 2 (현재 채우는 중)\nmsg101, msg102"]
+            B1["ProducerBatch 1 (꽉"]
+            B2["ProducerBatch 2 (현"]
             B1 --> B2
         end
     end
@@ -53,9 +53,9 @@ props.put(ProducerConfig.LINGER_MS_CONFIG, 20);         // 20ms 대기
 
 ```mermaid
 graph TD
-    A["linger.ms=0: msg1→즉시, msg2→즉시, msg3→즉시(3번)"]
-    B["linger.ms=20: msg1,msg2,msg3 대기"]
-    B --> C["t=20: 배치 전송(1번, 처리량 3배)"]
+    A["linger.ms=0: msg1→"]
+    B["linger.ms=20: msg1"]
+    B --> C["t=20: 배치 전송(1번, 처리"]
 ```
 
 ### 압축(Compression)
@@ -111,10 +111,10 @@ public class RegionPartitioner implements Partitioner {
 ```mermaid
 graph TD
     subgraph rr["라운드로빈 (비효율)"]
-        RR["msg1→P0, msg2→P1, msg3→P2\n소배치 즉시 전송 → 압축 효율 저하"]
+        RR["msg1→P0, msg2→P1,"]
     end
-    subgraph sticky["Sticky Partitioner (효율)"]
-        ST1["msg1,2,3 모두 P0 누적\n배치 꽉 찰 때까지 대기"] --> ST2["전송 후 파티션 전환\n→ 큰 배치 = 좋은 압축"]
+    subgraph sticky["Sticky Partitioner"]
+        ST1["msg1,2,3 모두 P0 누적\"] --> ST2["전송 후 파티션 전환\n→ 큰 배"]
     end
 ```
 
@@ -156,12 +156,12 @@ public class OrderConsumerService {
 
 ```mermaid
 graph TD
-    A["1. poll(timeout) 호출"]
-    B["2. Fetcher가 각 파티션 리더에 FetchRequest 전송"]
-    C["3. 브로커: High Watermark 이하의 메시지 반환"]
-    D["4. Deserializer로 역직렬화"]
-    E["5. ConsumerRecords 반환"]
-    F["6. 다음 poll() 이전에 max.poll.interval.ms 초과하면 리밸런싱 트리거!"]
+    A["1. poll(timeout) 호"]
+    B["2. Fetcher가 각 파티션"]
+    C["3. 브로커: High Water"]
+    D["4. Deserializer로 역"]
+    E["5. ConsumerRecords"]
+    F["6. 다음 poll() 이전에 m"]
     A --> B --> C --> D --> E --> F
 ```
 
@@ -248,8 +248,8 @@ max.poll.interval.ms:
 
 ```mermaid
 graph TD
-    A["초기: C1=P0,P1 / C2=P2,P3"]
-    B["Phase1 Stop-the-World: 전체 중단"]
+    A["초기: C1=P0,P1 / C2="]
+    B["Phase1 Stop-the-Wo"]
     C1C["C1=P0,P1"]
     C2C["C2=P2"]
     C3C["C3=P3 (신규)"]
@@ -268,8 +268,8 @@ graph TD
 
 ```mermaid
 graph TD
-    A["초기: C1=P0+P1, C2=P2+P3"] --> B["Round1: C1=P0+P1 유지, C2=P2 유지, P3만 해제"]
-    B --> C["Round2: C3=P3 신규 할당 (나머지 변화 없음)"]
+    A["초기: C1=P0+P1, C2=P"] --> B["Round1: C1=P0+P1 유"]
+    B --> C["Round2: C3=P3 신규 할"]
 ```
 
 **차이점:**
@@ -511,9 +511,9 @@ public class ExactlyOnceProcessor {
 ```mermaid
 graph LR
     subgraph partition["Partition 0"]
-        L["Broker 1 (Leader)\nISR: Broker1, Broker2, Broker3"]
-        F1["Broker 2 (Follower)"]
-        F2["Broker 3 (Follower)"]
+        L["Broker 1 (Leader)\"]
+        F1["Broker 2 (Follower"]
+        F2["Broker 3 (Follower"]
         L -->|복제| F1
         L -->|복제| F2
     end
@@ -542,12 +542,12 @@ ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러
 ```mermaid
 graph TD
     subgraph zk["ZooKeeper"]
-        ZKA["브로커 /controller 선점 경쟁"] --> ZKB["먼저 생성한 브로커 = 컨트롤러"]
+        ZKA["브로커 /controller 선점"] --> ZKB["먼저 생성한 브로커 = 컨트롤러"]
     end
     subgraph kraft["KRaft"]
-        KRA["Raft 합의"] --> KRB["quorum 투표 → Active 선출\n빠른 failover"]
+        KRA["Raft 합의"] --> KRB["quorum 투표 → Active"]
     end
-    ZKB & KRB --> DUTIES["역할: 리더 선출·ISR·토픽 관리"]
+    ZKB & KRB --> DUTIES["역할: 리더 선출·ISR·토픽 관"]
 ```
 
 ---
@@ -575,12 +575,12 @@ key="user-2" → {"name":"이영희", "email":"c@c.com"}  (유일값)
 ```mermaid
 graph TD
     subgraph before["파티션 로그 (컴팩션 전)"]
-        CLEAN["Clean 영역 (이미 컴팩션됨)\nk1:v1, k2:v2"]
-        DIRTY["Dirty 영역 (컴팩션 대상)\nk1:v3, k3:v1, k2:v4, k1:v5"]
+        CLEAN["Clean 영역 (이미 컴팩션됨)"]
+        DIRTY["Dirty 영역 (컴팩션 대상)\"]
     end
     subgraph process["Log Cleaner 스레드 동작"]
-        SCAN["1. Dirty 영역 스캔\nk1 최신: v5 / k3 최신: v1 / k2 최신: v4"]
-        NEW["2. 새 세그먼트 생성\nk1:v5, k3:v1, k2:v4 (k1의 v3 제거)"]
+        SCAN["1. Dirty 영역 스캔\nk1"]
+        NEW["2. 새 세그먼트 생성\nk1:v"]
         REPLACE["3. 오래된 세그먼트 교체"]
         SCAN --> NEW --> REPLACE
     end
@@ -606,8 +606,8 @@ producer.send(new ProducerRecord<>("user-profile", "user-1", null));
 
 ```mermaid
 graph LR
-    T1["k1:v1"] --> T2["k1:v2"] --> T3["k1:null (tombstone)"]
-    T3 -->|컴팩션| GONE["k1 관련 모든 레코드 삭제\n(tombstone도 일정 시간 후 삭제)"]
+    T1["k1:v1"] --> T2["k1:v2"] --> T3["k1:null (tombstone"]
+    T3 -->|컴팩션| GONE["k1 관련 모든 레코드 삭제\n("]
 ```
 
 ### 컴팩션 설정

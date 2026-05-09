@@ -70,9 +70,9 @@ graph TD
     A["GoF 23 패턴"] --> B["생성 Creational"]
     A --> C["구조 Structural"]
     A --> D["행동 Behavioral"]
-    B --> B1["Singleton/Factory/Abstract Factory/Builder/Prototype"]
-    C --> C1["Adapter/Composite/Decorator/Facade/Flyweight/Proxy/Bridge"]
-    D --> D1["Observer/Strategy/Template/Command/Iterator/+8"]
+    B --> B1["Singleton/Factory/"]
+    C --> C1["Adapter/Composite/"]
+    D --> D1["Observer/Strategy/"]
 ```
 
 ---
@@ -133,9 +133,9 @@ flowchart TD
     Q1{"어떤 문제인가?"} --> C["객체 생성 방식 제어"]
     Q1 --> S["클래스/객체 조합 구조"]
     Q1 --> B["객체 간 통신/알고리즘"]
-    C --> C1["생성 패턴\n("Singleton, Factory,\nBuilder, Prototype")"]
-    S --> S1["구조 패턴\n("Adapter, Composite,\nProxy, Decorator")"]
-    B --> B1["행동 패턴\n("Observer, Strategy,\nCommand, Template")"]
+    C --> C1["생성 패턴\n("Singleton, Factory")"]
+    S --> S1["구조 패턴\n("Adapter, Composite")"]
+    B --> B1["행동 패턴\n("Observer, Strategy")"]
 ```
 
 ---

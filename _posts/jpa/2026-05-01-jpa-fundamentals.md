@@ -85,7 +85,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 ```mermaid
 graph LR
     APP["App\nem.persist()"] --> PC1["1차 캐시"] & PC2["쓰기지연 SQL"]
-    subgraph EM["EntityManager (1 트랜잭션)"]
+    subgraph EM["EntityManager (1 트"]
         PC1
         PC2
         SNAP["스냅샷"]
@@ -413,7 +413,7 @@ graph LR
     subgraph UNI["단방향 (단순, 권장 시작점)"]
         M1["Member"] -->|"team 참조"| T1["Team"]
     end
-    subgraph BI["양방향 (Team → Member 탐색 필요 시 추가)"]
+    subgraph BI["양방향 (Team → Member"]
         M2["Member"] -->|"team 참조"| T2["Team"]
         T2 -->|"members 참조"| M2
     end
@@ -493,9 +493,9 @@ public class Movie extends Item {
 
 ```mermaid
 graph TD
-    ITEM["ITEM 테이블\nid │ name │ price │ DTYPE"]
-    ALBUM["ALBUM 테이블\nitem_id (FK) │ artist"]
-    MOVIE["MOVIE 테이블\nitem_id (FK) │ director │ actor"]
+    ITEM["ITEM 테이블\nid │ nam"]
+    ALBUM["ALBUM 테이블\nitem_id"]
+    MOVIE["MOVIE 테이블\nitem_id"]
     ITEM -->|"1:1 JOIN"| ALBUM
     ITEM -->|"1:1 JOIN"| MOVIE
 ```
@@ -507,8 +507,8 @@ graph TD
 
 ```mermaid
 graph TD
-    ITEM["ITEM 테이블 (단일)\nid │ name │ price │ DTYPE │ artist │ director\n────────────────────────────────────────\n1 │ 음반 │ 10000 │ A │ BTS │ null\n2 │ 영화 │ 20000 │ M │ null │ 봉준호"]
-    NOTE["null 허용 컬럼 多\n→ not null 제약 불가"]
+    ITEM["ITEM 테이블 (단일)\nid"]
+    NOTE["null 허용 컬럼 多\n→ no"]
     ITEM --> NOTE
 ```
 

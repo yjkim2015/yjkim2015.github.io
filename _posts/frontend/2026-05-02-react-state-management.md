@@ -198,9 +198,9 @@ Redux는 "모든 상태 변경이 예측 가능하고 추적 가능해야 한다
 ```mermaid
 flowchart LR
     VIEW["View 컴포넌트"] -->|"dispatch(action)"| STORE["Store"]
-    STORE -->|"reducer(state, action)"| NEW_STATE["새 State"]
+    STORE -->|"reducer(state, act"| NEW_STATE["새 State"]
     NEW_STATE -->|"상태 업데이트"| VIEW
-    MIDDLEWARE["Middleware<br>redux-thunk"] -->|"비동기 처리"| STORE
+    MIDDLEWARE["Middleware<br>redu"] -->|"비동기 처리"| STORE
     style STORE fill:#764abc,color:#fff
     style MIDDLEWARE fill:#e74c3c,color:#fff
 ```
@@ -367,7 +367,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["상태 필요?"] -->|"단일 컴포넌트"| C["useState/useReducer"]
+    A["상태 필요?"] -->|"단일 컴포넌트"| C["useState/useReduce"]
     A -->|"공유 필요"| D{"서버 데이터?"}
     D -->|"예"| E["React Query/SWR"]
     D -->|"아니오"| F{"규모?"}

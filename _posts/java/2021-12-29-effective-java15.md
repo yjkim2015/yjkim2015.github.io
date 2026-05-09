@@ -19,11 +19,11 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["캡슐화(정보 은닉) 효과"] --> B["개발 속도 향상\n컴포넌트 병렬 개발 가능"]
-    A --> C["관리 비용 감소\n컴포넌트 교체 부담 적음"]
-    A --> D["성능 최적화 용이\n다른 컴포넌트 영향 없이 최적화"]
+    A["캡슐화(정보 은닉) 효과"] --> B["개발 속도 향상\n컴포넌트 병렬"]
+    A --> C["관리 비용 감소\n컴포넌트 교체"]
+    A --> D["성능 최적화 용이\n다른 컴포넌트"]
     A --> E["재사용성 향상\n독립적 동작 가능"]
-    A --> F["대형 시스템 개발 수월\n개별 컴포넌트 독립 검증 가능"]
+    A --> F["대형 시스템 개발 수월\n개별 컴"]
 ```
 
 ---
@@ -33,7 +33,7 @@ graph TD
 ```mermaid
 graph LR
     A["접근 범위 (좁음 → 넓음)"] --> B["private"]
-    B --> C["package-private\n(default)"]
+    B --> C["package-private\n("]
     C --> D["protected"]
     D --> E["public"]
     B --> B1["선언 클래스 내부만"]
@@ -211,10 +211,10 @@ module my.library {
 
 ```mermaid
 graph TD
-    A["모듈 경계"] --> B["com.example.api (공개)"]
-    A --> C["com.example.internal (비공개)"]
+    A["모듈 경계"] --> B["com.example.api (공"]
+    A --> C["com.example.intern"]
     D["외부 모듈"] -->|"접근 가능"| B
-    D -->|"접근 불가\n(protected/public이어도)"| C
+    D -->|"접근 불가\n(protected/"| C
     style C fill:#ff6b6b,color:#fff
     style B fill:#51cf66,color:#fff
 ```
@@ -227,12 +227,12 @@ graph TD
 
 ```mermaid
 graph TD
-    A["접근 제한자 결정 원칙"] --> B["클래스: public 꼭 필요한 것만"]
+    A["접근 제한자 결정 원칙"] --> B["클래스: public 꼭 필요한"]
     A --> C["멤버: 가능한 한 좁게"]
-    A --> D["필드: 절대 public 금지\n(상수 제외)"]
-    B --> B1["내부용은 package-private\nAPI는 public"]
-    C --> C1["private → default → protected → public\n순서로 최소화"]
-    D --> D1["가변 필드 public → 불변식 파괴\n스레드 안전성 파괴"]
+    A --> D["필드: 절대 public 금지\n"]
+    B --> B1["내부용은 package-priva"]
+    C --> C1["private → default"]
+    D --> D1["가변 필드 public → 불변식"]
 ```
 
 **체크리스트:**

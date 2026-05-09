@@ -79,7 +79,7 @@ public class UserDao {
 
 ```mermaid
 graph LR
-    A[UserDao] -->|"의존"| B["ConnectionMaker 인터페이스"]
+    A[UserDao] -->|"의존"| B["ConnectionMaker 인터"]
     C[DConnectionMaker] -->|"구현"| B
     D[NConnectionMaker] -->|"구현"| B
     E[UserDaoTest] -->|DI| A
@@ -90,8 +90,8 @@ graph LR
 
 ```mermaid
 graph TD
-    A["OCP: 확장에 열려있고, 변경에 닫혀있음"] --> B[UserDao]
-    A --> C["ConnectionMaker 인터페이스"]
+    A["OCP: 확장에 열려있고, 변경에"] --> B[UserDao]
+    A --> C["ConnectionMaker 인터"]
     B -->|"변경 없이"| D["새 DB로 전환 가능"]
     C -->|"새 구현체 추가"| E[NConnectionMaker]
     C -->|"새 구현체 추가"| F[TestConnectionMaker]
@@ -242,7 +242,7 @@ public class UserService {
 
 ```mermaid
 graph TD
-    A[UserService] -->|"의존"| B["PlatformTransactionManager 인터페이스"]
+    A[UserService] -->|"의존"| B["PlatformTransactio"]
     C[DataSourceTransactionManager] -->|"구현"| B
     D[JpaTransactionManager] -->|"구현"| B
     E[HibernateTransactionManager] -->|"구현"| B
@@ -295,10 +295,10 @@ public interface UserDao {
 
 ```mermaid
 graph TD
-    A["DataAccessException"] --> B["NonTransient\nDataIntegrityViolation·BadSqlGrammar"]
-    A --> C["Transient\nQueryTimeout·ConcurrencyFailure"]
-    B --> D["DuplicateKeyException"]
-    E["MySQL 1062\nOracle 1\nH2 23505"] -->|"변환"| D
+    A["DataAccessExceptio"] --> B["NonTransient\nData"]
+    A --> C["Transient\nQueryTi"]
+    B --> D["DuplicateKeyExcept"]
+    E["MySQL 1062\nOracle"] -->|"변환"| D
 ```
 
 ---
@@ -442,8 +442,8 @@ public class OrderService {
 
 ```mermaid
 graph TD
-    A[SOLID] --> B["SRP: 레이어 분리\nController·Service·Repository"]
-    A --> C["OCP: 인터페이스+DI\n확장에 열려있음"]
+    A[SOLID] --> B["SRP: 레이어 분리\nContr"]
+    A --> C["OCP: 인터페이스+DI\n확장에"]
     A --> D["LSP: 구현체 계약 준수"]
     A --> E["ISP: DAO 인터페이스 분리"]
     A --> F["DIP: 추상화 의존"]

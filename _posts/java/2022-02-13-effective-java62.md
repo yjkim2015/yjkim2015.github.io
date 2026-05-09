@@ -117,10 +117,10 @@ public final class ThreadLocal<T> {
 
 ```mermaid
 graph TD
-    A["문자열을 피해야 하는 상황"] --> B["수치 데이터\n→ int, double, BigDecimal"]
+    A["문자열을 피해야 하는 상황"] --> B["수치 데이터\n→ int, dou"]
     A --> C["상수 집합\n→ 열거 타입"]
-    A --> D["복합 데이터\n→ 전용 클래스 (private static)"]
-    A --> E["권한/식별자\n→ 위조 불가능한 Key 객체"]
+    A --> D["복합 데이터\n→ 전용 클래스 ("]
+    A --> E["권한/식별자\n→ 위조 불가능한"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff

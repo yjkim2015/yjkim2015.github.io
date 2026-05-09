@@ -30,8 +30,8 @@ public enum Ensemble {
 ```mermaid
 graph TD
     A["ordinal() 사용의 문제"] --> B["상수 선언 순서 변경 시\n오동작"]
-    A --> C["8명짜리 DOUBLE_QUARTET 추가 불가\nOCTET이 이미 ordinal=7 사용 중"]
-    A --> D["중간 값 비워둘 수 없음\n11명짜리 이름이 없어도\n더미 상수 추가 강제"]
+    A --> C["8명짜리 DOUBLE_QUARTE"]
+    A --> D["중간 값 비워둘 수 없음\n11명"]
     style A fill:#ff6b6b,color:#fff
 ```
 
@@ -85,10 +85,10 @@ EnumSet<Ensemble> smallGroups = EnumSet.of(SOLO, DUET, TRIO);
 
 ```mermaid
 graph TD
-    A["열거 상수에 연결된\n정숫값이 필요하다면"] --> B["ordinal() 사용 금지"]
-    A --> C["인스턴스 필드에 저장\n생성자에서 초기화"]
+    A["열거 상수에 연결된\n정숫값이 필"] --> B["ordinal() 사용 금지"]
+    A --> C["인스턴스 필드에 저장\n생성자에서"]
     B --> D["선언 순서 의존\n유지보수 지뢰"]
-    C --> E["선언 순서 독립\n자유로운 값 설정"]
+    C --> E["선언 순서 독립\n자유로운 값 설"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#51cf66,color:#fff
 ```

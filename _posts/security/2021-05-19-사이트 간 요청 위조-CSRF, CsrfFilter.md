@@ -163,12 +163,12 @@ http
 flowchart TD
     A["HTTP 요청"] --> B["CsrfFilter"]
     B --> C{"GET, HEAD, TRACE,\nOPTIONS 요청?"}
-    C -- "예 (읽기 전용)" --> D["CSRF 검증 생략\n(상태 변경 없으므로)"]
-    C -- "아니오 (POST, PUT, DELETE, PATCH)" --> E["요청에서 CSRF 토큰 추출\n(파라미터 또는 헤더)"]
+    C -- "예 (읽기 전용)" --> D["CSRF 검증 생략\n(상태 변경"]
+    C -- "아니오 (POST, PUT, DELETE, PATCH)" --> E["요청에서 CSRF 토큰 추출\n("]
     E --> F["세션에 저장된 토큰과 비교"]
     F --> G{"일치?"}
     G -- "예" --> H["다음 필터로 진행"]
-    G -- "아니오" --> I["InvalidCsrfTokenException\n→ 403 Forbidden"]
+    G -- "아니오" --> I["InvalidCsrfTokenEx"]
     D --> H
 ```
 

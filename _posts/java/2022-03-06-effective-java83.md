@@ -107,10 +107,10 @@ graph TD
     A["지연 초기화 방법 선택"] --> B{"어떤 필드인가?"}
     B --> C["정적 필드"]
     B --> D["인스턴스 필드"]
-    C --> E["지연 초기화 홀더 클래스\nprivate static class Holder\n동기화 없음, 성능 최우수"]
+    C --> E["지연 초기화 홀더 클래스\npri"]
     D --> F{"반복 초기화\n허용 가능?"}
-    F --> G["불가\n이중검사 관용구\nvolatile + double-check"]
-    F --> H["가능\n단일검사 관용구\nvolatile + single-check"]
+    F --> G["불가\n이중검사 관용구\nvola"]
+    F --> H["가능\n단일검사 관용구\nvola"]
     style E fill:#51cf66,color:#fff
     style G fill:#f39c12,color:#fff
     style H fill:#868e96,color:#fff

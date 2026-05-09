@@ -79,7 +79,7 @@ const element = React.createElement(
 
 ```mermaid
 flowchart TD
-    A["상태/props 변경"] --> B["새 Virtual DOM 트리 생성"]
+    A["상태/props 변경"] --> B["새 Virtual DOM 트리 생"]
     B --> C["Diffing 알고리즘 실행"]
     C --> D{"같은 타입?"}
     D -->|"예"| E["속성만 업데이트"]
@@ -254,7 +254,7 @@ setUser(prev => ({ ...prev, age: 26 }));
 
 ```mermaid
 flowchart TD
-    A["setState / props / Context 변경"] --> B["렌더 함수 실행"]
+    A["setState / props /"] --> B["렌더 함수 실행"]
     B --> C["Virtual DOM 생성"] --> D["Diffing"] --> E["DOM 업데이트"]
     style E fill:#2ecc71,color:#fff
 ```

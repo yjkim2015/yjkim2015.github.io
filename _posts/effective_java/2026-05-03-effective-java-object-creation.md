@@ -35,7 +35,7 @@ date: 2026-05-03
 
 ```mermaid
 flowchart LR
-    A["클라이언트"] -->|"of() / from() / valueOf()"| B["정적 팩터리 메서드"]
+    A["클라이언트"] -->|"of() / from() / va"| B["정적 팩터리 메서드"]
     B -->|"캐시 히트"| C["기존 인스턴스 반환"]
     B -->|"캐시 미스"| D["새 인스턴스 생성"]
     B -->|"조건 분기"| E["하위 타입 반환"]
@@ -81,11 +81,11 @@ public class Color {
 
 ```mermaid
 flowchart TD
-    A["NutritionFacts.builder(240, 8)"] --> B["fat(12)"]
+    A["NutritionFacts.bui"] --> B["fat(12)"]
     B --> C["sodium(35)"]
     C --> D["carbohydrate(27)"]
     D --> E["build()"]
-    E --> F["불변 NutritionFacts 객체"]
+    E --> F["불변 NutritionFacts"]
 ```
 
 아래 코드에서 `NutritionFacts`는 필수 매개변수 `servingSize`와 `servings`를 빌더 생성자로 받고, 나머지는 선택적으로 메서드 체이닝합니다. `build()` 호출 시점에 유효성 검사를 수행하므로 불완전한 객체가 만들어질 수 없습니다.
@@ -284,8 +284,8 @@ for (long i = 0; i <= Integer.MAX_VALUE; i++) {
 flowchart TD
     A["Stack.push()"] --> B["elements 배열에 저장"]
     B --> C["Stack.pop()"]
-    C -->|"나쁜 코드"| D["size만 줄임 → 참조 유지 → GC 불가"]
-    C -->|"좋은 코드"| E["elements[size] = null → 참조 해제 → GC 가능"]
+    C -->|"나쁜 코드"| D["size만 줄임 → 참조 유지 →"]
+    C -->|"좋은 코드"| E["elements[size] = n"]
 ```
 
 스택 클래스에서 `pop()` 시 단순히 `size`만 줄이면, 꺼낸 객체의 참조가 배열에 남아 GC가 수거하지 못합니다. 명시적으로 `null` 처리를 해야 합니다.
@@ -336,11 +336,11 @@ public Object pop() {
 
 ```mermaid
 flowchart TD
-    A["try-with-resources 진입"] --> B["자원 획득"]
+    A["try-with-resources"] --> B["자원 획득"]
     B --> C["비즈니스 로직 실행"]
     C -->|"정상"| D["close() 자동 호출"]
     C -->|"예외 발생"| E["close() 자동 호출"]
-    E --> F["원래 예외에 suppressed 예외 첨부"]
+    E --> F["원래 예외에 suppressed"]
 ```
 
 `try-finally`에서는 `finally` 블록의 예외가 `try` 블록의 예외를 덮어쓰는 문제가 있었습니다. `try-with-resources`는 `close()`에서 발생한 예외를 **suppressed exception**으로 첨부하므로 원래 예외 정보가 보존됩니다.

@@ -161,8 +161,8 @@ List<String> attrs = pickTwo("좋은", "빠른", "저렴한");  // 정상 동작
 ```mermaid
 graph TD
     A["제네릭 varargs 메서드"] --> B{"타입 안전한가?"}
-    B -->|"varargs 배열에 저장 안 함\n배열 참조 노출 안 함"| C["@SafeVarargs 추가\n경고 숨김"]
-    B -->|"위 조건 위반"| D["수정하거나\nList 매개변수로 교체"]
+    B -->|"varargs 배열에 저장 안 함"| C["@SafeVarargs 추가\n경"]
+    B -->|"위 조건 위반"| D["수정하거나\nList 매개변수로"]
     style C fill:#51cf66,color:#fff
     style D fill:#ff6b6b,color:#fff
 ```

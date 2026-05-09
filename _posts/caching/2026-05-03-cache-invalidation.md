@@ -47,8 +47,8 @@ TTL이 짧을수록 데이터 신선도는 올라가지만 Cache Miss가 자주 
 
 ```mermaid
 graph LR
-    A["TTL 짧음\n(10초)"] -->|"신선도 높음"| B["Cache Miss 빈번\nDB 부하 증가"]
-    C["TTL 긺\n(1시간)"] -->|"Cache Hit 높음"| D["Stale Data 위험\n일관성 저하"]
+    A["TTL 짧음\n(10초)"] -->|"신선도 높음"| B["Cache Miss 빈번\nDB"]
+    C["TTL 긺\n(1시간)"] -->|"Cache Hit 높음"| D["Stale Data 위험\n일관성"]
     E["적정 TTL"] -->|"데이터 성격에 따라"| F["신선도와 성능\n균형점"]
 ```
 
@@ -349,10 +349,10 @@ PER의 핵심 공식은 다음과 같다.
 ```mermaid
 graph LR
     subgraph "TTL 10분 기준 갱신 확률"
-        T1["남은 TTL 9분\n갱신 확률 ≈ 0.1%"]
-        T2["남은 TTL 5분\n갱신 확률 ≈ 3%"]
-        T3["남은 TTL 1분\n갱신 확률 ≈ 40%"]
-        T4["남은 TTL 10초\n갱신 확률 ≈ 90%"]
+        T1["남은 TTL 9분\n갱신 확률 ≈"]
+        T2["남은 TTL 5분\n갱신 확률 ≈"]
+        T3["남은 TTL 1분\n갱신 확률 ≈"]
+        T4["남은 TTL 10초\n갱신 확률"]
     end
     T1 --> T2 --> T3 --> T4
 ```
@@ -722,8 +722,8 @@ public Product getProduct(Long productId) {
 ```mermaid
 graph TD
     A["캐시 무효화 전략"]
-    A --> B["시간 기반\nTTL / Jitter / PER"]
-    A --> C["이벤트 기반\n@CacheEvict / Pub-Sub / CDC"]
+    A --> B["시간 기반\nTTL / Jitte"]
+    A --> C["이벤트 기반\n@CacheEvic"]
     A --> D["버전 기반\n버전 번호 포함 키"]
 ```
 

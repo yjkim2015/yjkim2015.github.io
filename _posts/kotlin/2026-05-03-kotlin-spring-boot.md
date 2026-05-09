@@ -431,9 +431,9 @@ fun `비동기 사용자 조회`() = runTest {
 
 ```mermaid
 flowchart TD
-  A["1단계: 빌드 설정 추가"] --> B["2단계: 새 파일은 Kotlin으로"]
+  A["1단계: 빌드 설정 추가"] --> B["2단계: 새 파일은 Kotlin으"]
   B --> C["3단계: DTO/Model 변환"]
-  C --> D["4단계: Service 레이어 변환"]
+  C --> D["4단계: Service 레이어 변"]
   D --> E["5단계: Controller 변환"]
   E --> F["6단계: Repository 변환"]
 ```

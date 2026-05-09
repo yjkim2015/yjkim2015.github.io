@@ -51,9 +51,9 @@ public String statement() {
 
 ```mermaid
 graph TD
-    A["문자열 연결 방법 비교"] --> B["String + 연산\n매 연결마다 전체 복사\nO(n²) 시간\n짧은 문자열에만 적합"]
-    A --> C["StringBuilder.append()\n끝에 추가만 함\nO(n) 시간\n루프·대량 연결에 사용"]
-    A --> D["String.join() / Collectors.joining()\n스트림·배열 조합에 간편\n내부적으로 StringBuilder 사용"]
+    A["문자열 연결 방법 비교"] --> B["String + 연산\n매 연결마"]
+    A --> C["StringBuilder.appe"]
+    A --> D["String.join() / Co"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff

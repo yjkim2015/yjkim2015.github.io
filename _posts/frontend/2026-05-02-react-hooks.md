@@ -183,7 +183,7 @@ flowchart TD
     A -->|"예 복잡한 연산"| B["useMemo 사용"]
     A -->|"아니오 간단한 계산"| C["useMemo 불필요"]
     D{"자식 컴포넌트에<br>전달하는 객체인가?"}
-    D -->|"예"| E["useMemo 사용 — 참조 안정화"]
+    D -->|"예"| E["useMemo 사용 — 참조 안정"]
     D -->|"아니오"| F["불필요"]
     style B fill:#2ecc71,color:#fff
     style C fill:#e74c3c,color:#fff
@@ -463,10 +463,10 @@ function BadComponent({ isAdmin }) {
 
 ```mermaid
 graph TD
-    ROOT["Hooks 선택"] --> S["상태: useState / useReducer"]
-    ROOT --> E["부작용: useEffect / useLayoutEffect"]
-    ROOT --> O["최적화: useMemo / useCallback"]
-    ROOT --> R["참조/공유: useRef / useContext / 커스텀훅"]
+    ROOT["Hooks 선택"] --> S["상태: useState / use"]
+    ROOT --> E["부작용: useEffect / u"]
+    ROOT --> O["최적화: useMemo / use"]
+    ROOT --> R["참조/공유: useRef / us"]
 ```
 
 Hooks를 올바르게 사용하는 핵심은 두 가지입니다. **의존성 배열을 정확히 관리하고, 불필요한 최적화를 피하는 것.** `useMemo`와 `useCallback`은 실제 성능 문제가 측정되었을 때만 사용하세요. 모든 함수에 `useCallback`을 붙이는 것은 오히려 코드를 복잡하게 만들고, 메모이제이션 비용이 더 클 수 있습니다.

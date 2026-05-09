@@ -58,10 +58,10 @@ int result = ThreadLocalRandom.current().nextInt(n);
 
 ```mermaid
 graph TD
-    A["무작위 수 생성"] --> B["직접 구현\nMath.abs + % 조합\n세 가지 버그 내포"]
-    A --> C["Random.nextInt(n)\n올바르지만 단일 스레드용"]
-    A --> D["ThreadLocalRandom\nJava 7+, 고품질, 빠름\n일반 사용 권장"]
-    A --> E["SplittableRandom\n포크-조인/병렬 스트림 사용"]
+    A["무작위 수 생성"] --> B["직접 구현\nMath.abs +"]
+    A --> C["Random.nextInt(n)\"]
+    A --> D["ThreadLocalRandom\"]
+    A --> E["SplittableRandom\n"]
     style B fill:#ff6b6b,color:#fff
     style D fill:#51cf66,color:#fff
     style E fill:#51cf66,color:#fff

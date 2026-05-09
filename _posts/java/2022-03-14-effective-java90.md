@@ -79,11 +79,11 @@ public final class Period implements Serializable {
 
 ```mermaid
 graph TD
-    A["직렬화"] --> B["writeReplace\n바깥 클래스 → 프록시로 교체"]
-    B --> C["프록시 직렬화\n논리적 상태만 전송"]
+    A["직렬화"] --> B["writeReplace\n바깥 클"]
+    B --> C["프록시 직렬화\n논리적 상태만 전"]
     C --> D["역직렬화\n프록시 인스턴스 생성"]
-    D --> E["readResolve\n공개 API로 바깥 클래스 생성\n불변식 자동 검사"]
-    F["직접 역직렬화 시도"] --> G["readObject\nInvalidObjectException\n공격 차단"]
+    D --> E["readResolve\n공개 AP"]
+    F["직접 역직렬화 시도"] --> G["readObject\nInvali"]
     style E fill:#51cf66,color:#fff
     style G fill:#ff6b6b,color:#fff
 ```

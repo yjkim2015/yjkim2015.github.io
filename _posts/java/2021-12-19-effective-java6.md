@@ -34,8 +34,8 @@ graph TD
     A["String Pool"] --> B["'kimchi' 인스턴스 1개"]
     B -->|"참조"| C["s3"]
     B -->|"참조"| D["s4"]
-    E["힙(Heap)"] --> F["new String('kimchi') #1"]
-    E --> G["new String('kimchi') #2"]
+    E["힙(Heap)"] --> F["new String('kimchi"]
+    E --> G["new String('kimchi"]
     style F fill:#ff6b6b,color:#fff
     style G fill:#ff6b6b,color:#fff
 ```
@@ -122,8 +122,8 @@ private static long sum() {
 
 ```mermaid
 graph LR
-    A["long i = 1"] -->|"오토박싱"| B["Long sum에 더할 때\n새 Long 객체 생성"]
-    B -->|"루프 21억 회"| C["Long 객체 21억 개\nGC 부담"]
+    A["long i = 1"] -->|"오토박싱"| B["Long sum에 더할 때\n새"]
+    B -->|"루프 21억 회"| C["Long 객체 21억 개\nGC"]
     style C fill:#ff6b6b,color:#fff
 ```
 
@@ -178,12 +178,12 @@ public class Period {
 
 ```mermaid
 graph TD
-    A["불필요한 객체 생성 패턴 3가지"] --> B["String 리터럴 대신\nnew String() 사용"]
-    A --> C["비싼 객체 반복 생성\nPattern.compile()"]
-    A --> D["박싱 타입으로 인한\n오토박싱 반복"]
-    B --> B1["해결: 리터럴 사용\nString Pool 활용"]
-    C --> C1["해결: static final로\n한 번만 생성 후 캐싱"]
-    D --> D1["해결: 기본 타입 우선 사용\nlong > Long"]
+    A["불필요한 객체 생성 패턴 3가지"] --> B["String 리터럴 대신\nnew"]
+    A --> C["비싼 객체 반복 생성\nPatte"]
+    A --> D["박싱 타입으로 인한\n오토박싱 반"]
+    B --> B1["해결: 리터럴 사용\nString"]
+    C --> C1["해결: static final로\"]
+    D --> D1["해결: 기본 타입 우선 사용\nl"]
 ```
 
 **핵심 규칙:**

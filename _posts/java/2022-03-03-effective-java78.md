@@ -19,10 +19,10 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["synchronized의 두 역할"] --> B["배타적 실행\n한 번에 한 스레드만 실행\n중간 상태를 다른 스레드가 못 봄"]
-    A --> C["스레드 간 통신\n한 스레드의 변경을\n다른 스레드에게 가시화"]
+    A["synchronized의 두 역할"] --> B["배타적 실행\n한 번에 한 스레드"]
+    A --> C["스레드 간 통신\n한 스레드의 변"]
     B --> D["락 획득 → 작업 → 락 해제"]
-    C --> E["이전 락 보호 아래 수행된\n모든 수정의 최종 결과를 보게 됨"]
+    C --> E["이전 락 보호 아래 수행된\n모든"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
 ```

@@ -47,11 +47,11 @@ service.execute(() -> action());
 
 ```mermaid
 graph TD
-    A["메서드 참조 유형"] --> B["정적 메서드 참조\nInteger::parseInt\n= str -> Integer.parseInt(str)"]
-    A --> C["한정적 인스턴스 참조\nInstant.now()::isAfter\n= t -> then.isAfter(t)"]
-    A --> D["비한정적 인스턴스 참조\nString::toLowerCase\n= str -> str.toLowerCase()"]
-    A --> E["클래스 생성자 참조\nTreeMap<K,V>::new\n= () -> new TreeMap<>()"]
-    A --> F["배열 생성자 참조\nint[]::new\n= len -> new int[len]"]
+    A["메서드 참조 유형"] --> B["정적 메서드 참조\nInteger"]
+    A --> C["한정적 인스턴스 참조\nInsta"]
+    A --> D["비한정적 인스턴스 참조\nStri"]
+    A --> E["클래스 생성자 참조\nTreeMa"]
+    A --> F["배열 생성자 참조\nint[]::"]
     style B fill:#4a9eff,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff

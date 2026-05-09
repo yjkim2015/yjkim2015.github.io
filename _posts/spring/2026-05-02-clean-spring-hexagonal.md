@@ -185,7 +185,7 @@ public class OrderService {
 graph TD
     subgraph "트랜잭션 스크립트"
         A[OrderService] --> B["모든 비즈니스 로직"]
-        C[Order] --> D["데이터만 보관 getter/setter"]
+        C[Order] --> D["데이터만 보관 getter/set"]
     end
     subgraph "도메인 모델"
         E[OrderService] --> F["얇은 오케스트레이션만"]

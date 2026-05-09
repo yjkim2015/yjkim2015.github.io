@@ -50,11 +50,11 @@ public class Stack {
 
 ```mermaid
 graph TD
-    A["Stack.elements 배열"] --> B["[0]: Object@100 ← size=1 이후 활성"]
-    A --> C["[1]: Object@200 ← 이미 pop됐지만 참조 유지!"]
-    A --> D["[2]: Object@300 ← 이미 pop됐지만 참조 유지!"]
-    C -->|"GC 회수 불가"| E["Object@200\n(실제로는 필요 없음)"]
-    D -->|"GC 회수 불가"| F["Object@300\n(실제로는 필요 없음)"]
+    A["Stack.elements 배열"] --> B["[0]: Object@100 ←"]
+    A --> C["[1]: Object@200 ←"]
+    A --> D["[2]: Object@300 ←"]
+    C -->|"GC 회수 불가"| E["Object@200\n(실제로는"]
+    D -->|"GC 회수 불가"| F["Object@300\n(실제로는"]
     style C fill:#ff6b6b,color:#fff
     style D fill:#ff6b6b,color:#fff
     style E fill:#ff6b6b,color:#fff
@@ -232,12 +232,12 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    A["메모리 누수 3대 주범"] --> B["자기 메모리 직접 관리\n(배열 기반 컬렉션)"]
+    A["메모리 누수 3대 주범"] --> B["자기 메모리 직접 관리\n(배열"]
     A --> C["캐시"]
     A --> D["리스너/콜백"]
-    B --> B1["해결: pop 시 null 처리\nelements[size] = null"]
-    C --> C1["해결: WeakHashMap\n또는 만료 정책 적용"]
-    D --> D1["해결: WeakReference로\n콜백 저장"]
+    B --> B1["해결: pop 시 null 처리\"]
+    C --> C1["해결: WeakHashMap\n또"]
+    D --> D1["해결: WeakReference로"]
 ```
 
 **핵심 규칙:**

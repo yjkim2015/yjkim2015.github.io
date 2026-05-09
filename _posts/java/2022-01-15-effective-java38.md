@@ -19,8 +19,8 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["열거 타입 확장 불허 이유"] --> B["확장 타입 원소가\n기반 타입 원소로 취급되나\n역방향은 불성립 — 이상한 관계"]
-    A --> C["기반 + 확장 원소\n모두 순회하는 방법\n마땅치 않음"]
+    A["열거 타입 확장 불허 이유"] --> B["확장 타입 원소가\n기반 타입 원"]
+    A --> C["기반 + 확장 원소\n모두 순회하"]
     A --> D["설계와 구현\n복잡도 증가"]
     style A fill:#ff6b6b,color:#fff
 ```
@@ -123,10 +123,10 @@ private static void test(Collection<? extends Operation> opSet,
 
 ```mermaid
 graph TD
-    A["확장 연산 전달 방법"] --> B["Class<T extends Enum<T> & Operation>"]
-    A --> C["Collection<? extends Operation>"]
-    B --> D["단일 열거 타입 전달\nEnumSet/EnumMap 사용 가능"]
-    C --> E["여러 타입 조합 가능\nEnumSet/EnumMap 직접 사용 불가"]
+    A["확장 연산 전달 방법"] --> B["Class<T extends En"]
+    A --> C["Collection<? exten"]
+    B --> D["단일 열거 타입 전달\nEnumS"]
+    C --> E["여러 타입 조합 가능\nEnumS"]
     style B fill:#4a9eff,color:#fff
     style C fill:#51cf66,color:#fff
 ```
@@ -157,10 +157,10 @@ public interface Operation {
 ```mermaid
 graph TD
     A["확장 가능한\n열거 타입이 필요"] --> B["열거 타입 상속 불가"]
-    B --> C["인터페이스 정의\n열거 타입이 구현"]
-    C --> D["BasicOperation\n기본 구현 열거 타입"]
-    C --> E["ExtendedOperation\n사용자 확장 열거 타입"]
-    D --> F["API를 인터페이스 기반으로\n작성하면 어디서든 교체 가능"]
+    B --> C["인터페이스 정의\n열거 타입이 구"]
+    C --> D["BasicOperation\n기본"]
+    C --> E["ExtendedOperation\"]
+    D --> F["API를 인터페이스 기반으로\n작"]
     E --> F
     style C fill:#51cf66,color:#fff
 ```

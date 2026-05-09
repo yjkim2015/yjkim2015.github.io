@@ -26,8 +26,8 @@ React 성능 최적화도 같은 논리입니다. 그리고 가장 중요한 것
 
 ```mermaid
 flowchart TD
-    A["성능 문제 발생"] --> B["Chrome DevTools Profiler 실행"]
-    B --> C["어느 컴포넌트가 자주 렌더링되는지 확인"]
+    A["성능 문제 발생"] --> B["Chrome DevTools Pr"]
+    B --> C["어느 컴포넌트가 자주 렌더링되는지"]
     C --> D["번들 사이즈 분석"]
     D --> E["Lighthouse 점수 확인"]
     E --> F["Core Web Vitals 측정"]
@@ -131,10 +131,10 @@ function ProductList({ products, category, onPurchase }) {
 
 ```mermaid
 graph TD
-    A["products/category 변경"] --> B["filteredProducts 재계산"]
+    A["products/category"] --> B["filteredProducts 재"]
     D["다른 상태 변경"] --> E["재계산 스킵 (useMemo)"]
-    F["category 변경"] --> G["handlePurchase 새 함수"]
-    H["다른 상태 변경"] --> I["같은 참조 유지 (useCallback)"] --> J["리렌더링 스킵"]
+    F["category 변경"] --> G["handlePurchase 새 함"]
+    H["다른 상태 변경"] --> I["같은 참조 유지 (useCallb"] --> J["리렌더링 스킵"]
 ```
 
 ---
@@ -146,13 +146,13 @@ graph TD
 ```mermaid
 graph LR
     subgraph "스플리팅 전"
-        BUNDLE["app.js 5MB<br>유저가 모든 코드 다운로드"]
+        BUNDLE["app.js 5MB<br>유저가"]
     end
     subgraph "스플리팅 후"
         MAIN["main.js 500KB"]
-        ROUTE1["route-home.js 100KB"]
-        ROUTE2["route-admin.js 200KB"]
-        ROUTE3["route-profile.js 150KB"]
+        ROUTE1["route-home.js 100K"]
+        ROUTE2["route-admin.js 200"]
+        ROUTE3["route-profile.js 1"]
         USER2["현재 페이지만 다운로드"]
     end
     style BUNDLE fill:#e74c3c,color:#fff
@@ -422,12 +422,12 @@ const StockRow = React.memo(
 
 ```mermaid
 flowchart TD
-    A["성능 최적화 시작"] --> B["1. 측정 먼저 — Profiler, Lighthouse"]
-    B --> C["2. 번들 크기 줄이기 — 가장 큰 효과"]
+    A["성능 최적화 시작"] --> B["1. 측정 먼저 — Profile"]
+    B --> C["2. 번들 크기 줄이기 — 가장"]
     C --> D["3. 이미지 최적화"]
     D --> E["4. 불필요한 네트워크 요청 제거"]
     E --> F["5. 불필요한 리렌더링 제거"]
-    F --> G["6. useMemo/useCallback 적용"]
+    F --> G["6. useMemo/useCall"]
     G --> H["7. 가상화 (목록이 긴 경우)"]
     H --> I["다시 측정해서 효과 확인"]
     style B fill:#e74c3c,color:#fff

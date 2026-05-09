@@ -31,10 +31,10 @@ Spring Security를 처음 보면 복잡해 보입니다. 하지만 핵심은 단
 
 ```mermaid
 graph TD
-    A["HTTP 요청"] --> B["DelegatingFilterProxy\n→ FilterChainProxy"]
+    A["HTTP 요청"] --> B["DelegatingFilterPr"]
     B --> C["Chain:/admin/**"]
     B --> D["Chain:/api/**"]
-    C & D --> E["SecurityContext→Auth→JWT→Authorization"]
+    C & D --> E["SecurityContext→Au"]
     E --> F{"인증·권한?"}
     F -->|"미인증"| G["401"]
     F -->|"권한없음"| H["403"]
@@ -216,9 +216,9 @@ graph LR
     A[JWT] --> B[Header]
     A --> C[Payload]
     A --> D[Signature]
-    B --> E["alg: HS256\ntyp: JWT"]
-    C --> F["sub: 사용자 ID\nroles: 권한 목록\niat: 발급 시간\nexp: 만료 시간"]
-    D --> G["HMACSHA256(\n  base64(header) + '.' + base64(payload),\n  서버만 아는 secret\n)"]
+    B --> E["alg: HS256\ntyp: J"]
+    C --> F["sub: 사용자 ID\nroles"]
+    D --> G["HMACSHA256(\n  bas"]
 ```
 
 Signature의 역할이 핵심입니다. Payload를 아무나 base64 디코딩해서 읽을 수 있습니다(암호화가 아님). 하지만 내용을 조작하면 Signature 검증에서 실패합니다. "userId=1"을 "userId=999"로 바꾸면 서버가 즉시 감지합니다. 따라서 JWT에 민감한 정보(비밀번호 등)를 넣으면 안 됩니다.
@@ -685,12 +685,12 @@ public class MultiSecurityConfig {
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["SecurityContextPersistenceFilter\n인증 정보 복원"]
-    B --> C["JwtAuthenticationFilter\nJWT 파싱→SecurityContext 저장"]
-    C --> D["AuthorizationFilter\n경로 권한 체크"]
-    D -->|"미인증"| E["401 AuthenticationEntryPoint"]
-    D -->|"권한 없음"| F["403 AccessDeniedHandler"]
-    D -->|"통과"| G["Controller → 응답\n→ SecurityContext 정리"]
+    A["HTTP 요청"] --> B["SecurityContextPer"]
+    B --> C["JwtAuthenticationF"]
+    C --> D["AuthorizationFilte"]
+    D -->|"미인증"| E["401 Authentication"]
+    D -->|"권한 없음"| F["403 AccessDeniedHa"]
+    D -->|"통과"| G["Controller → 응답\n→"]
 ```
 
 ---

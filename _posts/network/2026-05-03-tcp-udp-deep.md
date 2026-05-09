@@ -149,7 +149,7 @@ sysctl net.ipv4.tcp_max_tw_buckets
 
 ```mermaid
 graph LR
-    A["송신 버퍼\n(응용 프로그램 데이터)"]
+    A["송신 버퍼\n(응용 프로그램 데이"]
     B["전송 완료\n+ ACK 수신"]
     C["전송 완료\n+ ACK 미수신"]
     D["전송 가능\n(Window 내)"]
@@ -203,8 +203,8 @@ AIMD 규칙:
 
 ```mermaid
 graph TD
-    A["Slow Start\ncwnd×2/RTT"] -->|"cwnd≥ssthresh"| B["Congestion Avoidance\ncwnd+1/RTT"]
-    B -->|3 Dup ACK| C["Fast Recovery\ncwnd=ssthresh"]
+    A["Slow Start\ncwnd×2"] -->|"cwnd≥ssthresh"| B["Congestion Avoidan"]
+    B -->|3 Dup ACK| C["Fast Recovery\ncwn"]
     C --> B
     B & A & C -->|Timeout| D["재시작 cwnd=1"]
 ```
@@ -367,9 +367,9 @@ QUIC(Quick UDP Internet Connections)은 Google이 개발하고 IETF가 표준화
 ```mermaid
 graph TD
     A["TCP 문제점"]
-    B["Head-of-Line Blocking\n하나의 패킷 손실이\n전체 스트림 블로킹"]
-    C["긴 연결 수립\nTCP 1-RTT + TLS 2-RTT\n= 3 RTT"]
-    D["IP 변경 시 연결 재수립\n(모바일 LTE↔WiFi 전환)"]
+    B["Head-of-Line Block"]
+    C["긴 연결 수립\nTCP 1-RTT"]
+    D["IP 변경 시 연결 재수립\n(모"]
     A --> B
     A --> C
     A --> D
@@ -385,9 +385,9 @@ graph TD
 
 ```mermaid
 graph LR
-    A["HTTP/1.1\nTCP × 6병렬"]
-    B["HTTP/2\nTCP 1개\n멀티플렉싱"]
-    C["HTTP/3\nQUIC (UDP)\n스트림 독립"]
+    A["HTTP/1.1\nTCP × 6병"]
+    B["HTTP/2\nTCP 1개\n멀티"]
+    C["HTTP/3\nQUIC (UDP)"]
     D["패킷 손실 시"]
     A -->|"발전"| B
     B -->|"발전"| C

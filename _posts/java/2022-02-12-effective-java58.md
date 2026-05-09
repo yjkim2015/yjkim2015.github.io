@@ -81,10 +81,10 @@ for (Suit suit : suits) {
 
 ```mermaid
 graph TD
-    A["중첩 반복 버그"] --> B["i.next()가 안쪽 루프에서 호출\nRank마다 Suit를 소비함"]
-    B --> C["suits.size() != ranks.size()\n→ NoSuchElementException"]
-    B --> D["suits.size() == ranks.size()\n→ 예외 없이 잘못된 결과\n36개 대신 6개 출력"]
-    E["for-each 사용"] --> F["바깥 원소를 자동으로 보존\n저장 변수 불필요"]
+    A["중첩 반복 버그"] --> B["i.next()가 안쪽 루프에서"]
+    B --> C["suits.size() != ra"]
+    B --> D["suits.size() == ra"]
+    E["for-each 사용"] --> F["바깥 원소를 자동으로 보존\n저장"]
     style C fill:#ff6b6b,color:#fff
     style D fill:#ff6b6b,color:#fff
     style F fill:#51cf66,color:#fff

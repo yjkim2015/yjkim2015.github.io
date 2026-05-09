@@ -19,13 +19,13 @@ Java는 클래스 안에 클래스를 선언할 수 있습니다. 이를 중첩 
 
 ```mermaid
 graph TD
-    A["중첩 클래스 (Nested Class)"] --> B["Static Nested Class\n정적 중첩 클래스"]
-    A --> C["Inner Class\n내부 클래스"]
-    C --> D["Member Inner Class\n멤버 내부 클래스"]
-    C --> E["Local Inner Class\n지역 내부 클래스"]
-    C --> F["Anonymous Class\n익명 클래스"]
-    B --> B1["외부 인스턴스 참조 없음\n독립 생성 가능"]
-    D --> D1["외부 인스턴스 참조 보유\nouter.new Inner() 문법"]
+    A["중첩 클래스 (Nested Cla"] --> B["Static Nested Clas"]
+    A --> C["Inner Class\n내부 클래"]
+    C --> D["Member Inner Class"]
+    C --> E["Local Inner Class\"]
+    C --> F["Anonymous Class\n익"]
+    B --> B1["외부 인스턴스 참조 없음\n독립"]
+    D --> D1["외부 인스턴스 참조 보유\nout"]
     E --> E1["메서드 내부에서만 선언"]
     F --> F1["이름 없는 즉석 구현"]
 ```
@@ -346,9 +346,9 @@ Runnable lambdaCounter = () -> { /* count++ 불가 */ };
 
 ```mermaid
 graph TD
-    A["Thread (GC Root)"] --> B["MyTask 인스턴스 (Runnable)"]
+    A["Thread (GC Root)"] --> B["MyTask 인스턴스 (Runna"]
     B --> C["this$0 참조 (강참조)"]
-    C --> D["MyActivity 인스턴스 (GC 불가!)"]
+    C --> D["MyActivity 인스턴스 (G"]
     D --> E["모든 필드, 뷰, 리소스..."]
     style D fill:#ff6b6b
     style E fill:#ff6b6b
@@ -693,11 +693,11 @@ public class Outer {
 ```mermaid
 graph TD
     A["중첩 클래스 선택 가이드"] --> B["외부 인스턴스 불필요?"]
-    B -->|"Yes"| C["Static Nested Class\n빌더, 노드 등 구현 세부 클래스"]
+    B -->|"Yes"| C["Static Nested Clas"]
     B -->|"No"| D["Inner Class 계열"]
     D --> E["이름이 필요한가?"]
-    E -->|"Yes, 메서드 내"| F["Local Inner Class\n(거의 사용 안 함)"]
-    E -->|"Yes, 멤버"| G["Member Inner Class\nIterator, 이벤트 핸들러 등"]
+    E -->|"Yes, 메서드 내"| F["Local Inner Class\"]
+    E -->|"Yes, 멤버"| G["Member Inner Class"]
     E -->|"No"| H["함수형 인터페이스인가?"]
     H -->|"Yes (메서드 1개)"| I["람다로 대체"]
     H -->|"No (메서드 여러개)"| J["Anonymous Class"]

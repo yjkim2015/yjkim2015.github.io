@@ -69,11 +69,11 @@ try {
 ```mermaid
 graph TD
     A["예외 처리 결정"] --> B{"예외가 발생하면\n어떻게 해야 하는가?"}
-    B --> C["복구 가능\n→ 적절한 조치 후 계속"]
-    B --> D["복구 불가\n→ 비검사 예외로 재던지기\n또는 스레드 종료"]
-    B --> E["무시해도 되는 경우\n→ catch(E ignored)\n이유를 주석으로 반드시 명시"]
-    C --> F["catch 블록에\n실제 처리 코드 작성"]
-    D --> G["catch 블록에서\nthrow new RuntimeException(e)"]
+    B --> C["복구 가능\n→ 적절한 조치 후"]
+    B --> D["복구 불가\n→ 비검사 예외로 재"]
+    B --> E["무시해도 되는 경우\n→ catc"]
+    C --> F["catch 블록에\n실제 처리 코"]
+    D --> G["catch 블록에서\nthrow"]
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff
     style E fill:#868e96,color:#fff

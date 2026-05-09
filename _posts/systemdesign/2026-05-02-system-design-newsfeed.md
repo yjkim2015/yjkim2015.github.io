@@ -78,7 +78,7 @@ sequenceDiagram
 ```mermaid
 graph LR
     ReadReq["피드 읽기 요청"] --> Fetch["팔로잉 200명 조회"]
-    Fetch --> Gather["각각의 최신 게시글 수집\n(200개 쿼리)"]
+    Fetch --> Gather["각각의 최신 게시글 수집\n(20"]
     Gather --> Sort["정렬 + 랭킹"]
     Sort --> Result["피드 반환"]
 ```
@@ -91,8 +91,8 @@ graph LR
 ```mermaid
 graph TD
     Post["게시글 작성"] --> Check{"팔로워 수 확인"}
-    Check -->|"< 1만 (일반 사용자)"| Push["쓰기 시 팬아웃\n팔로워 피드 캐시에 즉시 반영"]
-    Check -->|"> 1만 (셀럽)"| Pull["팬아웃 건너뜀\n셀럽 게시글 캐시만 업데이트"]
+    Check -->|"< 1만 (일반 사용자)"| Push["쓰기 시 팬아웃\n팔로워 피드 캐"]
+    Check -->|"> 1만 (셀럽)"| Pull["팬아웃 건너뜀\n셀럽 게시글 캐시"]
     ReadReq["피드 읽기"] --> NormalFeed["캐시에서 일반 팔로잉 피드"]
     ReadReq --> CelebFeed["팔로우한 셀럽 게시글 동적 조합"]
     NormalFeed --> Merge["병합 + 랭킹"]
@@ -109,7 +109,7 @@ graph TD
 ```mermaid
 graph TD
     Client["모바일/웹"] --> LB["로드밸런서"]
-    LB --> PostSvc["게시글 서비스\n→ MySQL·S3"]
+    LB --> PostSvc["게시글 서비스\n→ MySQL·S"]
     LB --> FeedSvc["피드 서비스"]
     LB --> UserSvc["사용자/팔로우 DB"]
     PostSvc --> Kafka["Kafka → 팬아웃 워커×N"]

@@ -25,11 +25,11 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["스레드 안전성 수준 (높은 순)"] --> B["불변(immutable)\nString, Long, BigInteger\n외부 동기화 불필요"]
-    A --> C["무조건적 스레드 안전\nAtomicLong, ConcurrentHashMap\n내부 동기화 완비, 외부 동기화 불필요"]
-    A --> D["조건부 스레드 안전\nCollections.synchronizedMap 반환 객체\n일부 메서드 조합에 외부 동기화 필요"]
-    A --> E["스레드 안전하지 않음\nArrayList, HashMap\n외부에서 동기화해야 함"]
-    A --> F["스레드 적대적\n외부 동기화로도 안전하지 않음\n정적 데이터를 무단 수정"]
+    A["스레드 안전성 수준 (높은 순)"] --> B["불변(immutable)\nStr"]
+    A --> C["무조건적 스레드 안전\nAtomi"]
+    A --> D["조건부 스레드 안전\nCollec"]
+    A --> E["스레드 안전하지 않음\nArray"]
+    A --> F["스레드 적대적\n외부 동기화로도"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff

@@ -33,14 +33,14 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    Single["단일 테이블 1억 건\n풀 스캔 시 전체 I/O 발생"]
+    Single["단일 테이블 1억 건\n풀 스캔"]
     Single --> Part["파티셔닝 적용"]
-    Part --> P2020["파티션 p2020\n2020년 데이터 2500만 건"]
-    Part --> P2021["파티션 p2021\n2021년 데이터 2500만 건"]
-    Part --> P2022["파티션 p2022\n2022년 데이터 2500만 건"]
-    Part --> P2023["파티션 p2023\n2023년 데이터 2500만 건"]
-    Query["WHERE order_date = 2023년"] -->|"파티션 프루닝"| P2023
-    Query -.->|"p2020, p2021, p2022 건너뜀"| Skip["스캔 생략 75%"]
+    Part --> P2020["파티션 p2020\n2020년 데"]
+    Part --> P2021["파티션 p2021\n2021년 데"]
+    Part --> P2022["파티션 p2022\n2022년 데"]
+    Part --> P2023["파티션 p2023\n2023년 데"]
+    Query["WHERE order_date ="] -->|"파티션 프루닝"| P2023
+    Query -.->|"p2020, p2021, p202"| Skip["스캔 생략 75%"]
 ```
 
 > **핵심 요약**: 파티셔닝의 효과는 파티션 프루닝에서 나온다. 파티션 키가 WHERE 절에 없으면 모든 파티션을 스캔하므로 파티션 키 선택이 가장 중요하다.
@@ -56,8 +56,8 @@ graph TD
 ```mermaid
 graph LR
     Original["원본 테이블\nid 1~4 전체"]
-    Original --> PA["파티션 A\nid 1~2\nKim, Lee"]
-    Original --> PB["파티션 B\nid 3~4\nPark, Choi"]
+    Original --> PA["파티션 A\nid 1~2\nKim"]
+    Original --> PB["파티션 B\nid 3~4\nPar"]
     Query["WHERE id = 3"] -->|"파티션 프루닝"| PB
     Query -.->|"건너뜀"| PA
 ```
@@ -72,10 +72,10 @@ MySQL의 `PARTITION BY` 문법이 지원하는 것이 바로 수평 파티셔닝
 
 ```mermaid
 graph TD
-    Original["원본 테이블\nid, name, age, profile_image BLOB, bio TEXT"]
-    Original --> Hot["핫 테이블 자주 조회\nid, name, age\n목록 조회 시 사용"]
-    Original --> Cold["콜드 테이블 드물게 조회\nid, profile_image, bio\n상세 페이지 시 JOIN"]
-    Hot -->|"캐시 효율 높음"| BufferPool["Buffer Pool에 더 많이 상주"]
+    Original["원본 테이블\nid, name,"]
+    Original --> Hot["핫 테이블 자주 조회\nid, n"]
+    Original --> Cold["콜드 테이블 드물게 조회\nid,"]
+    Hot -->|"캐시 효율 높음"| BufferPool["Buffer Pool에 더 많이"]
     Cold -->|"필요할 때만 로드"| Disk["디스크 접근 최소화"]
 ```
 
@@ -111,10 +111,10 @@ INSERT 시 MySQL이 파티션 키 값을 평가하여 해당 범위의 파티션
 
 ```mermaid
 graph TD
-    Insert["INSERT order_date=2023-06-15"]
+    Insert["INSERT order_date="]
     Insert --> Eval["YEAR 평가 = 2023"]
     Eval --> Check{"파티션 경계 확인"}
-    Check -->|"2023 < 2023 = false"| P2022["p_2022 건너뜀"]
+    Check -->|"2023 < 2023 = fals"| P2022["p_2022 건너뜀"]
     Check -->|"2023 < 2024 = true"| P2023["p_2023 저장"]
     Check -.->|"이후 파티션 불검토"| P2024["p_2024 건너뜀"]
     style P2023 fill:#90EE90

@@ -19,8 +19,8 @@ Spring Boot로 실제 동작하는 회원 관리 프로그램을 만들어보면
 ```mermaid
 graph TD
     CLI["클라이언트"] --> CTRL["Controller"]
-    CTRL --> SVC["Service (비즈니스/트랜잭션)"]
-    SVC --> REPO["Repository (DB CRUD)"]
+    CTRL --> SVC["Service (비즈니스/트랜잭션"]
+    SVC --> REPO["Repository (DB CRU"]
     REPO --> DB["DB / 인메모리"]
     DOMAIN["Domain (Entity/VO)"] -.->|사용| SVC
     DOMAIN -.->|사용| REPO
@@ -42,10 +42,10 @@ graph TD
 ```mermaid
 graph LR
     REQ["요구사항"]
-    REQ --> F1["회원 가입\n이름 입력 → ID 자동 부여"]
-    REQ --> F2["회원 조회\nID 또는 이름으로 검색"]
+    REQ --> F1["회원 가입\n이름 입력 → ID"]
+    REQ --> F2["회원 조회\nID 또는 이름으로"]
     REQ --> F3["중복 검증\n같은 이름 가입 불가"]
-    REQ --> F4["저장소 교체 가능\n인터페이스 설계"]
+    REQ --> F4["저장소 교체 가능\n인터페이스 설"]
 ```
 
 ---
@@ -309,9 +309,9 @@ public class MemberService {
 
 ```mermaid
 graph LR
-    GIVEN["given\n테스트 준비\n입력 데이터 설정"]
-    WHEN["when\n실행\n테스트 대상 메서드 호출"]
-    THEN["then\n검증\nassertThat으로 결과 확인"]
+    GIVEN["given\n테스트 준비\n입력"]
+    WHEN["when\n실행\n테스트 대상 메"]
+    THEN["then\n검증\nassertTh"]
     GIVEN --> WHEN --> THEN
 ```
 
@@ -393,10 +393,10 @@ class MemberServiceTest {
 
 ```mermaid
 graph TD
-    SVC["MemberService\n(변경 없음)"]
-    IFACE["MemberRepository\n인터페이스"]
-    MEM["MemoryMemberRepository\n(개발/테스트용)"]
-    JPA["JpaMemberRepository\n(운영용 — 나중에 교체)"]
+    SVC["MemberService\n(변경"]
+    IFACE["MemberRepository\n"]
+    MEM["MemoryMemberReposi"]
+    JPA["JpaMemberRepositor"]
     SVC --> IFACE
     IFACE --> MEM
     IFACE --> JPA

@@ -102,10 +102,10 @@ public enum Elvis {
 
 ```mermaid
 graph TD
-    A["싱글턴 직렬화 방법 비교"] --> B["일반 클래스 + readResolve\n복사본 생성 후 소각\ntransient 아닌 필드 있으면 공격 가능"]
-    A --> C["열거 타입\nJVM이 유일성 보장\n직렬화/리플렉션 공격에 안전"]
-    B --> D["취약\nElvisStealer 공격 가능"]
-    C --> E["권장\n선언된 상수 외 인스턴스 생성 불가"]
+    A["싱글턴 직렬화 방법 비교"] --> B["일반 클래스 + readResol"]
+    A --> C["열거 타입\nJVM이 유일성 보장"]
+    B --> D["취약\nElvisStealer 공"]
+    C --> E["권장\n선언된 상수 외 인스턴스"]
     style B fill:#f39c12,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#ff6b6b,color:#fff

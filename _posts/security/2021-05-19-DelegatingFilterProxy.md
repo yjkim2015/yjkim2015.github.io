@@ -20,12 +20,12 @@ toc_label: 목차
 ```mermaid
 flowchart TD
     A["HTTP 요청"] --> B["서블릿 컨테이너\n(Tomcat)"]
-    B --> C["서블릿 필터 체인\n(javax.servlet.Filter)"]
-    C --> D["DelegatingFilterProxy\n서블릿 필터이지만\nSpring 빈에 위임"]
-    D <-- "Spring 빈 조회\n(springSecurityFilterChain)" --> E["Spring 컨테이너\n(ApplicationContext)"]
-    E --> F["FilterChainProxy\n(Spring 빈)"]
+    B --> C["서블릿 필터 체인\n(javax."]
+    C --> D["DelegatingFilterPr"]
+    D <-- "Spring 빈 조회\n(springSecurityFilterChain)" --> E["Spring 컨테이너\n(Appl"]
+    E --> F["FilterChainProxy\n"]
     F --> G["보안 필터 체인 실행"]
-    G --> H["DispatcherServlet\n(Spring MVC)"]
+    G --> H["DispatcherServlet\"]
 ```
 
 ## 왜 DelegatingFilterProxy가 필요한가
@@ -95,12 +95,12 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 ```mermaid
 flowchart TD
     A["HTTP 요청"] --> B["FilterChainProxy"]
-    B --> C["등록된 SecurityFilterChain 목록 순서대로 확인"]
+    B --> C["등록된 SecurityFilter"]
     C --> D{"요청 URL이\n/api/** 매칭?"}
-    D -- "예" --> E["ApiSecurityConfig의\n필터 체인 실행"]
+    D -- "예" --> E["ApiSecurityConfig의"]
     D -- "아니오" --> F{"요청 URL이\n/** 매칭?"}
-    F -- "예" --> G["WebSecurityConfig의\n필터 체인 실행"]
-    F -- "아니오" --> H["매칭되는 체인 없음\n→ 다음 서블릿 필터로"]
+    F -- "예" --> G["WebSecurityConfig의"]
+    F -- "아니오" --> H["매칭되는 체인 없음\n→ 다음 서"]
     E --> I["보안 처리 완료"]
     G --> I
 ```

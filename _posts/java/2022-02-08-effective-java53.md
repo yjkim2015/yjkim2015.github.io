@@ -77,10 +77,10 @@ public void foo(int a1, int a2, int a3, int... rest) {}
 
 ```mermaid
 graph TD
-    A["가변인수 성능 최적화"] --> B["대부분 호출: 고정 매개변수 메서드\n배열 생성 없음"]
-    A --> C["소수 호출: 가변인수 메서드\n배열 생성 발생"]
-    B --> D["foo()\nfoo(int a1)\nfoo(int a1,int a2)\nfoo(int a1,int a2,int a3)"]
-    C --> E["foo(int a1,int a2,int a3,int... rest)"]
+    A["가변인수 성능 최적화"] --> B["대부분 호출: 고정 매개변수 메서"]
+    A --> C["소수 호출: 가변인수 메서드\n배"]
+    B --> D["foo()\nfoo(int a1)"]
+    C --> E["foo(int a1,int a2,"]
     style B fill:#51cf66,color:#fff
     style C fill:#f39c12,color:#fff
 ```

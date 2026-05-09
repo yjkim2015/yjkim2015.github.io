@@ -21,13 +21,13 @@ Java는 성능과 객체지향이라는 두 가지 목표를 동시에 추구했
 
 ```mermaid
 graph LR
-    P1["byte/short/int/long"] <-->|"박싱/언박싱"| W1["Byte/Short/Integer/Long"]
+    P1["byte/short/int/lon"] <-->|"박싱/언박싱"| W1["Byte/Short/Integer"]
     P2["float/double"] <-->|"박싱/언박싱"| W2["Float/Double"]
     P3["char/boolean"] <-->|"박싱/언박싱"| W3["Character/Boolean"]
     W1 --> OBJ["Object (참조형 계층)"]
     W2 --> OBJ
     W3 --> OBJ
-    OBJ --> REF["String / List&lt;T&gt; / 모든 클래스"]
+    OBJ --> REF["String / List&lt;T"]
 ```
 
 ### 메모리 저장 방식 비교
@@ -200,12 +200,10 @@ JVM은 자주 사용되는 `-128`부터 `127` 범위의 Integer 객체를 **JVM 
 
 ```mermaid
 graph TD
-    VALUEOF["Integer.valueOf(n) 호출"]
+    VALUEOF["Integer.valueOf(n)"]
     CHECK["n이 -128 ~ 127 범위?"]
-    CACHE["IntegerCache.cache 배열에서 반환
-    (항상 동일한 객체)"]
-    NEW["new Integer(n) 생성
-    (매번 새 객체)"]
+    CACHE["IntegerCache.cache 배열에서 반환"]
+    NEW["new Integer(n) 생성"]
     VALUEOF --> CHECK
     CHECK -->|"예"| CACHE
     CHECK -->|"아니오"| NEW
@@ -452,9 +450,9 @@ assert a == b;  // 운영: 실패! 다른 객체
 ```mermaid
 graph TD
     WRAPPER["래퍼 클래스 핵심 정리"]
-    WRAPPER --> PRIM["기본형=스택/빠름/null불가 vs 참조형=힙/null가능/제네릭"]
-    WRAPPER --> BOXING["오토박싱: valueOf()/intValue() 자동 삽입 / null 언박싱→NPE"]
-    WRAPPER --> CACHE["Integer 캐시: -128~127은 == 동작 / 항상 equals()"]
-    WRAPPER --> PERF["반복문 박싱 금지 / IntStream/LongStream/DoubleStream 우선"]
-    WRAPPER --> NULL["null 처리: Optional / OptionalInt"]
+    WRAPPER --> PRIM["기본형=스택/빠름/null불가 v"]
+    WRAPPER --> BOXING["오토박싱: valueOf()/in"]
+    WRAPPER --> CACHE["Integer 캐시: -128~1"]
+    WRAPPER --> PERF["반복문 박싱 금지 / IntStr"]
+    WRAPPER --> NULL["null 처리: Optional"]
 ```

@@ -20,7 +20,7 @@ Spring Cloud Gateway는 Spring 생태계의 API Gateway 솔루션이다. Netflix
 
 ```mermaid
 graph TD
-    C["클라이언트"] --> GW["API Gateway\n인증·RateLimit·로깅·SSL·LB"]
+    C["클라이언트"] --> GW["API Gateway\n인증·Ra"]
     GW --> R["라우팅"]
     R --> US["User Service"]
     R --> OS["Order Service"]

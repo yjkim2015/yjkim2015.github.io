@@ -52,10 +52,10 @@ Class<?> c = f.getFavorite(Class.class);
 
 ```mermaid
 graph TD
-    A["Favorites 컨테이너"] --> B["키: Class<String>\n값: 'Java'"]
-    A --> C["키: Class<Integer>\n값: 0xcafebabe"]
-    A --> D["키: Class<Class>\n값: Favorites.class"]
-    B --> E["getFavorite(String.class)\n→ 'Java' 반환\n형변환 불필요"]
+    A["Favorites 컨테이너"] --> B["키: Class<String>\n"]
+    A --> C["키: Class<Integer>\"]
+    A --> D["키: Class<Class>\n값"]
+    B --> E["getFavorite(String"]
     style E fill:#51cf66,color:#fff
 ```
 
@@ -161,10 +161,10 @@ static Annotation getAnnotation(AnnotatedElement element, String typeName) {
 
 ```mermaid
 graph TD
-    A["여러 타입을 타입 안전하게\n하나의 컨테이너에 저장"] --> B["타입 안전 이종 컨테이너 패턴"]
-    B --> C["컨테이너가 아닌 키를 매개변수화\nClass<T>를 키로 사용"]
-    C --> D["타입 토큰: String.class, Integer.class 등"]
-    C --> E["type.cast()로 형변환\n비검사 경고 없음"]
+    A["여러 타입을 타입 안전하게\n하나"] --> B["타입 안전 이종 컨테이너 패턴"]
+    B --> C["컨테이너가 아닌 키를 매개변수화\"]
+    C --> D["타입 토큰: String.clas"]
+    C --> E["type.cast()로 형변환\n"]
     style B fill:#51cf66,color:#fff
 ```
 

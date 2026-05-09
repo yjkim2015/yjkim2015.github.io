@@ -46,10 +46,10 @@ E get(int index);
 
 ```mermaid
 graph TD
-    A["메서드 문서화 주석"] --> B["@param\n각 매개변수의 의미\n명사구, 마침표 없음"]
-    A --> C["@return\n반환값의 의미\nvoid가 아닐 때"]
-    A --> D["@throws\n예외 발생 조건\nif ... 절로 시작"]
-    A --> E["본문 첫 문장\n요약 설명\n고유하게 기술"]
+    A["메서드 문서화 주석"] --> B["@param\n각 매개변수의 의미"]
+    A --> C["@return\n반환값의 의미\n"]
+    A --> D["@throws\n예외 발생 조건\"]
+    A --> E["본문 첫 문장\n요약 설명\n고유"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff
@@ -177,8 +177,8 @@ public @interface ExceptionTest {
 
 ```mermaid
 graph TD
-    A["자주 누락되는 API 문서"] --> B["스레드 안전성\n스레드 안전하든 아니든\n안전 수준을 반드시 명시"]
-    A --> C["직렬화 가능성\n직렬화할 수 있는 클래스는\n직렬화 형태도 기술"]
+    A["자주 누락되는 API 문서"] --> B["스레드 안전성\n스레드 안전하든"]
+    A --> C["직렬화 가능성\n직렬화할 수 있는"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#ff6b6b,color:#fff
 ```

@@ -41,11 +41,11 @@ JNI(Java Native Interface)로 C/C++ 코드를 호출할 수 있지만, 자바가
 
 ```mermaid
 graph TD
-    A["네이티브 메서드 단점"] --> B["메모리 안전 위협\n자바의 메모리 보호 밖에 있음\n버퍼 오버플로 등 가능"]
-    A --> C["이식성 저하\n플랫폼을 많이 탐\nWindows 코드가 Linux에서 안 됨"]
-    A --> D["디버깅 어려움\nJVM 디버거로 추적 불가"]
-    A --> E["성능 저하 가능성\n자바↔네이티브 경계 비용\nGC가 네이티브 메모리 추적 못함"]
-    A --> F["코드 복잡도 증가\n접착 코드(glue code) 필요\n가독성 저하"]
+    A["네이티브 메서드 단점"] --> B["메모리 안전 위협\n자바의 메모리"]
+    A --> C["이식성 저하\n플랫폼을 많이 탐\"]
+    A --> D["디버깅 어려움\nJVM 디버거로"]
+    A --> E["성능 저하 가능성\n자바↔네이티브"]
+    A --> F["코드 복잡도 증가\n접착 코드(g"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#ff6b6b,color:#fff
     style D fill:#f39c12,color:#fff

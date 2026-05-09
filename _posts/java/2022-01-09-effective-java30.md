@@ -76,8 +76,8 @@ Number n = sameNumber.apply(42);
 
 ```mermaid
 graph TD
-    A["재귀적 타입 한정\n<E extends Comparable<E>>"] --> B["'모든 E는 자신과 비교 가능하다'"]
-    B --> C["E 원소들끼리 정렬/비교 가능\n→ max, min, sort에 활용"]
+    A["재귀적 타입 한정\n<E exte"] --> B["'모든 E는 자신과 비교 가능하다"]
+    B --> C["E 원소들끼리 정렬/비교 가능\n"]
     style A fill:#4a9eff,color:#fff
 ```
 
@@ -112,9 +112,9 @@ Integer maxNum = max(nums);   // 5
 ```mermaid
 graph TD
     A["메서드 설계"] --> B{"형변환이\n필요한가?"}
-    B -->|"Yes"| C["제네릭 메서드로 변환\n타입 매개변수 추가"]
+    B -->|"Yes"| C["제네릭 메서드로 변환\n타입 매개"]
     B -->|"No"| D["이미 충분히 좋음"]
-    C --> E["클라이언트: 형변환 불필요\n컴파일러: 타입 오류 즉시 발견"]
+    C --> E["클라이언트: 형변환 불필요\n컴파"]
     style C fill:#51cf66,color:#fff
 ```
 

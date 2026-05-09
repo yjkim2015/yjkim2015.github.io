@@ -21,11 +21,11 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    A["전등 제어 객체"] --> B["1️⃣ 전등 켜기\nturnOn()"]
-    A --> C["2️⃣ 전등 끄기\nturnOff()"]
-    A --> D["3️⃣ 밝기 조절\nsetBrightness(int level)"]
+    A["전등 제어 객체"] --> B["1️⃣ 전등 켜기\nturnOn("]
+    A --> C["2️⃣ 전등 끄기\nturnOff"]
+    A --> D["3️⃣ 밝기 조절\nsetBrig"]
     style A fill:#4a9eff,color:#fff
-    Note["내부 구현(PWM, GPIO 핀 번호 등)은 감춰도 됨"]
+    Note["내부 구현(PWM, GPIO 핀"]
 ```
 
 ```java
@@ -54,8 +54,8 @@ light.setBrightness(80);
 
 ```mermaid
 graph TD
-    A["시그니처(Signature)"] --> B["1️⃣ 기능 이름\n메서드명: read()"]
-    A --> C["2️⃣ 파라미터 및 타입\nString filePath"]
+    A["시그니처(Signature)"] --> B["1️⃣ 기능 이름\n메서드명: r"]
+    A --> C["2️⃣ 파라미터 및 타입\nStr"]
     A --> D["3️⃣ 반환 타입\nbyte[]"]
 ```
 
@@ -122,12 +122,12 @@ public class DataFlowController {
 ```mermaid
 graph TD
     subgraph "책임이 작은 설계 (좋음)"
-    A1["FileReader\n- 파일 읽기만"]
+    A1["FileReader\n- 파일 읽"]
     A2["Encryptor\n- 암호화만"]
-    A3["FileWriter\n- 파일 쓰기만"]
+    A3["FileWriter\n- 파일 쓰"]
     end
     subgraph "책임이 큰 설계 (나쁨)"
-    B1["DataManager\n- 파일 읽기\n- 암호화\n- 파일 쓰기\n- 로깅\n- 에러 처리..."]
+    B1["DataManager\n- 파일"]
     end
     style B1 fill:#ff6b6b,color:#fff
 ```
@@ -256,7 +256,7 @@ graph TD
     A["객체지향"] --> B["객체\n시그니처·메시지"]
     A --> C["책임\nSRP: 작을수록 좋다"]
     A --> D["의존\n순환 피하기 DIP"]
-    A --> E["캡슐화\nTell Don't Ask\n데미테르 법칙"]
+    A --> E["캡슐화\nTell Don't As"]
 ```
 
 ---

@@ -45,11 +45,11 @@ graph LR
 
 ```mermaid
 graph TD
-    Client["클라이언트\n(브라우저)"] -->|"1️⃣ CDN Hit: 5~50ms"| CDN["CDN\n(CloudFront, Akamai)\n정적 자원 + API 응답 캐시"]
-    CDN -->|"Miss"| GW["2️⃣ API Gateway\n(Rate Limit + 응답 캐시)\nHit: 1~5ms"]
-    GW -->|"Miss"| L1["3️⃣ L1 Local Cache\n(Caffeine, JVM Heap)\nHit: ~100ns"]
-    L1 -->|"Miss"| L2["4️⃣ L2 Remote Cache\n(Redis Cluster)\nHit: 0.5~2ms"]
-    L2 -->|"Miss"| DB["5️⃣ Database\n(MySQL, PostgreSQL)\n응답: 5~200ms"]
+    Client["클라이언트\n(브라우저)"] -->|"1️⃣ CDN Hit: 5~50m"| CDN["CDN\n(CloudFront,"]
+    CDN -->|"Miss"| GW["2️⃣ API Gateway\n("]
+    GW -->|"Miss"| L1["3️⃣ L1 Local Cache"]
+    L1 -->|"Miss"| L2["4️⃣ L2 Remote Cach"]
+    L2 -->|"Miss"| DB["5️⃣ Database\n(MyS"]
 ```
 
 ### 계층별 특성 비교
@@ -78,11 +78,11 @@ Caffeine은 Google Guava Cache의 후속작으로, W-TinyLFU 알고리즘을 사
 
 ```mermaid
 graph LR
-    New["새 항목"] -->|"1️⃣ Window Cache\n(전체의 1%)"| WC["Window\nLRU"]
+    New["새 항목"] -->|"1️⃣ Window Cache\n"| WC["Window\nLRU"]
     WC -->|"2️⃣ 빈도 비교"| Filter{"TinyLFU\n빈도 필터"}
-    Filter -->|"신규가 더 자주 사용"| Main["Main Cache\n(전체의 99%)"]
+    Filter -->|"신규가 더 자주 사용"| Main["Main Cache\n(전체의 9"]
     Filter -->|"기존이 더 자주 사용"| Evict["신규 항목 폐기"]
-    Main -->|"Probation → Protected"| Main
+    Main -->|"Probation → Protec"| Main
 ```
 
 새로 들어온 항목은 먼저 Window 영역(1%)에 들어간다. Window에서 밀려날 때 TinyLFU 필터가 "이 신규 항목의 접근 빈도"와 "Main 영역에서 쫓겨날 후보의 접근 빈도"를 비교한다. 신규가 더 자주 사용될 것으로 예측되면 Main에 입성하고, 아니면 바로 폐기된다. 이 메커니즘 덕분에 한 번만 접근되는 데이터가 자주 접근되는 데이터를 밀어내는 "cache pollution"을 방지한다.
@@ -511,13 +511,13 @@ public class GatewayCacheConfig {
 
 ```mermaid
 graph TD
-    Total["100K TPS 유입"] --> CDN["CDN Hit 70%\n70,000 TPS\n응답: 10ms"]
-    Total --> GW["Gateway Hit 5%\n5,000 TPS\n응답: 3ms"]
-    Total --> Miss1["CDN+GW Miss\n25,000 TPS"]
-    Miss1 --> L1["L1 Hit 80%\n20,000 TPS\n응답: 0.1ms"]
+    Total["100K TPS 유입"] --> CDN["CDN Hit 70%\n70,00"]
+    Total --> GW["Gateway Hit 5%\n5,"]
+    Total --> Miss1["CDN+GW Miss\n25,00"]
+    Miss1 --> L1["L1 Hit 80%\n20,000"]
     Miss1 --> Miss2["L1 Miss\n5,000 TPS"]
-    Miss2 --> L2["L2 Hit 90%\n4,500 TPS\n응답: 1ms"]
-    Miss2 --> DB["L2 Miss → DB\n500 TPS\n응답: 50ms"]
+    Miss2 --> L2["L2 Hit 90%\n4,500"]
+    Miss2 --> DB["L2 Miss → DB\n500"]
 ```
 
 ### 계층별 부하 분석
@@ -537,11 +537,11 @@ graph TD
 ```mermaid
 graph LR
     subgraph "L1 없을 때"
-        A1["25,000 TPS"] -->|"전부 Redis로"| R1["Redis 25,000 ops/sec\n위험 수준"]
+        A1["25,000 TPS"] -->|"전부 Redis로"| R1["Redis 25,000 ops/s"]
     end
     subgraph "L1 있을 때"
         A2["25,000 TPS"] -->|"80% L1 Hit"| L1["L1에서 20,000 처리"]
-        A2 -->|"20% Miss"| R2["Redis 5,000 ops/sec\n안전 수준"]
+        A2 -->|"20% Miss"| R2["Redis 5,000 ops/se"]
     end
 ```
 
@@ -712,10 +712,10 @@ API 응답에 `Cache-Control: max-age=3600`을 설정해놓고, 긴급 데이터
 ```mermaid
 graph LR
     subgraph "계층별 역할"
-        CDN["CDN\n정적자원, 공개API\n트래픽 70% 흡수"]
-        GW["API Gateway\n인증, Rate Limit\n트래픽 5% 흡수"]
-        L1["L1 Caffeine\nHot 데이터\n네트워크 없이 100ns"]
-        L2["L2 Redis\n공유 캐시\n전 서버 일관성"]
+        CDN["CDN\n정적자원, 공개API\n"]
+        GW["API Gateway\n인증, R"]
+        L1["L1 Caffeine\nHot 데"]
+        L2["L2 Redis\n공유 캐시\n전"]
         DB["DB\n원본 데이터\n최후 방어선"]
     end
     CDN --> GW --> L1 --> L2 --> DB

@@ -108,7 +108,7 @@ public class Connection {
 
 ```mermaid
 graph LR
-    A["Car.getCarByType(type)"] -->|"type=Rent"| B["RentCar (하위 타입)"]
+    A["Car.getCarByType(t"] -->|"type=Rent"| B["RentCar (하위 타입)"]
     A -->|"type=Normal"| C["NormalCar (하위 타입)"]
     D["클라이언트"] -->|"Car 타입만 알면 됨"| A
     style A fill:#4a9eff,color:#fff
@@ -156,10 +156,10 @@ JDBC가 대표적인 예입니다. `DriverManager.getConnection()`은 어떤 DB 
 
 ```mermaid
 graph TD
-    A["서비스 제공자 프레임워크 구성"] --> B["서비스 인터페이스\nConnection (JDBC)"]
-    A --> C["제공자 등록 API\nDriverManager.registerDriver()"]
-    A --> D["서비스 접근 API\nDriverManager.getConnection()"]
-    A --> E["서비스 제공자 인터페이스\nDriver"]
+    A["서비스 제공자 프레임워크 구성"] --> B["서비스 인터페이스\nConnect"]
+    A --> C["제공자 등록 API\nDriver"]
+    A --> D["서비스 접근 API\nDriver"]
+    A --> E["서비스 제공자 인터페이스\nDri"]
     B --> F["MySQLConnection"]
     B --> G["OracleConnection"]
 ```
@@ -218,8 +218,8 @@ graph TD
     B --> B2["인스턴스 캐싱/재사용"]
     B --> B3["하위 타입 반환 (유연성)"]
     B --> B4["매개변수에 따라 다른 클래스 반환"]
-    B --> B5["작성 시점에 반환 클래스 없어도 됨"]
-    C --> C1["상속 불가 (private 생성자)"]
+    B --> B5["작성 시점에 반환 클래스 없어도"]
+    C --> C1["상속 불가 (private 생성자"]
     C --> C2["API 문서에서 찾기 어려움"]
 ```
 

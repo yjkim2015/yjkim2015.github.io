@@ -94,9 +94,9 @@ public class UserService {
 
 ```mermaid
 graph TD
-    A["예외 문서화 원칙"] --> B["검사 예외\n하나씩 throws 선언\n@throws로 발생 조건 기술"]
-    A --> C["비검사 예외\nthrows 목록에 넣지 않음\n@throws 로만 기술\n전제조건 명세 역할"]
-    A --> D["공통 예외\n클래스 설명에 일괄 기술\nNullPointerException 등"]
+    A["예외 문서화 원칙"] --> B["검사 예외\n하나씩 throws"]
+    A --> C["비검사 예외\nthrows 목록에"]
+    A --> D["공통 예외\n클래스 설명에 일괄"]
     style B fill:#51cf66,color:#fff
     style C fill:#f39c12,color:#fff
     style D fill:#51cf66,color:#fff

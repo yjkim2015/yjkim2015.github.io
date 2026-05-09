@@ -56,11 +56,11 @@ public boolean equals(Object o) {
 
 ```mermaid
 graph TD
-    A["equals 5대 규약"] --> B["반사성\nx.equals(x)==true"]
+    A["equals 5대 규약"] --> B["반사성\nx.equals(x)=="]
     A --> C["대칭성\nx==y → y==x"]
-    A --> D["추이성\nx==y,y==z → x==z"]
+    A --> D["추이성\nx==y,y==z → x"]
     A --> E["일관성\n항상 동일 결과"]
-    A --> F["null-아님\nx.equals(null)==false"]
+    A --> F["null-아님\nx.equals("]
 ```
 
 ### 규약 1: 반사성 (Reflexivity)
@@ -104,7 +104,7 @@ graph LR
     C["s.equals(cis)"] -->|"false"| D["String은 CIS 존재를 모름"]
     style A fill:#51cf66,color:#fff
     style C fill:#ff6b6b,color:#fff
-    note["대칭성 위반: A→B true, C→D false"]
+    note["대칭성 위반: A→B true,"]
 ```
 
 **올바른 수정 — 같은 타입끼리만 비교:**
@@ -217,12 +217,12 @@ public boolean equals(Object o) {
 
 ```mermaid
 graph TD
-    A["equals 재정의 주의사항"] --> B["hashCode도 반드시 함께 재정의"]
-    A --> C["매개변수 타입은 반드시 Object"]
+    A["equals 재정의 주의사항"] --> B["hashCode도 반드시 함께 재"]
+    A --> C["매개변수 타입은 반드시 Objec"]
     A --> D["지나치게 복잡하게 만들지 말 것"]
-    B --> B1["Item 11 — HashMap/HashSet 오작동 방지"]
-    C --> C1["Object가 아니면 오버로딩!\n@Override로 반드시 체크"]
-    D --> D1["별칭·심볼릭 링크 비교는 금지\n핵심 필드만 비교"]
+    B --> B1["Item 11 — HashMap/"]
+    C --> C1["Object가 아니면 오버로딩!\"]
+    D --> D1["별칭·심볼릭 링크 비교는 금지\n"]
 ```
 
 **흔한 실수 — 오버라이딩이 아닌 오버로딩:**
@@ -270,10 +270,10 @@ public record PhoneNumber(short areaCode, short prefix, short lineNum) {}
 ```mermaid
 graph TD
     A["equals 재정의 필요한가?"] --> B{"논리적 동치성\n비교가 필요한가?"}
-    B -->|"No"| C["재정의 불필요\nObject.equals 사용"]
+    B -->|"No"| C["재정의 불필요\nObject.eq"]
     B -->|"Yes"| D{"상위 클래스 equals가\n충분한가?"}
-    D -->|"Yes"| E["재정의 불필요\n상속된 equals 사용"]
-    D -->|"No"| F["재정의 필요\n5대 규약 준수 + hashCode도 함께"]
+    D -->|"Yes"| E["재정의 불필요\n상속된 equal"]
+    D -->|"No"| F["재정의 필요\n5대 규약 준수 +"]
     style C fill:#51cf66,color:#fff
     style E fill:#51cf66,color:#fff
     style F fill:#4a9eff,color:#fff

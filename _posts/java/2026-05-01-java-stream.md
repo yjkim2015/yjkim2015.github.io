@@ -68,16 +68,16 @@ List<String> result2 = names.stream()
 ```mermaid
 graph LR
   subgraph "1단계: 소스 (Source)"
-    A["Collection / Array\nStream.of() / I/O 채널"]
+    A["Collection / Array"]
   end
   subgraph "2단계: 중간 연산 (Intermediate)"
-    B["filter → map → flatMap\nsorted → distinct → limit"]
+    B["filter → map → fla"]
   end
   subgraph "3단계: 최종 연산 (Terminal)"
-    C["collect / count\nforEach / reduce\nfindFirst / anyMatch"]
+    C["collect / count\nf"]
   end
-  A -->|"Stream&lt;T&gt; 반환\n지연 실행 (lazy)\n체이닝 가능"| B
-  B -->|"스트림 아님\n즉시 실행 (eager)\n1회만 호출"| C
+  A -->|"Stream&lt;T&gt; 반환"| B
+  B -->|"스트림 아님\n즉시 실행 (eag"| C
 ```
 
 중간 연산과 최종 연산의 차이는 핵심입니다. 중간 연산은 항상 `Stream<T>`를 반환하므로 계속 체이닝할 수 있고, 최종 연산이 호출되기 전까지는 아무것도 실행되지 않습니다. 반면 최종 연산은 스트림이 아닌 실제 결과(List, int, void 등)를 반환하며, 이 시점에 파이프라인 전체가 실행됩니다. 최종 연산이 없으면 파이프라인에 아무리 많은 중간 연산을 걸어도 실행 자체가 되지 않습니다.
