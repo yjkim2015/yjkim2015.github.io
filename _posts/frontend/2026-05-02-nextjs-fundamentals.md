@@ -353,3 +353,128 @@ mindmap
 ```
 
 Next.js는 단순한 React 프레임워크가 아니라 **풀스택 프레임워크**입니다. 렌더링 전략을 페이지별로 다르게 설정할 수 있다는 점이 가장 강력한 기능입니다. "이 페이지가 얼마나 자주 바뀌는가? 사용자별로 다른 데이터가 필요한가?"라는 질문으로 전략을 결정하세요. 대부분의 경우 SSG + ISR 조합이 성능과 신선도의 최선의 균형입니다.
+
+---
+
+## 왜 Next.js인가?
+
+| 프레임워크 | SSR/SSG | App Router | 번들러 내장 | 풀스택 | 학습 곡선 |
+|-----------|--------|-----------|-----------|-------|---------|
+| **Next.js** | 네이티브 지원 | App Router (React Server Components) | Turbopack | API Routes + Server Actions | 중간 |
+| **Remix** | SSR 중심 | 없음 | Vite | Loader/Action | 중간 |
+| **Gatsby** | SSG 중심 | 없음 | Webpack | 플러그인 | 높음 |
+| **Vite + React** | 별도 설정 필요 | 없음 | Vite | 없음 | 낮음 |
+
+SEO가 필요하거나 초기 로딩 성능이 중요한 프로젝트에서 Next.js는 사실상 표준입니다. CSR만으로 충분한 관리자 대시보드라면 Vite + React가 더 단순합니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. 서버 컴포넌트에서 useState/useEffect 사용**
+
+```typescript
+// 에러: Server Component는 브라우저 API, Hook 사용 불가
+// app/page.tsx (기본은 Server Component)
+export default function Page() {
+  const [count, setCount] = useState(0); // Error!
+  return <div>{count}</div>;
+}
+
+// 올바른 방법: 'use client' 지시어 추가
+'use client';
+export default function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
+}
+```
+
+**실수 2. getServerSideProps를 남발해 정적 최적화 포기**
+
+```typescript
+// 불필요: 데이터가 거의 안 바뀌는데 매 요청마다 DB 조회
+export async function getServerSideProps() {
+  const data = await fetchBlogPosts(); // 1시간에 한 번 바뀌는 데이터
+  return { props: { data } };
+}
+
+// 올바른 방법: ISR로 주기적 재생성
+export async function getStaticProps() {
+  const data = await fetchBlogPosts();
+  return { props: { data }, revalidate: 3600 }; // 1시간마다 재생성
+}
+```
+
+**실수 3. Image 컴포넌트 미사용으로 LCP 저하**
+
+```tsx
+// 비최적화: 브라우저가 원본 크기 그대로 다운로드
+<img src="/hero.png" alt="hero" />
+
+// 올바른 방법: Next.js Image로 자동 최적화
+import Image from 'next/image';
+<Image
+  src="/hero.png"
+  alt="hero"
+  width={1200}
+  height={600}
+  priority // LCP 이미지는 priority 필수
+/>
+// WebP 변환, 뷰포트에 맞는 크기 제공, lazy loading 자동 처리
+```
+
+**실수 4. API Route에서 CORS 설정 누락**
+
+```typescript
+// app/api/data/route.ts
+export async function GET() {
+  // CORS 헤더 없음 → 다른 도메인에서 호출 시 차단
+  return Response.json({ data: [] });
+}
+
+// 올바른 방법: middleware.ts에서 CORS 헤더 추가
+export function middleware(request: NextRequest) {
+  const response = NextResponse.next();
+  response.headers.set('Access-Control-Allow-Origin', 'https://app.example.com');
+  return response;
+}
+```
+
+**실수 5. 환경변수 NEXT_PUBLIC_ 접두사 혼동**
+
+```bash
+# NEXT_PUBLIC_ 없음: 서버에서만 접근 가능 (DB 비밀번호 등)
+DATABASE_URL=postgresql://...
+
+# NEXT_PUBLIC_ 있음: 클라이언트 번들에 포함 (공개 API 키만)
+NEXT_PUBLIC_API_URL=https://api.example.com
+```
+
+```typescript
+// 클라이언트에서 DATABASE_URL 접근 시 undefined
+const url = process.env.DATABASE_URL; // 서버: OK, 클라이언트: undefined
+```
+
+---
+
+## 면접 포인트
+
+**Q1. SSR, SSG, ISR, CSR의 차이와 각각 언제 사용하나요?**
+
+SSR(서버사이드 렌더링)은 매 요청마다 서버에서 HTML을 생성합니다. 개인화된 데이터(대시보드, 마이페이지)에 적합합니다. SSG(정적 생성)는 빌드 시 HTML을 미리 생성합니다. 거의 바뀌지 않는 콘텐츠(블로그, 문서)에 최적입니다. ISR(증분 정적 재생성)은 SSG + 주기적 재생성으로 성능과 신선도를 균형합니다. CSR은 클라이언트에서 데이터를 가져오며 SEO가 불필요한 경우에 사용합니다.
+
+**Q2. React Server Components(RSC)와 기존 SSR의 차이는?**
+
+기존 SSR은 전체 페이지를 서버에서 렌더링해 HTML로 보내고, 클라이언트에서 하이드레이션합니다. RSC는 컴포넌트 단위로 서버/클라이언트를 구분합니다. 서버 컴포넌트는 번들에 포함되지 않아 JS 크기를 줄이고, 직접 DB에 접근할 수 있습니다. 클라이언트 컴포넌트(`use client`)만 하이드레이션됩니다. RSC는 스트리밍과 Suspense로 점진적 UI 로딩도 지원합니다.
+
+**Q3. Next.js App Router와 Pages Router의 주요 차이는?**
+
+App Router(Next.js 13+)는 `app/` 디렉토리를 사용하며 React Server Components가 기본입니다. 중첩 레이아웃(`layout.tsx`), Streaming, Server Actions를 지원합니다. Pages Router는 `pages/` 디렉토리를 사용하며 `getServerSideProps`/`getStaticProps`로 데이터를 가져옵니다. 신규 프로젝트는 App Router가 권장이지만, 기존 Pages Router 프로젝트는 혼용도 가능합니다.
+
+**Q4. Next.js에서 SEO를 최적화하는 방법은?**
+
+App Router에서는 `metadata` 객체 또는 `generateMetadata` 함수로 동적 메타태그를 설정합니다. `next/image`로 LCP를 개선하고, `priority` prop으로 첫 화면 이미지를 미리 로드합니다. SSG/ISR로 크롤러가 완성된 HTML을 받도록 합니다. `next-sitemap`으로 sitemap.xml을 자동 생성하고, `robots.txt`를 `app/robots.ts`로 관리합니다.
+
+**Q5. Server Actions란 무엇이며 기존 API Route와 어떻게 다른가요?**
+
+Server Actions는 클라이언트 컴포넌트에서 서버 함수를 직접 호출하는 방식입니다. `'use server'` 지시어를 붙인 함수는 자동으로 API 엔드포인트로 변환됩니다. 폼 제출이나 데이터 변경에서 별도 API Route 없이 서버 로직을 실행할 수 있어 코드가 간결해집니다. 단, 내부적으로 POST 요청을 생성하므로 CSRF 방어가 Next.js에 의해 자동 처리됩니다.

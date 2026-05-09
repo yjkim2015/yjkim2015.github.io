@@ -439,3 +439,127 @@ flowchart LR
 | Concurrent Mode | 중간 | 높음 |
 
 **황금률**: 측정하지 않고 최적화하지 마세요. 추측 기반 최적화는 코드 복잡도만 높이고, 잘못하면 메모이제이션 비용이 절감 효과보다 더 클 수 있습니다. React DevTools Profiler에서 실제로 느린 컴포넌트를 찾은 후에 최적화를 적용하세요.
+
+---
+
+## 왜 React 성능 최적화인가?
+
+| 최적화 기법 | 해결하는 문제 | 적용 난이도 | 효과 |
+|-----------|-----------|-----------|-----|
+| **코드 스플리팅** | 초기 번들 크기 | 낮음 | 초기 로딩 개선 |
+| **React.memo** | 불필요한 리렌더 | 낮음 | 자식 컴포넌트 리렌더 방지 |
+| **useMemo/useCallback** | 계산/함수 재생성 | 낮음 | 참조 안정성 |
+| **가상화(virtualization)** | 대용량 리스트 렌더 | 중간 | 수천 행 처리 |
+| **이미지 최적화** | LCP, 네트워크 | 낮음 | 체감 로딩 속도 |
+| **Concurrent Features** | UI 응답성 | 높음 | 인터랙션 부드러움 |
+
+성능 최적화는 측정 → 병목 식별 → 적용 순서로 진행합니다. React DevTools Profiler, Lighthouse, Web Vitals(LCP/FID/CLS)가 측정 도구입니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. React.memo 없이 모든 자식이 부모 리렌더와 함께 재실행**
+
+```tsx
+// 위험: ParentForm이 리렌더될 때마다 ExpensiveChild도 리렌더
+function ParentForm() {
+  const [input, setInput] = useState('');
+  return (
+    <>
+      <input value={input} onChange={e => setInput(e.target.value)} />
+      <ExpensiveChild /> {/* 입력마다 리렌더 */}
+    </>
+  );
+}
+
+// 올바른 방법: React.memo로 props가 바뀌지 않으면 스킵
+const ExpensiveChild = React.memo(function ExpensiveChild() {
+  return <HeavyVisualization />;
+});
+```
+
+**실수 2. 인라인 함수/객체로 React.memo 무력화**
+
+```tsx
+// 위험: 렌더마다 새 함수/객체 참조 생성 → React.memo 무효
+const MemoChild = React.memo(({ onClick, style }) => <div style={style} onClick={onClick} />);
+
+function Parent() {
+  return (
+    <MemoChild
+      onClick={() => console.log('click')} // 매 렌더마다 새 함수
+      style={{ color: 'red' }}              // 매 렌더마다 새 객체
+    />
+  );
+}
+
+// 올바른 방법
+const handleClick = useCallback(() => console.log('click'), []);
+const style = useMemo(() => ({ color: 'red' }), []);
+```
+
+**실수 3. 대용량 리스트를 가상화 없이 렌더**
+
+```tsx
+// 위험: 10,000개 DOM 노드 생성 → 심각한 성능 저하
+{largeList.map(item => <Row key={item.id} item={item} />)}
+
+// 올바른 방법: react-window로 가시 영역만 렌더
+import { FixedSizeList } from 'react-window';
+<FixedSizeList height={600} itemCount={largeList.length} itemSize={50} width="100%">
+  {({ index, style }) => <Row style={style} item={largeList[index]} />}
+</FixedSizeList>
+```
+
+**실수 4. Lazy loading 미사용으로 초기 번들 비대화**
+
+```tsx
+// 비효율: 사용 전에 모든 페이지 컴포넌트를 즉시 로드
+import AdminDashboard from './AdminDashboard';
+import AnalyticsPage from './AnalyticsPage';
+
+// 올바른 방법: 동적 import로 코드 스플리팅
+const AdminDashboard = lazy(() => import('./AdminDashboard'));
+const AnalyticsPage = lazy(() => import('./AnalyticsPage'));
+
+// Suspense로 로딩 상태 처리
+<Suspense fallback={<Spinner />}>
+  <AdminDashboard />
+</Suspense>
+```
+
+**실수 5. Context 값 변경으로 전체 트리 리렌더**
+
+```tsx
+// 위험: theme과 user가 같은 Context에 있으면 theme 변경 시 user 구독 컴포넌트도 리렌더
+const AppContext = createContext({ theme, user, setTheme, setUser });
+
+// 올바른 방법: 변경 빈도에 따라 Context 분리
+const ThemeContext = createContext({ theme, setTheme });
+const UserContext = createContext({ user, setUser });
+```
+
+---
+
+## 면접 포인트
+
+**Q1. React.memo와 useMemo의 차이는?**
+
+`React.memo`는 컴포넌트를 감싸는 HOC로, props가 이전과 같으면 리렌더를 스킵합니다. `useMemo`는 Hook으로, 계산된 값을 메모이제이션합니다. `useCallback`은 함수를 메모이제이션해 불필요한 재생성을 막습니다. `React.memo`는 자식 컴포넌트 불필요 리렌더 방지에, `useMemo`는 비용이 큰 계산 결과 재사용에, `useCallback`은 `React.memo`로 감싼 자식에게 안정적인 함수 참조를 전달할 때 사용합니다.
+
+**Q2. 리렌더가 발생하는 조건 4가지를 설명하세요.**
+
+(1) `setState` 호출 — 상태 변경. (2) 부모 컴포넌트 리렌더 — 자식은 기본으로 따라서 리렌더. (3) Context 값 변경 — 구독하는 모든 컴포넌트. (4) `forceUpdate` (클래스 컴포넌트). `React.memo`는 (2)번을 방어하고, Context 분리는 (3)번을 최소화합니다.
+
+**Q3. 가상화(Virtualization)가 성능을 개선하는 원리는?**
+
+리스트의 전체 항목을 DOM에 렌더하는 대신, 현재 뷰포트에 보이는 항목만 렌더합니다. 스크롤 위치에 따라 보이지 않는 항목은 DOM에서 제거하고 새로 보이는 항목을 추가합니다. 10,000개 항목이라도 DOM에는 20~30개만 존재하므로 초기 렌더와 스크롤 성능이 극적으로 개선됩니다. `react-window`(경량)와 `react-virtual`(Tanstack)이 주요 라이브러리입니다.
+
+**Q4. Web Vitals에서 LCP, FID(INP), CLS를 React에서 개선하는 방법은?**
+
+LCP(최대 콘텐츠 페인트): 히어로 이미지에 `priority` 설정, 코드 스플리팅으로 JS 파싱 시간 감소, SSR/SSG로 HTML 먼저 전달. INP(인터랙션 응답): `startTransition`으로 무거운 상태 업데이트를 저우선순위로 전환, 이벤트 핸들러에서 동기 블로킹 제거. CLS(레이아웃 이동): 이미지/iframe에 width/height 고정, 동적 콘텐츠에 최소 높이 예약, 폰트 로딩에 `font-display: swap` 사용.
+
+**Q5. `startTransition`은 어떤 문제를 해결하나요?**
+
+검색 입력처럼 타이핑과 동시에 무거운 필터링 결과를 보여줄 때, 필터링 렌더가 타이핑 UI를 블로킹합니다. `startTransition(() => setFilteredList(...))`으로 필터링 업데이트를 낮은 우선순위로 표시하면, React는 타이핑 상태 업데이트를 먼저 처리하고 필터링은 여유가 생길 때 처리합니다. 사용자는 타이핑이 즉각 반응하는 것으로 느낍니다.

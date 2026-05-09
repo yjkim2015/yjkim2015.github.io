@@ -469,3 +469,105 @@ mindmap
 ```
 
 프로토타입은 자바스크립트의 근본 메커니즘입니다. ES6 클래스 문법을 사용하더라도 내부적으로는 프로토타입이 동작합니다. 이를 이해하면 `instanceof`가 어떻게 동작하는지, 메서드를 prototype에 정의하는 것이 왜 성능상 좋은지, 그리고 보안 취약점을 어떻게 방어하는지까지 모두 연결됩니다.
+
+---
+
+## 왜 프로토타입 방식인가?
+
+| 방식 | 메모리 | 동적 확장 | 코드 명확성 | 주요 사용처 |
+|------|--------|----------|-----------|------------|
+| **프로토타입 체인** | 메서드 공유 (효율적) | 런타임 동적 추가 가능 | 낮음 (암묵적 체인) | JS 내부 동작, 라이브러리 |
+| **ES6 클래스** | 프로토타입과 동일 | 가능하나 권장 안 함 | 높음 (명시적 구조) | 현대 애플리케이션 코드 |
+| **믹스인(Mixin)** | 복사 방식, 메모리 증가 | 유연한 조합 | 중간 | 다중 상속 대체 |
+| **클로저 기반** | 인스턴스마다 함수 복사 | 완전한 캡슐화 | 높음 | private 상태 필요 시 |
+
+ES6 클래스는 프로토타입의 문법적 설탕입니다. `class` 키워드를 써도 내부적으로 프로토타입 체인이 동작하므로 두 개념을 모두 이해해야 합니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. 내장 객체 프로토타입 직접 수정**
+
+```javascript
+// 위험: Array.prototype에 추가하면 모든 배열에 영향
+Array.prototype.last = function() { return this[this.length - 1]; };
+// for...in 루프에서 'last'가 열거됨 → 예상치 못한 버그
+
+// 올바른 방법: 유틸 함수로 분리
+const last = (arr) => arr[arr.length - 1];
+```
+
+**실수 2. 외부 입력으로 `__proto__` 오염 (Prototype Pollution)**
+
+```javascript
+// 위험: 공격자가 JSON으로 프로토타입을 오염시킴
+const userInput = JSON.parse('{"__proto__": {"admin": true}}');
+Object.assign({}, userInput); // 모든 객체에 admin: true 전파
+
+// 올바른 방법: 위험 키 필터링 또는 Object.create(null) 사용
+const safe = JSON.parse(input, (key, val) => key === '__proto__' ? undefined : val);
+const map = Object.create(null); // 프로토타입 없는 순수 맵
+```
+
+**실수 3. 생성자 함수에서 메서드를 인스턴스에 직접 정의**
+
+```javascript
+// 비효율: 인스턴스마다 greet 함수 복사 (메모리 낭비)
+function Person(name) {
+  this.name = name;
+  this.greet = function() { return `Hi, ${this.name}`; }; // 매번 새 함수
+}
+
+// 올바른 방법: prototype에 정의해 모든 인스턴스가 공유
+function Person(name) { this.name = name; }
+Person.prototype.greet = function() { return `Hi, ${this.name}`; };
+```
+
+**실수 4. `instanceof` — 다른 Realm 객체에서 오작동**
+
+```javascript
+// iframe이나 다른 창의 배열은 instanceof Array가 false
+const iframe = document.createElement('iframe');
+document.body.appendChild(iframe);
+const iframeArr = new iframe.contentWindow.Array();
+iframeArr instanceof Array; // false! 다른 Array.prototype 체인
+
+// 올바른 방법: Realm에 관계없이 동작하는 방법 사용
+Array.isArray(iframeArr); // true
+Object.prototype.toString.call(iframeArr); // "[object Array]"
+```
+
+**실수 5. 깊은 프로토타입 체인으로 성능 저하**
+
+```javascript
+// 체인이 깊을수록 프로퍼티 탐색 비용 증가 (A→B→C→D→E→Object.prototype)
+// 직접 소유 프로퍼티인지 먼저 확인하면 탐색 단축
+if (Object.prototype.hasOwnProperty.call(obj, 'method')) {
+  obj.method(); // 체인 탐색 없이 바로 확인
+}
+```
+
+---
+
+## 면접 포인트
+
+**Q1. `__proto__`와 `prototype`의 차이를 설명하세요.**
+
+`prototype`은 함수 객체에만 있는 프로퍼티로, `new`로 인스턴스를 만들 때 그 인스턴스의 `[[Prototype]]`에 연결됩니다. `__proto__`는 모든 객체가 가진 내부 슬롯 `[[Prototype]]`에 접근하는 접근자 프로퍼티입니다. `person.__proto__ === Person.prototype`이 성립합니다. 실무에서는 `__proto__` 대신 `Object.getPrototypeOf(obj)`를 사용합니다.
+
+**Q2. ES6 클래스와 프로토타입 기반 생성자 함수의 실질적 차이는?**
+
+기능적으로는 동일하지만 세 가지 차이가 있습니다. (1) 클래스는 호이스팅되지 않습니다 (TDZ 적용). (2) 클래스 내부는 항상 strict mode입니다. (3) 클래스는 `new` 없이 호출하면 TypeError가 발생하지만 생성자 함수는 일반 함수로 실행됩니다. `extends`와 `super`는 프로토타입 체인 연결을 자동으로 처리합니다.
+
+**Q3. `Object.create(null)`을 언제 사용하나요?**
+
+프로토타입이 전혀 없는 순수 딕셔너리가 필요할 때 사용합니다. 일반 `{}`는 `Object.prototype`을 상속받아 `toString`, `hasOwnProperty` 등이 키로 충돌할 수 있습니다. `Object.create(null)`로 만든 객체는 `[[Prototype]]`이 `null`이라 충돌이 없어, 외부 입력을 키로 사용하는 안전한 맵에 활용합니다.
+
+**Q4. 프로토타입 체인에서 프로퍼티 탐색이 멈추는 조건은?**
+
+두 가지입니다. (1) 체인 중 어딘가에서 프로퍼티를 찾으면 즉시 반환합니다 (섀도잉). (2) 체인 끝인 `Object.prototype`의 `[[Prototype]]`은 `null`이며, 여기서도 못 찾으면 `undefined`를 반환합니다. 하위 객체에 같은 이름 프로퍼티를 정의하면 상위를 가리는 섀도잉이 발생합니다.
+
+**Q5. 프로토타입 오염(Prototype Pollution) 공격이란?**
+
+공격자가 `__proto__`나 `constructor.prototype`을 키로 가진 악의적인 데이터를 주입해 `Object.prototype`을 오염시키는 공격입니다. 이후 모든 객체에서 오염된 프로퍼티가 노출됩니다. 방어 방법: `JSON.parse` 결과에서 `__proto__` 키 제거, `Object.create(null)` 사용, `Object.freeze(Object.prototype)`으로 수정 차단입니다.

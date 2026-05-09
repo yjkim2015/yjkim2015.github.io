@@ -467,3 +467,118 @@ graph LR
 ```
 
 Hooks를 올바르게 사용하는 핵심은 두 가지입니다. **의존성 배열을 정확히 관리하고, 불필요한 최적화를 피하는 것.** `useMemo`와 `useCallback`은 실제 성능 문제가 측정되었을 때만 사용하세요. 모든 함수에 `useCallback`을 붙이는 것은 오히려 코드를 복잡하게 만들고, 메모이제이션 비용이 더 클 수 있습니다.
+
+---
+
+## 왜 Hooks인가?
+
+| 방식 | 코드 재사용 | 로직 분리 | 클래스 필요 | React 버전 |
+|------|-----------|---------|-----------|----------|
+| **클래스 컴포넌트** | HOC/render props (복잡) | lifecycle에 분산 | 필요 | 모든 버전 |
+| **Hooks** | Custom Hook으로 간결 | 관심사별 분리 가능 | 불필요 | 16.8+ |
+| **HOC 패턴** | 재사용 가능 | wrapper 중첩 | 불필요 | 모든 버전 |
+
+Hooks 이전에는 상태 로직을 재사용하려면 HOC나 render props로 컴포넌트를 감싸야 했습니다. 이는 "wrapper hell"을 만들고 DevTools에서 추적이 어려웠습니다. Custom Hook은 컴포넌트 트리를 수정하지 않고 로직을 공유합니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. useEffect 의존성 배열 불일치 — stale closure**
+
+```tsx
+// 위험: count가 의존성에 없어 오래된 값(0)을 계속 참조
+const [count, setCount] = useState(0);
+useEffect(() => {
+  const id = setInterval(() => {
+    setCount(count + 1); // 항상 0 + 1 = 1
+  }, 1000);
+  return () => clearInterval(id);
+}, []); // count 누락
+
+// 올바른 방법: 함수형 업데이트로 의존성 제거
+useEffect(() => {
+  const id = setInterval(() => {
+    setCount(prev => prev + 1); // 최신 값 보장
+  }, 1000);
+  return () => clearInterval(id);
+}, []);
+```
+
+**실수 2. useEffect cleanup 미작성으로 메모리 누수**
+
+```tsx
+// 위험: 컴포넌트 언마운트 후에도 구독이 살아있음
+useEffect(() => {
+  const subscription = dataStream.subscribe(setData);
+  // cleanup 없음 → 메모리 누수
+}, []);
+
+// 올바른 방법: cleanup 함수 반환
+useEffect(() => {
+  const subscription = dataStream.subscribe(setData);
+  return () => subscription.unsubscribe(); // 언마운트 시 정리
+}, []);
+```
+
+**실수 3. useCallback/useMemo 과도 사용**
+
+```tsx
+// 불필요: 원시값 메모이제이션은 비용이 이득보다 큼
+const value = useMemo(() => count * 2, [count]); // 단순 계산에 오버킬
+
+// useCallback도 의존 자식이 React.memo로 감싸져 있을 때만 효과
+const handleClick = useCallback(() => {
+  console.log('clicked');
+}, []); // 자식이 React.memo가 아니면 아무 효과 없음
+
+// 올바른 기준: React DevTools Profiler에서 실제 문제 확인 후 적용
+```
+
+**실수 4. useState 초기값에 함수 호출 (lazy initialization 미사용)**
+
+```tsx
+// 비효율: 렌더마다 heavyCompute() 실행 (초기값은 첫 렌더만 필요)
+const [value, setValue] = useState(heavyCompute());
+
+// 올바른 방법: 함수를 전달해 첫 렌더에만 실행
+const [value, setValue] = useState(() => heavyCompute());
+```
+
+**실수 5. useRef를 상태처럼 사용해 리렌더 누락**
+
+```tsx
+// 위험: ref 값 변경은 리렌더를 유발하지 않음
+const countRef = useRef(0);
+const increment = () => {
+  countRef.current++;
+  // UI 업데이트 없음 — ref는 렌더와 무관한 값 저장용
+};
+
+// 리렌더가 필요하면 useState 사용
+// ref는 DOM 참조, 이전 값 저장, 타이머 ID 등에 사용
+```
+
+---
+
+## 면접 포인트
+
+**Q1. useEffect의 실행 시점을 정확히 설명하세요.**
+
+`useEffect`는 렌더링이 완료되고 브라우저가 화면을 그린 후 비동기로 실행됩니다. 의존성 배열이 없으면 매 렌더마다, `[]`이면 최초 마운트 시만, 값이 있으면 해당 값이 변경될 때 실행됩니다. DOM을 읽고 동기적으로 처리해야 한다면 `useLayoutEffect`를 사용합니다 (`useLayoutEffect`는 DOM 변경 후 브라우저 페인트 전에 동기 실행).
+
+**Q2. Custom Hook이 일반 함수와 다른 점은?**
+
+Custom Hook은 이름이 `use`로 시작하고 내부에서 다른 Hook을 호출합니다. 일반 함수는 Hook을 호출할 수 없습니다. Custom Hook은 Hook의 규칙(최상위에서만 호출, 조건부 호출 금지)을 따르므로 React가 Hook 호출 순서를 추적할 수 있습니다. 로직을 Custom Hook으로 추출해도 각 컴포넌트는 독립적인 상태를 가집니다.
+
+**Q3. `useState`의 함수형 업데이트(`setState(prev => ...)`)를 언제 사용해야 하나요?**
+
+이전 상태에 기반해 새 상태를 계산할 때 항상 사용해야 합니다. 비동기 핸들러나 이벤트 핸들러에서 최신 상태를 보장받을 수 있습니다. `setState(count + 1)` 방식은 클로저가 캡처한 `count`를 사용하므로, 배치 처리나 stale closure 상황에서 예상과 다르게 동작할 수 있습니다. `setState(prev => prev + 1)`은 항상 최신 상태를 받아 업데이트합니다.
+
+**Q4. `useReducer`를 `useState` 대신 선택하는 기준은?**
+
+상태 업데이트 로직이 복잡하거나 여러 상태가 함께 변경될 때 `useReducer`가 유리합니다. 구체적으로: (1) 다음 상태가 이전 상태에 복잡하게 의존할 때, (2) 여러 관련 상태를 하나의 객체로 관리할 때, (3) 액션 타입으로 로직을 명시적으로 표현하고 싶을 때, (4) 테스트 시 reducer를 순수 함수로 단독 테스트하고 싶을 때입니다.
+
+**Q5. `useContext`의 성능 문제와 해결 방법은?**
+
+Context 값이 변경되면 해당 Context를 구독하는 **모든** 컴포넌트가 리렌더됩니다. 자주 변경되는 값(카운터, 폼 상태)을 Context에 넣으면 성능 문제가 생깁니다. 해결 방법: (1) Context를 자주 변경되는 것과 안 되는 것으로 분리, (2) 자식 컴포넌트를 `React.memo`로 감싸 불필요한 리렌더 방지, (3) Zustand나 Jotai 같은 상태 관리 라이브러리는 구독한 값이 변경된 컴포넌트만 리렌더합니다.

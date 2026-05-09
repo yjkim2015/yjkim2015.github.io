@@ -464,3 +464,133 @@ queryClient.invalidateQueries({ queryKey: ['users'] });
 ```
 
 상태 관리의 핵심은 **"이 상태를 어디에 두어야 하는가?"** 를 결정하는 것입니다. 로컬 상태는 `useState`, 서버 상태는 `React Query`, 전역 UI 상태는 `Zustand` 또는 `Context`. 이 세 가지 분류만 확실히 이해해도 대부분의 상태 관리 문제를 해결할 수 있습니다. 과도한 라이브러리 도입보다 올바른 상태 분류가 훨씬 중요합니다.
+
+---
+
+## 왜 이 상태 관리 전략인가?
+
+| 라이브러리 | 적합한 상태 | 보일러플레이트 | 번들 크기 | DevTools |
+|-----------|-----------|------------|---------|---------|
+| **useState/useReducer** | 로컬, 단순 | 없음 | 0kb | React DevTools |
+| **Context API** | 전역 UI (변경 적음) | 낮음 | 0kb | 제한적 |
+| **Zustand** | 전역 UI (변경 잦음) | 매우 낮음 | ~1kb | Redux DevTools 호환 |
+| **Redux Toolkit** | 복잡한 전역 상태 | 중간 | ~40kb | Redux DevTools |
+| **React Query** | 서버 상태 | 낮음 | ~13kb | React Query DevTools |
+| **Jotai/Recoil** | 원자적 상태 | 낮음 | ~3kb | 전용 DevTools |
+
+Redux는 대규모 팀에서 예측 가능한 상태 흐름이 필요할 때 여전히 유효합니다. 하지만 소규모 프로젝트에서 Redux 도입은 과도한 복잡도를 만듭니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. 서버 상태를 전역 스토어로 관리**
+
+```tsx
+// 비효율: 서버 데이터를 Redux/Zustand에 저장하면 캐시 동기화, 로딩/에러 상태를 직접 관리
+const usersSlice = createSlice({
+  name: 'users',
+  initialState: { data: [], loading: false, error: null },
+  reducers: { /* 장황한 액션들 */ }
+});
+
+// 올바른 방법: React Query로 서버 상태 분리
+const { data, isLoading, error } = useQuery({
+  queryKey: ['users'],
+  queryFn: fetchUsers,
+  staleTime: 5 * 60 * 1000, // 5분 캐시
+});
+```
+
+**실수 2. Context로 자주 변경되는 상태 관리 — 성능 저하**
+
+```tsx
+// 위험: count가 변경될 때마다 모든 Context 소비자가 리렌더
+const AppContext = createContext({ count, user, theme });
+
+// 올바른 방법 1: 변경 빈도별 Context 분리
+const CountContext = createContext(count);   // 자주 변경
+const UserContext = createContext(user);     // 거의 안 변경
+
+// 올바른 방법 2: Zustand로 교체 — 구독한 값만 리렌더
+const useCountStore = create(set => ({
+  count: 0,
+  increment: () => set(state => ({ count: state.count + 1 })),
+}));
+```
+
+**실수 3. props drilling을 피하려고 모든 것을 전역 상태로**
+
+```tsx
+// 과도: 단일 컴포넌트에서만 쓰는 상태를 전역 스토어에
+// 상태가 어디서 변경되는지 추적 어려움
+
+// 올바른 기준
+// - 한 컴포넌트에서만 사용 → useState
+// - 형제 컴포넌트 공유 → 공통 부모로 lift up
+// - 여러 페이지/컴포넌트 → Zustand/Context
+// - 서버 데이터 → React Query
+```
+
+**실수 4. React Query staleTime 미설정으로 과도한 재요청**
+
+```tsx
+// 기본 staleTime은 0 → 컴포넌트 마운트마다 재요청
+const { data } = useQuery({ queryKey: ['config'], queryFn: fetchConfig });
+
+// 거의 안 바뀌는 데이터는 staleTime을 길게 설정
+const { data } = useQuery({
+  queryKey: ['config'],
+  queryFn: fetchConfig,
+  staleTime: 10 * 60 * 1000,  // 10분간 신선
+  gcTime: 30 * 60 * 1000,     // 30분간 캐시 유지 (구 cacheTime)
+});
+```
+
+**실수 5. optimistic update 없이 UX 저하**
+
+```tsx
+// 느린 UX: 서버 응답을 기다린 후 UI 업데이트
+const mutation = useMutation({
+  mutationFn: updateTodo,
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['todos'] }),
+});
+
+// 빠른 UX: 즉시 낙관적 업데이트 후 실패 시 롤백
+const mutation = useMutation({
+  mutationFn: updateTodo,
+  onMutate: async (newTodo) => {
+    await queryClient.cancelQueries({ queryKey: ['todos'] });
+    const previous = queryClient.getQueryData(['todos']);
+    queryClient.setQueryData(['todos'], old => [...old, newTodo]);
+    return { previous };
+  },
+  onError: (err, newTodo, context) => {
+    queryClient.setQueryData(['todos'], context.previous); // 롤백
+  },
+});
+```
+
+---
+
+## 면접 포인트
+
+**Q1. 서버 상태와 클라이언트 상태를 분리해야 하는 이유는?**
+
+서버 상태는 원본이 서버에 있고 여러 클라이언트가 공유하며 언제든 변경될 수 있습니다. 캐싱, 재요청, 동기화, 로딩/에러 처리가 필요합니다. 클라이언트 상태는 오직 UI에만 존재하며 서버와 무관합니다 (모달 열림 여부, 테마 등). 이 둘을 같은 스토어에 섞으면 캐시 무효화 로직이 복잡해지고 UI 상태와 서버 데이터가 뒤엉킵니다. React Query가 서버 상태 전용 레이어를 담당하면 전역 스토어는 순수한 UI 상태만 관리합니다.
+
+**Q2. Zustand가 Redux보다 간단한 이유는?**
+
+Redux는 Action → Reducer → Store의 단방향 흐름을 강제하고, 미들웨어(Thunk/Saga)로 비동기를 처리합니다. Boilerplate(액션 타입 상수, 액션 생성자, 리듀서)가 많습니다. Zustand는 스토어를 단순한 객체와 함수로 정의하고, 비동기도 함수 안에서 직접 처리합니다. Redux의 구조적 강제가 필요 없는 중소규모 프로젝트에서 Zustand가 훨씬 실용적입니다.
+
+**Q3. React Query의 staleTime과 gcTime(cacheTime)의 차이는?**
+
+`staleTime`은 데이터를 "신선"으로 간주하는 시간입니다. 이 시간 내에는 동일 쿼리가 재마운트되어도 서버 요청을 보내지 않습니다. `gcTime`(구 `cacheTime`)은 쿼리가 더 이상 사용되지 않을 때 캐시를 메모리에서 제거하는 시간입니다. 기본값: `staleTime=0`(즉시 stale), `gcTime=5분`. 변경이 드문 데이터는 `staleTime`을 늘려 불필요한 요청을 줄입니다.
+
+**Q4. 상태를 어느 레벨에 두어야 하는지 결정하는 기준은?**
+
+"이 상태를 필요로 하는 컴포넌트의 공통 최상위 조상이 어디인가"입니다. 단일 컴포넌트만 필요하면 그 컴포넌트 내 `useState`. 형제 컴포넌트 간 공유라면 공통 부모로 lift up. 여러 페이지에서 필요하면 전역 스토어(Zustand/Context). 서버에서 오는 데이터라면 React Query. "모든 것을 전역"과 "모든 것을 로컬" 양 극단을 피하고 최소 필요 범위를 선택합니다.
+
+**Q5. React Query의 `invalidateQueries`와 `setQueryData`의 차이와 사용 시점은?**
+
+`invalidateQueries`는 캐시를 무효화해 다음 사용 시 서버에서 재요청합니다. 데이터 변경 후 최신 서버 상태가 필요할 때 사용합니다. `setQueryData`는 서버 요청 없이 캐시를 직접 업데이트합니다. Optimistic update에서 즉시 UI를 업데이트하거나, 이미 가진 데이터로 캐시를 채울 때 사용합니다. 일반적으로 mutation 성공 후 `invalidateQueries`를 쓰고, 빠른 UX가 필요하면 `onMutate`에서 `setQueryData`로 낙관적 업데이트를 조합합니다.

@@ -497,3 +497,130 @@ mindmap
 5. **렌더링은 태스크 사이에** — requestAnimationFrame 활용
 
 이벤트 루프를 완전히 이해하면 비동기 코드의 동작을 정확히 예측하고, "왜 setTimeout 0이어도 늦게 실행되지?"같은 의문이 모두 해소됩니다.
+
+---
+
+## 왜 이벤트 루프 방식인가?
+
+다른 동시성 모델과 비교하면 자바스크립트가 왜 이 방식을 선택했는지 이해할 수 있습니다.
+
+| 모델 | 동시성 방식 | 장점 | 단점 |
+|------|-----------|------|------|
+| **이벤트 루프 (JS)** | 단일 스레드 + 비동기 큐 | 락/경쟁 조건 없음, 메모리 낮음 | CPU 집중 작업에 취약 |
+| **멀티스레드 (Java)** | 스레드 병렬 실행 | CPU 바운드 작업 강력 | 락/데드락/경쟁 조건 복잡 |
+| **Web Worker** | 별도 스레드, 메시지 통신 | CPU 작업 분리 가능 | DOM 접근 불가, 통신 오버헤드 |
+| **SharedArrayBuffer** | 공유 메모리 + Atomics | 스레드 간 빠른 데이터 공유 | Spectre 보안 제한, 복잡성 높음 |
+
+UI가 중심인 브라우저 환경에서 **락 없는 단일 스레드**는 예측 가능성과 안정성을 극대화합니다. CPU 집중 작업은 Web Worker로 분리하는 것이 정석입니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. 무한 마이크로태스크로 UI 완전 동결**
+
+```javascript
+// 위험: Promise 체인이 끊이지 않으면 렌더링이 영원히 안 됨
+function loop() {
+  Promise.resolve().then(loop); // 마이크로태스크 큐를 계속 채움
+}
+loop();
+
+// 올바른 방법: setTimeout으로 태스크 큐에 넘겨 렌더링 기회 부여
+function loop() {
+  setTimeout(loop, 0);
+}
+```
+
+**실수 2. 동기 루프로 메인 스레드 블로킹**
+
+```javascript
+// 위험: 수백만 건 루프가 이벤트 루프를 점령
+for (let i = 0; i < 10_000_000; i++) {
+  heavyCalc(i);
+}
+
+// 올바른 방법: 청크 분할 + setTimeout으로 제어권 반환
+function processChunk(data, index = 0) {
+  const chunk = data.slice(index, index + 1000);
+  chunk.forEach(heavyCalc);
+  if (index + 1000 < data.length) {
+    setTimeout(() => processChunk(data, index + 1000), 0);
+  }
+}
+```
+
+**실수 3. async 함수 안에서 동기 블로킹 호출**
+
+```javascript
+// 위험: async라고 해서 동기 코드가 비동기가 되진 않음
+async function fetchAndProcess() {
+  const data = await fetch('/api/data');
+  const result = data.json(); // 이 줄은 동기 — CPU 집중 시 블로킹
+  return heavyTransform(result); // 무거운 변환이면 UI 멈춤
+}
+
+// 올바른 방법: 무거운 처리는 Web Worker로
+const worker = new Worker('transform.worker.js');
+worker.postMessage(data);
+```
+
+**실수 4. setTimeout(fn, 0)의 최소 딜레이 오해**
+
+```javascript
+// 브라우저는 최소 1ms (중첩 5단계 이상이면 4ms) 딜레이가 있음
+// "즉시 실행"이 아니라 "현재 태스크 완료 후 가능한 빨리"
+setTimeout(() => console.log('빠름'), 0);
+Promise.resolve().then(() => console.log('더 빠름')); // 마이크로태스크가 먼저
+```
+
+**실수 5. requestAnimationFrame 타이밍 오해**
+
+```javascript
+// 위험: rAF 안에서 레이아웃 강제 발생 (Forced Reflow)
+function animate() {
+  const height = element.offsetHeight; // 레이아웃 읽기
+  element.style.height = height + 1 + 'px'; // 레이아웃 쓰기
+  requestAnimationFrame(animate);
+}
+
+// 올바른 방법: 읽기/쓰기 분리
+function animate() {
+  const height = element.offsetHeight; // 먼저 읽기
+  requestAnimationFrame(() => {
+    element.style.height = height + 1 + 'px'; // 다음 프레임에 쓰기
+  });
+}
+```
+
+---
+
+## 면접 포인트
+
+**Q1. 마이크로태스크와 태스크(매크로태스크)의 차이를 설명하고, 실행 순서를 코드로 보여주세요.**
+
+마이크로태스크(Promise `.then`, `queueMicrotask`, `MutationObserver`)는 현재 태스크가 끝나면 즉시, 다음 태스크 전에 모두 실행됩니다. 태스크(setTimeout, setInterval, I/O)는 매번 이벤트 루프 한 사이클에 하나씩 실행됩니다.
+
+```javascript
+console.log('1');
+setTimeout(() => console.log('2'), 0);   // 태스크 큐
+Promise.resolve().then(() => console.log('3')); // 마이크로태스크
+console.log('4');
+// 출력: 1 → 4 → 3 → 2
+```
+
+**Q2. `async/await`와 Promise `.then()`의 실행 순서가 다른 경우가 있나요?**
+
+`await`는 내부적으로 Promise `.then()`으로 변환되지만, 스펙 변경(V8 최적화)으로 `async/await`가 때로 `.then()` 체인보다 마이크로태스크를 하나 적게 소비합니다. 실무에서 순서 차이가 문제가 될 경우 `queueMicrotask`로 명시적으로 제어합니다.
+
+**Q3. Web Worker와 이벤트 루프의 관계는?**
+
+Web Worker는 별도 스레드에서 자체 이벤트 루프를 가집니다. 메인 스레드와 `postMessage`/`onmessage`로 통신하며, 데이터는 구조적 복제(Structured Clone)로 전달됩니다. DOM에는 접근할 수 없고, CPU 집중 작업을 메인 스레드에서 분리하는 데 사용합니다.
+
+**Q4. Node.js 이벤트 루프와 브라우저 이벤트 루프의 차이는?**
+
+Node.js는 libuv 기반으로 6단계 페이즈(timers → I/O → idle → poll → check → close)를 순환합니다. `process.nextTick`은 어느 페이즈든 현재 페이즈 직후 실행되는 특수 큐입니다. 브라우저에는 `process.nextTick`이 없고, Node.js에는 `requestAnimationFrame`이 없습니다.
+
+**Q5. 이벤트 루프를 이용해 무거운 작업을 UI 블로킹 없이 처리하는 방법은?**
+
+세 가지 접근법이 있습니다. (1) **청크 분할 + setTimeout**: 작업을 작은 단위로 나눠 매 청크 후 `setTimeout(fn, 0)`으로 이벤트 루프에 제어권 반환. (2) **Web Worker**: CPU 집중 작업을 별도 스레드로 완전히 분리. (3) **`scheduler.postTask`(현대 브라우저)**: 우선순위 기반 태스크 스케줄링으로 중요한 UI 작업에 높은 우선순위 부여.

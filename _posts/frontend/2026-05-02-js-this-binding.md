@@ -599,3 +599,136 @@ flowchart LR
 5. **fn()**: window (엄격 모드: undefined)
 
 `this`가 헷갈릴 때마다 위 순서대로 체크해 보세요. "이 함수가 화살표 함수인가? → new인가? → call/apply/bind인가? → 점 앞에 뭔가 있나? → 없으면 전역" — 이 5개 질문으로 반드시 답을 찾을 수 있습니다.
+
+---
+
+## 왜 동적 this 바인딩인가?
+
+| 방식 | this 결정 시점 | 특징 | 사용 언어/방식 |
+|------|-------------|------|-------------|
+| **JS 동적 바인딩** | 호출 시점 | 유연하지만 예측 어려움 | JavaScript (일반 함수) |
+| **화살표 함수** | 정의 시점 (렉시컬) | 예측 가능, 메서드엔 부적합 | JavaScript (ES6+) |
+| **Python self** | 항상 명시적 전달 | 명확하지만 장황 | Python |
+| **Java this** | 항상 인스턴스 고정 | 단순, 유연성 없음 | Java |
+
+동적 바인딩은 동일한 메서드를 여러 객체가 공유할 수 있어 유연하지만, 콜백 등 맥락이 바뀌는 상황에서 버그를 만들기 쉽습니다. 화살표 함수와 `bind`로 명시적 바인딩을 적극 활용하는 것이 현대 JavaScript의 정석입니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. 콜백에서 this 소실**
+
+```javascript
+class Timer {
+  constructor() { this.count = 0; }
+  start() {
+    setInterval(function() {
+      this.count++; // this는 window (또는 undefined in strict mode)
+    }, 1000);
+  }
+}
+
+// 올바른 방법 1: 화살표 함수
+start() {
+  setInterval(() => { this.count++; }, 1000); // 외부 this 캡처
+}
+// 올바른 방법 2: bind
+start() {
+  setInterval(function() { this.count++; }.bind(this), 1000);
+}
+```
+
+**실수 2. 메서드를 변수에 할당할 때 this 소실**
+
+```javascript
+const obj = { name: 'Kim', greet() { return this.name; } };
+const greet = obj.greet; // 메서드 참조만 꺼냄
+greet(); // undefined — this가 전역(또는 undefined)
+
+// 올바른 방법: bind로 고정
+const greet = obj.greet.bind(obj);
+greet(); // 'Kim'
+```
+
+**실수 3. 화살표 함수를 객체 메서드로 사용**
+
+```javascript
+const obj = {
+  name: 'Kim',
+  greet: () => { return this.name; } // this는 외부(전역) 스코프
+};
+obj.greet(); // undefined
+
+// 올바른 방법: 일반 함수 메서드
+const obj = {
+  name: 'Kim',
+  greet() { return this.name; } // 호출 시 obj가 this
+};
+```
+
+**실수 4. 이벤트 핸들러에서 화살표 함수와 일반 함수 혼동**
+
+```javascript
+// 일반 함수: this = 이벤트 타겟 요소
+button.addEventListener('click', function() {
+  console.log(this); // <button>
+});
+
+// 화살표 함수: this = 외부 스코프 (컴포넌트 인스턴스 등)
+button.addEventListener('click', () => {
+  console.log(this); // 외부 this (클래스라면 인스턴스)
+});
+// React 클래스 컴포넌트 핸들러에는 화살표 함수가 올바른 선택
+```
+
+**실수 5. call/apply/bind 혼동**
+
+```javascript
+function greet(greeting, punct) {
+  return `${greeting}, ${this.name}${punct}`;
+}
+const obj = { name: 'Kim' };
+
+greet.call(obj, 'Hello', '!');   // 즉시 실행, 인수 나열
+greet.apply(obj, ['Hello', '!']); // 즉시 실행, 인수 배열
+const bound = greet.bind(obj, 'Hello'); // 새 함수 반환, 나중에 실행
+bound('!'); // 'Hello, Kim!'
+```
+
+---
+
+## 면접 포인트
+
+**Q1. 화살표 함수의 this가 일반 함수와 다른 이유를 설명하세요.**
+
+일반 함수는 `this`가 호출 시점에 동적으로 결정됩니다. 화살표 함수는 `this`가 없어 자신을 감싼 외부 스코프의 `this`를 렉시컬로 캡처합니다. 이를 "렉시컬 this"라고 합니다. 화살표 함수는 `call`, `apply`, `bind`로 `this`를 바꿀 수 없습니다.
+
+**Q2. React 클래스 컴포넌트에서 핸들러를 바인딩하는 세 가지 방법과 각 단점은?**
+
+(1) 생성자에서 `this.handleClick = this.handleClick.bind(this)` — 보일러플레이트 많음. (2) 화살표 함수 클래스 필드 `handleClick = () => {}` — 인스턴스마다 함수 생성 (메모리). (3) JSX 인라인 `onClick={() => this.handleClick()}` — 렌더마다 새 함수 생성, 자식 리렌더 유발. 현대 React에서는 함수형 컴포넌트 + `useCallback`이 표준입니다.
+
+**Q3. `call`, `apply`, `bind`의 차이와 각각의 사용 시나리오는?**
+
+`call`은 즉시 실행하며 인수를 쉼표로 나열합니다. `apply`는 즉시 실행하며 인수를 배열로 전달합니다 (스프레드 이전에 가변 인수 전달에 활용). `bind`는 새 함수를 반환하며 나중에 실행합니다. 이벤트 핸들러 등록, 부분 적용(Partial Application)에 활용합니다.
+
+**Q4. strict mode에서 this의 동작이 다른 이유는?**
+
+strict mode가 아닐 때 일반 함수 호출에서 `this`는 전역 객체(`window`)입니다. strict mode에서는 `this`가 `undefined`입니다. 이는 의도치 않은 전역 오염을 방지하기 위한 설계입니다. ES6 모듈은 기본적으로 strict mode이므로 모듈에서 일반 함수의 `this`는 항상 `undefined`입니다.
+
+**Q5. 다음 코드의 출력을 예측하세요.**
+
+```javascript
+const obj = {
+  name: 'A',
+  outer() {
+    const inner = () => { console.log(this.name); };
+    inner();
+  }
+};
+obj.outer(); // 'A' — 화살표 inner는 outer의 this(obj)를 캡처
+const fn = obj.outer;
+fn(); // undefined — fn() 호출 시 this는 전역, outer의 this가 전역이 됨
+```
+
+호출 체인 전체를 추적해 `this`를 결정해야 합니다.

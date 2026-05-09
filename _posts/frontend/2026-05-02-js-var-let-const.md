@@ -489,3 +489,110 @@ mindmap
 ```
 
 현대 자바스크립트에서는 `var`를 사용할 이유가 없습니다. `const`를 기본으로 사용하고, 재할당이 필요한 경우에만 `let`을 사용하세요. 이 원칙을 따르면 코드가 의도를 명확하게 전달하고, 예측하기 어려운 버그도 사전에 방지할 수 있습니다.
+
+---
+
+## 왜 let/const인가?
+
+| 특성 | `var` | `let` | `const` |
+|------|-------|-------|---------|
+| **스코프** | 함수 스코프 | 블록 스코프 | 블록 스코프 |
+| **호이스팅** | 선언+초기화(undefined) | 선언만 (TDZ) | 선언만 (TDZ) |
+| **재선언** | 가능 | 불가 | 불가 |
+| **재할당** | 가능 | 가능 | 불가 |
+| **전역 객체 프로퍼티** | window.x 생성 | 생성 안 함 | 생성 안 함 |
+
+`var`의 함수 스코프와 호이스팅은 의도치 않은 버그의 원인입니다. `let`/`const`의 블록 스코프와 TDZ는 이런 문제를 컴파일 시점에 잡아줍니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. var의 루프 변수 공유 문제**
+
+```javascript
+// 위험: 모든 클로저가 같은 var i를 참조
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0); // 3, 3, 3
+}
+
+// 올바른 방법: let으로 각 반복마다 새 바인딩 생성
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0); // 0, 1, 2
+}
+```
+
+**실수 2. TDZ(Temporal Dead Zone) 오류 무시**
+
+```javascript
+// 에러: let/const는 선언 전 접근 시 ReferenceError
+console.log(x); // ReferenceError: Cannot access 'x' before initialization
+let x = 5;
+
+// var는 undefined로 조용히 실패해 버그 추적이 어려움
+console.log(y); // undefined (에러 없음 — 위험한 동작)
+var y = 5;
+```
+
+**실수 3. const는 불변(immutable)이 아님을 혼동**
+
+```javascript
+const arr = [1, 2, 3];
+arr.push(4);       // 가능! 배열 내용 변경은 허용
+arr = [1, 2, 3, 4]; // TypeError: const는 재할당 불가
+
+const obj = { name: 'Kim' };
+obj.name = 'Lee';  // 가능! 객체 프로퍼티 변경은 허용
+Object.freeze(obj); // 완전한 불변이 필요하면 freeze 사용
+```
+
+**실수 4. 블록 스코프 무시로 변수 누출**
+
+```javascript
+// var는 if 블록을 탈출해 외부에서 접근 가능
+if (true) {
+  var secret = 'hidden';
+}
+console.log(secret); // 'hidden' — 의도치 않은 노출
+
+// let은 블록 스코프로 안전하게 격리
+if (true) {
+  let secret = 'hidden';
+}
+console.log(secret); // ReferenceError
+```
+
+**실수 5. 전역 var가 window 프로퍼티를 오염**
+
+```javascript
+var globalName = 'Kim';
+console.log(window.globalName); // 'Kim' — 전역 객체 오염
+
+// 3rd-party 라이브러리의 전역 변수와 충돌 가능
+let safeName = 'Kim';
+console.log(window.safeName); // undefined — 안전
+```
+
+---
+
+## 면접 포인트
+
+**Q1. 호이스팅이 var와 let/const에서 다르게 동작하는 이유는?**
+
+모든 선언(var, let, const, function)은 스코프 최상단으로 호이스팅됩니다. 차이는 초기화 시점입니다. `var`는 호이스팅 시 `undefined`로 초기화됩니다. `let`/`const`는 호이스팅되지만 초기화되지 않아 선언 라인에 도달할 때까지 접근하면 TDZ(Temporal Dead Zone)에 의해 `ReferenceError`가 발생합니다. TDZ는 선언 전 사용이라는 논리적 오류를 런타임에서 잡아주는 안전망입니다.
+
+**Q2. TDZ(Temporal Dead Zone)란 무엇이며 왜 존재하나요?**
+
+TDZ는 변수가 스코프에 진입한 시점부터 선언 라인에 도달하기 전까지의 구간입니다. 이 구간에서 변수에 접근하면 `ReferenceError`가 발생합니다. `var`의 "선언 전 접근 시 undefined"는 조용히 실패해 버그 추적을 어렵게 만들었습니다. TDZ는 이를 명시적 오류로 전환해 개발자가 즉시 문제를 인식하도록 설계되었습니다.
+
+**Q3. for 루프에서 var와 let의 클로저 동작 차이를 설명하세요.**
+
+`var`는 함수 스코프이므로 루프의 모든 반복이 같은 `i` 변수를 공유합니다. 콜백이 실행될 때 이미 루프가 끝나 `i`는 최종값입니다. `let`은 블록 스코프이므로 각 반복마다 새로운 `i` 바인딩이 생성됩니다. 각 클로저가 독립적인 `i`를 캡처하므로 0, 1, 2가 출력됩니다.
+
+**Q4. const를 기본으로 사용해야 하는 이유는?**
+
+`const`는 변수가 재할당되지 않음을 명시적으로 선언합니다. 코드 읽는 사람이 해당 변수의 참조가 바뀌지 않음을 즉시 알 수 있습니다. 또한 잘못된 재할당을 컴파일 시점에 에러로 잡아줍니다. 객체/배열의 경우 참조는 고정되지만 내용은 변경 가능하므로, 완전한 불변이 필요하면 `Object.freeze()`를 함께 사용합니다.
+
+**Q5. var가 여전히 쓰이는 상황이 있나요?**
+
+거의 없습니다. 레거시 브라우저 지원이 필요한 오래된 코드베이스나, 트랜스파일 없이 실행되는 환경에서 함수 스코프가 의도적으로 필요한 드문 경우 외에는 `var`를 쓸 이유가 없습니다. 현대 JavaScript(ES6+)에서는 `const`를 기본으로, 재할당이 필요한 경우에만 `let`을 사용하는 것이 표준입니다.

@@ -349,3 +349,130 @@ mindmap
 ```
 
 NestJS는 **Angular에서 영감을 받은 아키텍처**로, 규모가 커져도 유지보수 가능한 백엔드를 만들기 위한 강제적인 구조를 제공합니다. 처음에는 보일러플레이트가 많다고 느낄 수 있습니다. 하지만 팀이 커지고 기능이 복잡해질수록, 이 구조가 있느냐 없느냐의 차이는 엄청납니다. 6개월 후의 자신을 위해 구조를 투자하는 것입니다.
+
+---
+
+## 왜 NestJS인가?
+
+| 프레임워크 | 구조 강제 | TypeScript | DI 컨테이너 | 학습 곡선 | 적합한 규모 |
+|-----------|---------|-----------|------------|---------|-----------|
+| **Express** | 없음 | 선택 | 없음 | 낮음 | 소규모, 프로토타입 |
+| **Fastify** | 없음 | 선택 | 없음 | 낮음 | 고성능 소규모 |
+| **NestJS** | 강제 (Module/Controller/Service) | 기본 | 내장 | 높음 | 중~대규모 팀 |
+| **Hapi** | 중간 | 선택 | 플러그인 | 중간 | 중규모 |
+
+NestJS는 구조가 없어서 생기는 혼돈을 방지합니다. 팀원이 어디에 코드를 두어야 할지 고민할 필요가 없고, 코드 리뷰에서 구조 논쟁이 사라집니다. Express는 자유롭지만 5명 이상 팀에서 일관성 유지가 어렵습니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1. Service를 Controller에 직접 new로 생성**
+
+```typescript
+// 위험: DI를 우회해 테스트 불가, 싱글톤 보장 없음
+@Controller('users')
+export class UsersController {
+  private usersService = new UsersService(); // DI 컨테이너 미사용
+}
+
+// 올바른 방법: 생성자 주입
+@Controller('users')
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+}
+```
+
+**실수 2. Module imports 누락으로 "Cannot resolve dependency" 에러**
+
+```typescript
+// 에러: OrdersModule에서 UsersService를 쓰려면 UsersModule을 import해야 함
+@Module({
+  controllers: [OrdersController],
+  providers: [OrdersService], // UsersService 미포함 → 에러
+})
+export class OrdersModule {}
+
+// 올바른 방법: UsersModule을 imports에 추가
+@Module({
+  imports: [UsersModule], // UsersModule이 UsersService를 exports해야 함
+  controllers: [OrdersController],
+  providers: [OrdersService],
+})
+export class OrdersModule {}
+```
+
+**실수 3. Guard와 Interceptor, Middleware의 역할 혼동**
+
+```typescript
+// Middleware: 요청/응답 객체 수정, 로깅 — NestJS 컨텍스트 없음
+// Guard: 인증/인가 — true/false 반환, 실행 컨텍스트 접근 가능
+// Interceptor: 응답 변환, 캐싱, 실행 시간 측정 — before + after 처리
+// Pipe: 입력 유효성 검사 및 변환
+
+// 인증은 Guard, 응답 포맷 통일은 Interceptor, 입력 검증은 Pipe
+@UseGuards(JwtAuthGuard)
+@UseInterceptors(TransformInterceptor)
+@UsePipes(ValidationPipe)
+async getUser() {}
+```
+
+**실수 4. TypeORM N+1 문제 방치**
+
+```typescript
+// 위험: 유저마다 orders를 별도 쿼리로 로드 (N+1)
+const users = await this.usersRepo.find();
+for (const user of users) {
+  user.orders = await this.ordersRepo.find({ where: { userId: user.id } });
+}
+
+// 올바른 방법: relations로 JOIN 한 번에 처리
+const users = await this.usersRepo.find({
+  relations: { orders: true },
+});
+// 또는 QueryBuilder로 명시적 JOIN
+```
+
+**실수 5. Global Exception Filter 없이 에러 응답 불일치**
+
+```typescript
+// 각 컨트롤러마다 try/catch 중복, 에러 포맷 제각각
+
+// 올바른 방법: 전역 Exception Filter로 통일
+@Catch()
+export class AllExceptionsFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const status = exception instanceof HttpException
+      ? exception.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+    response.status(status).json({ statusCode: status, message: '...' });
+  }
+}
+// main.ts: app.useGlobalFilters(new AllExceptionsFilter());
+```
+
+---
+
+## 면접 포인트
+
+**Q1. NestJS의 DI(의존성 주입)가 왜 테스트에 유리한가요?**
+
+DI 컨테이너가 의존성을 외부에서 주입하므로 테스트 시 실제 구현 대신 Mock을 주입할 수 있습니다. `Test.createTestingModule()`로 테스트 모듈을 만들고, `{ provide: UsersService, useValue: mockUsersService }`로 Mock을 교체합니다. 데이터베이스 연결 없이 순수한 비즈니스 로직만 단위 테스트할 수 있습니다.
+
+**Q2. NestJS의 실행 파이프라인 순서를 설명하세요.**
+
+요청이 들어오면 순서대로: Middleware → Guard → Interceptor(before) → Pipe → Controller Handler → Interceptor(after) → Exception Filter(에러 시). Guard에서 false를 반환하면 403, Pipe에서 검증 실패 시 400, Exception Filter가 나머지 에러를 처리합니다.
+
+**Q3. `@Module()` decorator의 imports와 providers의 차이는?**
+
+`providers`는 현재 모듈 내에서 DI 컨테이너에 등록할 클래스입니다. `imports`는 다른 모듈을 가져와 그 모듈이 `exports`한 providers를 현재 모듈에서 사용할 수 있게 합니다. 다른 모듈의 Service를 사용하려면 그 모듈이 `exports`에 Service를 등록하고, 사용하는 모듈이 `imports`에 그 모듈을 추가해야 합니다.
+
+**Q4. Interceptor로 응답 포맷을 통일하는 방법은?**
+
+`NestInterceptor`를 구현하고 `intercept(context, next)`에서 `next.handle().pipe(map(data => ({ success: true, data })))`로 모든 응답을 래핑합니다. `APP_INTERCEPTOR` 토큰으로 전역 등록하면 모든 엔드포인트에 자동 적용됩니다. Exception Filter와 조합해 성공/실패 응답 포맷을 완전히 통일합니다.
+
+**Q5. NestJS와 Express를 혼용할 수 있나요?**
+
+가능합니다. NestJS는 기본적으로 Express 위에서 동작하므로 `app.use()`로 Express 미들웨어를 그대로 사용할 수 있습니다. `@nestjs/platform-fastify`로 교체하면 Fastify 기반으로 전환됩니다. 단, Fastify로 교체 시 Express 전용 미들웨어는 호환되지 않을 수 있습니다. 기존 Express 미들웨어 생태계 활용이 필요하면 플랫폼을 Express로 유지합니다.
