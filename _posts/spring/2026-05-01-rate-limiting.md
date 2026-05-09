@@ -22,14 +22,10 @@ API를 운영하다 보면 특정 클라이언트가 초당 수천 건의 요청
 
 ```mermaid
 graph TD
-    subgraph BEFORE["Rate Limiting 미적용"]
-        A1["공격자"] -->|"10,000 req/s"| S1["서버 다운"]
-    end
-    subgraph AFTER["Rate Limiting 적용 후"]
-        A2["공격자"] -->|"10,000 req/s"| RL["Rate Limiter"]
-        RL -->|"100 req/s 허용"| S2["서버 정상"]
-        RL -->|"429 Too Many Reque"| A2
-    end
+    A1["공격자"] -->|10000 req/s| S1["서버 다운"]
+    A2["공격자"] -->|10000 req/s| RL["Rate Limiter"]
+    RL -->|100 req/s| S2["서버 정상"]
+    RL -->|429| A2
     style S1 fill:#f88,stroke:#c00,color:#000
     style S2 fill:#8f8,stroke:#080,color:#000
 ```
@@ -211,14 +207,10 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph TB["Token Bucket - 버스트"]
-        TB1["요청 도착 (불규칙)"] --> TB2["토큰 있으면 즉시 처리"]
-        TB2 --> TB3["순간 몰아서 처리 가능"]
-    end
-    subgraph LB["Leaky Bucket - 균일한"]
-        LB1["요청 도착 (불규칙)"] --> LB2["큐에 적재"]
-        LB2 -->|"일정 간격으로"| LB3["균일하게 처리"]
-    end
+    TB1["요청(불규칙)"] --> TB2["토큰 확인"]
+    TB2 --> TB3["즉시 처리"]
+    LB1["요청(불규칙)"] --> LB2["큐 적재"]
+    LB2 -->|일정 간격| LB3["균일 처리"]
 ```
 
 - 장점: 출력 속도 완전히 일정 → 다운스트림 서비스 보호, Nginx의 기본 방식

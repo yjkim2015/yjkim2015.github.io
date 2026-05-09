@@ -187,15 +187,13 @@ public static Stack newInstance(Stack original) {
 
 ```mermaid
 graph TD
-    A["복사 생성자 vs Cloneabl"] --> B["복사 생성자/팩토리"]
-    A --> C["Cloneable/clone"]
-    B --> B1["생성자를 정상 사용"]
+    B["복사 생성자/팩토리"]
+    C["Cloneable/clone"]
+    B --> B1["생성자 정상 사용"]
     B --> B2["final 필드 문제 없음"]
-    B --> B3["검사 예외 불필요"]
-    B --> B4["인터페이스 타입 인수 가능"]
-    C --> C1["생성자 없이 객체 생성"]
-    C --> C2["final 필드 할당 불가"]
-    C --> C3["CloneNotSupportedE"]
+    B --> B3["인터페이스 타입 가능"]
+    C --> C1["final 필드 할당 불가"]
+    C --> C2["CloneNotSupportedException"]
     style B fill:#51cf66,color:#fff
     style C fill:#ff6b6b,color:#fff
 ```

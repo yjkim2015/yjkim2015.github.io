@@ -19,10 +19,10 @@ date: 2026-05-01
 
 ```mermaid
 graph LR
-    C1["클라이언트"] -->|100ms| A1["App"] -->|200ms| DB1["DB (300ms)"]
-    C2["클라이언트"] -->|100ms| A2["App"] -->|1ms| CA["Cache Hit (101ms)"]
-    C3["클라이언트"] -->|100ms| A3["App"] -->|1ms| CM["Cache Miss"]
-    CM -->|200ms| DB3["DB"] -->|1ms| ST["저장 후 반환 (302ms)"]
+    C["클라이언트"] -->|"100ms"| APP["App"]
+    APP -->|"Hit: 1ms"| CA["Cache"]
+    APP -->|"Miss: 200ms"| DB["DB"]
+    DB -->|"저장 후 반환"| CA
 ```
 
 ```

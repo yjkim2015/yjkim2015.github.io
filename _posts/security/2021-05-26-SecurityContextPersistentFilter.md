@@ -36,16 +36,13 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant SCPF as SCPersistenceFilter
+    participant SCPF as SCPFilter
     participant TL as ThreadLocal
-    participant AAF as AnonymousAuthFilter
-    B->>SCPF: GET /public (세션 없음)
-    SCPF->>TL: 빈 SecurityContext 생성
-    SCPF->>AAF: 다음 필터로 진행
-    AAF->>TL: AnonymousAuthenticationToken 저장
-    SCPF->>SCPF: AnonymousToken 세션 저장 안 함
+    B->>SCPF: GET /public
+    SCPF->>TL: 빈 Context 생성
+    TL->>TL: AnonymousToken 저장
     SCPF->>TL: clearContext()
-    SCPF-->>B: 응답 전송
+    SCPF-->>B: 응답
 ```
 
 ### 2. 최초 인증 시
@@ -53,34 +50,26 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant SCPF as SCPersistenceFilter
-    participant TL as ThreadLocal
-    participant UPAF as AuthFilter
+    participant SCPF as SCPFilter
     participant S as Session
     B->>SCPF: POST /login
-    SCPF->>TL: 빈 SecurityContext 생성
-    SCPF->>UPAF: 인증 필터로 진행
-    UPAF->>TL: 인증된 Authentication 저장
-    SCPF->>S: SecurityContext 세션 저장
-    SCPF->>TL: clearContext()
-    SCPF-->>B: 로그인 성공(JSESSIONID)
+    SCPF->>SCPF: 인증 처리
+    SCPF->>S: SecurityContext 저장
+    SCPF->>SCPF: clearContext()
+    SCPF-->>B: 로그인 성공
 ```
 
 ### 3. 인증 후 재방문
 
 ```mermaid
 sequenceDiagram
-    participant Browser
+    participant B as Browser
     participant SCPF as SCPFilter
-    participant Session
-    participant Controller
-    Browser->>SCPF: GET /mypage (JSESSIONID)
-    SCPF->>Session: SecurityContext 조회
-    Session-->>SCPF: 인증된 Context
-    SCPF->>Controller: ThreadLocal 저장 후 실행
-    Controller-->>SCPF: 응답
-    SCPF->>Session: Context 재저장
-    SCPF-->>Browser: clearContext() 후 응답
+    participant CTRL as Controller
+    B->>SCPF: GET /mypage
+    SCPF->>CTRL: Context 로드 후 실행
+    CTRL-->>SCPF: 응답
+    SCPF-->>B: clearContext() 후 응답
 ```
 
 ## HttpSessionSecurityContextRepository

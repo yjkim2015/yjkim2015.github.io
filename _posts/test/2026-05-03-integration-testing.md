@@ -19,12 +19,8 @@ date: 2026-05-03
 
 ```mermaid
 graph TD
-    subgraph "테스트 피라미드"
-        E2E["E2E 테스트"]
-        INT["통합 테스트"]
-        UNIT["단위 테스트"]
-    end
-    E2E --> INT --> UNIT
+    E2E["E2E 테스트"] --> INT["통합 테스트"]
+    INT --> UNIT["단위 테스트"]
     style E2E fill:#f88,stroke:#c00,color:#000
     style INT fill:#ff8,stroke:#880,color:#000
     style UNIT fill:#8f8,stroke:#080,color:#000

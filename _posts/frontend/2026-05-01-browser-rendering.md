@@ -31,13 +31,12 @@ toc_label: 목차
 flowchart TD
     HTML["HTML"] --> DOM["DOM 트리"]
     CSS["CSS"] --> CSSOM["CSSOM 트리"]
-    JS["JS 실행"] -->|"DOM/CSSOM 수정"| RT
-    DOM --> RT["렌더 트리 (보이는 노드만)"]
+    DOM --> RT["렌더 트리"]
     CSSOM --> RT
-    RT --> LAYOUT["Layout: 위치/크기 계산"]
-    LAYOUT --> PAINT["Paint: 픽셀 채우기"]
-    PAINT --> COMPOSITE["Composite: GPU 레이어"]
-    COMPOSITE --> SCREEN["화면 출력"]
+    JS["JS"] -->|"DOM 수정"| RT
+    RT --> LAYOUT["Layout"]
+    LAYOUT --> PAINT["Paint"]
+    PAINT --> SCREEN["화면 출력"]
 ```
 
 ---
@@ -331,15 +330,10 @@ transform: translateZ(0);          /* 핵 (hack), 남용 금지 */
 
 ```mermaid
 flowchart TD
-    subgraph "최적화 전략"
-        A["1️⃣ render-blockin"]
-        B["2️⃣ Critical CSS 인"]
-        C["3️⃣ JS defer/async"]
-        D["4️⃣ Reflow 배치 처리"]
-        E["5️⃣ DocumentFragme"]
-        F["6️⃣ 리소스 힌트"]
-    end
-    A --> B --> C --> D --> E --> F
+    A["render-blocking 제거"] --> B["Critical CSS 인라인"]
+    B --> C["JS defer/async"]
+    C --> D["Reflow 배치 처리"]
+    D --> E["리소스 힌트"]
     style A fill:#3498db,color:#fff
     style B fill:#2ecc71,color:#fff
     style C fill:#f39c12,color:#fff
@@ -420,15 +414,12 @@ list.appendChild(fragment);  // Reflow 1번만
 sequenceDiagram
     participant WIN as window
     participant DOC as document
-    participant BODY as body
     participant BTN as button
     Note over WIN,BTN: 캡처링 (위→아래)
     WIN->>DOC: 전파
-    DOC->>BODY: 전파
-    BODY->>BTN: 타깃 도착
+    DOC->>BTN: 타깃 도착
     Note over WIN,BTN: 버블링 (아래→위)
-    BTN->>BODY: 버블링
-    BODY->>DOC: 버블링
+    BTN->>DOC: 버블링
     DOC->>WIN: 버블링
 ```
 

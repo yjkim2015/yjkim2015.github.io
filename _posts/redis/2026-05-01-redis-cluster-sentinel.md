@@ -104,14 +104,12 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant S1 as Sentinel1
-    participant S23 as Sentinel2,3
     participant R1 as Replica1
     participant C as Client
-    S1->>S1: SDOWN 선언(PING 무응답)
-    S1->>S23: quorum 확인 요청
-    Note over S1,S23: ODOWN 선언
-    S1->>R1: REPLICAOF NO ONE(승격)
-    S1-->>C: 새 마스터 주소 알림
+    S1->>S1: SDOWN 선언
+    Note over S1: ODOWN 선언
+    S1->>R1: REPLICAOF NO ONE
+    S1-->>C: 새 마스터 알림
 ```
 
 **SDOWN vs ODOWN**:

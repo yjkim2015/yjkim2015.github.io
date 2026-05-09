@@ -82,11 +82,7 @@ sequenceDiagram
     C->>P: createOrder()
     P->>P: getTransaction()
     P->>S: 실행
-    alt 정상
-        P->>P: commit()
-    else 예외
-        P->>P: rollback()
-    end
+    P->>P: commit/rollback
     P-->>C: 응답
 ```
 
@@ -128,16 +124,12 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant TX1 as "TX1 트랜잭션"
-    participant CO as "createOrder()"
-    participant SL as "saveLog()"
-    Note over C,SL: "부모 트랜잭션 있을 때"
+    participant C as Client
+    participant TX1 as TX1
+    participant CO as createOrder
     C->>TX1: TX1 시작
     TX1->>CO: 실행
-    CO->>SL: 호출 (TX1에 참여)
-    SL-->>CO: 완료
-    CO-->>TX1: 완료
+    CO->>TX1: saveLog(참여)
     TX1-->>C: TX1 커밋
 ```
 

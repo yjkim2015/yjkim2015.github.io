@@ -166,16 +166,14 @@ TPS 기반 계산:
 ```mermaid
 sequenceDiagram
     participant T1 as 스레드1~10
-    participant Pool as HikariCP(size=10)
-    participant DB as MySQL
+    participant Pool as HikariCP
     participant API as 외부API
     T1->>Pool: getConnection() x10
-    Pool->>DB: 커넥션 10개 대여 (풀 소진)
-    T1->>API: HTTP 호출 (블로킹 3초)
-    Note over Pool: 스레드11~200 대기, timeout 30s
+    Note over Pool: 풀 소진
+    T1->>API: HTTP 블로킹(3초)
+    Note over Pool: 스레드11~ 대기
     API-->>T1: 3초 후 응답
     T1->>Pool: close() 반납
-    Pool-->>T1: 대기 스레드에 재배분
 ```
 
 ```
@@ -269,18 +267,15 @@ Connection leak detection triggered for
 
 ```mermaid
 sequenceDiagram
-    participant TA as 스레드 A
-    participant Pool as HikariCP (size=1)
-    participant TB as 스레드 B (REQUIRES_NEW)
-    TA->>Pool: getConnection() - 커넥션 1 획득
-    Note over TA: @Transactional 시작
-    TA->>TA: orderRepository.save()
-    TA->>TB: auditService.log() 호출
+    participant TA as 스레드A
+    participant Pool as HikariCP
+    participant TB as 스레드B
+    TA->>Pool: getConnection() 획득
+    TA->>TB: auditService 호출
     TB->>Pool: getConnection() 요청
-    Note over Pool: 남은 커넥션 0개
-    TB-->>TB: 대기 (connectionTimeout까지)
-    Note over TA,TB: 데드락 발생!<br/>A는 B 완료 대기<br/>B는 커넥션 대기
-    TB-->>TB: 30초 후 SQLException (timeout)
+    Note over Pool: 커넥션 0개
+    TB-->>TB: 대기(timeout)
+    Note over TA,TB: 데드락 발생
 ```
 
 ```

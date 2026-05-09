@@ -23,18 +23,10 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph "전통적 스레드 모델 — 동시 요청 1000개"
-        T1["Thread 1"]
-        T2["Thread 2"]
-        T3["Thread 3~1000"]
-        Mem1["총 메모리: ~1GB"]
-    end
-    subgraph "코루틴 모델 — 동시 요청 1000개"
-        C1["Coroutine 1~1000"]
-        Pool["Thread Pool"]
-        C1 --> Pool
-        Mem2["총 메모리: ~수십 MB"]
-    end
+    T1["Thread 1"] --- T2["Thread 2"] --- T3["Thread 3~1000"]
+    Mem1["총 메모리: ~1GB"]
+    C1["Coroutine 1~1000"] --> Pool["Thread Pool"]
+    Mem2["총 메모리: ~수십MB"]
 ```
 
 왜 코루틴이 스레드보다 가볍나? 스레드는 OS 레벨에서 관리되고 컨텍스트 스위칭 비용이 크다. 코루틴은 JVM 힙에 있는 일반 객체다. 일시 중단(suspend)은 코루틴 상태를 힙에 저장하고 스레드를 반환하는 것 — OS가 개입하지 않는다.

@@ -40,17 +40,16 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant C as 코디네이터
-    participant A as 한국 DB
-    participant B as 미국 DB
-    Note over C,B: Phase 1 - Prepare (투표)
+    participant A as DB-A
+    participant B as DB-B
+    Note over C,B: Phase 1 - Prepare
     C->>A: PREPARE
     C->>B: PREPARE
     A-->>C: YES
     B-->>C: YES
-    Note over C,B: Phase 2 - Commit (결정)
+    Note over C,B: Phase 2 - Commit
     C->>A: COMMIT
     C->>B: COMMIT
-    Note over C,B: 실패 시: 하나라도 NO → 전부 ROLLBACK
 ```
 
 ### 2PC의 문제점 — 왜 잘 안 쓰이나
@@ -188,17 +187,14 @@ public class PaymentService {
 
 ```mermaid
 sequenceDiagram
-    participant Orch as Saga 오케스트레이터
-    participant OS as 주문
+    participant Orch as Orch
     participant PS as 결제
     participant IS as 재고
-    OS->>Orch: Saga 시작
     Orch->>PS: 결제 요청
     PS-->>Orch: 결제 완료
     Orch->>IS: 재고 차감
-    IS-->>Orch: 재고 부족!
-    Orch->>PS: 결제 취소 (보상)
-    Orch->>OS: 주문 취소 (보상)
+    IS-->>Orch: 재고 부족
+    Orch->>PS: 결제 취소
 ```
 
 오케스트레이션 방식은 "지휘자가 악기별로 언제 어떻게 연주할지 지시하는 것"과 같습니다. 전체 흐름이 오케스트레이터 한 곳에 집중되어 디버깅이 쉽습니다. 단, 오케스트레이터가 단일 장애점이 될 수 있습니다.
@@ -612,17 +608,13 @@ public class PaymentService {
 
 ```mermaid
 graph TD
-    Flash["1️⃣ 블랙프라이데이"]
-    Flash --> Async["2️⃣ 비동기 Saga"]
-    Async --> Queue["3️⃣ Kafka 큐"]
-    Queue --> Workers["4️⃣ Saga 워커 1000개"]
-    Workers --> DB["DB 분산 처리"]
-    subgraph "장애 시나리오"
-        DBFail["5️⃣ 재고 DB 장애"]
-        DBFail --> CircuitBreak["Circuit Breaker OP"]
-        CircuitBreak --> Fallback["Fallback: 재고 예약 나중"]
-        Fallback --> RetryLater["장애 복구 후 재시도"]
-    end
+    Flash["블랙프라이데이"] --> Async["비동기 Saga"]
+    Async --> Queue["Kafka 큐"]
+    Queue --> Workers["Saga 워커"]
+    Workers --> DB["DB 분산처리"]
+    DB --> DBFail["DB 장애"]
+    DBFail --> CB["Circuit Breaker"]
+    CB --> Retry["복구 후 재시도"]
 ```
 
 이 규모에서 동기적 2PC를 사용하면 어떻게 될까요? 코디네이터 하나가 초당 10만 건을 조율하는 건 물리적으로 불가능합니다. 잠금 경합으로 DB가 멈춥니다. 비동기 Saga + Kafka 조합이 이 규모를 감당할 수 있는 유일한 현실적 선택입니다.

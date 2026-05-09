@@ -752,18 +752,15 @@ public class SimpleTestRunner {
 
 ```mermaid
 sequenceDiagram
-    participant 클라이언트
-    participant 프록시
-    participant InvocationHandler
-    participant 실제객체
-    클라이언트->>프록시: findById(1L) 호출
-    프록시->>InvocationHandler: invoke(proxy, method, args)
-    InvocationHandler->>InvocationHandler: 부가 기능 처리 (로깅, 트랜잭션 등)
-    InvocationHandler->>실제객체: method.invoke(target, args)
-    실제객체-->>InvocationHandler: 결과 반환
-    InvocationHandler->>InvocationHandler: 후처리 (로깅 등)
-    InvocationHandler-->>프록시: 결과 반환
-    프록시-->>클라이언트: 결과 반환
+    participant C as 클라이언트
+    participant P as 프록시
+    participant H as Handler
+    C->>P: findById(1L) 호출
+    P->>H: invoke(proxy, method, args)
+    H->>H: 부가 기능 처리
+    H->>P: method.invoke(target)
+    P-->>H: 결과 반환
+    H-->>C: 결과 반환
 ```
 
 ```java

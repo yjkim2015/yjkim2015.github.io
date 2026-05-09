@@ -71,13 +71,11 @@ sequenceDiagram
     participant GS as 전역 스코프
     participant SH as sayHello()
     participant G as greet()
-    participant CL as console.log()
-    GS->>SH: sayHello() 호출 → 스택에 push
-    SH->>G: greet('World') 호출 → 스택에 push
-    G-->>SH: 'Hello, World!' 반환 → 스택에서 pop
-    SH->>CL: console.log() 호출 → 스택에 push
-    CL-->>SH: 실행 완료 → 스택에서 pop
-    SH-->>GS: 실행 완료 → 스택에서 pop
+    GS->>SH: sayHello() 호출
+    SH->>G: greet('World') 호출
+    G-->>SH: 'Hello, World!' 반환
+    SH->>SH: console.log() 호출
+    SH-->>GS: 실행 완료
 ```
 
 만약 이 스택이 꽉 차면 어떻게 될까요? **스택 오버플로우**가 발생합니다.
@@ -168,16 +166,14 @@ console.log('4. 끝');
 ```mermaid
 sequenceDiagram
     participant CS as CallStack
-    participant WA as WebAPI
-    participant MQ as 마이크로태스크큐
+    participant MQ as 마이크로태스크
     participant TQ as 태스크큐
     CS->>CS: log(1.시작)
-    CS->>WA: setTimeout 등록
+    CS->>TQ: setTimeout 등록
     CS->>MQ: Promise.then 등록
-    CS->>CS: log(4.끝) - 스택 비워짐
-    WA->>TQ: setTimeout 콜백 전달
-    MQ->>CS: Promise 콜백 실행 - log(3.Promise)
-    TQ->>CS: setTimeout 콜백 실행 - log(2.setTimeout)
+    CS->>CS: log(4.끝)
+    MQ->>CS: log(3.Promise)
+    TQ->>CS: log(2.setTimeout)
 ```
 
 출력 결과:
@@ -275,17 +271,13 @@ gantt
 ```mermaid
 flowchart TD
     A["태스크 실행"] --> B["마이크로태스크 처리"]
-    B --> C{"렌더링이<br>필요한가?"}
-    C -->|"예"| D["requestAnimationFr"]
-    D --> E["스타일 계산"]
-    E --> F["레이아웃"]
-    F --> G["페인트"]
-    G --> H["다음 태스크"]
+    B --> C{"렌더링 필요?"}
+    C -->|"예"| D["rAF 콜백"]
+    D --> E["스타일/레이아웃/페인트"]
+    E --> H["다음 태스크"]
     C -->|"아니오"| H
     style D fill:#f39c12,color:#fff
     style E fill:#e74c3c,color:#fff
-    style F fill:#e74c3c,color:#fff
-    style G fill:#e74c3c,color:#fff
 ```
 
 ```javascript

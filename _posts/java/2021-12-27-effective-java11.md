@@ -60,14 +60,12 @@ System.out.println(result);  // null! → "제니"가 나올 것 같지만 null
 
 ```mermaid
 sequenceDiagram
-    participant Put as put(new PhoneNumber(...), "제니")
-    participant Bucket as 버킷 42 (hashCode=임의값1)
-    participant Get as get(new PhoneNumber(...))
-    participant Bucket2 as 버킷 99 (hashCode=임의값2)
-    Put->>Bucket: hashCode()=임의값1 → 버킷 42에 저장
-    Get->>Bucket2: hashCode()=임의값2 → 버킷 99를 찾음
-    Bucket2-->>Get: 버킷 99는 비어있음 → null 반환
-    Note over Get: equals가 true여도 다른 버킷을 보므로 절대 못 찾음!
+    participant Put as put(PhoneNumber)
+    participant Get as get(PhoneNumber)
+    Put->>Put: hashCode=임의값1 → 버킷42 저장
+    Get->>Get: hashCode=임의값2 → 버킷99 탐색
+    Get-->>Get: 버킷99 비어있음 → null
+    Note over Get: equals=true여도 못 찾음!
 ```
 
 두 `PhoneNumber` 인스턴스는 `equals`로 같다고 판단되지만, `hashCode`를 재정의하지 않으면 `Object`의 기본 구현(객체 메모리 주소 기반)이 호출되어 서로 다른 hashCode를 반환합니다.

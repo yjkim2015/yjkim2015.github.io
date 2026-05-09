@@ -118,18 +118,13 @@ public class EmailService {
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant C as Client
     participant SCPF as SCPFilter
-    participant SCH as SCHolder
-    participant Controller
-    Client->>SCPF: HTTP 요청
-    SCPF->>SCH: 세션 → ThreadLocal 저장
-    SCH->>Controller: 요청 전달
-    Controller->>SCH: Authentication 조회
-    Controller->>SCH: Service에서도 Authentication 조회
-    Controller-->>SCPF: 응답
-    SCPF->>SCH: clearContext()
-    SCPF-->>Client: HTTP 응답
+    participant CTRL as Controller
+    C->>SCPF: HTTP 요청
+    SCPF->>CTRL: ThreadLocal 저장 후 전달
+    CTRL->>SCPF: 응답
+    SCPF->>C: clearContext 후 응답
 ```
 
 ## 실무 활용 패턴

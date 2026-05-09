@@ -153,18 +153,14 @@ public class MemoryMemberRepository implements MemberRepository {
 
 ```mermaid
 sequenceDiagram
-    participant T as "JUnit 테스트"
-    participant R as "MemoryMemberRepository"
-    participant S as "Map (저장소)"
-    T->>R: 1️⃣ save(member) 호출
-    R->>S: 2️⃣ store.put(id, member)
-    S-->>R: 3️⃣ 저장 완료
-    R-->>T: 4️⃣ 저장된 member 반환
-    T->>T: 5️⃣ assertThat 검증
-    T->>R: 6️⃣ findByName("spring") 호출
-    R->>S: 7️⃣ stream().filter() 검색
-    S-->>T: 8️⃣ Optional<Member> 반환
-    T->>T: 9️⃣ @AfterEach: clearStore()
+    participant T as JUnit
+    participant R as Repository
+    T->>R: save(member)
+    R-->>T: member 반환
+    T->>T: assertThat 검증
+    T->>R: findByName()
+    R-->>T: Optional 반환
+    T->>T: @AfterEach 정리
 ```
 
 ### JUnit 테스트 코드

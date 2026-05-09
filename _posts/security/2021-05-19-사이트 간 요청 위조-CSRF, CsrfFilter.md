@@ -59,12 +59,10 @@ sequenceDiagram
     participant B as Browser
     participant S as CsrfFilter
     B->>S: GET /transfer-form
-    S->>S: CSRF 토큰 생성, 세션 저장
-    S-->>B: 폼 응답(_csrf=abc123xyz 포함)
-    B->>S: POST /transfer (_csrf=abc123xyz)
-    S->>S: 요청 토큰 vs 세션 토큰 비교
+    S-->>B: 폼(_csrf=abc123)
+    B->>S: POST /transfer (_csrf=abc123)
     alt 일치
-        S-->>B: 요청 처리 완료
+        S-->>B: 처리 완료
     else 불일치
         S-->>B: 403 Forbidden
     end

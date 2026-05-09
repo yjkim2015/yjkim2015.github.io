@@ -254,17 +254,14 @@ public class Main {
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant R as "ShapeRegistry"
-    participant P as "원본 Circle (프로토타입)"
-    participant CP as "복사된 Circle"
-    C->>R: "1. getShape('smallCircle') 요청"
-    R->>P: "2. shape.clone() 호출"
-    P->>CP: "3. 새 Circle 생성 (복사)"
-    CP-->>R: "4. 복사본 반환"
-    R-->>C: "5. 복사본 전달"
-    C->>CP: "6. draw() 또는 수정"
-    Note over P,CP: "원본과 복사본은 완전히 독립"
+    participant C as Client
+    participant R as Registry
+    participant P as Prototype
+    C->>R: getShape() 요청
+    R->>P: shape.clone()
+    P-->>R: 복사본 반환
+    R-->>C: 복사본 전달
+    C->>P: draw() 호출
 ```
 
 ---

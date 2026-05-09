@@ -68,18 +68,14 @@ WebSocket 연결 수: DAU의 30% 동시 접속 = 1억 5천만 연결
 
 ```mermaid
 sequenceDiagram
-    participant C as 클라이언트
-    participant S as 서버
-    Note over C,S: Short Polling — 매 3초 폴링 (낭비)
-    C->>S: GET /messages
-    S-->>C: 없음 (empty)
-    Note over C,S: Long Polling — 메시지 올 때까지 대기
-    C->>S: GET /messages (30s timeout)
-    S-->>C: 메시지 도착 시 응답
-    Note over C,S: WebSocket — 양방향 (채팅 최적)
-    C->>S: HTTP Upgrade
-    S-->>C: 101 Switching Protocols
-    S->>C: 서버 push / C->>S: send 가능
+    participant C as Client
+    participant S as Server
+    C->>S: GET /messages (Short Poll)
+    S-->>C: empty
+    C->>S: GET /messages (Long Poll)
+    S-->>C: 메시지 도착
+    C->>S: HTTP Upgrade (WS)
+    S-->>C: 101 Switching
 ```
 
 | 방식 | 지연시간 | 서버 부하 | 실시간성 | 사용 케이스 |
@@ -140,11 +136,7 @@ sequenceDiagram
     participant B as UserB
     A->>S: WS 메시지
     S->>K: 발행
-    alt B 온라인
-        K->>B: WS 전달
-    else B 오프라인
-        K->>B: Push
-    end
+    K->>B: WS 또는 Push 전달
 ```
 
 ### 서버 간 메시지 라우팅 문제
@@ -319,17 +311,14 @@ CREATE TABLE conversation_members (
 ```mermaid
 sequenceDiagram
     participant App as 모바일 앱
-    participant WS as WebSocket 서버
-    participant Redis as Redis (TTL 30s)
+    participant WS as WS 서버
+    participant Redis as Redis
     App->>WS: 연결
-    WS->>Redis: SET presence:userA EX=30
-    loop 매 25초 하트비트
-        App->>WS: ping
-        WS->>Redis: EXPIRE 30 (TTL 갱신)
-    end
-    App->>WS: close (정상 종료)
-    WS->>Redis: DEL presence:userA
-    Note over Redis: 크래시 시 30초 후 TTL 만료 → 자동 오프라인
+    WS->>Redis: SET presence EX=30
+    App->>WS: ping(하트비트)
+    WS->>Redis: EXPIRE 갱신
+    App->>WS: close
+    WS->>Redis: DEL presence
 ```
 
 ### Presence 최적화 — 대규모에서의 팬아웃 문제
@@ -357,14 +346,9 @@ sequenceDiagram
     participant A as 사용자A
     participant S1 as 채팅서버
     participant K as Kafka
-    participant B as B(온라인)
-    participant D as D(오프라인)
     A->>S1: WS 그룹 메시지
     S1->>K: 발행
-    par 팬아웃
-        K->>B: WS 전달
-        K->>D: FCM Push
-    end
+    K->>K: 팬아웃(WS/FCM)
 ```
 
 ### 팬아웃 전략: Write-time vs Read-time

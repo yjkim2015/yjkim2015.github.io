@@ -326,30 +326,25 @@ public void afterCompletion(HttpServletRequest request,
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant F as Filter
     participant DS as DispatcherServlet
     participant CT as Controller
-    C->>F: HTTP 요청
-    F->>DS: doFilter()
-    DS->>DS: I1→I2 preHandle()
+    C->>DS: HTTP 요청
+    DS->>DS: preHandle()
     DS->>CT: 핸들러 실행
     CT-->>DS: ModelAndView
-    DS->>DS: I2→I1 postHandle()/afterCompletion()
-    F-->>C: HTTP 응답
+    DS->>DS: postHandle()
+    DS-->>C: HTTP 응답
 ```
 
 ### preHandle에서 false 반환 시 흐름
 
 ```mermaid
 sequenceDiagram
-    participant C as 클라이언트
+    participant C as Client
     participant DS as DispatcherServlet
     participant I1 as Interceptor1
-    participant I2 as Interceptor2
     C->>DS: HTTP 요청
-    DS->>I1: preHandle() → true
-    DS->>I2: preHandle() → false(인증실패)
-    Note over DS: Controller 미호출, I1.afterCompletion 호출
+    DS->>I1: preHandle() → false
     DS->>I1: afterCompletion()
     DS-->>C: 401 응답
 ```
@@ -361,13 +356,9 @@ sequenceDiagram
     participant C as Client
     participant DS as DispatcherServlet
     participant I1 as Interceptor1
-    participant CT as Controller
-    participant EH as ExceptionHandler
     C->>DS: HTTP 요청
-    DS->>I1: preHandle() → true
-    DS->>CT: 핸들러 실행
-    CT--xDS: RuntimeException (postHandle 생략)
-    DS->>EH: @ExceptionHandler 처리
+    DS->>I1: preHandle()
+    DS->>DS: 핸들러 실행
     DS->>I1: afterCompletion(ex)
     DS-->>C: 에러 응답
 ```
@@ -896,17 +887,10 @@ order(4) 인증    → order(3) RateLimit → order(2) 성능    → order(1) �
 
 ```mermaid
 graph LR
-    subgraph "100 TPS 환경"
-        A["요청"] --> B[Interceptor Chain]
-        B --> C[Controller]
-        C --> D["응답"]
-    end
-    subgraph "특징"
-        E["단순 구현 OK"]
-        F["HashMap 사용 가능"]
-        G["동기 처리 문제 없음"]
-        H["메모리 여유 충분"]
-    end
+    A["요청"] --> B[Interceptor Chain]
+    B --> C[Controller]
+    C --> D["응답"]
+    E["단순 구현 OK"] --> F["동기 처리 가능"]
 ```
 
 100 TPS 수준에서는 대부분의 구현이 문제없이 동작한다.
@@ -1077,11 +1061,10 @@ public class UltraOptimizedInterceptor implements HandlerInterceptor {
 
 ```mermaid
 graph TD
-    A["요청 (최적화 전)"] --> B["로깅"] --> C["인증"] --> D["RateLimit"] --> E["성능"] --> F["Controller"]
-    A2["요청 (최적화 후)"] --> G{"경로 분기"}
-    G -->|"/public"| H["성능만 → Controller"]
-    G -->|"/api"| I["로깅+인증+RL+성능 → Cont"]
-    G -->|"/internal"| J["인증만 → Controller"]
+    A["요청"] --> G{"경로 분기"}
+    G -->|"/public"| H["성능만"]
+    G -->|"/api"| I["로깅+인증+RL"]
+    G -->|"/internal"| J["인증만"]
 ```
 
 **100,000 TPS 최적화 기법 목록:**

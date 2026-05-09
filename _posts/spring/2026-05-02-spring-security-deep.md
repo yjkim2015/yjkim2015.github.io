@@ -127,15 +127,11 @@ public class SecurityConfig {
 sequenceDiagram
     participant U as 사용자
     participant F as AuthFilter
-    participant AP as DaoAuthProvider
     participant DB as Database
     U->>F: POST /login
-    F->>AP: authenticate(token)
-    AP->>DB: loadUserByUsername()
-    DB-->>AP: UserDetails
-    AP->>AP: BCrypt 검증
-    AP-->>F: authenticated=true
-    F->>F: SecurityContextHolder 저장
+    F->>DB: loadUserByUsername()
+    DB-->>F: UserDetails
+    F->>F: BCrypt 검증
     F-->>U: JWT 발급
 ```
 
@@ -451,17 +447,14 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 ```mermaid
 sequenceDiagram
     participant U as 사용자
-    participant B as 은행 (bank.com)
-    participant M as 악성 사이트 (evil.com)
-    U->>B: 로그인 (은행 쿠키 발급)
-    M-->>U: "경품 당첨" 링크 클릭 유도
-    U->>B: POST /transfer?to=hacker&amount=1000000 (자동으로 쿠키 포함!)
-    Note over B: 유효한 쿠키이므로 송금 처리
-    Note over B: CSRF 토큰으로 방어하면
-    B-->>U: 폼 제출 시 숨겨진 CSRF 토큰 포함
+    participant B as 은행
+    participant M as 악성사이트
+    U->>B: 로그인(쿠키 발급)
+    M-->>U: 클릭 유도
+    U->>B: POST /transfer(쿠키 자동 포함)
+    B-->>U: CSRF 토큰 포함 폼
     U->>B: 토큰 포함 요청
-    B->>B: 토큰 검증 통과 → 정상 요청으로 처리
-    Note over B: evil.com은 이 토큰을 모름 → 위조 불가
+    B->>B: 토큰 검증 통과
 ```
 
 **JWT 기반 REST API에서 CSRF를 비활성화하는 이유:** CSRF 공격의 핵심은 브라우저가 쿠키를 자동으로 보내는 것을 악용합니다. JWT를 `Authorization: Bearer <token>` 헤더로 보내면, 이 헤더는 JavaScript로만 설정할 수 있고 브라우저가 자동으로 추가하지 않습니다. 따라서 cross-site 요청으로는 이 헤더를 포함시킬 수 없고, CSRF 공격 자체가 성립하지 않습니다.

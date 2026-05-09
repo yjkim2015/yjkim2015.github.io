@@ -19,17 +19,11 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    subgraph "파티셔닝 (단일 서버)"
-        S["MySQL Server"]
-        S --> P0["Partition p0"]
-        S --> P1["Partition p1"]
-        S --> P2["Partition p2"]
-    end
-    subgraph "샤딩 (다중 서버)"
-        SH0["Shard 0"]
-        SH1["Shard 1"]
-        SH2["Shard 2"]
-    end
+    S["MySQL Server"] --> P0["Partition 0"]
+    S --> P1["Partition 1"]
+    S --> P2["Partition 2"]
+    SH0["Shard 0"] --- SH1["Shard 1"]
+    SH1 --- SH2["Shard 2"]
 ```
 
 > **핵심**: 파티셔닝은 하나의 서버 안에서 데이터를 나누는 것이고, 샤딩은 서버 자체를 여러 대로 늘리는 것이다. 샤딩에서는 각 샤드가 독립된 CPU, 메모리, 디스크를 가진다.
@@ -82,12 +76,10 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "Range-based Sharding (user_id 기준)"
-        R["라우터"] --> SH0["Shard 0"]
-        R --> SH1["Shard 1"]
-        R --> SH2["Shard 2"]
-        R --> SH3["Shard 3"]
-    end
+    R["라우터"] --> SH0["Shard 0"]
+    R --> SH1["Shard 1"]
+    R --> SH2["Shard 2"]
+    R --> SH3["Shard 3"]
 ```
 
 **단점 — 핫스팟(Hot Spot) 문제**
@@ -118,15 +110,12 @@ Consistent Hashing은 노드(샤드) 추가/제거 시 최소한의 데이터만
 
 ```mermaid
 graph TD
-    subgraph "Consistent Hashing 링"
-        N0["Node 0 (위치 50)"]
-        N1["Node 1 (위치 150)"]
-        N2["Node 2 (위치 250)"]
-        N3["Node 3 추가 (위치 120)"]
-    end
-    K0["Key A (hash=70)"] --> N0
-    K1["Key B (hash=130)"] --> N3
-    K2["Key C (hash=200)"] --> N2
+    N0["Node 0(50)"] --- N1["Node 1(150)"]
+    N1 --- N2["Node 2(250)"]
+    N3["Node 3(120)"] --- N1
+    K0["Key A(70)"] --> N0
+    K1["Key B(130)"] --> N3
+    K2["Key C(200)"] --> N2
 ```
 
 > **핵심**: Consistent Hashing에서 노드 추가 시 전체 데이터의 1/N만 이동한다. 단순 모듈러 해싱은 거의 전체 데이터가 재배치된다.

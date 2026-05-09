@@ -144,14 +144,10 @@ console.log(age); // 25
 
 ```mermaid
 flowchart LR
-    A["블록 진입"] --> B["TDZ 시작<br>(선언 전)"]
-    B --> C["let/const 선언문 도달"]
+    A["블록 진입"] --> B["TDZ 시작"]
+    B --> C["선언문 도달"]
     C --> D["초기화 완료"]
     D --> E["사용 가능"]
-    subgraph "TDZ 구간"
-        B
-        C
-    end
     style B fill:#e74c3c,color:#fff
     style C fill:#f39c12,color:#fff
     style D fill:#2ecc71,color:#fff
@@ -234,11 +230,9 @@ obj.age = 25;         // 가능! 새 속성 추가
 
 ```mermaid
 graph LR
-    subgraph "const obj = { name: '홍길동' }"
-        OBJ_VAR["const obj<br>(변수)"]
-        OBJ_VAL["메모리 주소<br>0x1234"]
-        OBJ_DATA["{ name: '홍길동' }"]
-    end
+    OBJ_VAR["const obj (변수)"]
+    OBJ_VAL["주소 0x1234"]
+    OBJ_DATA["name: 홍길동"]
     OBJ_VAR -->|"고정! 변경 불가"| OBJ_VAL
     OBJ_VAL -->|"가리킴"| OBJ_DATA
     OBJ_DATA -->|"변경 가능"| OBJ_DATA
@@ -291,15 +285,12 @@ console.log(funcs[2]()); // 3 — 예상: 2
 ```mermaid
 sequenceDiagram
     participant FOR as for 루프
-    participant VAR_I as var i (하나의 변수)
-    participant LET_J as let j (각 반복마다 새 변수)
-    participant FN as 클로저 함수들
-    FOR->>VAR_I: i = 0, 1, 2, 3 (하나의 i)
-    FN->>VAR_I: 실행 시 i 참조 → 최종값 3
-    FOR->>LET_J: j_0 = 0 생성
-    FOR->>LET_J: j_1 = 1 생성
-    FOR->>LET_J: j_2 = 2 생성
-    FN->>LET_J: 각각 j_0, j_1, j_2 참조 → 0, 1, 2
+    participant VAR_I as var i (공유)
+    participant LET_J as let j (반복별)
+    FOR->>VAR_I: i = 0,1,2,3 (하나)
+    VAR_I-->>FOR: 실행시 최종값 3
+    FOR->>LET_J: j_0=0, j_1=1, j_2=2
+    LET_J-->>FOR: 각각 0, 1, 2
 ```
 
 `let`을 쓰면 **각 반복마다 새로운 바인딩**이 생성됩니다. 즉, 반복마다 독립적인 `j`가 존재합니다.
@@ -366,11 +357,9 @@ const sayHi = function() {
 
 ```mermaid
 flowchart TD
-    subgraph "호이스팅 동작 비교"
-        A["function foo() {}"] --> A1["전체 함수 호이스팅<br>선언 전"]
-        B["var foo = function"] --> B1["var foo만 호이스팅 (und"]
-        C["let/const foo = ()"] --> C1["TDZ 적용<br>선언 전 접근"]
-    end
+    A["function foo(){}"] --> A1["전체 함수 호이스팅"]
+    B["var foo = function"] --> B1["var만 호이스팅 undefined"]
+    C["let/const foo=()=>"] --> C1["TDZ 적용"]
     style A1 fill:#2ecc71,color:#fff
     style B1 fill:#f39c12,color:#fff
     style C1 fill:#e74c3c,color:#fff

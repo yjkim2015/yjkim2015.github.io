@@ -107,15 +107,13 @@ console.log(counter()); // 3
 sequenceDiagram
     participant R as JS 런타임
     participant M as makeCounter()
-    participant C as counter 함수
     participant H as 힙 메모리
     R->>M: makeCounter() 호출
     M->>H: count=0 생성
-    M->>C: inner 함수 생성 + 힙 참조 저장
-    M-->>R: inner 반환 (M 스택 제거, count는 GC 제외)
-    R->>C: counter() 호출
-    C->>H: count 읽고 증가
-    C-->>R: 1 반환
+    M-->>R: inner 함수 반환
+    R->>M: counter() 호출
+    M->>H: count 읽고 증가
+    M-->>R: 1 반환
 ```
 
 ---
@@ -368,15 +366,10 @@ const getFirst = createHeavyResource();
 
 ```mermaid
 graph TD
-    subgraph "메모리 누수"
-        GF["getFirst 함수"] -->|"클로저 참조"| LD["largeData (4MB)"]
-        LD --> D["실제 사용: largeData[0"]
-        D --> WASTE["나머지 999,999개 낭비"]
-    end
-    subgraph "해결책"
-        GF2["getFirst2 함수"] -->|"클로저 참조"| FIRST["first = largeData["]
-        FIRST --> LD2["largeData 원본 GC 가능"]
-    end
+    GF["getFirst 함수"] -->|"클로저 참조"| LD["largeData 4MB"]
+    LD --> WASTE["999,999개 낭비"]
+    GF2["getFirst2 함수"] -->|"클로저 참조"| FIRST["first만 저장"]
+    FIRST --> LD2["largeData GC 가능"]
     style WASTE fill:#e74c3c,color:#fff
     style LD2 fill:#2ecc71,color:#fff
 ```
@@ -447,14 +440,10 @@ buttons[1](); // 5
 
 ```mermaid
 graph TD
-    subgraph "for 루프 종료 후"
-        I["var i = 5 (하나의 변수)"]
-        B0["buttons[0]"] -->|"참조"| I
-        B1["buttons[1]"] -->|"참조"| I
-        B2["buttons[2]"] -->|"참조"| I
-        B3["buttons[3]"] -->|"참조"| I
-        B4["buttons[4]"] -->|"참조"| I
-    end
+    I["var i = 5 (하나의 변수)"]
+    B0["buttons[0]"] -->|"참조"| I
+    B1["buttons[1]"] -->|"참조"| I
+    B2["buttons[2]"] -->|"참조"| I
     style I fill:#e74c3c,color:#fff
 ```
 

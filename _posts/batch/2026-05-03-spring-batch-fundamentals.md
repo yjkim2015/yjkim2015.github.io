@@ -116,11 +116,9 @@ Chunk 모델은 Spring Batch의 **핵심 처리 패턴**입니다. 데이터를 
 
 ```mermaid
 flowchart LR
-    subgraph "하나의 Chunk 트랜잭션"
-        A["ItemReader"] -->|"chunk-size만큼 반복"| B["ItemProcessor"]
-        B -->|"List로 모아서"| C["ItemWriter"]
-    end
-    C -->|"커밋 후 다음 chunk"| A
+    A["ItemReader"] -->|"chunk-size 반복"| B["ItemProcessor"]
+    B -->|"List로 모아서"| C["ItemWriter"]
+    C -->|"커밋 후 다음"| A
 ```
 
 ---
@@ -235,16 +233,14 @@ public class BatchController {
 sequenceDiagram
     participant SC as Scheduler
     participant JL as JobLauncher
-    participant JR as JobRepository
     participant ST as Step
     SC->>JL: run(job, params)
-    JL->>JR: JobExecution 생성
     JL->>ST: execute()
     loop chunk 반복
         ST->>ST: read/process/write
-        ST->>JR: 커밋
+        ST->>JL: 커밋
     end
-    ST-->>JR: Job 상태 갱신
+    ST-->>JL: Job 완료
 ```
 
 ---

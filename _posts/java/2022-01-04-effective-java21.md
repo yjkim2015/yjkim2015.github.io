@@ -55,16 +55,13 @@ default boolean removeIf(Predicate<? super E> filter) {
 
 ```mermaid
 sequenceDiagram
-    participant Thread1 as 스레드 1
-    participant Thread2 as 스레드 2
+    participant T1 as 스레드1
+    participant T2 as 스레드2
     participant SC as SynchronizedCollection
-    participant Lock as Lock 객체
-    Note over SC: 모든 메서드는 락 객체로 동기화
-    Thread1->>SC: add("A") → synchronized(lock)
-    Thread2->>SC: removeIf(pred) → ???
-    Note over SC: removeIf는 디폴트 구현 사용<br/>→ lock을 모름!<br/>동기화 없이 iterator 직접 호출
-    Thread1->>SC: add("B") (동시 진행)
-    SC-->>Thread2: ConcurrentModificationException!
+    T1->>SC: add("A") synchronized
+    T2->>SC: removeIf(pred) → 락 모름!
+    T1->>SC: add("B") 동시 진행
+    SC-->>T2: ConcurrentModificationException!
 ```
 
 `SynchronizedCollection`은 모든 메서드 호출을 락으로 동기화합니다. 하지만 `removeIf`의 디폴트 구현은 락에 대해 아무것도 모릅니다. 그래서 멀티스레드 환경에서 `removeIf`를 호출하면 `ConcurrentModificationException`이 발생하거나 데이터가 손상됩니다.

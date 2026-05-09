@@ -125,16 +125,12 @@ graph TD
 sequenceDiagram
     participant App
     participant Svc as 게시글서비스
-    participant DB as MySQL
     participant K as Kafka
-    participant W as 팬아웃워커
     participant C as Redis
     App->>Svc: POST /posts
-    Svc->>DB: INSERT
     Svc-->>App: 201
     Svc->>K: post-created
-    K->>W: 소비
-    W->>C: LPUSH feed:{id} (팔로워별)
+    K->>C: LPUSH feed(팔로워별)
 ```
 
 왜 비동기로 처리하는가? 팔로워가 1000명이면 1000번의 Redis LPUSH다. 동기로 처리하면 게시글 저장 API가 수초가 걸린다. Kafka에 발행하고 즉시 반환한다.

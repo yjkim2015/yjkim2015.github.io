@@ -30,12 +30,10 @@ URL을 입력하고 엔터를 누르는 순간, 브라우저는 믿기 어려울
 flowchart LR
     HTML["HTML 파싱"] --> DOM["DOM"]
     CSS["CSS 파싱"] --> CSSOM["CSSOM"]
-    DOM --> RT["렌더 트리"]
-    CSSOM --> RT
+    DOM & CSSOM --> RT["렌더 트리"]
     RT --> L["Layout"]
     L --> P["Paint"]
-    P --> C["Compositing"]
-    C --> SCREEN["화면 출력"]
+    P --> SCREEN["화면 출력"]
     JS["JS 실행"] -->|"DOM/CSSOM 수정"| DOM
 ```
 

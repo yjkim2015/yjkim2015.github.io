@@ -356,9 +356,8 @@ graph TD
 sequenceDiagram
     participant C as Client
     participant P as Proxy
-    participant S as OrderService
+    participant S as Service
     C->>P: createOrder()
-    P->>P: getTransaction()
     P->>S: proceed()
     alt 정상
         P->>P: commit()
@@ -506,13 +505,10 @@ public class LoggingAspect { ... }
 sequenceDiagram
     participant C as Client
     participant SA as Security
-    participant TA as Transaction
     participant M as Method
     C->>SA: 호출
-    SA->>TA: before()
-    TA->>M: 실행
-    M-->>TA: 반환
-    TA-->>SA: after()
+    SA->>M: 실행
+    M-->>SA: 반환
     SA-->>C: 반환
 ```
 

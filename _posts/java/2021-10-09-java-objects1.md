@@ -81,15 +81,13 @@ public class Car {
 
 ```mermaid
 sequenceDiagram
-    participant FC as DataFlowController
-    participant FR as FileReader("데이터 읽기")
-    participant EN as Encryptor("암호화")
-    participant FW as FileWriter("파일 쓰기")
-    FC->>FR: 1️⃣ read() 메시지 전송
+    participant FC as Controller
+    participant FR as FileReader
+    participant EN as Encryptor
+    FC->>FR: read() 메시지 전송
     FR-->>FC: byte[] data 반환
-    FC->>EN: 2️⃣ encrypt(data) 메시지 전송
+    FC->>EN: encrypt(data) 전송
     EN-->>FC: byte[] encrypted 반환
-    FC->>FW: 3️⃣ write(encrypted) 메시지 전송
 ```
 
 ```java
@@ -121,14 +119,8 @@ public class DataFlowController {
 
 ```mermaid
 graph TD
-    subgraph "책임이 작은 설계 (좋음)"
-    A1["FileReader"]
-    A2["Encryptor"]
-    A3["FileWriter"]
-    end
-    subgraph "책임이 큰 설계 (나쁨)"
-    B1["DataManager"]
-    end
+    A1["FileReader"] & A2["Encryptor"] & A3["FileWriter"]
+    B1["DataManager (모든 책임)"]
     style B1 fill:#ff6b6b,color:#fff
 ```
 

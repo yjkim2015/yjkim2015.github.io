@@ -50,12 +50,10 @@ sequenceDiagram
     participant APP as SpringApp
     participant PROM as Prometheus
     participant GRAF as Grafana
-    participant SLACK as Slack
     PROM->>APP: Scrape(15초마다)
     APP-->>PROM: 메트릭 반환
     GRAF->>PROM: PromQL 쿼리
     PROM-->>GRAF: 데이터 반환
-    PROM->>SLACK: 알림 규칙 위반시 발송
 ```
 
 ### Prometheus 설정

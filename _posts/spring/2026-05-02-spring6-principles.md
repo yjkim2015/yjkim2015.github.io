@@ -343,14 +343,12 @@ public record Failure<T>(String error) implements Result<T> {}
 
 ```mermaid
 graph LR
-    A[Spring 6 + GraalVM] --> B["AOT 컴파일"]
-    B --> C["Native Image 생성"]
-    C --> D["빠른 시작 시간"]
-    C --> E["낮은 메모리 사용"]
-    C --> F["JVM 불필요"]
-    G["기존 JVM 방식"] --> H["JIT 컴파일"]
-    H --> I["런타임 최적화"]
-    I --> J["긴 시작 시간"]
+    A["Spring 6 + GraalVM"] --> B["AOT 컴파일"]
+    B --> C["Native Image"]
+    C --> D["빠른 시작"]
+    C --> E["낮은 메모리"]
+    G["JVM 방식"] --> H["JIT 컴파일"]
+    H --> I["긴 시작 시간"]
 ```
 
 ```java
@@ -456,11 +454,8 @@ graph TD
     A["템플릿 콜백 패턴"] --> B[JdbcTemplate]
     A --> C[RestTemplate]
     A --> D[TransactionTemplate]
-    A --> E[RedisTemplate]
-    A --> F[RabbitTemplate]
-    A --> G[KafkaTemplate]
-    B -->|"콜백"| H[RowMapper, PreparedStatementCreator]
-    C -->|"콜백"| I[RequestCallback, ResponseExtractor]
+    B -->|"콜백"| H[RowMapper]
+    C -->|"콜백"| I[RequestCallback]
     D -->|"콜백"| J[TransactionCallback]
 ```
 

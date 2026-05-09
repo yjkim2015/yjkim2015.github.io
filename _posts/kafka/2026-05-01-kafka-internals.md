@@ -29,13 +29,7 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph acc["RecordAccumulator"]
-        subgraph p0["Partition 0 deque"]
-            B1["ProducerBatch 1 (꽉"]
-            B2["ProducerBatch 2 (현"]
-            B1 --> B2
-        end
-    end
+    B1["ProducerBatch 1 (꽉 참)"] --> B2["ProducerBatch 2 (현재)"]
 ```
 
 배치 전송 트리거 조건:
@@ -110,12 +104,8 @@ public class RegionPartitioner implements Partitioner {
 
 ```mermaid
 graph TD
-    subgraph rr["라운드로빈 (비효율)"]
-        RR["msg1→P0, msg2→P1,"]
-    end
-    subgraph sticky["Sticky Partitioner"]
-        ST1["msg1,2,3 모두 P0 누적\"] --> ST2["전송 후 파티션 전환"]
-    end
+    RR["라운드로빈: msg1→P0,msg2→P1"]
+    ST1["Sticky: msg1,2,3 P0 누적"] --> ST2["전송 후 파티션 전환"]
 ```
 
 ---
@@ -510,13 +500,8 @@ public class ExactlyOnceProcessor {
 
 ```mermaid
 graph LR
-    subgraph partition["Partition 0"]
-        L["Broker 1 (Leader)\"]
-        F1["Broker 2 (Follower"]
-        F2["Broker 3 (Follower"]
-        L -->|복제| F1
-        L -->|복제| F2
-    end
+    L["Broker 1 (Leader)"] -->|복제| F1["Broker 2 (Follower)"]
+    L -->|복제| F2["Broker 3 (Follower)"]
 ```
 
 ### 리더 장애 시
@@ -524,15 +509,12 @@ graph LR
 ```mermaid
 sequenceDiagram
     participant CTL as Controller
-    participant B1 as Broker 1 (구 Leader)
-    participant B2 as Broker 2
-    participant B3 as Broker 3
+    participant B1 as Broker1(구Leader)
+    participant B2 as Broker2
     Note over B1: 장애 발생!
-    CTL->>CTL: ISR 확인: [Broker2, Broker3]
-    CTL->>B2: 새 Leader로 선출
-    CTL->>B2: 메타데이터 갱신
-    CTL->>B3: 메타데이터 갱신
-    Note over B2: Partition 0 새 Leader\nISR: [Broker2, Broker3]
+    CTL->>CTL: ISR 확인
+    CTL->>B2: 새 Leader 선출
+    Note over B2: 새 Leader
 ```
 
 ### 컨트롤러(Controller) 역할
@@ -541,13 +523,9 @@ ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러
 
 ```mermaid
 graph TD
-    subgraph zk["ZooKeeper"]
-        ZKA["브로커 /controller 선점"] --> ZKB["먼저 생성한 브로커 = 컨트롤러"]
-    end
-    subgraph kraft["KRaft"]
-        KRA["Raft 합의"] --> KRB["quorum 투표 → Active"]
-    end
-    ZKB & KRB --> DUTIES["역할: 리더 선출·ISR·토픽 관"]
+    ZKA["ZK: /controller 선점"] --> ZKB["먼저 생성 = 컨트롤러"]
+    KRA["KRaft: Raft 합의"] --> KRB["quorum 투표 → Active"]
+    ZKB & KRB --> DUTIES["역할: 리더선출·ISR·토픽"]
 ```
 
 ---
@@ -574,23 +552,16 @@ key="user-2" → {"name":"이영희", "email":"c@c.com"}  (유일값)
 
 ```mermaid
 graph TD
-    subgraph before["파티션 로그 (컴팩션 전)"]
-        CLEAN["Clean 영역 (이미 컴팩션됨)"]
-        DIRTY["Dirty 영역 (컴팩션 대상)\"]
-    end
-    subgraph process["Log Cleaner 스레드 동작"]
-        SCAN["1. Dirty 영역 스캔"]
-        NEW["2. 새 세그먼트 생성"]
-        REPLACE["3. 오래된 세그먼트 교체"]
-        SCAN --> NEW --> REPLACE
-    end
-    before --> process
+    CLEAN["Clean 영역 (컴팩션됨)"] --> DIRTY["Dirty 영역 (대상)"]
+    DIRTY --> SCAN["1. Dirty 영역 스캔"]
+    SCAN --> NEW["2. 새 세그먼트 생성"]
+    NEW --> REPLACE["3. 세그먼트 교체"]
 ```
 
 ```mermaid
 graph LR
-    B0["0:k1v1"] --> B1["1:k2v1"] --> B2["2:k1v2"] --> B3["3:k3v1"] --> B4["4:k2v2"] --> B5["5:k1v3"] --> B6["6:k3v2"]
-    B6 -->|컴팩션| A2["2:k1v2"] --> A4["4:k2v2"] --> A5["5:k1v3"] --> A6["6:k3v2"]
+    B0["0:k1v1"] --> B2["2:k1v2"] --> B4["4:k2v2"] --> B6["6:k3v2"]
+    B6 -->|컴팩션| A4["4:k2v2"] --> A5["5:k1v3"] --> A6["6:k3v2"]
 ```
 
 **주의:** 컴팩션 후에도 offset은 변하지 않는다. 일부 offset이 없는 sparse log가 된다.

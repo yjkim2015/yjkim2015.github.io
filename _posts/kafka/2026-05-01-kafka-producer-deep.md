@@ -81,12 +81,8 @@ max.in.flight.requests.per.connection=5  # 브로커당 동시 미확인 요청 
 
 ```mermaid
 graph LR
-    subgraph "linger.ms=0 (기본: 지연 최소화)"
-        L0["메시지 도착 즉시 전송"]
-    end
-    subgraph "linger.ms=10 (처리량 최적화)"
-        L10["10ms 대기 후 배치로 전송"]
-    end
+    L0["linger.ms=0: 즉시 전송"]
+    L10["linger.ms=10: 배치 전송"]
     style L0 fill:#3498db,color:#fff
     style L10 fill:#2ecc71,color:#fff
 ```

@@ -54,15 +54,12 @@ sequenceDiagram
     participant CO as Coordinator
     participant ODB as OrderDB
     participant IDB as InventoryDB
-    participant PDB as PaymentDB
-    Note over CO,PDB: Phase 1 - Prepare
+    Note over CO: Phase 1 - Prepare
     CO->>ODB: Prepare
     CO->>IDB: Prepare
-    CO->>PDB: Prepare
-    Note over CO,PDB: Phase 2 - Commit
+    Note over CO: Phase 2 - Commit
     CO->>ODB: Commit
     CO->>IDB: Commit
-    CO->>PDB: Commit
 ```
 
 ### 2PC의 문제점
@@ -117,12 +114,9 @@ sequenceDiagram
     participant OS as Order
     participant MQ as MQ
     participant IS as Inventory
-    participant PS as Payment
     OS->>MQ: OrderCreated
-    MQ->>IS: 재고 차감 → InventoryReserved
-    IS->>MQ: InventoryReserved
-    MQ->>PS: 결제 → PaymentFailed(실패)
-    MQ->>IS: 보상: 재고 복원
+    MQ->>IS: 재고 차감
+    IS->>MQ: 실패
     MQ->>OS: 보상: 주문 취소
 ```
 
@@ -141,13 +135,9 @@ sequenceDiagram
     participant SO as Orchestrator
     participant OS as Order
     participant IS as Inventory
-    participant PS as Payment
     SO->>OS: 주문 생성
     SO->>IS: 재고 차감
-    SO->>PS: 결제 처리
-    PS-->>SO: 실패
-    Note over SO: 보상 트랜잭션
-    SO->>IS: 재고 복원
+    IS-->>SO: 실패
     SO->>OS: 주문 취소
 ```
 

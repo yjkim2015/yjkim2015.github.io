@@ -105,15 +105,13 @@ repl-backlog-ttl 3600   # 레플리카가 없어도 1시간 backlog 유지
 
 ```mermaid
 sequenceDiagram
-    participant C as "Client"
-    participant M as "Master"
-    participant R1 as "Replica 1"
-    participant R2 as "Replica 2"
+    participant C as Client
+    participant M as Master
+    participant R1 as Replica
     C->>M: SET user:1 "Kim"
-    M-->>C: OK (즉시 응답)
-    M--)R1: SET user:1 "Kim" (비동기 전파)
-    M--)R2: SET user:1 "Kim" (비동기 전파)
-    Note over R1,R2: 약간 뒤처질 수 있음 (Replication Lag)
+    M-->>C: OK
+    M--)R1: SET user:1 "Kim"
+    Note over R1: Replication Lag
 ```
 
 **비동기**: 마스터는 레플리카의 응답을 기다리지 않는다. 그래서 마스터는 빠르지만, 레플리카는 항상 마스터보다 약간 뒤처진다(Replication Lag).
@@ -184,14 +182,10 @@ min-replicas-max-lag 10    # 레플리카 지연 10초 이내여야 함
 
 ```mermaid
 graph LR
-    subgraph "정상 (쓰기 허용)"
-        M1["Master"] <-->|"연결됨"| R1["Replica"]
-        M1 --> W1["쓰기 허용"]
-    end
-    subgraph "장애 (쓰기 거부)"
-        M2["Master"] -. "연결 끊김" .- R2["Replica"]
-        M2 --> W2["쓰기 거부 — 유실 방지"]
-    end
+    M1["Master"] <-->|연결됨| R1["Replica"]
+    M1 --> W1["쓰기 허용"]
+    M2["Master"] -. 연결 끊김 .- R2["Replica"]
+    M2 --> W2["쓰기 거부"]
     style W1 fill:#8f8,stroke:#080,color:#000
     style W2 fill:#f88,stroke:#c00,color:#000
 ```

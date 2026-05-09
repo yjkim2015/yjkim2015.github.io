@@ -493,18 +493,10 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph "모놀리스 아키텍처"
-        M["하나의 큰 JAR/WAR"]
-    end
-    subgraph "마이크로서비스 아키텍처"
-        US["사용자 서비스"]
-        OS["주문 서비스"]
-        PS["결제 서비스"]
-        DS["배송 서비스"]
-    end
-    US -->|"HTTP/gRPC"| OS
-    OS -->|"HTTP/gRPC"| PS
-    PS -->|"이벤트 발행"| DS
+    M["모놀리스 JAR/WAR"]
+    US["사용자 서비스"] -->|"HTTP/gRPC"| OS["주문 서비스"]
+    OS -->|"HTTP/gRPC"| PS["결제 서비스"]
+    PS -->|"이벤트"| DS["배송 서비스"]
 ```
 
 | 특성 | 모놀리스 | 마이크로서비스 |

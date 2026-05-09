@@ -159,13 +159,11 @@ curl -X POST http://order-service:8080/actuator/refresh
 sequenceDiagram
     participant DEV as Dev
     participant CS as ConfigServer
-    participant MQ as MQ
-    participant SVC as Services(OS1/OS2/US)
-    DEV->>CS: push + bus-refresh (1회)
-    CS->>MQ: RefreshRemoteApplicationEvent 발행
-    MQ->>SVC: 이벤트 수신
+    participant SVC as Services
+    DEV->>CS: push + bus-refresh
+    CS->>SVC: 이벤트 발행
     SVC->>CS: 새 설정 fetch
-    Note over SVC: 재배포 없이 새 설정 적용
+    Note over SVC: 재배포 없이 적용
 ```
 
 ---

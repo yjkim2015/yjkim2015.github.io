@@ -638,18 +638,10 @@ System.out.println(stringList.getClass()); // class java.util.ArrayList
 
 ```mermaid
 graph LR
-  subgraph "컴파일 타임"
-    SRC["List&lt;String&gt;"]
-  end
-  subgraph "컴파일러 처리"
-    CHECK["1. 타입 검사"]
-    ERASE["2. 타입 소거"]
-    CAST["3. 캐스팅 삽입"]
-  end
-  subgraph "런타임 바이트코드"
-    BC["List list"]
-  end
-  SRC --> CHECK --> ERASE --> CAST --> BC
+    SRC["List&lt;String&gt;"] --> CHECK["1. 타입 검사"]
+    CHECK --> ERASE["2. 타입 소거"]
+    ERASE --> CAST["3. 캐스팅 삽입"]
+    CAST --> BC["List list 바이트코드"]
 ```
 
 컴파일러는 타입 소거 시 다음 규칙을 적용합니다.

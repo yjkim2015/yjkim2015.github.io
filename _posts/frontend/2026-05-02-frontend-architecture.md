@@ -252,8 +252,8 @@ function App() {
 ```mermaid
 graph TD
     ROOT["root/"] --> APPS["apps/"] & PACKAGES["packages/"]
-    APPS --> WEB["web Next.js"] & MOBILE["mobile RN"] & ADMIN["admin React"]
-    PACKAGES --> UI["ui"] & TYPES["types"] & UTILS["utils"] & CONFIG["config"]
+    APPS --> WEB["web Next.js"] & MOBILE["mobile RN"]
+    PACKAGES --> UI["ui"] & TYPES["types"] & UTILS["utils"]
 ```
 
 > 비유: 한 회사의 여러 부서가 같은 복지 제도, 같은 업무 시스템을 공유하는 것과 같습니다. 각 팀은 독립적으로 일하지만, 공통 인프라는 함께 씁니다.
@@ -266,11 +266,10 @@ graph TD
 
 ```mermaid
 graph TD
-    SHELL["Shell App 앱 컨테이너"]
-    SHELL --> AUTH["Auth MFE<br>팀 A"]
-    SHELL --> PRODUCTS["Products MFE<br>팀"]
-    SHELL --> CART["Cart MFE<br>팀 C"]
-    SHELL --> CHECKOUT["Checkout MFE<br>팀"]
+    SHELL["Shell App"]
+    SHELL --> AUTH["Auth MFE 팀A"]
+    SHELL --> PRODUCTS["Products MFE 팀B"]
+    SHELL --> CART["Cart MFE 팀C"]
     AUTH -.->|"독립 배포"| AUTH
     PRODUCTS -.->|"독립 배포"| PRODUCTS
     CART -.->|"독립 배포"| CART

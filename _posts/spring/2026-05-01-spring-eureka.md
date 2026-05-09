@@ -30,15 +30,13 @@ sequenceDiagram
     participant S as Service
     participant E as EurekaServer
     participant C as Client
-    S->>E: POST /eureka/apps/{appName} (Register)
+    S->>E: Register
     loop 매 10초
-        S->>E: PUT Heartbeat
-        E-->>S: 200 OK
+        S->>E: Heartbeat
     end
-    C->>E: 인스턴스 목록 조회
-    E-->>C: 목록 반환
-    C->>S: 직접 HTTP 호출
-    S->>E: DELETE (Deregister)
+    C->>E: 목록 조회
+    C->>S: HTTP 호출
+    S->>E: Deregister
 ```
 
 ---
@@ -216,16 +214,11 @@ eureka:
 
 ```mermaid
 graph TD
-    subgraph "HA Eureka 클러스터"
-        ES1["Eureka Server 1"]
-        ES2["Eureka Server 2"]
-        ES1 <-->|"Peer Replication"| ES2
-    end
-    MS1["Order Service"] -->|"Register"| ES1
-    MS2["User Service"] -->|"Register"| ES2
-    MS3["Product Service"] -->|"Register"| ES1
-    MS1 -->|"Discovery"| ES1
-    MS1 -.->|"Fallback"| ES2
+    ES1["Eureka 1"] <-->|Peer Replication| ES2["Eureka 2"]
+    MS1["Order"] -->|Register| ES1
+    MS2["User"] -->|Register| ES2
+    MS1 -->|Discovery| ES1
+    MS1 -.->|Fallback| ES2
 ```
 
 ---

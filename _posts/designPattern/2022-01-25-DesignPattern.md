@@ -52,18 +52,18 @@ classDiagram
 
 ```mermaid
 classDiagram
-    class "Target 인터페이스" {
+    class Target {
         +request()
     }
-    class "Adapter" {
+    class Adapter {
         -adaptee
         +request()
     }
-    class "Adaptee (기존 클래스)" {
+    class Adaptee {
         +specificRequest()
     }
-    "Target 인터페이스" <|.. "Adapter"
-    "Adapter" --> "Adaptee (기존 클래스)" : "위임"
+    Target <|.. Adapter
+    Adapter --> Adaptee : 위임
 ```
 
 ```java
@@ -191,16 +191,14 @@ JDK에서 `BufferedInputStream(new FileInputStream(file))`이 대표적인 Decor
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant F as "HomeAutomationFacade"
-    participant L as "LightSystem"
-    participant S as "SecuritySystem"
-    participant A as "AirConditioner"
-    C->>F: "1. sleepMode() 호출"
-    F->>L: "2. turnOffAllLights()"
-    F->>S: "3. lockAllDoors()"
-    F->>A: "4. turnOff()"
-    F-->>C: "5. 완료"
+    participant C as Client
+    participant F as Facade
+    participant Sub as Subsystems
+    C->>F: sleepMode()
+    F->>Sub: turnOffLights()
+    F->>Sub: lockDoors()
+    F->>Sub: turnOffAC()
+    F-->>C: 완료
 ```
 
 ```java

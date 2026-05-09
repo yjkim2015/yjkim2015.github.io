@@ -271,13 +271,8 @@ public class OrderPersistenceAdapter implements OrderRepository {
 
 ```mermaid
 graph TD
-    subgraph "테스트 레벨"
-        UT["단위 테스트"]
-        IT["통합 테스트"]
-        E2E["E2E 테스트"]
-    end
-    UT -->|"70%"| IT
-    IT -->|"20%"| E2E
+    UT["단위 테스트"] -->|"70%"| IT["통합 테스트"]
+    IT -->|"20%"| E2E["E2E 테스트"]
     class E2E e2e
 ```
 

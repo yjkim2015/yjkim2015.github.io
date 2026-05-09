@@ -15,17 +15,13 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph "MongoDB"
-        DB1["데이터베이스"] --> Col["컬렉션 Collection"]
-        Col --> Doc["도큐먼트 Document (JSO"]
-    end
-    subgraph "RDBMS"
-        DB2["데이터베이스"] --> Table["테이블"]
-        Table --> Row["행 Row"]
-    end
-    DB1 <-->|"대응"| DB2
-    Col <-->|"대응"| Table
-    Doc <-->|"대응"| Row
+    DB1["MongoDB DB"] --> Col["Collection"]
+    Col --> Doc["Document"]
+    DB2["RDBMS DB"] --> Table["테이블"]
+    Table --> Row["행 Row"]
+    DB1 <-->|대응| DB2
+    Col <-->|대응| Table
+    Doc <-->|대응| Row
 ```
 
 ```json

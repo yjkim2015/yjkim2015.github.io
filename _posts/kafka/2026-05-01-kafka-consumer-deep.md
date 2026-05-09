@@ -44,17 +44,13 @@ graph TD
 
 ```mermaid
 flowchart LR
-    subgraph "파티션 3개, Consumer 5개"
-        PA["P0 → Consumer A"]
-        PB["P1 → Consumer B"]
-        PC["P2 → Consumer C"]
-        PD["Consumer D → 유휴 (I"]
-        PE["Consumer E → 유휴 (I"]
-    end
-    subgraph "파티션 3개, Consumer 2개"
-        Q1["P0, P1 → Consumer"]
-        Q2["P2 → Consumer B"]
-    end
+    PA["P0 → Consumer A"]
+    PB["P1 → Consumer B"]
+    PC["P2 → Consumer C"]
+    PD["Consumer D → 유휴"]
+    PE["Consumer E → 유휴"]
+    Q1["P0,P1 → Consumer A"]
+    Q2["P2 → Consumer B"]
 ```
 
 핵심 규칙:

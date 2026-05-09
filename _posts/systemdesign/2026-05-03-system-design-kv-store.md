@@ -61,12 +61,10 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    subgraph ring["해시 링 (0 ~ 2^32)"]
-        N1["노드A"] --> N2["노드B"]
-        N2 --> N3["노드C"]
-        N3 --> N4["노드D"]
-        N4 --> N1
-    end
+    N1["노드A"] --> N2["노드B"]
+    N2 --> N3["노드C"]
+    N3 --> N4["노드D"]
+    N4 --> N1
     K1["key1"] -.-> N2
     K2["key2"] -.-> N4
 ```
@@ -135,17 +133,13 @@ DynamoDB, Cassandra, Riak이 이 방식을 쓴다. 리더 없이 모든 노드�
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant N1 as "노드1"
-    participant N2 as "노드2"
-    participant N3 as "노드3"
+    participant C as Client
+    participant N1 as 노드1
+    participant N2 as 노드2
     C->>N1: put(key, val)
     C->>N2: put(key, val)
-    C->>N3: put(key, val)
     N1-->>C: OK
-    N2-->>C: OK
-    Note over C: W=2 달성 → 완료
-    N3-->>C: OK (늦게 도착)
+    N2-->>C: OK(W=2 달성)
 ```
 
 ### Quorum — W + R > N

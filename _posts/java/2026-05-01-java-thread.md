@@ -64,13 +64,9 @@ Java의 전통적인 Platform Thread는 OS 커널 스레드와 **1:1로 매핑**
 
 ```mermaid
 graph TD
-  subgraph JVM
-    JT1[Java Thread 1] & JT2[Java Thread 2] & JT3[Java Thread 3]
-  end
-  JT1 & JT2 & JT3 -->|JNI| OS
-  subgraph OS["OS 스케줄러"]
-    CPU1[CPU 코어 1] & CPU2[CPU 코어 2]
-  end
+  JT1[Java Thread 1] & JT2[Java Thread 2] & JT3[Java Thread 3] -->|JNI| OS
+  OS --> CPU1[CPU 코어 1]
+  OS --> CPU2[CPU 코어 2]
 ```
 
 이 모델의 한계는 커널 스레드 생성 비용(약 1MB 스택 메모리)과 컨텍스트 스위칭 오버헤드입니다. 수만 개의 스레드를 동시에 만들기 어렵습니다.
@@ -405,15 +401,11 @@ public class ProducerConsumer {
 
 ```mermaid
 graph TD
-  subgraph Core1["CPU 코어 1 캐시"]
-    F1["flag = true"]
-  end
-  subgraph Core2["CPU 코어 2 캐시"]
-    F2["flag = false ← 코어"]
-  end
-  MM["메인 메모리: flag = tru"]
-  Core1 <--> MM
-  Core2 <--> MM
+  F1["코어1 캐시: flag=true"]
+  F2["코어2 캐시: flag=false"]
+  MM["메인 메모리: flag=true"]
+  F1 <--> MM
+  F2 <--> MM
 ```
 
 ```java
@@ -1103,14 +1095,13 @@ boolean success = stampedRef.compareAndSet(
 
 ```mermaid
 graph LR
-    TA[ThreadA] --> CELL["AtomicLong: count("]
+    TA[ThreadA] --> CELL["AtomicLong: count"]
     TB[ThreadB] --> CELL
     TC[ThreadC] --> CELL
     T1[Thread1] --> C1["Cell:3"]
     T2[Thread2] --> C2["Cell:7"]
     T3[Thread3] --> C3["Cell:2"]
-    T4[Thread4] --> C4["Cell:5"]
-    C1 & C2 & C3 & C4 -->|"sum()=17"| SUM["LongAdder 합계"]
+    C1 & C2 & C3 -->|"sum()"| SUM["LongAdder 합계"]
 ```
 
 ```java
@@ -1137,16 +1128,14 @@ Java 8의 `ConcurrentHashMap`은 세그먼트 락(Java 7 방식)을 버리고 **
 
 ```mermaid
 graph TD
-  subgraph "ConcurrentHashMap 버킷 배열 (Node[] table)"
-    B0["버킷 0"]
-    B1["버킷 1"]
-    B2["버킷 2"]
-    B3["버킷 3"]
-  end
-  T1["스레드 A"] -->|"1. CAS 시도"| B0
-  T2["스레드 B"] -->|"1. synchronized"| B1
-  T3["스레드 C"] -->|"1. CAS 시도"| B2
-  NOTE["서로 다른 버킷 → 완전 병렬"]
+  B0["버킷 0"]
+  B1["버킷 1"]
+  B2["버킷 2"]
+  B3["버킷 3"]
+  T1["스레드 A"] -->|"CAS"| B0
+  T2["스레드 B"] -->|"synchronized"| B1
+  T3["스레드 C"] -->|"CAS"| B2
+  NOTE["서로 다른 버킷 → 병렬"]
 ```
 
 ```java

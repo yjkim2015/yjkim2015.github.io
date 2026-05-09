@@ -15,10 +15,8 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph APP["Application Proces"]
-        BL["Business Logic"] -->|조회| LC["Local Cache (Heap"]
-    end
-    APP -->|Cache Miss only| EXT["External Store (DB"]
+    BL["Business Logic"] -->|조회| LC["Local Cache"]
+    BL -->|Cache Miss| EXT["External Store"]
 ```
 
 ### 로컬 캐시 vs 분산 캐시

@@ -193,15 +193,10 @@ public String myPage(@LoginUser User loginUser, Model model) {
 
 ```mermaid
 graph TD
-    A["HTTP 요청"] --> B
-    subgraph "Servlet 컨테이너 레벨 (필터)"
-        B["Filter Chain<br>Ch"]
-    end
+    A["HTTP 요청"] --> B["Filter Chain"]
     B --> C["DispatcherServlet"]
-    subgraph "Spring MVC 레벨 (인터셉터)"
-        C --> D["Interceptor Chain"]
-        D --> E["Controller"]
-    end
+    C --> D["Interceptor"]
+    D --> E["Controller"]
 ```
 
 필터는 Spring 컨텍스트 밖 Servlet 컨테이너 레벨에서 동작한다. 인터셉터는 Spring MVC 내부에서 동작하므로 Spring Bean을 주입받을 수 있다.

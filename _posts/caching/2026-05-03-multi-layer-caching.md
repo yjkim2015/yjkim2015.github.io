@@ -192,15 +192,14 @@ Spring의 Cache 추상화를 활용하면 L1(Caffeine)과 L2(Redis)를 투명하
 ```mermaid
 sequenceDiagram
     participant App
-    participant L1 as Caffeine
-    participant L2 as Redis
-    participant DB
+    participant L1 as L1(Caffeine)
+    participant L2 as L2(Redis)
     App->>L1: GET key
     alt Hit
         L1-->>App: 100ns
     else Miss
         App->>L2: GET key
-        L2-->>App: Hit(1ms) or Miss→DB조회→L2/L1 저장
+        L2-->>App: Hit(1ms)/Miss→DB
     end
 ```
 
@@ -346,15 +345,12 @@ L2(Redis)는 모든 서버가 공유하므로 일관성 문제가 없다. 진짜
 
 ```mermaid
 sequenceDiagram
-    participant SA as "서버 A"
-    participant Redis as "Redis Pub/Sub"
-    participant SB as "서버 B"
-    participant SC as "서버 C"
-    SA->>SA: 1️⃣ 데이터 변경
-    SA->>SA: 2️⃣ 자신의 L1 삭제
-    SA->>Redis: 3️⃣ PUBLISH l1:invalidate products:42
-    Redis-->>SB: 4️⃣ 수신 → L1 삭제
-    Redis-->>SC: 4️⃣ 수신 → L1 삭제
+    participant SA as 서버A
+    participant Redis as Redis
+    participant SB as 서버B/C
+    SA->>SA: 데이터 변경 + L1 삭제
+    SA->>Redis: PUBLISH l1:invalidate
+    Redis-->>SB: L1 삭제
 ```
 
 L1 동기화에서 중요한 설계 결정이 있다. "내가 보낸 무효화 메시지를 내가 또 처리할 것인가?" 서버 A가 이미 자신의 L1을 지웠는데, 자신이 보낸 Pub/Sub 메시지를 자기도 수신해서 또 지울 필요는 없다. 하지만 이를 구분하는 로직이 더 복잡하고, 한 번 더 지워도 부작용이 없으므로 보통은 구분 없이 처리한다.
@@ -536,13 +532,9 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "L1 없을 때"
-        A1["25,000 TPS"] -->|"전부 Redis로"| R1["Redis 25,000 ops/s"]
-    end
-    subgraph "L1 있을 때"
-        A2["25,000 TPS"] -->|"80% L1 Hit"| L1["L1에서 20,000 처리"]
-        A2 -->|"20% Miss"| R2["Redis 5,000 ops/se"]
-    end
+    A1["25K TPS"] -->|"L1 없음"| R1["Redis 25K ops"]
+    A2["25K TPS"] -->|"80% L1 Hit"| L1["L1: 20K 처리"]
+    A2 -->|"20% Miss"| R2["Redis 5K ops"]
 ```
 
 L1을 빼면 Redis 부하가 5배로 증가한다. Redis Cluster의 단일 샤드 한계는 보통 100K ops/sec이므로, L1 없이 여러 샤드로 분산해야 같은 성능을 내려면 Redis 비용이 5배 증가한다.
@@ -711,14 +703,10 @@ API 응답에 `Cache-Control: max-age=3600`을 설정해놓고, 긴급 데이터
 
 ```mermaid
 graph LR
-    subgraph "계층별 역할"
-        CDN["CDN"]
-        GW["API Gateway"]
-        L1["L1 Caffeine"]
-        L2["L2 Redis"]
-        DB["DB"]
-    end
-    CDN --> GW --> L1 --> L2 --> DB
+    CDN["CDN"] --> GW["API Gateway"]
+    GW --> L1["L1 Caffeine"]
+    L1 --> L2["L2 Redis"]
+    L2 --> DB["DB"]
 ```
 
 | 설계 원칙 | 설명 |

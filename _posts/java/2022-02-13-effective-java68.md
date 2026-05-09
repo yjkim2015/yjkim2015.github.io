@@ -87,17 +87,16 @@ Optional.valueOf(str);
 ```mermaid
 graph TD
     A["메서드 이름 선택"] --> B{"boolean 반환?"}
-    B -- 예 --> C["is / has 시작"]
+    B -- 예 --> C["is/has 시작"]
     B -- 아니오 --> D{"동작 수행?"}
     D -- 예 --> E["동사/동사구"]
-    D -- 아니오 --> F{"속성 반환?"}
-    F -- 예 --> G["명사/명사구 또는 get"]
-    F -- 아니오 --> H{"타입 변환?"}
-    H -- 예 --> I["toType / asType /"]
+    D -- 아니오 --> F{"타입 변환?"}
+    F -- 예 --> G["toType/asType"]
+    F -- 아니오 --> H["명사/get 시작"]
     style C fill:#51cf66,color:#fff
     style E fill:#51cf66,color:#fff
     style G fill:#51cf66,color:#fff
-    style I fill:#51cf66,color:#fff
+    style H fill:#51cf66,color:#fff
 ```
 
 ---

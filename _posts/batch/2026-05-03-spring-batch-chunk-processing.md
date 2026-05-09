@@ -81,15 +81,14 @@ chunk-size가 크면 한 트랜잭션에서 더 많은 데이터를 처리하므
 ```mermaid
 sequenceDiagram
     participant TX as TX
-    participant CR as CursorReader
-    participant PR as PagingReader
+    participant CR as Reader
     participant PW as Processor/Writer
     Note over TX,CR: Cursor 방식
-    TX->>CR: read() TX 안에서 커서이동
+    TX->>CR: read() 커서이동
     TX->>PW: process/write
     TX->>TX: COMMIT
-    Note over TX,PR: Paging 방식
-    PR->>PR: read() 별도 SELECT
+    Note over TX,CR: Paging 방식
+    CR->>CR: 별도 SELECT
     TX->>PW: process/write
     TX->>TX: COMMIT
 ```

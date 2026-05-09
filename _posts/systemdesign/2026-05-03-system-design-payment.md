@@ -74,13 +74,10 @@ toc_label: 목차
 graph TD
     A[클라이언트] --> B[API Gateway]
     B --> C[결제 서비스]
-    C --> D[PG 연동 레이어]
+    C --> D[PG 연동]
     C --> E[원장 서비스]
-    C --> F[이상거래 탐지 FDS]
     D --> G[PG사 A]
-    D --> H[PG사 B 폴백]
     E --> I[정산 서비스]
-    I --> J[판매자 정산 배치]
 ```
 
 ### 핵심 컴포넌트 역할
@@ -108,12 +105,9 @@ sequenceDiagram
     participant U as 사용자
     participant PS as 결제서비스
     participant PG as PG사
-    participant LS as 원장서비스
-    U->>PS: 결제 요청 (idempotency_key 포함)
-    PS->>PS: 멱등성 키 중복 확인
+    U->>PS: 결제 요청
     PS->>PG: 승인 요청
-    PG-->>PS: 승인 응답 (approval_code)
-    PS->>LS: 원장 기록 (차변/대변)
+    PG-->>PS: 승인 응답
     PS-->>U: 결제 완료
 ```
 
@@ -353,12 +347,9 @@ sequenceDiagram
     participant U as 사용자
     participant RS as 환불서비스
     participant PG as PG사
-    participant LS as 원장서비스
     U->>RS: 환불 요청
-    RS->>RS: 환불 가능 여부 검증
     RS->>PG: PG 취소 요청
-    PG-->>RS: 취소 성공/실패
-    RS->>LS: 역분개 원장 기록
+    PG-->>RS: 취소 응답
     RS-->>U: 환불 완료
 ```
 

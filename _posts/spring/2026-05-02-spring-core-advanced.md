@@ -59,18 +59,12 @@ public class MemberService {
 
 ```mermaid
 graph TD
-    subgraph "AOP 적용 후 — 각자 자기 일만"
-        A["OrderService"] --> F["핵심 비즈니스 로직만"]
-        B["MemberService"] --> F
-        C["ItemService"] --> F
-    end
-    subgraph "Aspect — 한 곳에서 관리"
-        G["LogAspect"]
-        H["TransactionAspect\"]
-    end
-    G -. "자동 적용 (프록시)" .--> A
-    G -. "자동 적용 (프록시)" .--> B
-    G -. "자동 적용 (프록시)" .--> C
+    A["OrderService"] --> F["비즈니스 로직"]
+    B["MemberService"] --> F
+    C["ItemService"] --> F
+    G["LogAspect"] -. "프록시 적용" .--> A
+    G -. "프록시 적용" .--> B
+    G -. "프록시 적용" .--> C
 ```
 
 `LogAspect` 하나만 바꾸면 100개 서비스에 일괄 적용됩니다. 새 서비스를 추가해도 자동으로 로그가 붙습니다. 비즈니스 로직에는 단 한 줄도 추가할 필요가 없습니다.
@@ -138,14 +132,11 @@ public class TimeDecorator implements Subject {
 sequenceDiagram
     participant C as Client
     participant T as TimeDecorator
-    participant CP as CacheProxy
     participant R as RealSubject
     C->>T: operation()
-    T->>CP: 위임 (시간측정 시작)
-    CP->>R: operation() (캐시 없을 때만)
-    R-->>CP: 결과
-    CP-->>T: 결과 (캐시 저장)
-    T-->>C: 결과 (시간 로그)
+    T->>R: operation()
+    R-->>T: 결과
+    T-->>C: 결과(시간 로그)
 ```
 
 시간 측정 → 캐시 → 실제 로직 순서로 연결됩니다. 순서를 바꾸고 싶거나 새 기능을 추가하고 싶으면 체인에 하나만 추가하면 됩니다. `RealSubject`는 전혀 건드리지 않습니다.
@@ -367,17 +358,12 @@ public class AllLogAspect {
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant AR as @Around
-    participant B as @Before
+    participant AR as Around
     participant T as Target
-    participant AF as @After*
-    C->>AR: 호출 (proceed 전)
-    AR->>B: @Before 실행
-    B->>T: 메서드 실행
-    T-->>AR: 결과 반환
-    AR->>AF: @AfterReturning or @AfterThrowing
-    AF->>AF: @After (항상)
-    AF-->>C: 최종 반환
+    C->>AR: 호출
+    AR->>T: proceed()
+    T-->>AR: 결과
+    AR-->>C: 최종 반환
 ```
 
 ---
@@ -500,12 +486,9 @@ sequenceDiagram
     participant C as Container
     participant O as 원본 빈
     participant BPP as BeanPostProcessor
-    participant P as 프록시 빈
-    C->>O: new + 의존주입 + @PostConstruct
-    C->>BPP: postProcessAfterInitialization()
-    BPP->>BPP: Pointcut 매칭 확인
-    BPP->>P: 매칭 시 ProxyFactory로 프록시 생성
-    C-->>P: 컨테이너에 프록시 등록
+    C->>O: new + 의존주입
+    C->>BPP: postProcessAfter()
+    BPP->>C: 프록시 빈 등록
 ```
 
 이 사실이 중요한 이유: `@PostConstruct`는 원본 빈에서 실행됩니다. 하지만 컨테이너에 등록되는 것은 프록시입니다. 즉, `@PostConstruct` 안에서 `this`는 원본 객체이고, 외부에서 주입받는 것은 프록시입니다. 대부분의 경우 문제없지만, `@PostConstruct` 안에서 프록시 메서드를 호출해야 하는 상황이라면 주의가 필요합니다.

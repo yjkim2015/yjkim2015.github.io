@@ -262,15 +262,12 @@ public class Manager implements Employee {
 
 ```mermaid
 sequenceDiagram
-    participant C as 클라이언트
-    participant R as Directory(root)
-    participant D as Directory(src)
-    participant F1 as File(readme)
-    participant F2 as File(App)
+    participant C as Client
+    participant R as Dir(root)
+    participant D as Dir/File
     C->>R: print()
-    R->>F1: child.print()
     R->>D: child.print()
-    D->>F2: child.print()
+    D->>D: 재귀 호출
     R-->>C: 완료
 ```
 

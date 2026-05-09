@@ -92,11 +92,9 @@ Mark-and-Sweep에 압축(Compact) 단계를 추가합니다.
 
 ```mermaid
 graph LR
-    subgraph "After Compact"
-        U1["A*"] --- U2["B*"] --- U3["C*"] --- F1["빈"] --- F2["빈"] --- F3["빈"] --- F4["빈"] --- F5["빈"]
-    end
-    PRO["장점: 단편화 없음, 연속 메모리"]
-    CON["단점: 객체 이동 → 참조 주소"]
+    U1["A*"] --- U2["B*"] --- U3["C*"] --- F1["빈"] --- F2["빈"]
+    PRO["장점: 단편화 없음"]
+    CON["단점: 객체 이동 비용"]
 ```
 
 ### Copying (복사 알고리즘)
@@ -105,15 +103,8 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph "복사 전"
-        FROM1["From Space: A* | B"]
-        TO1["To Space:   (비어 있음"]
-    end
-    subgraph "복사 후"
-        FROM2["From Space: (전체 비움"]
-        TO2["To Space:   A* | C"]
-    end
-    FROM1 -->|"살아있는 객체만 복사"| TO2
+    FROM1["From Space: A* B C* D"] -->|"살아있는 객체만 복사"| TO2["To Space: A* C*"]
+    FROM2["From Space: 전체 비움"]
 ```
 
 **장점**: 단편화 없음, 할당 속도 빠름(포인터 하나만 이동).
@@ -126,8 +117,8 @@ Young Generation의 Eden ↔ Survivor 복사에 이 방식을 사용합니다.
 
 ```mermaid
 graph LR
-    A["A (count=1)"] --> B["B (count=1)"] --> C["C (count=1)"] --> A
-    NOTE["외부 참조 없음에도 각 카운트 ≥"]
+    A["A count=1"] --> B["B count=1"] --> C["C count=1"] --> A
+    NOTE["순환참조: 외부 없어도 count>=1"]
 ```
 
 ---
@@ -142,11 +133,9 @@ graph LR
 
 ```mermaid
 graph LR
-    subgraph "객체 수명 분포 (Weak Generational Hypothesis)"
-        S["짧은 수명<br>(대다수 객체)"] -->|"수명 증가 → 객체 수 급감"| L["긴 수명<br>(소수 객체)"]
-    end
-    N1["대부분의 객체는 생성 직후 회수됨"]
-    N2["살아남은 객체는 오래 생존하는 경"]
+    S["짧은 수명(대다수)"] -->|"수명증가→객체수 급감"| L["긴 수명(소수)"]
+    N1["대부분 생성 직후 회수"]
+    N2["살아남으면 오래 생존"]
 ```
 
 이 가설을 바탕으로 메모리를 **Young Generation**과 **Old Generation**으로 분리합니다.
@@ -155,25 +144,17 @@ graph LR
 
 ```mermaid
 graph LR
-    subgraph "Young Generation"
-        Eden["Eden (전체의 약 80%)"]
-        S0["S0 (Survivor From)"]
-        S1["S1 (Survivor To)"]
-    end
-    TLAB["TLAB: Thread-Local"]
-    Eden --> S0
-    S0 --> S1
+    Eden["Eden 약 80%"] --> S0["S0 Survivor"]
+    S0 --> S1["S1 Survivor"]
+    TLAB["TLAB: Thread-Local 할당"]
 ```
 
 ### Minor GC vs Major GC vs Full GC
 
 ```mermaid
 graph TD
-    MinorGC["Minor GC (Young GC"]
-    MajorGC["Major GC (Old GC)\"]
-    FullGC["Full GC"]
-    MinorGC -->|"STW 짧음"| MajorGC
-    MajorGC -->|"STW 더 김"| FullGC
+    MinorGC["Minor GC Young"] -->|"STW 짧음"| MajorGC["Major GC Old"]
+    MajorGC -->|"STW 더 김"| FullGC["Full GC"]
 ```
 
 ### 객체 승격(Promotion) 과정
@@ -286,25 +267,17 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    subgraph "G1 GC 힙 구조 (2048개 Region)"
-        R1["E (Eden)"]
-        R2["E (Eden)"]
-        R3["S (Survivor)"]
-        R4["O (Old)"]
-        R5["H (Humongous)"]
-        R6["빈 Region"]
-    end
-    LEGEND["E: Eden Region"]
+    R1["E Eden"] & R2["S Survivor"] & R3["O Old"]
+    R4["H Humongous"] & R5["빈 Region"]
+    LEGEND["동적으로 역할 변경 가능"]
 ```
 
 **G1 GC 동작 단계**:
 
 ```mermaid
 graph TD
-    YGC["1. Young GC (STW)\"]
-    CMC["2. Concurrent Mark"]
-    MGC["3. Mixed GC (STW)\"]
-    YGC --> CMC --> MGC --> YGC
+    YGC["1. Young GC STW"] --> CMC["2. Concurrent Mark"]
+    CMC --> MGC["3. Mixed GC STW"] --> YGC
 ```
 
 **Humongous 객체**:
@@ -336,14 +309,7 @@ byte[] hugeArray = new byte[2 * 1024 * 1024]; // 2MB → Humongous
 
 ```mermaid
 graph TD
-    subgraph "Old Region"
-        CT["Card Table (512 by"]
-        OLD_OBJ["Old 객체 → Young 객체"]
-    end
-    subgraph "Young Region"
-        RS["Remembered Set (RS"]
-    end
-    CT -->|"참조 발생 시 기록"| RS
+    CT["Old Region Card Table"] -->|"참조 발생 시 기록"| RS["Young Region RemSet"]
     NOTE["Young GC 시 RS만 확인"]
     RS --> NOTE
 ```
@@ -362,13 +328,10 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "일반 64비트 포인터"
-        P1["0000 0000 ... 실제 주"]
-    end
-    subgraph "ZGC Colored Pointer"
-        P2["실제 주소 (42비트) | Fin"]
-        META["상위 4비트를 GC 메타데이터로"]
-    end
+    P1["일반 포인터: 실제 주소 64비트"]
+    P2["ZGC: 실제주소 42비트 + 메타4비트"]
+    META["상위 4비트 GC 상태 저장"]
+    P2 --> META
 ```
 
 객체 주소 자체에 GC 상태를 저장하여 추가 메모리 없이 동시 처리를 구현합니다.
@@ -433,14 +396,9 @@ RedHat이 개발한 **동시 압축(Concurrent Compaction)** GC입니다.
 
 ```mermaid
 graph TD
-    subgraph "Shenandoah 객체 레이아웃"
-        BP["Brooks Pointer (간접"]
-        OH["Object Header"]
-        OF["Object Fields"]
-        BP --> OH --> OF
-    end
-    OLD["Old Location"] -->|"Brooks Pointer가 Ne"| NEW["New Location"]
-    NOTE["모든 스레드가 old를 통해 ne"]
+    BP["Brooks Pointer"] --> OH["Object Header"] --> OF["Object Fields"]
+    OLD["Old Location"] -->|"Brooks Pointer → New"| NEW["New Location"]
+    NOTE["모든 스레드가 old 통해 new 접근"]
 ```
 
 | 항목 | ZGC | Shenandoah |
@@ -1043,17 +1001,9 @@ public class OffHeapCache {
 
 ```mermaid
 graph TD
-    subgraph "100K TPS GC 전략"
-        Z["ZGC / Generational"]
-        OH["Off-heap 캐시"]
-        OBJ["객체 풀링"]
-        VAL["Value Objects 최소화\"]
-        MON["실시간 모니터링"]
-    end
-    Z -->|"STW 1ms 이하"| MON
-    OH -->|"GC 압력 감소"| MON
-    OBJ -->|"할당 빈도 감소"| MON
-    VAL -->|"Young GC 감소"| MON
+    Z["ZGC STW 1ms 이하"] --> MON["실시간 모니터링"]
+    OH["Off-heap 캐시"] --> MON
+    OBJ["객체 풀링"] --> MON
 ```
 
 100K TPS에서는 GC 튜닝 이전에 애플리케이션 코드에서 불필요한 객체 생성을 줄이는 것이 선행되어야 합니다. JFR(Java Flight Recorder)로 어느 코드가 가장 많은 객체를 생성하는지 프로파일링한 후 최적화하는 순서가 효과적입니다.

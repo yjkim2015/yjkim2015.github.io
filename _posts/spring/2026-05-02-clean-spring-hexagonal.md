@@ -183,16 +183,11 @@ public class OrderService {
 
 ```mermaid
 graph TD
-    subgraph "트랜잭션 스크립트"
-        A[OrderService] --> B["모든 비즈니스 로직"]
-        C[Order] --> D["데이터만 보관 getter/set"]
-    end
-    subgraph "도메인 모델"
-        E[OrderService] --> F["얇은 오케스트레이션만"]
-        G[Order] --> H[cancel, getTotalPrice...]
-        I[Item] --> J[removeStock, addStock...]
-        K[OrderItem] --> L[getTotalPrice, cancel...]
-    end
+    A[OrderService] --> B["모든 비즈니스 로직"]
+    C[Order] --> D["데이터만(getter/set)"]
+    E[OrderSvc-DM] --> F["오케스트레이션만"]
+    G[Order-DM] --> H["cancel/getTotal"]
+    I[Item] --> J["removeStock"]
 ```
 
 ---
@@ -216,13 +211,11 @@ graph TD
 
 ```mermaid
 graph LR
-    A[REST/gRPC/Kafka] -->|인바운드 포트| E[OrderUseCase]
-    B[CLI] -->|인바운드 포트| F[MemberUseCase]
+    A[REST/Kafka] -->|인바운드| E[OrderUseCase]
     E --> G[OrderService]
-    F --> G
-    G --> H[Order/Item 도메인]
-    G -->|아웃바운드 포트| J[OrderPort]
-    G -->|아웃바운드 포트| L[EventPort]
+    G --> H[Order 도메인]
+    G -->|아웃바운드| J[OrderPort]
+    G -->|아웃바운드| L[EventPort]
     J --> M[JPA Repository]
     L --> O[Kafka Publisher]
 ```

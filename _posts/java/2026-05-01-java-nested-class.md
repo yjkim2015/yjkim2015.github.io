@@ -19,15 +19,11 @@ Java는 클래스 안에 클래스를 선언할 수 있습니다. 이를 중첩 
 
 ```mermaid
 graph TD
-    A["중첩 클래스 (Nested Cla"] --> B["Static Nested Clas"]
+    A["중첩 클래스"] --> B["Static Nested"]
     A --> C["Inner Class"]
-    C --> D["Member Inner Class"]
-    C --> E["Local Inner Class\"]
-    C --> F["Anonymous Class"]
-    B --> B1["외부 인스턴스 참조 없음"]
-    D --> D1["외부 인스턴스 참조 보유"]
-    E --> E1["메서드 내부에서만 선언"]
-    F --> F1["이름 없는 즉석 구현"]
+    B --> B1["외부 참조 없음"]
+    C --> D["Member Inner"] & E["Local Inner"] & F["Anonymous"]
+    D --> D1["외부 참조 보유"]
 ```
 
 | 종류 | static | 외부 인스턴스 참조 | 선언 위치 |
@@ -692,15 +688,14 @@ public class Outer {
 
 ```mermaid
 graph TD
-    A["중첩 클래스 선택 가이드"] --> B["외부 인스턴스 불필요?"]
-    B -->|"Yes"| C["Static Nested Clas"]
-    B -->|"No"| D["Inner Class 계열"]
-    D --> E["이름이 필요한가?"]
-    E -->|"Yes, 메서드 내"| F["Local Inner Class\"]
-    E -->|"Yes, 멤버"| G["Member Inner Class"]
-    E -->|"No"| H["함수형 인터페이스인가?"]
-    H -->|"Yes (메서드 1개)"| I["람다로 대체"]
-    H -->|"No (메서드 여러개)"| J["Anonymous Class"]
+    A["중첩 클래스 선택"] --> B{"외부 인스턴스 불필요?"}
+    B -->|"Yes"| C["Static Nested"]
+    B -->|"No"| D{"이름 필요?"}
+    D -->|"멤버"| G["Member Inner"]
+    D -->|"메서드 내"| F["Local Inner"]
+    D -->|"No"| H{"함수형 인터페이스?"}
+    H -->|"Yes"| I["람다"]
+    H -->|"No"| J["Anonymous Class"]
 ```
 
 **핵심 규칙:**

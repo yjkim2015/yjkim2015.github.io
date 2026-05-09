@@ -138,13 +138,10 @@ sequenceDiagram
     participant Dev as 개발자
     participant Obj as person 객체
     participant Fn as greet 함수
-    participant Win as window
     Dev->>Obj: person.greet() 호출
     Obj->>Fn: this = person으로 실행
     Fn-->>Dev: '이영희' 출력
-    Note over Dev,Win: 함수 참조를 변수에 복사하면...
     Dev->>Fn: greetFn() 직접 호출
-    Win->>Fn: this = window로 실행
     Fn-->>Dev: undefined 출력
 ```
 

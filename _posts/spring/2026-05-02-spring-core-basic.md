@@ -618,15 +618,12 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    A["XML 설정"] --> C["BeanDefinitionRead"]
-    B["자바 @Configuration\"] --> C
+    A["XML 설정"] --> C["BeanDefinitionReader"]
+    B["@Configuration"] --> C
     D["@ComponentScan"] --> C
-    C --> E["BeanDefinition 생성\"]
+    C --> E["BeanDefinition"]
     E --> F["Spring Container"]
     E --> G["beanClassName"]
-    E --> H["scope"]
-    E --> I["lazyInit"]
-    E --> J["initMethodName"]
 ```
 
 이 추상화 덕분에 Spring 컨테이너는 XML이든 자바 코드든 상관없이 동일한 방식으로 빈을 처리합니다. 개발자 입장에서는 설정 방식을 언제든지 바꿀 수 있습니다.
@@ -743,9 +740,9 @@ flowchart TD
     A["앱 시작"] --> B["Container 생성"]
     B --> C["@Configuration 읽기"] --> D["BeanDefinition"]
     D --> E["빈 생성"] --> F["@Autowired 주입"]
-    F --> G["@PostConstruct"] --> H["빈 준비 완료"]
-    H --> I{"요청"} --> J["빈 사용"] --> I
-    I --> K["컨테이너 종료"] --> L["@PreDestroy"] --> M["빈 소멸"]
+    F --> G["빈 준비 완료"]
+    G --> H["빈 사용"]
+    H --> I["@PreDestroy"] --> J["빈 소멸"]
 ```
 
 ---

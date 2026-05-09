@@ -110,12 +110,9 @@ String sessionId = details.getSessionId();          // 세션 ID
 sequenceDiagram
     participant F as Form
     participant AF as AuthFilter
-    participant AP as AuthProvider
     participant SC as SecurityContext
     F->>AF: username/password
-    AF->>AP: authenticate(token)
-    AP->>AP: UserDetails 조회+검증
-    AP-->>AF: 인증 Token
+    AF->>AF: UserDetails 조회+검증
     AF->>SC: setAuthentication()
 ```
 

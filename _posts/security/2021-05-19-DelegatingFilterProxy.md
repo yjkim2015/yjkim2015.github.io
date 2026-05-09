@@ -40,17 +40,13 @@ Spring Security는 `UserDetailsService`, `PasswordEncoder`, `AuthenticationProvi
 
 ```mermaid
 sequenceDiagram
-    participant "서블릿 컨테이너" as SC
-    participant "DelegatingFilterProxy" as DFP
-    participant "Spring ApplicationContext" as AC
-    participant "FilterChainProxy" as FCP
-    SC->>DFP: 1. 최초 요청 수신
-    DFP->>AC: 2. "springSecurityFilterChain" 이름의 빈 조회
-    AC-->>DFP: 3. FilterChainProxy 빈 반환
-    DFP->>FCP: 4. doFilter() 위임 (실제 보안 처리)
-    FCP-->>DFP: 5. 처리 완료
-    DFP-->>SC: 6. 다음 필터로 전달
-    note over DFP,AC: 이후 요청에서는 캐싱된 빈을 바로 사용
+    participant SC as 서블릿컨테이너
+    participant DFP as DelegatingProxy
+    participant FCP as FilterChainProxy
+    SC->>DFP: 요청 수신
+    DFP->>FCP: doFilter() 위임
+    FCP-->>DFP: 처리 완료
+    DFP-->>SC: 다음 필터 전달
 ```
 
 `DelegatingFilterProxy`는 처음 요청이 들어올 때 Spring ApplicationContext에서 `springSecurityFilterChain`이라는 이름의 빈을 찾아 내부에 캐싱합니다. 이후 요청에서는 캐싱된 빈을 재사용합니다.

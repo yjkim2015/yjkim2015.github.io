@@ -24,16 +24,10 @@ date: 2026-05-01
 
 ```mermaid
 graph LR
-    subgraph "동기 호출 (문제 상황)"
-        OS1["Order Service"]
-        PS1["Payment Service"]
-        IS1["Inventory Service"]
-        NS1["Notification Servi"]
-        OS1 -->|"1️⃣ 결제 요청\n응답 대기.."| PS1
-        PS1 -.->|"❌ 타임아웃!"| OS1
-        OS1 -.->|"❌ 주문 실패"| IS1
-        OS1 -.->|"❌ 실행 안됨"| NS1
-    end
+    OS["Order"] -->|"결제 요청"| PS["Payment"]
+    PS -.->|"타임아웃"| OS
+    OS -.->|"주문 실패"| IS["Inventory"]
+    OS -.->|"실행 안됨"| NS["Notify"]
 ```
 
 ```
@@ -143,17 +137,10 @@ public record OrderCreatedEventV2(
 
 ```mermaid
 graph LR
-    subgraph "전통적 방식 (상태 저장)"
-        DB1[("orders 테이블")]
-    end
-    subgraph "Event Sourcing (이벤트 저장)"
-        E1["OrderCreated"]
-        E2["PaymentCharged"]
-        E3["InventoryReserved\"]
-        E4["OrderShipped"]
-        E1 --> E2 --> E3 --> E4
-    end
-    E4 -->|"이벤트 재생\n→ 현재 상태"| STATE["status=SHIPPED"]
+    DB1[("orders 테이블")] -->|"상태만 저장"| CURR["현재 상태"]
+    E1["OrderCreated"] --> E2["PaymentCharged"]
+    E2 --> E3["OrderShipped"]
+    E3 -->|"이벤트 재생"| STATE["status=SHIPPED"]
 ```
 
 ```
@@ -294,14 +281,12 @@ Event Sourcing은 CQRS와 함께 쓸 때 강력합니다.
 
 ```mermaid
 graph TD
-    CMD["Command"] --> AGG["Order Aggregate"] --> ES[("Event Store")]
+    CMD["Command"] --> AGG["Aggregate"]
+    AGG --> ES[("Event Store")]
     ES --> KB["Kafka"]
-    KB --> P1["Status Projection"] --> DB1[("MySQL")]
-    KB --> P2["List Projection"] --> DB2[("Elasticsearch")]
-    KB --> P3["Analytics Projecti"] --> DB3[("ClickHouse")]
-    Q1["조회"] --> DB1
-    Q2["검색"] --> DB2
-    Q3["통계"] --> DB3
+    KB --> P1["Status→MySQL"]
+    KB --> P2["Search→ES"]
+    KB --> P3["Stats→ClickHouse"]
 ```
 
 ---

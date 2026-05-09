@@ -67,14 +67,11 @@ toc_label: 목차
 ```mermaid
 graph TD
     App["모바일 앱"] --> API["API Gateway"]
-    API --> Search["가게 검색 서비스"]
-    API --> Track["위치 추적 서비스"]
-    API --> Match["배달 매칭 서비스"]
+    API --> Search["검색 서비스"]
+    API --> Track["위치 추적"]
+    API --> Match["매칭 서비스"]
     Search --> GeoCache["Redis"]
-    Search --> ShopDB[("MySQL")]
     Track --> RedisPos["Redis"]
-    Track --> HistDB[("TimescaleDB\n위치 히스토리)"]
-    Match --> ETA["ETA 서비스"]
 ```
 
 ### 4개 핵심 서비스 역할 분담
@@ -251,14 +248,10 @@ sequenceDiagram
     participant App
     participant S as 검색서비스
     participant C as Redis
-    participant DB as MySQL
     App->>S: GET /shops?lat&lon
     S->>S: Geohash 변환
     S->>C: 캐시 조회
-    alt 미스
-        S->>DB: Geohash 쿼리
-        S->>C: 캐싱
-    end
+    C-->>S: 미스 시 DB 쿼리
     S-->>App: 가게 목록
 ```
 
@@ -386,14 +379,10 @@ sequenceDiagram
     participant Rider as 라이더 앱
     participant WS as 위치 서버
     participant Redis as Redis
-    participant Sub as 구독 고객 앱
-    participant DB as TimescaleDB
-    Rider->>WS: WebSocket: {lat, lon, speed, heading}
-    WS->>Redis: HSET rider:12345 lat 37.52 lon 127.05
-    WS->>Redis: EXPIRE rider:12345 30
-    WS->>Redis: PUBLISH order:67890 위치정보
-    Redis->>Sub: 실시간 위치 푸시
-    WS->>DB: INSERT 위치 히스토리 (비동기)
+    Rider->>WS: WS {lat, lon}
+    WS->>Redis: HSET rider 위치
+    WS->>Redis: PUBLISH 위치정보
+    Redis->>Rider: 실시간 푸시
 ```
 
 ### Redis 위치 저장 구조
@@ -517,17 +506,14 @@ ORDER BY time;
 
 ```mermaid
 sequenceDiagram
-    participant Order as 주문 서비스
-    participant Match as 매칭 서비스
+    participant Order as 주문서비스
+    participant Match as 매칭서비스
     participant Redis as Redis GEO
-    participant Rider as 라이더
-    Order->>Match: 주문 발생 (가게/고객 위치)
-    Match->>Redis: GEORADIUS 가게위치 3km COUNT 20
-    Redis-->>Match: 후보 라이더 20명
-    Match->>Match: ETA 병렬 계산 → 상위 5명 선택
-    Match->>Rider: 1순위 라이더 수락 요청
-    Rider-->>Match: 수락 or 거절/타임아웃
-    Match-->>Order: 수락 시 매칭 완료 / 거절 시 다음 후보
+    Order->>Match: 주문 발생
+    Match->>Redis: GEORADIUS 3km
+    Redis-->>Match: 후보 라이더
+    Match->>Match: ETA 계산
+    Match-->>Order: 매칭 완료
 ```
 
 ### 매칭 알고리즘 구현

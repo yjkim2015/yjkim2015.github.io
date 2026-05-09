@@ -18,10 +18,9 @@ toc_label: 목차
 ```mermaid
 graph TD
     A[JobLauncher] --> B[Job]
-    B --> C[Step1: Tasklet]
+    B --> C[Step1]
     B --> D[Step2: Chunk]
     D --> R[Reader] --> P[Processor] --> W[Writer]
-    B --> E[Step3]
     K[JobRepository] --> B
     L[JobParameters] --> B
 ```
@@ -101,13 +100,10 @@ sequenceDiagram
     participant R as Reader
     participant P as Processor
     participant W as Writer
-    participant TX as TX
-    S->>TX: 트랜잭션 시작
-    S->>R: read() → 아이템
-    S->>P: process(item) → 변환
-    S->>W: write(chunk) 일괄 전달
-    W-->>S: 완료
-    S->>TX: 커밋 (null 반환 시 종료)
+    S->>R: read() 아이템
+    S->>P: process(item)
+    S->>W: write(chunk)
+    W-->>S: 완료/커밋
 ```
 
 ### 4.2 기본 Chunk Step 구성

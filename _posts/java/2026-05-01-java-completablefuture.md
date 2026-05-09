@@ -255,13 +255,10 @@ CompletableFuture<User> future = CompletableFuture
 
 ```mermaid
 flowchart TD
-    A1["fetchUser()"] --> C1["thenCombine 결합"]
+    A1["fetchUser()"] --> C1["thenCombine"]
     B1["fetchOrders()"] --> C1
-    A2["api1"] --> D["allOf 완료대기"]
-    B2["api2"] --> D
-    C2["api3"] --> D
-    A3["us-east"] --> E["anyOf 첫완료"]
-    B3["eu-west"] --> E
+    A2["api1 & api2 & api3"] --> D["allOf 완료대기"]
+    A3["us-east & eu-west"] --> E["anyOf 첫완료"]
 ```
 
 ### thenCombine — 두 Future 결과 합치기

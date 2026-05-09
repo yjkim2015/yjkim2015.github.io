@@ -412,13 +412,11 @@ def get_trending(self, limit: int = 10) -> list:
 
 ```mermaid
 graph TD
-    User["사용자"] --> LB["LB"] --> API["검색 API"]
+    User["사용자"] --> API["검색 API"]
     API --> AC["자동완성 Redis"]
-    API --> Cache["인기검색어 Redis"]
-    API --> QP["쿼리 파서+오타교정"]
-    QP --> ES["Elasticsearch(5샤드)"]
-    DocSrc["문서 소스"] --> Kafka["Kafka"] --> Worker["색인 워커"] --> ES
-    Kafka2["검색이벤트"] --> Flink["Flink"] --> TrendRedis["트렌딩 Redis"]
+    API --> QP["쿼리 파서"]
+    QP --> ES["Elasticsearch"]
+    DocSrc["문서 소스"] --> Kafka["Kafka"] --> ES
 ```
 
 ---

@@ -206,14 +206,8 @@ Debezium은 Kafka Connect 위에서 동작하는 CDC 커넥터다. DB의 binlog/
 
 ```mermaid
 flowchart TD
-    subgraph "Kafka Connect"
-        subgraph "Debezium Connector"
-            READER["binlog/WAL Reader\"]
-            SMT["Event Transformati"]
-            READER --> SMT
-        end
-    end
-    DB["MySQL / PostgreSQL"] -->|"binlog / WAL"| READER
+    READER["binlog/WAL Reader"] --> SMT["Event Transform"]
+    DB["MySQL/PostgreSQL"] -->|"binlog/WAL"| READER
     SMT -->|"이벤트 발행"| KAFKA["Kafka Topic"]
     style DB fill:#3498db,color:#fff
     style KAFKA fill:#2ecc71,color:#fff

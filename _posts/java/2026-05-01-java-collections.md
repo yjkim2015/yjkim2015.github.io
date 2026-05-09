@@ -306,9 +306,9 @@ Java 7까지는 같은 버킷에 충돌이 많아지면 연결 리스트가 길�
 
 ```mermaid
 graph TD
-    B3A["Java7 버킷[3]"] --> NA["A"] --> NX["X"] --> NM["M"] --> NULL1["null (O(n))"]
-    B3B["Java8+ 버킷[3]"] --> TREE["Red-Black Tree"] --> L["왼쪽"] & R["오른쪽"]
-    TREE --> NOTE2["O(log n)"]
+    B3A["Java7 버킷"] --> NA["A→X→M→null O(n)"]
+    B3B["Java8+ 버킷"] --> TREE["Red-Black Tree O(logn)"]
+    TREE --> L["왼쪽"] & R["오른쪽"]
 ```
 
 ---
@@ -331,14 +331,10 @@ System.out.println(linked); // [Banana, Apple, Cherry] — 삽입 순서 유지
 
 ```mermaid
 graph TD
-    subgraph "Hash 버킷 (빠른 조회)"
-        B2["bucket[2] → Banana"]
-        B7["bucket[7] → Apple"]
-        B4["bucket[4] → Cherry"]
-    end
-    subgraph "삽입 순서 연결 리스트 (순서 유지)"
-        H(["head"]) <--> BN["Banana"] <--> AP["Apple"] <--> CH["Cherry"] <--> T(["tail"])
-    end
+    B2["bucket[2] Banana"]
+    B7["bucket[7] Apple"]
+    B4["bucket[4] Cherry"]
+    H(["head"]) <--> BN["Banana"] <--> AP["Apple"] <--> CH["Cherry"] <--> T(["tail"])
 ```
 
 ---
@@ -415,11 +411,9 @@ System.out.println(ts.lower(5));            // 3              — 5 미만 최�
 
 ```mermaid
 graph LR
-    subgraph "enum Day 비트 인덱스"
-        MON["MON=0"] --- TUE["TUE=1"] --- WED["WED=2"] --- THU["THU=3"] --- FRI["FRI=4"] --- SAT["SAT=5"] --- SUN["SUN=6"]
-    end
-    MASK["EnumSet.of(MON, WE"]
-    OPS["add(SAT)      → bi"]
+    MON["MON=0"] --- TUE["TUE=1"] --- WED["WED=2"] --- FRI["FRI=4"]
+    MASK["EnumSet.of(MON,WED)"]
+    OPS["add/remove → bit연산"]
 ```
 
 - Enum 상수가 64개 이하 → `RegularEnumSet` (long 하나)
@@ -450,15 +444,9 @@ Java 컬렉션에서 가장 많이 사용되는 Map 구현체입니다.
 
 ```mermaid
 graph LR
-    subgraph "HashMap 버킷 배열 (capacity=16, loadFactor=0.75)"
-        B0["[0] null"]
-        B1["[1]"] --> N1["key=Alice, val=30"] --> NULL1["null"]
-        B2["[2] null"]
-        B3["[3]"] --> N3a["key=Bob, val=25"] --> N3b["key=Carol, val=28"] --> NULL3["null"]
-        B4["[4] null"]
-        B15["[15] null"]
-    end
-    PUT["put(Dave, 35)<br>1"]
+    B1["버킷[1]"] --> N1["Alice=30"]
+    B3["버킷[3]"] --> N3a["Bob=25"] --> N3b["Carol=28"]
+    PUT["put(Dave,35) → 해시버킷 배정"]
 ```
 
 #### 초기 용량(initialCapacity)과 로드 팩터(loadFactor)
@@ -534,12 +522,8 @@ groups.computeIfAbsent("fruits", k -> new ArrayList<>()).add("banana");
 
 ```mermaid
 graph LR
-    subgraph "accessOrder=false (삽입 순서)"
-        A1["A"] <--> B1["B"] <--> C1["C"]
-    end
-    subgraph "accessOrder=true (접근 순서) — get(A) 후"
-        B2["B"] <--> C2["C"] <--> A2["A (최근 접근 → tail)"]
-    end
+    A1["A"] <--> B1["B"] <--> C1["C"]
+    B2["B"] <--> C2["C"] <--> A2["A(최근→tail)"]
 ```
 
 #### LRU 캐시 구현
@@ -610,29 +594,22 @@ System.out.println(desc); // {Charlie=85, Bob=78, Alice=92}
 
 ```mermaid
 graph TD
-    subgraph "ConcurrentHashMap Java 7 - segments 배열 (기본 16개)"
-        S0["Segment-0<br>Reent"]
-        S1["Segment-1<br>Reent"]
-        SD["..."]
-        S15["Segment-15<br>Reen"]
-    end
-    NOTE["서로 다른 세그먼트 put() →"]
+    S0["Segment-0 ReentrantLock"]
+    S1["Segment-1 ReentrantLock"]
+    SD["... (기본 16개)"]
+    NOTE["서로 다른 세그먼트 put() → 병렬"]
 ```
 
 #### Java 8: CAS + synchronized (버킷 단위 락)
 
 ```mermaid
 graph TD
-    subgraph "ConcurrentHashMap Java 8+ - 단일 Node 배열 (버킷)"
-        B0["[0] null"]
-        B1["[1] Node"]
-        BD["..."]
-    end
-    PUT{"버킷 상태?"}
-    CAS["CAS로 락 없이 삽입<br>(C"]
-    SYNC["해당 버킷 head에만 synch"]
-    PUT -->|"비어있음"| CAS
-    PUT -->|"원소 있음"| SYNC
+    B0["[0] null"] & B1["[1] Node"]
+    PUT{"버킷 비어있음?"}
+    CAS["CAS로 락 없이 삽입"]
+    SYNC["버킷 head synchronized"]
+    PUT -->|"예"| CAS
+    PUT -->|"아니오"| SYNC
 ```
 
 ```java
@@ -670,12 +647,10 @@ Key에 **약한 참조(WeakReference)** 를 사용하는 Map입니다.
 
 ```mermaid
 graph TD
-    subgraph "일반 HashMap"
-        HM["map.put(key, value"]
-    end
-    subgraph "WeakHashMap"
-        WM["map.put(key, value"]
-    end
+    HM["HashMap: 강한 참조 유지"]
+    WM["WeakHashMap: 약한 참조"]
+    HM -->|"GC 대상 아님"| HM
+    WM -->|"외부 참조 없으면 GC"| WM
 ```
 
 ```java

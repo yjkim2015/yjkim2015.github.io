@@ -201,9 +201,9 @@ JVM은 자주 사용되는 `-128`부터 `127` 범위의 Integer 객체를 **JVM 
 ```mermaid
 graph TD
     VALUEOF["Integer.valueOf(n)"]
-    CHECK["n이 -128 ~ 127 범위?"]
-    CACHE["IntegerCache.cache 배열에서 반환"]
-    NEW["new Integer(n) 생성"]
+    CHECK["n이 -128~127?"]
+    CACHE["캐시에서 반환"]
+    NEW["new Integer(n)"]
     VALUEOF --> CHECK
     CHECK -->|"예"| CACHE
     CHECK -->|"아니오"| NEW

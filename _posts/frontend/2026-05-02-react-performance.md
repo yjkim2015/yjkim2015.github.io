@@ -145,16 +145,12 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "스플리팅 전"
-        BUNDLE["app.js 5MB<br>유저가"]
-    end
-    subgraph "스플리팅 후"
-        MAIN["main.js 500KB"]
-        ROUTE1["route-home.js 100K"]
-        ROUTE2["route-admin.js 200"]
-        ROUTE3["route-profile.js 1"]
-        USER2["현재 페이지만 다운로드"]
-    end
+    BUNDLE["app.js 5MB 전부"]
+    MAIN["main.js 500KB"]
+    ROUTE1["route-home.js 100K"]
+    ROUTE2["route-admin.js 200K"]
+    BUNDLE -->|"스플리팅 후"| MAIN
+    MAIN --> ROUTE1 & ROUTE2
     style BUNDLE fill:#e74c3c,color:#fff
     style MAIN fill:#2ecc71,color:#fff
 ```
@@ -239,16 +235,12 @@ function VirtualizedList({ items }) {
 
 ```mermaid
 graph TD
-    subgraph "일반 렌더링 10000개"
-        DOM1["DOM에 10000개 노드"]
-        MEM1["메모리 수백 MB"]
-        PERF1["스크롤 느림"]
-    end
-    subgraph "가상화 10000개"
-        DOM2["DOM에 20~30개 노드만"]
-        MEM2["메모리 수 MB"]
-        PERF2["스크롤 빠름"]
-    end
+    DOM1["일반: DOM 10000개 노드"]
+    MEM1["메모리 수백 MB, 느림"]
+    DOM2["가상화: DOM 20~30개"]
+    MEM2["메모리 수 MB, 빠름"]
+    DOM1 --> MEM1
+    DOM2 --> MEM2
     style DOM1 fill:#e74c3c,color:#fff
     style DOM2 fill:#2ecc71,color:#fff
 ```

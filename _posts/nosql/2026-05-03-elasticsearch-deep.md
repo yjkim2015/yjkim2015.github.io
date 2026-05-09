@@ -665,16 +665,13 @@ ELK는 Elasticsearch + Logstash + Kibana의 조합이다. **Logstash**가 다양
 
 ```mermaid
 graph TB
-    subgraph "Elasticsearch 아키텍처 요약"
-        CL["Cluster"]
-        CL --> N1["Node 1"]
-        CL --> N2["Node 2"]
-        CL --> N3["Node 3"]
-        N2 --> IDX["Index = 논리 단위"]
-        IDX --> SH["Shard = Lucene Ind"]
-        SH --> SEG["Segment = 불변 역인덱스"]
-        SEG --> II["역인덱스"]
-    end
+    CL["Cluster"] --> N1["Node 1"]
+    CL --> N2["Node 2"]
+    CL --> N3["Node 3"]
+    N2 --> IDX["Index"]
+    IDX --> SH["Shard"]
+    SH --> SEG["Segment"]
+    SEG --> II["역인덱스"]
 ```
 
 | 개념 | 역할 | 핵심 포인트 |

@@ -119,13 +119,9 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    subgraph "배압 없음 - 문제 상황"
-        P1[Producer] -->|"데이터 폭주"| B1["버퍼 폭주"] --> C1["Consumer 처리 중... →"]
-    end
-    subgraph "배압 있음 - Reactive Streams"
-        C2["Consumer 처리 완료"] -->|"request(5) - 5개 더"| P2[Producer]
-        P2 -->|"5개만 전송"| C2
-    end
+    P1[Producer] -->|"데이터 폭주"| B1["버퍼 폭주"] --> C1["Consumer"]
+    C2["Consumer"] -->|"request(5)"| P2[Producer]
+    P2 -->|"5개만 전송"| C2
 ```
 
 ```java
@@ -395,16 +391,12 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph "전통적 블로킹 I/O"
-        T1[Thread] -->|DB 연결 요청| W1["대기... (스레드 블로킹)"]
-        W1 -->|결과 수신 스레드 깨어남| P1[처리]
-    end
-    subgraph "논블로킹 I/O NIO"
-        T2[Thread] -->|DB 연결 요청| IR[즉시 반환]
-        IR --> OW[다른 작업 처리...]
-        T2 --> SEL["Selector가 I/O 감시 중"]
-        SEL -->|I/O 완료 이벤트 발생| CB[콜백 실행]
-    end
+    T1[Thread] -->|DB 요청| W1["대기(블로킹)"]
+    W1 --> P1[처리]
+    T2[Thread] -->|DB 요청| IR[즉시 반환]
+    IR --> OW[다른 작업]
+    OW --> SEL["Selector 감시"]
+    SEL -->|I/O 완료| CB[콜백 실행]
 ```
 
 실제 동작 수준에서는 Linux의 `epoll`, macOS의 `kqueue`, Windows의 `IOCP`를 사용하여 커널이 I/O 완료를 통지합니다.
@@ -447,12 +439,12 @@ Flux.range(1, 5)
 
 ```mermaid
 graph TD
-    PA["소스(main)"] --> PB["map(A) main"]
-    PB --> PC["publishOn(parallel"]
-    PC --> PD["map(B) parallel"] --> PE["map(C) parallel"] --> PF[subscribe]
-    SA["소스(boundedElastic)"] --> SB["map(A)"] --> SC["map(B)"]
-    SC --> SD["subscribeOn(bounde"]
-    SD --> SE["map(C)"] --> SF["subscribe(main)"]
+    PA["소스(main)"] --> PB["map(A)"]
+    PB --> PC["publishOn(parallel)"]
+    PC --> PD["map(B)"] --> PE["map(C)"] --> PF[subscribe]
+    SA["소스"] --> SB["map(A)"] --> SC["map(B)"]
+    SC --> SD["subscribeOn(elastic)"]
+    SD --> SE["subscribe(main)"]
 ```
 
 ```java

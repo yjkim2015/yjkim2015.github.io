@@ -81,13 +81,12 @@ public final class Complex {
 ```mermaid
 sequenceDiagram
     participant Client as 클라이언트
-    participant C1 as Complex(3, 4)
-    participant C2 as Complex(1, 2)
-    participant Result as Complex(4, 6)
+    participant C1 as Complex(3,4)
+    participant Result as Complex(4,6)
     Client->>C1: plus(c2)
-    C1->>Result: new Complex(3+1, 4+2) 생성
+    C1->>Result: new Complex(4,6) 생성
     Result-->>Client: 새 객체 반환
-    Note over C1: 원본 불변! 여전히 (3+4i)
+    Note over C1: 원본 불변!
 ```
 
 ---
@@ -206,15 +205,12 @@ public class Complex {
 
 ```mermaid
 graph TD
-    A["클래스 설계 원칙"] --> B["기본: 불변으로 만들기"]
-    B --> C["모든 필드 private fina"]
-    A --> D["불변 불가능하면"]
+    A["클래스 설계 원칙"] --> B["기본: 불변으로"]
+    A --> D["불변 불가 시"]
+    B --> F1["스레드 안전"]
+    B --> F2["단순함/버그 감소"]
+    B --> F3["자유로운 공유"]
     D --> E["가변 필드 최소화"]
-    C --> F["장점"]
-    F --> F1["스레드 안전 (동기화 불필요)"]
-    F --> F2["단순함, 버그 감소"]
-    F --> F3["자유로운 공유"]
-    F --> F4["실패 원자성"]
 ```
 
 **핵심 규칙:**

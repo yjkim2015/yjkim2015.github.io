@@ -360,13 +360,8 @@ export default function ProductsPage({
 
 ```mermaid
 flowchart TD
-    subgraph "테스트 피라미드"
-        E2E["E2E 테스트"]
-        INT["통합 테스트"]
-        UNIT["단위 테스트"]
-    end
-    UNIT -->|"통과하면"| INT
-    INT -->|"통과하면"| E2E
+    UNIT["단위 테스트"] -->|"통과하면"| INT["통합 테스트"]
+    INT -->|"통과하면"| E2E["E2E 테스트"]
     style E2E fill:#e74c3c,color:#fff
     style INT fill:#f39c12,color:#fff
     style UNIT fill:#2ecc71,color:#fff

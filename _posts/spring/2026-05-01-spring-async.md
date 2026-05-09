@@ -24,15 +24,12 @@ Spring의 `@Async`는 메서드를 별도 스레드에서 비동기로 실행하
 
 ```mermaid
 sequenceDiagram
-    participant C as "호출자 스레드"
-    participant P as "Proxy"
-    participant Q as "TaskExecutor 스레드 풀"
-    participant M as "실제 메서드"
-    C->>P: sendWelcomeEmail(userId) 호출
-    P->>Q: 1️⃣ 작업 큐에 제출
-    P-->>C: 2️⃣ 즉시 반환 (비동기)
-    Q->>M: 3️⃣ 별도 스레드에서 실행
-    Note over M: "호출자와 독립적으로 실행"
+    participant C as 호출자
+    participant P as Proxy
+    participant M as 실제메서드
+    C->>P: sendWelcomeEmail()
+    P-->>C: 즉시 반환
+    P->>M: 별도 스레드 실행
 ```
 
 ```java

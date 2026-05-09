@@ -25,11 +25,9 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph "테스트 피라미드"
-        E2E["E2E 테스트<br>느림, 비용"]
-        INT["통합 테스트<br>중간 속도, 중"]
-        UNIT["단위 테스트<br>빠름, 비용 낮"]
-    end
+    E2E["E2E 테스트<br>느림, 비용 높"]
+    INT["통합 테스트<br>중간 속도"]
+    UNIT["단위 테스트<br>빠름, 저비용"]
     UNIT --> INT
     INT --> E2E
     style E2E fill:#e74c3c,color:#fff
@@ -403,16 +401,13 @@ it('증가 버튼 클릭 시 카운트 증가', async () => {
 sequenceDiagram
     participant USER as 사용자
     participant COMP as SearchInput
-    participant API1 as 요청1 사과
-    participant API2 as 요청2 바나나
+    participant API as API 서버
     USER->>COMP: 사과 입력
-    COMP->>API1: 사과 검색 요청
+    COMP->>API: 요청1 사과
     USER->>COMP: 바나나로 변경
-    COMP->>API2: 바나나 검색 요청
-    API2-->>COMP: 바나나 결과 (먼저 도착)
-    COMP->>COMP: 바나나 표시
-    API1-->>COMP: 사과 결과 (나중에 도착)
-    COMP->>COMP: 사과로 덮어씌워짐! 버그
+    COMP->>API: 요청2 바나나
+    API-->>COMP: 바나나 결과 먼저
+    API-->>COMP: 사과로 덮어씌워짐!
 ```
 
 ```javascript

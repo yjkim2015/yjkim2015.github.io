@@ -287,17 +287,13 @@ export class ResponseTransformInterceptor<T> implements NestInterceptor<T> {
 ```mermaid
 sequenceDiagram
     participant C as 클라이언트
-    participant MW as 미들웨어
-    participant G as 가드
-    participant PIPE as 파이프
+    participant MW as 미들웨어/가드
     participant CTRL as 컨트롤러
-    participant SVC as 서비스/DB
-    C->>MW: HTTP 요청 (로깅/CORS)
-    MW->>G: JWT 검증/권한 확인
-    G->>PIPE: DTO 유효성 검사/타입 변환
-    PIPE->>CTRL: 컨트롤러 호출
-    CTRL->>SVC: 비즈니스 로직 위임
-    SVC-->>C: 최종 응답
+    C->>MW: HTTP 요청
+    MW->>MW: JWT/DTO 검사
+    MW->>CTRL: 컨트롤러 호출
+    CTRL->>CTRL: 서비스 위임
+    CTRL-->>C: 최종 응답
 ```
 
 ---

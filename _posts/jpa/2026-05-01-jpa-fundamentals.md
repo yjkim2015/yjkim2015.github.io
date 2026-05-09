@@ -84,12 +84,9 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
 ```mermaid
 graph LR
-    APP["App"] --> PC1["1차 캐시"] & PC2["쓰기지연 SQL"]
-    subgraph EM["EntityManager (1 트"]
-        PC1
-        PC2
-        SNAP["스냅샷"]
-    end
+    APP["App"] --> PC1["1차 캐시"]
+    APP --> PC2["쓰기지연 SQL"]
+    PC1 --- SNAP["스냅샷"]
     PC2 -->|flush| DB["DB"]
     DB -->|조회| PC1
 ```
@@ -230,18 +227,14 @@ public class Member {
 
 ```mermaid
 sequenceDiagram
-    participant App as "애플리케이션"
-    participant EM as "EntityManager"
-    participant Proxy as "TeamProxy (가짜 객체)"
-    participant DB as "Database"
-    App->>EM: 1️⃣ em.find(Member.class, 1L)
-    EM->>DB: SELECT * FROM Member WHERE id=1
-    DB-->>App: Member (team=TeamProxy, FK만 보유)
-    App->>Proxy: member.getTeam() (DB 조회 안함)
-    App->>Proxy: team.getName() 호출
-    Proxy->>DB: SELECT Team WHERE id=2
-    DB-->>Proxy: Team 데이터 로딩
-    Proxy-->>App: "개발팀" 반환
+    participant App as App
+    participant EM as EntityManager
+    participant DB as Database
+    App->>EM: em.find(Member, 1L)
+    EM->>DB: SELECT Member WHERE id=1
+    DB-->>App: Member(team=Proxy)
+    App->>DB: team.getName() 호출시 SELECT Team
+    DB-->>App: 개발팀 반환
 ```
 
 **핵심**: `getTeam()`을 호출해도 DB에 쿼리가 나가지 않는다. `team.getName()` 처럼 **실제 필드에 접근하는 시점**에 비로소 SELECT가 실행된다.
@@ -410,13 +403,9 @@ public class MemberProduct { // 중간 엔티티
 
 ```mermaid
 graph LR
-    subgraph UNI["단방향 (단순, 권장 시작점)"]
-        M1["Member"] -->|"team 참조"| T1["Team"]
-    end
-    subgraph BI["양방향 (Team → Member"]
-        M2["Member"] -->|"team 참조"| T2["Team"]
-        T2 -->|"members 참조"| M2
-    end
+    M1["Member"] -->|"team 참조"| T1["Team"]
+    M2["Member2"] -->|"team 참조"| T2["Team2"]
+    T2 -->|"members 참조"| M2
 ```
 
 ### 연관관계 주인 (Owner)

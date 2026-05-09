@@ -134,16 +134,12 @@ org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 ```mermaid
 sequenceDiagram
     participant SA as SpringApplication
-    participant AIS as AutoConfigurationImportSelector
-    participant SF as AutoConfiguration.imports
-    participant C as @Conditional 평가기
-    SA->>AIS: selectImports() 호출
-    AIS->>SF: 자동 구성 후보 읽기
-    SF-->>AIS: 142개+ 클래스 목록 반환
-    AIS->>C: 각 클래스의 @Conditional 조건 평가
-    Note over C: @ConditionalOnClass, @ConditionalOnMissingBean 등
-    C-->>AIS: 조건 충족한 클래스만 반환 (보통 20~50개)
-    AIS-->>SA: 최종 자동 구성 클래스 목록
+    participant AIS as ImportSelector
+    participant C as Conditional
+    SA->>AIS: selectImports()
+    AIS->>C: @Conditional 평가
+    C-->>AIS: 통과 클래스 반환
+    AIS-->>SA: 자동구성 목록
     SA->>SA: 빈 등록
 ```
 
@@ -448,16 +444,12 @@ com.example.HttpClientAutoConfiguration
 ```mermaid
 sequenceDiagram
     participant SA as SpringApplication
-    participant SF as TomcatFactory
     participant TC as Tomcat
     participant DS as DispatcherServlet
-    SA->>SF: getWebServer()
-    SF->>TC: Tomcat 생성 + 커넥터 설정
+    SA->>TC: getWebServer()
     SA->>DS: DS 빈 등록
     DS->>TC: 서블릿 등록
-    TC->>TC: start() 포트 바인딩
-    TC-->>SA: TomcatWebServer 반환
-    Note over SA: 구동 완료
+    TC-->>SA: 구동 완료
 ```
 
 내장 Tomcat의 장점은 단순히 편리함이 아닙니다. WAR 배포는 WAS 서버 설정에 의존합니다. 서버 버전이 다르면 동작이 달라질 수 있습니다. 내장 서버는 테스트 환경과 운영 환경이 완전히 동일한 Tomcat 버전을 사용한다는 것을 보장합니다. "내 로컬에서는 됐는데 서버에선 안 돼요" 문제를 줄여줍니다.

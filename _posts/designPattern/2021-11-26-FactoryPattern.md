@@ -187,17 +187,14 @@ public class SimpleTransportFactory {
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant F as "LogisticsFactory (추상)"
-    participant CF as "RoadLogistics (구체 팩토리)"
-    participant P as "Truck (구체 제품)"
-    C->>CF: "1. planDelivery() 호출"
-    CF->>CF: "2. createTransport() 호출 (추상 메서드)"
-    CF->>P: "3. new Truck() 생성"
-    P-->>CF: "4. Truck 인스턴스 반환"
-    CF->>P: "5. deliver() 호출"
-    P-->>CF: "6. 트럭 배송 실행"
-    CF-->>C: "7. planDelivery() 완료"
+    participant C as Client
+    participant CF as RoadLogistics
+    participant P as Truck
+    C->>CF: planDelivery()
+    CF->>P: new Truck()
+    P-->>CF: 인스턴스 반환
+    CF->>P: deliver()
+    CF-->>C: 완료
 ```
 
 ---

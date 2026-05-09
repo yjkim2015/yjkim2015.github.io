@@ -144,17 +144,15 @@ public Result<User> findById(Long id) {
 
 ```mermaid
 graph TD
-    subgraph "하네스 엔지니어링 레이어"
-        CLAUDEMD["CLAUDE.md"]
-        MCP["MCP 서버"]
-        HOOKS["Hooks"]
-        PROMPT["프롬프트 패턴"]
-    end
+    CLAUDEMD["CLAUDE.md"]
+    MCP["MCP 서버"]
+    HOOKS["Hooks"]
+    PROMPT["프롬프트 패턴"]
     CLAUDEMD --> AI["AI 에이전트"]
     MCP --> AI
     HOOKS --> AI
     PROMPT --> AI
-    AI --> OUTPUT["일관되고 안전한 출력"]
+    AI --> OUTPUT["안전한 출력"]
 ```
 
 ### CLAUDE.md — 프로젝트 전역 AI 지시서

@@ -64,18 +64,15 @@ SET resource_lock <unique_value> NX EX 30
 
 ```mermaid
 sequenceDiagram
-    participant C as 클라이언트
+    participant C as Client
     participant R as Redis
     participant DB as Database
-    Note over C: Step 1: UUID 생성
-    C->>R: SET order:lock:42 "uuid-abc" NX EX 30
-    R-->>C: OK (락 획득 성공)
-    Note over C: Step 2: 임계 영역 처리
-    C->>DB: UPDATE stock SET count = count - 1 WHERE id = 42
+    C->>R: SET lock NX EX 30
+    R-->>C: OK
+    C->>DB: UPDATE stock
     DB-->>C: 1 row affected
-    Note over C: Step 3: Lua로 안전하게 락 해제
-    C->>R: EVAL "if get==uuid then del end" order:lock:42 uuid-abc
-    R-->>C: 1 (해제 성공)
+    C->>R: EVAL Lua 해제
+    R-->>C: 1 (성공)
 ```
 
 ### 락 획득 코드
@@ -320,18 +317,14 @@ Redisson의 가장 큰 장점은 락 대기 방식이다. 스핀락이 아닌 Pu
 
 ```mermaid
 sequenceDiagram
-    participant A as "Thread A"
-    participant R as "Redis"
-    participant B as "Thread B"
-    participant C as "Thread C"
-    A->>R: SET NX EX → OK (락 획득)
-    B->>R: tryLock → FAIL, SUBSCRIBE channel
-    C->>R: tryLock → FAIL, SUBSCRIBE channel
-    A->>R: unlock() + PUBLISH lockReleased
+    participant A as ThreadA
+    participant R as Redis
+    participant B as ThreadB
+    A->>R: SET NX EX → OK
+    B->>R: tryLock → FAIL, SUBSCRIBE
+    A->>R: unlock + PUBLISH
     R-->>B: 이벤트 수신
-    R-->>C: 이벤트 수신
     B->>R: tryLock → OK
-    C->>R: tryLock → FAIL, 재대기
 ```
 
 **스핀락 vs Pub/Sub 비교:**
@@ -406,12 +399,10 @@ try {
 
 ```mermaid
 flowchart LR
-    subgraph "FairLock 대기 큐 (Redis List)"
-        Q1[Thread-1 먼저 요청] --> Q2[Thread-2] --> Q3[Thread-3 나중 요청]
-    end
-    Q1 -->|Step 1. 락 해제 시 큐 앞에서부터 알림| L[Lock 획득]
-    Q2 -.->|Step 2. Thread-1 완료 후 차례| L
-    Q3 -.->|Step 3. Thread-2 완료 후 차례| L
+    Q1[Thread-1] --> Q2[Thread-2] --> Q3[Thread-3]
+    Q1 -->|해제시 알림| L[Lock 획득]
+    Q2 -.->|T1 완료 후| L
+    Q3 -.->|T2 완료 후| L
     style Q1 fill:#8f8
     style L fill:#4af,color:#fff
 ```
@@ -644,13 +635,11 @@ sequenceDiagram
     participant R as Redis
     A->>R: SET lock NX EX 30
     R-->>A: OK
-    Note over A: 외부 API 지연
-    Note over R: 30s TTL 만료
+    Note over R: TTL 만료
     B->>R: SET lock NX EX 30
     R-->>B: OK
-    Note over B: B 작업 시작
-    A->>R: DEL lock(Lua 없이!)
-    Note over A,R: A가 B의 락을 삭제! 임계영역 노출
+    A->>R: DEL lock (Lua 없이)
+    Note over A,R: B의 락 삭제! 노출
 ```
 
 **해결 1**: Lua 스크립트로 `value` 비교 후 삭제 (UUID 확인 후 DEL)
@@ -676,15 +665,13 @@ if (ttl != null && ttl < MINIMUM_WORK_TIME_MS) {
 sequenceDiagram
     participant A as ProcessA
     participant M as Master
-    participant Rep as Replica(승격)
     participant B as ProcessB
     A->>M: SET lock NX EX 30
     M-->>A: OK
-    Note over M: 크래시(복제 완료 전)
-    Note over Rep: Sentinel이 마스터로 승격(락 데이터 없음)
-    B->>Rep: SET lock NX EX 30
-    Rep-->>B: OK
-    Note over A,B: A,B 동시 임계 영역 진입! 데이터 불일치
+    Note over M: 크래시
+    Note over B: Replica 승격(락 없음)
+    B->>M: SET lock NX EX 30
+    Note over A,B: 동시 진입! 불일치
 ```
 
 **원인**: Redis 복제는 **비동기**이므로, 마스터가 죽기 전에 복제되지 않은 데이터는 유실된다.
@@ -709,13 +696,11 @@ redisTemplate.execute((RedisCallback<Long>) conn ->
 
 ```mermaid
 flowchart LR
-    subgraph "네트워크 파티션 발생"
-        A[Process A] -. "Step 1.\n네트워크 단절 ✕" .- R[(Redis)]
-        B[Process B] -->|Step 2. 정상 통신| R
-    end
-    R -->|Step 3. TTL 만료 → B가 락 획득| B
-    A -->|Step 4. 단절 해제, 락 있다고 착각| DB[(공유 DB)]
-    B -->|Step 4. 실제 락 보유| DB
+    A[Process A] -. 네트워크 단절 .- R[(Redis)]
+    B[Process B] -->|정상 통신| R
+    R -->|TTL 만료→B 락 획득| B
+    A -->|착각: 락 보유| DB[(공유 DB)]
+    B -->|실제 락 보유| DB
     style A fill:#fdd,stroke:#c00
     style B fill:#dfd,stroke:#080
 ```
@@ -762,13 +747,11 @@ sequenceDiagram
     participant R as Redis
     A->>R: SET lock NX EX 30
     R-->>A: OK
-    Note over A: GC STW 시작(JVM 멈춤)
-    Note over R: 30s TTL 만료, 키 삭제
+    Note over A: GC STW(35s)
+    Note over R: TTL 만료
     B->>R: SET lock NX EX 30
     R-->>B: OK
-    Note over B: B 작업 시작
-    Note over A: GC 종료(35s), 락 보유 착각
-    Note over A,B: A,B 동시에 임계 영역 진입!
+    Note over A,B: 동시 진입!
 ```
 
 **증상**: GC가 끝난 서버 A가 자신이 여전히 락을 보유하고 있다고 착각하고 작업을 이어간다.

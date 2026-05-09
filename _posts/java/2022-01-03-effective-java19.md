@@ -146,14 +146,12 @@ sequenceDiagram
     participant Client as main()
     participant Sub as Sub 생성자
     participant Super as Super 생성자
-    participant OV as overrideMe()
     Client->>Sub: new Sub() 호출
-    Sub->>Super: super() 자동 호출 (Java 규칙)
-    Super->>OV: overrideMe() 호출
-    Note over OV: instant는 아직 null!<br/>Sub 생성자가 아직 실행 전
-    OV-->>Super: null 출력
+    Sub->>Super: super() 자동 호출
+    Super->>Super: overrideMe() 호출
+    Note over Super: instant는 아직 null!
     Super-->>Sub: Super 생성자 완료
-    Sub->>Sub: instant = Instant.now() 실행
+    Sub->>Sub: instant = Instant.now()
     Sub-->>Client: Sub 객체 완성
 ```
 

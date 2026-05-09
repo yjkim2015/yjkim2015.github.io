@@ -190,14 +190,12 @@ if (o instanceof Set) {         // 로 타입으로 검사
 
 ```mermaid
 graph TD
-    A["List<E>"] --> B["제네릭 타입"]
-    C["List<String>"] --> D["매개변수화 타입"]
-    E["List"] --> F["로 타입"]
-    G["List<?>"] --> H["비한정적 와일드카드 타입"]
-    I["List<? extends Num"] --> J["한정적 와일드카드 타입"]
-    style F fill:#ff6b6b,color:#fff
+    A["List&lt;E&gt; 제네릭"] --> B["List&lt;String&gt; 매개변수화"]
+    A --> C["List 로타입 (위험)"]
+    A --> D["List&lt;?&gt; 와일드카드"]
+    style C fill:#ff6b6b,color:#fff
+    style B fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff
-    style H fill:#51cf66,color:#fff
 ```
 
 > 로 타입을 사용하면 런타임에 예외가 일어날 수 있습니다. 로 타입은 제네릭 도입 이전 코드와의 호환성을 위해 제공될 뿐입니다. `Set<Object>`는 모든 타입의 객체를 저장할 수 있는 매개변수화 타입이고, `Set<?>`는 모종의 타입 객체만 저장할 수 있는 와일드카드 타입입니다. 이 둘은 안전하지만, 로 타입인 `Set`은 안전하지 않습니다.

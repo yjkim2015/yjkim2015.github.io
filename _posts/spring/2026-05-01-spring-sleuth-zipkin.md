@@ -24,17 +24,10 @@ date: 2026-05-01
 
 ```mermaid
 graph TD
-    subgraph "TraceId: abc123 (하나의 주문 요청)"
-        A["API Gateway"]
-        B["Order Service"]
-        C["Payment Service"]
-        D["Inventory Service\"]
-        E["Notification Servi"]
-    end
-    A --> B
-    B --> C
-    B --> D
-    B --> E
+    A["API Gateway"] --> B["Order Service"]
+    B --> C["Payment Service"]
+    B --> D["Inventory Service"]
+    B --> E["Notification Svc"]
 ```
 
 TraceId가 있으면 각 서비스의 로그를 한 번에 조회할 수 있다.

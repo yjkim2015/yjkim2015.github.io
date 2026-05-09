@@ -190,13 +190,9 @@ pureObject.key = 'value';
 
 ```mermaid
 graph LR
-    subgraph "프로토타입 방식"
-        PF["function Animal(na"]
-        PP["Animal.prototype.s"]
-    end
-    subgraph "클래스 방식"
-        CC["class Animal { spe"]
-    end
+    PF["function Animal()"]
+    PP["Animal.prototype.speak"]
+    CC["class Animal { speak }"]
     PF -.->|"동일한 결과"| CC
     PP -.->|"동일한 결과"| CC
     style CC fill:#9b59b6,color:#fff

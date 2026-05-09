@@ -265,15 +265,9 @@ JVM 메모리는 회사 사무실과 같습니다.
 
 ```mermaid
 flowchart LR
-    subgraph SHARED["공유 영역 (모든 스레드 접근 가"]
-        MA["Method Area"]
-        HP["Heap"]
-    end
-    subgraph THREAD["스레드별 독립 영역"]
-        ST["JVM Stack"]
-        PC["PC Register"]
-        NS["Native Method Stac"]
-    end
+    MA["Method Area"] --- HP["Heap"]
+    ST["JVM Stack"] --- PC["PC Register"]
+    PC --- NS["Native Method Stack"]
 ```
 
 ### 4.1 Method Area (메서드 영역) — "클래스 설계도 보관소"
@@ -549,16 +543,8 @@ GC Root가 될 수 있는 것들:
 
 ```mermaid
 flowchart LR
-    subgraph MARK["1. Mark (표시)"]
-        A["GC Root부터"]
-    end
-    subgraph SWEEP["2. Sweep (제거)"]
-        B["표시되지 않은"]
-    end
-    subgraph COMPACT["3. Compact (압축)"]
-        C["살아있는 객체를"]
-    end
-    MARK --> SWEEP --> COMPACT
+    A["1. Mark: GC Root부터"] --> B["2. Sweep: 미표시 제거"]
+    B --> C["3. Compact: 객체 압축"]
 ```
 
 - **Mark**: GC Root에서 시작해 도달 가능한 객체에 표시. STW(Stop-The-World) 중 수행.

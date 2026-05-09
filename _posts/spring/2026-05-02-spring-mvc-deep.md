@@ -126,17 +126,14 @@ protected void initStrategies(ApplicationContext context) {
 
 ```mermaid
 sequenceDiagram
-    participant B as 클라이언트
+    participant B as Client
     participant DS as DispatcherServlet
-    participant I as Interceptor
     participant C as Controller
-    B->>DS: HTTP 요청 (Filter 통과 후)
-    DS->>I: preHandle()
+    B->>DS: HTTP 요청
+    DS->>DS: preHandle()
     DS->>C: 컨트롤러 실행
     C-->>DS: ModelAndView
-    DS->>I: postHandle()
     DS->>B: 응답
-    DS->>I: afterCompletion()
 ```
 
 ### 4.2 doDispatch() 핵심 로직 — 실제 코드로 보기
@@ -188,14 +185,9 @@ protected void doDispatch(HttpServletRequest request, HttpServletResponse respon
 
 ```mermaid
 graph TD
-    subgraph "HandlerMapping 우선순위"
-        A["1️⃣ RequestMapping"]
-        B["2️⃣ BeanNameUrlHan"]
-        D["3️⃣ SimpleUrlHandl"]
-    end
-    A --> E["컨트롤러 메서드"]
-    B --> F["빈 이름 /orderControl"]
-    D --> H["/**/*.html"]
+    A["RequestMappingHM"] --> E["컨트롤러 메서드"]
+    B["BeanNameUrlHM"] --> F["빈 이름 매핑"]
+    D["SimpleUrlHM"] --> H["/**/*.html"]
 ```
 
 `RequestMappingHandlerMapping`이 애플리케이션 시작 시에 모든 `@RequestMapping` 어노테이션을 스캔해서 "URL 패턴 → 컨트롤러 메서드" 매핑 테이블을 미리 만들어둡니다. 요청이 오면 이 테이블에서 O(1)에 가까운 속도로 핸들러를 찾습니다. 만약 이 초기화가 느리면 서버 시작이 느립니다. `@RequestMapping`이 수천 개인 대형 서비스에서 시작 시간이 길어지는 원인 중 하나입니다.
@@ -268,13 +260,11 @@ public class OrderController {
 
 ```mermaid
 graph LR
-    subgraph "ArgumentResolver 처리 흐름"
-        A["컨트롤러 메서드"] --> B{"각 파라미터에 대해"}
-        B -->|"Yes"| C["resolveArgument()\"]
-        B -->|"No"| D["다음 Resolver 시도"]
-        C --> E["파라미터 값 준비 완료"]
-        D --> B
-    end
+    A["컨트롤러 메서드"] --> B{"파라미터 순회"}
+    B -->|"지원"| C["resolveArgument()"]
+    B -->|"미지원"| D["다음 Resolver"]
+    C --> E["파라미터 준비 완료"]
+    D --> B
 ```
 
 ```java
@@ -381,11 +371,9 @@ public List<OrderResponse> getMyOrders(@CurrentUser Member member) {
 
 ```mermaid
 flowchart TD
-    subgraph "ViewResolver 체인"
-        A["컨트롤러가 'order/list'"] --> B["1️⃣ ContentNegotia"]
-        B --> C["2️⃣ ThymeleafViewR"]
-        B --> D["3️⃣ InternalResour"]
-    end
+    A["'order/list'"] --> B["ContentNegotiation"]
+    B --> C["ThymeleafViewR"]
+    B --> D["InternalResource"]
     C --> E["HTML 렌더링"]
     D --> F["JSP 포워드"]
 ```
@@ -424,11 +412,13 @@ public String createOrderGood(OrderCreateRequest request) {
 
 ```mermaid
 graph TD
-    A["HTTP 요청"] --> B["Filter1(인코딩)"] --> C["Filter2(CORS)"] --> D["Filter3(Security)"]
-    D --> E["DispatcherServlet"]
-    E --> F["Interceptor1 preHa"] --> G["Interceptor2 preHa"] --> H["Controller"]
-    H --> I["Interceptor2 postH"] --> J["Interceptor1 postH"] --> K["View 렌더링"]
-    K --> L["afterCompletion"] --> M["Filter(역방향)"] --> N["HTTP 응답"]
+    A["HTTP 요청"] --> B["Filter(인코딩/CORS)"]
+    B --> C["DispatcherServlet"]
+    C --> D["preHandle()"]
+    D --> E["Controller"]
+    E --> F["postHandle()"]
+    F --> G["afterCompletion()"]
+    G --> H["HTTP 응답"]
 ```
 
 ### 8.2 필터 구현 — 서블릿 계층에서 처리해야 할 것들

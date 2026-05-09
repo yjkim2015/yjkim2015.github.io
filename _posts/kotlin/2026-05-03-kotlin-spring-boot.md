@@ -515,14 +515,8 @@ class LoadTestController(private val service: ExternalApiService) {
 
 ```mermaid
 flowchart LR
-  subgraph 스레드["Java 스레드 10만 개"]
-    T1["스레드당 ~1MB 스택"]
-    T2["총 메모리: ~100GB"]
-  end
-  subgraph 코루틴["Kotlin 코루틴 10만 개"]
-    C1["코루틴당 ~수KB"]
-    C2["총 메모리: ~수백MB"]
-  end
+  T1["스레드당 ~1MB 스택"] --- T2["총 메모리: ~100GB"]
+  C1["코루틴당 ~수KB"] --- C2["총 메모리: ~수백MB"]
 ```
 
 ### 실제 운영에서의 조율

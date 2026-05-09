@@ -295,14 +295,10 @@ routes:
 sequenceDiagram
     participant C as Client
     participant GW as Gateway
-    participant AUTH as AuthFilter
-    participant RL as RateLimiter
     participant SVC as Service
     C->>GW: HTTP 요청
-    GW->>GW: Route Predicate 매칭
-    GW->>AUTH: JWT 검증
-    GW->>RL: Rate Limit 확인
-    GW->>SVC: CircuitBreaker 서비스 호출
+    GW->>GW: JWT 검증/Rate Limit
+    GW->>SVC: 서비스 호출
     SVC-->>C: 응답
 ```
 

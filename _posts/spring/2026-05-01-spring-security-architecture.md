@@ -101,15 +101,11 @@ public class SecurityConfig {
 sequenceDiagram
     participant C as Client
     participant F as AuthFilter
-    participant AM as AuthManager
-    participant AP as AuthProvider/UDS
     participant SC as SecurityContext
     C->>F: POST /login
-    F->>AM: authenticate()
-    AM->>AP: loadUserByUsername()+비밀번호검증
-    AP-->>AM: 인증 성공
-    AM-->>F: Authentication
-    F->>SC: 저장 후 성공 응답
+    F->>F: loadUser+비밀번호검증
+    F->>SC: Authentication 저장
+    F-->>C: 성공 응답
 ```
 
 ---
@@ -182,15 +178,11 @@ public class CustomUserDetails implements UserDetails {
 
 ```mermaid
 graph TD
-    subgraph "요청 1 - Thread-1"
-        A1["FilterChainProxy"] -->|"SecurityContext 생성"| B1["ThreadLocal 저장"]
-        B1 --> C1["Controller → Secur"]
-    end
-    subgraph "요청 2 - Thread-2"
-        A2["FilterChainProxy"] -->|"SecurityContext 생성"| B2["ThreadLocal 저장"]
-        B2 --> C2["Controller → Secur"]
-    end
-    C1 --- NOTE["각 Thread가 독립적인 Sec"]
+    A1["FilterChainProxy"] -->|"SecurityContext 생성"| B1["ThreadLocal-1"]
+    B1 --> C1["Controller-1"]
+    A2["FilterChainProxy"] -->|"SecurityContext 생성"| B2["ThreadLocal-2"]
+    B2 --> C2["Controller-2"]
+    C1 --- NOTE["Thread 독립 Context"]
     C2 --- NOTE
 ```
 
