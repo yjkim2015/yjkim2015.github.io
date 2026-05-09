@@ -715,3 +715,47 @@ props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 | Consumer Lag 폭증 | 실시간성 파괴 | 자동 스케일링, Lag 알림 |
 | 네트워크 파티션 | Split-Brain | Leader Epoch, 다중 AZ 배포 |
 | 재시도 중복 | 메시지 중복 저장 | enable.idempotence=true |
+
+---
+
+## 왜 극한 시나리오를 알아야 하는가?
+
+정상 동작만 아는 엔지니어는 장애 상황에서 대응이 느리다. "브로커 3대 중 2대가 동시에 죽으면?", "Consumer가 메시지를 처리하다 GC로 10분 멈추면?" 같은 극한 시나리오를 미리 생각해두면 설정값의 의미가 보이고 장애 복구 절차가 체계화된다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 카오스 테스트 없이 운영 투입**
+브로커 장애, 네트워크 파티션, Consumer 지연을 시뮬레이션하지 않은 채 운영한다. 첫 장애가 실제 운영에서 발생해 복구 절차를 그 자리에서 찾게 된다. Chaos Monkey, `tc` 명령으로 네트워크 지연을 주입해 주기적으로 장애 훈련을 수행해야 한다.
+
+**실수 2: min.insync.replicas 설정을 replication.factor와 동일하게 설정**
+`replication.factor=3`, `min.insync.replicas=3`이면 브로커 1대 장애 시 ISR이 2개로 줄어 모든 쓰기가 차단된다. `min.insync.replicas=2`(과반수)로 설정해야 브로커 1대 장애에서도 쓰기가 가능하다.
+
+**실수 3: 메시지 크기 한계를 고려하지 않은 설계**
+기본 `message.max.bytes=1MB`를 초과하는 페이로드를 전송하다 `RecordTooLargeException`이 발생한다. 브로커와 프로듀서·컨슈머 모두 일관되게 설정해야 하며, 대용량 바이너리는 S3에 저장하고 Kafka에는 참조 URL만 전송하는 패턴을 권장한다.
+
+**실수 4: 오프셋 리셋 시 downstream 영향 미고려**
+`--reset-offsets --to-earliest`로 오프셋을 재설정하면 모든 과거 메시지를 재처리한다. 멱등성이 없는 downstream(이메일 발송, 결제 처리)이면 중복 처리가 발생한다. 오프셋 리셋 전에 downstream의 멱등성 보장 여부를 반드시 확인해야 한다.
+
+**실수 5: Consumer Group이 오랫동안 비활성 상태**
+Consumer Group이 `offsets.retention.minutes`(기본 7일) 동안 비활성이면 오프셋 정보가 삭제된다. 재시작 시 `auto.offset.reset` 정책에 따라 earliest나 latest부터 처리해 예상치 못한 메시지 유실 또는 재처리가 발생한다.
+
+---
+
+## 면접 포인트
+
+**Q1. 브로커 과반수 장애 시 Kafka의 동작은?**
+`min.insync.replicas`를 충족하지 못하면 프로듀서의 쓰기가 `NotEnoughReplicasException`으로 실패한다. ISR이 없으면 해당 파티션이 unavailable 상태가 된다. `unclean.leader.election.enable=false`(기본)이면 ISR에 없는 레플리카가 리더가 되지 않아 데이터 유실을 방지하지만 서비스는 중단된다.
+
+**Q2. Split-Brain 상황에서 Kafka는 어떻게 처리하는가?**
+네트워크 파티션으로 브로커가 두 그룹으로 나뉘면 KRaft(또는 ZooKeeper)의 과반수를 확보한 쪽만 클러스터 운영을 계속한다. 소수 쪽 브로커는 컨트롤러를 잃고 쓰기를 거부한다. 각 AZ에 균등하게 브로커를 배치하고 홀수 개(최소 3개)를 유지해야 한다.
+
+**Q3. Consumer Lag이 폭증하는 원인과 대응은?**
+원인: ① 프로듀서 처리량 급증 ② Consumer 처리 지연(DB 슬로우쿼리, 외부 API 지연) ③ Consumer 수 < 파티션 수. 즉시 대응: Consumer 인스턴스 추가(파티션 수 한도), 처리 로직 최적화. 근본 대응: 파티션 수 증가(재할당 필요), 처리 병목 제거.
+
+**Q4. Kafka의 메시지 순서 보장 범위는?**
+파티션 내에서만 순서가 보장된다. 토픽 전체 순서는 보장되지 않는다. 순서가 중요한 이벤트(사용자 행동 순서)는 같은 키로 전송해 같은 파티션에 배치한다. 글로벌 순서가 필요하면 파티션을 1개로 설정하지만 처리량 확장이 불가능해진다.
+
+**Q5. Kafka를 DB 대신 사용할 수 있는가?**
+이벤트 로그로서의 Kafka는 immutable append-only 저장소다. 임의 조회(특정 키로 최신 값 조회)가 필요하면 Log Compaction + Kafka Streams의 KTable이나 별도 DB로 materialized view를 구성해야 한다. Kafka는 데이터 파이프라인과 이벤트 스트리밍에 최적화되어 있고 일반 DB를 대체하지 않는다.

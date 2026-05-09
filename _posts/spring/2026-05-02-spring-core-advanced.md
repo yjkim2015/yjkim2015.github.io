@@ -716,3 +716,37 @@ flowchart LR
 | @Around | 실행 전/후 모두 제어 | proceed() 미호출 시 비즈니스 로직 건너뜀 |
 | 내부 호출 | this.method() 프록시 우회 | @Transactional 롤백 안 됨, 데이터 정합성 깨짐 |
 | ThreadLocal | 스레드별 독립 저장소 | 미정리 시 스레드 풀 오염 |
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 횡단 관심사 분리 | 런타임 오버헤드 | 디버깅 용이성 | 적합한 상황 |
+|---|---|---|---|---|
+| 직접 코드 삽입 | X (코드 오염) | 없음 | 쉬움 | 단순 1회성 |
+| 데코레이터 패턴 | O (수동) | 거의 없음 | 쉬움 | 소수의 대상 |
+| Spring AOP (프록시 기반) | O (자동) | 미미함 | 중간 | 실무 표준 |
+| AspectJ (바이트코드 조작) | O (자동) | 거의 없음 | 어려움 | self-invocation 해결 필요 시 |
+
+**결론:** Spring AOP는 `@Transactional`, `@Async`, `@Cacheable` 등 Spring의 핵심 기능이 모두 의존하는 인프라다. 프록시 기반 동작 원리를 이해하지 못하면 self-invocation, private 메서드 적용 실패 같은 문제를 해결하기 어렵다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **self-invocation으로 AOP가 무력화** — 같은 빈 내부에서 `this.method()`로 호출하면 프록시를 거치지 않아 `@Transactional`, `@Async`, `@Cacheable`이 모두 무시된다. 반드시 다른 빈을 통해 호출하거나 `AopContext.currentProxy()`를 사용해야 한다.
+
+2. **private/final 메서드에 AOP 어드바이스 적용 시도** — JDK Dynamic Proxy는 인터페이스 메서드만 프록시한다. CGLIB는 final 클래스/메서드를 상속할 수 없다. `@Transactional`을 private 메서드에 붙이면 아무 효과가 없다.
+
+3. **Pointcut 표현식의 `..` vs `*` 혼동** — `execution(* com.example.service.*.*(..)))`은 service 패키지 바로 아래의 모든 클래스만 매칭한다. 하위 패키지까지 포함하려면 `com.example.service..*.*(..)`와 같이 `..`을 사용해야 한다.
+
+4. **여러 AOP Aspect의 실행 순서 미지정** — 여러 Aspect가 같은 메서드에 적용될 때 `@Order` 없이는 실행 순서가 보장되지 않는다. 트랜잭션 Aspect가 로깅 Aspect보다 먼저 실행되어야 한다면 `@Order(1)`, `@Order(2)`로 명시해야 한다.
+
+5. **Around Advice에서 `proceed()` 호출 누락** — `@Around` 어드바이스에서 `joinPoint.proceed()`를 호출하지 않으면 실제 메서드가 실행되지 않는다. 성능 측정 코드에서 실수로 `proceed()`를 try 블록 밖에 두어 예외 시 측정이 누락되는 경우도 흔하다.
+
+---
+
+## 면접 포인트 (보강)
+
+**Q. JDK Dynamic Proxy와 CGLIB의 선택 기준은?**
+> 대상 클래스가 인터페이스를 구현하면 기본적으로 JDK Dynamic Proxy가 사용된다. Spring Boot 2.0 이후 `spring.aop.proxy-target-class=true`가 기본값이 되어 인터페이스 여부와 무관하게 CGLIB를 사용한다. CGLIB는 final 클래스와 final 메서드를 프록시할 수 없는 제약이 있다.

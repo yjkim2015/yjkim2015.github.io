@@ -445,3 +445,47 @@ flowchart LR
 - Rebalancing Events Timeline
 - Records Consumed Rate vs Records Produced Rate
 ```
+
+---
+
+## 왜 Consumer 내부를 알아야 하는가?
+
+Consumer Lag, Rebalancing, 중복 처리는 Kafka 운영에서 가장 자주 마주치는 문제다. `max.poll.interval.ms`, `session.timeout.ms`, `auto.offset.reset`의 의미를 모르면 장애 원인을 찾지 못하고 잘못된 설정으로 메시지를 유실하거나 무한 중복 처리에 빠진다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: enable.auto.commit=true + 처리 실패 무시**
+자동 커밋은 `poll()` 호출 주기마다 오프셋을 커밋한다. 처리 중 예외가 발생해도 오프셋이 커밋되어 메시지가 유실된다. `enable.auto.commit=false`로 설정하고 처리 완료 후 수동으로 `commitSync()` 또는 `commitAsync()`를 호출해야 한다.
+
+**실수 2: max.poll.interval.ms보다 긴 처리 시간**
+기본값(5분)을 초과하면 Consumer가 죽은 것으로 판단해 Rebalancing이 발생한다. 오프셋 커밋 전에 파티션이 다른 Consumer에게 넘어가 메시지가 중복 처리된다. 처리 시간을 단축하거나 `max.poll.interval.ms`를 늘리되, 배치 크기(`max.poll.records`)를 줄여야 한다.
+
+**실수 3: auto.offset.reset=latest로 신규 컨슈머 배포**
+신규 Consumer Group을 `latest`로 시작하면 배포 전에 쌓인 메시지를 처리하지 못한다. `earliest`로 시작하거나, 처음 배포 시 `kafka-consumer-groups.sh --reset-offsets`로 명시적으로 오프셋을 지정해야 한다.
+
+**실수 4: Rebalancing 중 처리 중인 메시지 손실**
+Cooperative Sticky Assignor 없이 Eager Rebalancing에서는 리밸런싱 시작 시 모든 파티션 할당이 취소된다. 처리 중이던 메시지의 오프셋이 커밋되지 않으면 다른 Consumer가 같은 메시지를 다시 처리한다. `partition.assignment.strategy=CooperativeStickyAssignor`로 점진적 리밸런싱을 사용한다.
+
+**실수 5: 하나의 Consumer Group으로 용도가 다른 처리를 묶음**
+결제 이벤트를 하나의 Consumer Group에서 이메일 발송과 재고 차감을 함께 처리한다. 한쪽이 느려지면 전체 Lag이 쌓인다. 독립적인 처리는 별도 Consumer Group으로 분리해 서로 영향을 주지 않아야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Consumer Group의 동작 원리는?**
+같은 Group ID의 Consumer들이 토픽 파티션을 나눠 갖는다. 각 파티션은 최대 하나의 Consumer에 할당된다. Consumer 수가 파티션 수를 초과하면 초과 Consumer는 유휴 상태가 된다. Consumer 추가/제거/장애 시 Group Coordinator가 Rebalancing을 트리거한다.
+
+**Q2. at-least-once vs exactly-once 처리의 차이는?**
+at-least-once: 처리 후 커밋 — 처리 중 장애 시 재처리로 중복 가능, 멱등성 처리 필요. exactly-once: Kafka 트랜잭션 API + `isolation.level=read_committed` — 프로듀서-컨슈머 양쪽에 트랜잭션 설정 필요, 성능 비용 증가. 대부분의 실무는 at-least-once + 멱등성 처리가 현실적이다.
+
+**Q3. Consumer Lag을 어떻게 모니터링하는가?**
+`kafka-consumer-groups.sh --describe`로 파티션별 오프셋과 Lag 확인. Prometheus + kafka_exporter로 `kafka_consumergroup_lag` 메트릭 수집. Lag이 지속적으로 증가하면 Consumer 처리 속도 < 프로듀서 생산 속도임을 의미 — Consumer 수를 파티션 수만큼 늘리거나 처리 로직을 최적화한다.
+
+**Q4. Rebalancing이 자주 발생하는 원인과 해결책은?**
+① Consumer GC pause가 `session.timeout.ms`(기본 45초)를 초과 → G1GC 튜닝, `session.timeout.ms` 증가 ② 처리 시간이 `max.poll.interval.ms` 초과 → 배치 크기 축소, 처리 시간 단축 ③ Consumer 재배포 빈번 → Rolling 배포 + Cooperative Assignor로 파티션 이동 최소화.
+
+**Q5. Kafka Streams와 Consumer API의 차이는?**
+Consumer API는 저수준으로 오프셋, 리밸런싱, 직렬화를 직접 관리한다. Kafka Streams는 Consumer/Producer를 추상화하고 stateful 처리(집계, 조인), exactly-once 처리, 내결함성 상태 저장소(RocksDB)를 기본 제공한다. 단순 이벤트 소비는 Consumer API, 스트림 처리가 필요하면 Kafka Streams 또는 Flink를 고려한다.

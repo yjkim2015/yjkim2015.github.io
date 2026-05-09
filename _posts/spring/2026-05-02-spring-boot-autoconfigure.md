@@ -702,3 +702,49 @@ flowchart LR
 | 자동 구성 제외 | exclude 속성 | 불필요한 자동 구성 비활성화 |
 | 테스트 슬라이스 | @WebMvcTest, @DataJpaTest | 빠른 테스트, 필요한 계층만 로드 |
 | 운영 모니터링 | Actuator | 재배포 없이 상태 확인, 로그 레벨 변경 |
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 설정 자동화 | 커스터마이징 | 학습 곡선 | 적합한 상황 |
+|---|---|---|---|---|
+| 순수 Spring (XML/Java Config) | X | 완전 | 높음 | 세밀한 설정 제어 필요 |
+| Spring Boot Auto-configuration | O | O (@Conditional) | 낮음 | 실무 표준, 빠른 시작 |
+| Micronaut AOT | O (컴파일 타임) | O | 중간 | 네이티브 이미지, 빠른 시작 |
+| Quarkus | O (컴파일 타임) | O | 중간 | 서버리스, 낮은 메모리 |
+
+**결론:** Spring Boot Auto-configuration은 `@Conditional`로 필요한 빈만 조건부 등록해 "합리적인 기본값 + 필요시 오버라이드" 패턴을 구현한다. 내부 동작을 이해하면 자동 설정 충돌 문제를 빠르게 진단할 수 있다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **`@SpringBootApplication`의 컴포넌트 스캔 범위 초과** — `@SpringBootApplication`이 최상위 패키지에 없으면 하위 패키지의 `@Component`를 스캔하지 못한다. 반대로 너무 넓은 패키지에 두면 불필요한 빈이 등록되어 시작 시간이 늘어난다.
+
+2. **자동 설정과 수동 설정 충돌** — `DataSource` 빈을 직접 등록했는데 `spring.datasource.*` 프로퍼티도 설정하면 충돌이 발생할 수 있다. `@ConditionalOnMissingBean`으로 자동 설정이 동작하는 조건을 이해하고, `spring.autoconfigure.exclude`로 불필요한 자동 설정을 제외해야 한다.
+
+3. **`@ConfigurationProperties` 빈 등록 누락** — `@ConfigurationProperties` 클래스에 `@Component`나 `@EnableConfigurationProperties`가 없으면 빈으로 등록되지 않아 프로퍼티가 바인딩되지 않는다. Spring Boot 2.2+ 에서는 `@ConfigurationPropertiesScan`으로 자동 스캔이 가능하다.
+
+4. **테스트 슬라이스에서 필요한 빈 누락** — `@WebMvcTest`는 Web 레이어 빈만 로드한다. `@Service`, `@Repository`는 로드되지 않으므로 `@MockBean`으로 모킹해야 한다. 이를 모르고 `@Autowired`로 실제 서비스를 주입하려 하면 `NoSuchBeanDefinitionException`이 발생한다.
+
+5. **Actuator 엔드포인트를 운영에서 모두 노출** — `management.endpoints.web.exposure.include=*`로 설정하면 `/actuator/env`(환경변수), `/actuator/heapdump`(힙 덤프)가 외부에 노출된다. 운영에서는 `health`, `info`, `metrics`만 노출하고 나머지는 내부 네트워크로 제한해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. `@EnableAutoConfiguration`의 동작 원리는?**
+> `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`(Boot 2.7+) 파일에 나열된 자동 설정 클래스들을 로드한다. 각 클래스는 `@Conditional` 계열 어노테이션으로 조건을 검사해 현재 환경에 필요한 빈만 등록한다. `spring-boot-autoconfigure` jar 안에 수백 개의 자동 설정 클래스가 있다.
+
+**Q2. `@ConditionalOnMissingBean`의 역할은?**
+> 해당 타입의 빈이 컨텍스트에 없을 때만 자동 설정 빈을 등록한다. 사용자가 직접 빈을 정의하면 자동 설정이 비활성화된다. 이 패턴이 "합리적인 기본값 + 필요시 오버라이드"를 구현하는 핵심이다.
+
+**Q3. 자동 설정 디버깅 방법은?**
+> `--debug` 플래그 또는 `logging.level.org.springframework.boot.autoconfigure=DEBUG`로 실행하면 어떤 자동 설정이 적용됐고(Positive matches), 왜 제외됐는지(Negative matches)를 출력한다. Actuator의 `/actuator/conditions` 엔드포인트로도 확인 가능하다.
+
+**Q4. `@TestConfiguration`과 `@Configuration`의 차이는?**
+> `@TestConfiguration`은 테스트 컨텍스트에만 추가 빈을 등록한다. 컴포넌트 스캔에서 자동으로 감지되지 않아 테스트 클래스에서 `@Import(TestConfig.class)`로 명시적으로 포함해야 한다. `@Configuration`은 운영 컨텍스트에도 등록된다.
+
+**Q5. 커스텀 자동 설정 라이브러리를 만드는 방법은?**
+> 자동 설정 클래스를 `@AutoConfiguration`으로 선언하고, `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`에 클래스 이름을 등록한다. `@ConditionalOnClass`, `@ConditionalOnMissingBean`으로 조건을 정의한다. `spring-boot-starter` 패턴으로 의존성을 정의하면 사용자가 단 하나의 스타터만 추가하면 된다.
