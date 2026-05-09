@@ -303,11 +303,11 @@ export function useCreateProduct() {
 ```mermaid
 flowchart TD
     Q1{"이 데이터는 어디서 왔는가?"}
-    Q1 -->|"서버 API에서 왔다"| SERVER["서버 상태\n→ React Que"]
-    Q1 -->|"URL에서 왔다"| URL["URL 상태\n→ searchPa"]
-    Q1 -->|"클라이언트에서 생성"| Q2{"여러 컴포넌트가\n공유하는가?"}
-    Q2 -->|"예"| GLOBAL["전역 상태\n→ Zustand /"]
-    Q2 -->|"아니오"| LOCAL["로컬 상태\n→ useState"]
+    Q1 -->|"서버 API에서 왔다"| SERVER["서버 상태"]
+    Q1 -->|"URL에서 왔다"| URL["URL 상태"]
+    Q1 -->|"클라이언트에서 생성"| Q2{"여러 컴포넌트가"}
+    Q2 -->|"예"| GLOBAL["전역 상태"]
+    Q2 -->|"아니오"| LOCAL["로컬 상태"]
     style SERVER fill:#e74c3c,color:#fff
     style URL fill:#9b59b6,color:#fff
     style GLOBAL fill:#3498db,color:#fff
@@ -361,9 +361,9 @@ export default function ProductsPage({
 ```mermaid
 flowchart TD
     subgraph "테스트 피라미드"
-        E2E["E2E 테스트\nPlaywrigh"]
-        INT["통합 테스트\nReact Test"]
-        UNIT["단위 테스트\nJest / Vit"]
+        E2E["E2E 테스트"]
+        INT["통합 테스트"]
+        UNIT["단위 테스트"]
     end
     UNIT -->|"통과하면"| INT
     INT -->|"통과하면"| E2E

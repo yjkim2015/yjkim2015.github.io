@@ -119,11 +119,11 @@ public final class StringList implements Serializable {
 
 ```mermaid
 graph TD
-    A["필드 직렬화 여부 판단"] --> B{"객체의 논리적 상태와\n관련 있는가?"}
-    B --> C["관련 있음\ntransient 생"]
-    B --> D["관련 없음\ntransient 선"]
-    D --> E["예: 캐시된 해시값\n다른 필드에"]
-    D --> F["예: JVM마다 달라지는 값\n네"]
+    A["필드 직렬화 여부 판단"] --> B{"객체의 논리적 상태와"}
+    B --> C["관련 있음"]
+    B --> D["관련 없음"]
+    D --> E["예: 캐시된 해시값"]
+    D --> F["예: JVM마다 달라지는 값"]
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff
 ```

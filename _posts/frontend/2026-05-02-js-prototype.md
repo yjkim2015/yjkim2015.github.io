@@ -287,10 +287,10 @@ console.log(buddy instanceof Animal);          // true
 
 ```mermaid
 graph BT
-    BUDDY["buddy\nname:'버디'"]
+    BUDDY["buddy"]
     GR["GoldenRetriever.pr"]
-    DOG["Dog.prototype\nbar"]
-    OBJ["Object.prototype\n"]
+    DOG["Dog.prototype"]
+    OBJ["Object.prototype"]
     NULL[null]
     BUDDY -->|__proto__| GR -->|__proto__| DOG -->|__proto__| OBJ -->|__proto__| NULL
     style BUDDY fill:#e74c3c,color:#fff

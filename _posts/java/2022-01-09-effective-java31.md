@@ -81,10 +81,10 @@ numberStack.popAll(objects);  // Object는 Number의 상위 타입 — OK
 
 ```mermaid
 graph TD
-    A["와일드카드 타입 선택"] --> B{"매개변수가\n무엇을 하나?"}
-    B -->|"값을 꺼내 제공\n(생산자, Pr"| C["<? extends E>\next"]
-    B -->|"값을 받아 저장\n(소비자, Co"| D["<? super E>\nsuper"]
-    B -->|"둘 다"| E["와일드카드 사용 말것\n명확한 타"]
+    A["와일드카드 타입 선택"] --> B{"매개변수가"}
+    B -->|"값을 꺼내 제공\n(생산자, Pr"| C["<? extends E>"]
+    B -->|"값을 받아 저장\n(소비자, Co"| D["<? super E>"]
+    B -->|"둘 다"| E["와일드카드 사용 말것"]
     style C fill:#51cf66,color:#fff
     style D fill:#4a9eff,color:#fff
 ```

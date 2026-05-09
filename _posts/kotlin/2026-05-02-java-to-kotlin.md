@@ -98,9 +98,9 @@ val confirmedOrder = pendingOrder.copy(status = OrderStatus.CONFIRMED)
 
 ```mermaid
 graph TD
-    Java["Java\n모든 참조 타입이 nu"] --> Problem["NullPointerExcepti"]
-    Kotlin["Kotlin\nnon-null:"] --> Compile["컴파일 타임 체크\n?. 연산자"]
-    Compile --> Safe["런타임 NPE 발생 불가\n(!!"]
+    Java["Java"] --> Problem["NullPointerExcepti"]
+    Kotlin["Kotlin"] --> Compile["컴파일 타임 체크"]
+    Compile --> Safe["런타임 NPE 발생 불가"]
 ```
 
 Kotlin의 타입 시스템은 null 가능 여부를 타입에 인코딩한다. `String`은 null이 될 수 없고, `String?`는 될 수 있다. 컴파일러가 이걸 강제한다.
@@ -237,11 +237,11 @@ val member = memberRepository.findByIdOrThrow(1L)  // null이면 즉시 예외
 graph TD
     ScopeFn["스코프 함수"] --> LambdaResult["반환값: 람다 결과"]
     ScopeFn --> ReceiverResult["반환값: 수신 객체 자신"]
-    LambdaResult --> Let["let\n수신 객체를 it으로\n"]
-    LambdaResult --> Run["run\n수신 객체를 this로\"]
-    LambdaResult --> With["with\n수신 객체를 this로"]
-    ReceiverResult --> Apply["apply\n수신 객체를 this"]
-    ReceiverResult --> Also["also\n수신 객체를 it으로\"]
+    LambdaResult --> Let["let"]
+    LambdaResult --> Run["run"]
+    LambdaResult --> With["with"]
+    ReceiverResult --> Apply["apply"]
+    ReceiverResult --> Also["also"]
 ```
 
 ```kotlin
@@ -354,9 +354,9 @@ JPA 엔티티는 `data class`로 만들면 안 된다. `equals`와 `hashCode`가
 flowchart TD
     A["Java 프로젝트"] --> B["1단계: 새 파일은 Kotlin으"]
     B --> C["2단계: DTO, Value Ob"]
-    C --> D["3단계: 서비스 계층 변환\nnu"]
-    D --> E["4단계: 컨트롤러 변환\n생성자"]
-    E --> F["완전한 Kotlin 프로젝트\nb"]
+    C --> D["3단계: 서비스 계층 변환"]
+    D --> E["4단계: 컨트롤러 변환"]
+    E --> F["완전한 Kotlin 프로젝트"]
     B -->|"양방향 호출 가능"| G["@JvmStatic, @JvmFi"]
 ```
 

@@ -156,10 +156,10 @@ JDBC가 대표적인 예입니다. `DriverManager.getConnection()`은 어떤 DB 
 
 ```mermaid
 graph TD
-    A["서비스 제공자 프레임워크 구성"] --> B["서비스 인터페이스\nConnect"]
-    A --> C["제공자 등록 API\nDriver"]
-    A --> D["서비스 접근 API\nDriver"]
-    A --> E["서비스 제공자 인터페이스\nDri"]
+    A["서비스 제공자 프레임워크 구성"] --> B["서비스 인터페이스"]
+    A --> C["제공자 등록 API"]
+    A --> D["서비스 접근 API"]
+    A --> E["서비스 제공자 인터페이스"]
     B --> F["MySQLConnection"]
     B --> G["OracleConnection"]
 ```

@@ -58,13 +58,13 @@ toc_label: 목차
 ```mermaid
 graph TD
     A["1️⃣ 트래픽 증가 감지"] --> B{"2️⃣ 확장 전략 선택"}
-    B --> C["3️⃣ 수직 확장\nScale U"]
-    B --> D["3️⃣ 수평 확장\nScale O"]
-    C --> E["더 큰 서버로 교체\n빠르지만 한"]
+    B --> C["3️⃣ 수직 확장"]
+    B --> D["3️⃣ 수평 확장"]
+    C --> E["더 큰 서버로 교체"]
     D --> F["4️⃣ 로드밸런서 추가"]
     F --> G["서버 1"]
     F --> H["서버 2"]
-    F --> I["서버 N\n무한 확장 가능"]
+    F --> I["서버 N"]
 ```
 
 ### 확장성 측정 지표
@@ -115,9 +115,9 @@ MTBF = 100시간, MTTR = 1시간이면 가용성 99.01%입니다. MTTR을 0.1시
 
 ```mermaid
 graph TD
-    A["고가용성 목표"] --> B["이중화\n서버·DB·네트워크"]
-    A --> C["장애 감지\n헬스체크·알람"]
-    A --> D["자동 복구\nAuto Scalin"]
+    A["고가용성 목표"] --> B["이중화"]
+    A --> C["장애 감지"]
+    A --> D["자동 복구"]
 ```
 
 ### 면접 포인트
@@ -136,9 +136,9 @@ graph TD
 
 ```mermaid
 graph LR
-    A["강한 일관성\nStrong"] --> B["순차적 일관성\nSequentia"]
-    B --> C["인과적 일관성\nCausal"]
-    C --> D["최종 일관성\nEventual"]
+    A["강한 일관성"] --> B["순차적 일관성"]
+    B --> C["인과적 일관성"]
+    C --> D["최종 일관성"]
     A -.->|"성능 낮음\n지연 높음"| E["저성능"]
     D -.->|"성능 높음\n지연 낮음"| F["고성능"]
 ```
@@ -314,11 +314,11 @@ WebSocket 같은 장기 연결에서 라운드 로빈은 비효율적입니다.
 
 ```mermaid
 graph LR
-    A["로드밸런싱\n알고리즘"]
-    A --> B["Round Robin\n단순 순환"]
-    A --> C["Weighted RR\n가중치 순"]
+    A["로드밸런싱"]
+    A --> B["Round Robin"]
+    A --> C["Weighted RR"]
     A --> D["Least Connections\"]
-    A --> E["IP Hash\nIP 기반 고정"]
+    A --> E["IP Hash"]
     B --> F["균등 서버 환경"]
     C --> G["이기종 서버 환경"]
     D --> H["WebSocket/긴 처리"]
@@ -335,11 +335,11 @@ graph LR
 
 ```mermaid
 graph TD
-    W["1️⃣ 쓰기 요청\nINSERT/"] --> M[("2️⃣ 마스터 DB\nPrimar")]
+    W["1️⃣ 쓰기 요청"] --> M[("2️⃣ 마스터 DB")]
     M -->|"3️⃣ 비동기 복제"| R1[("레플리카 1")]
     M -->|"3️⃣ 비동기 복제"| R2[("레플리카 2")]
     M -->|"3️⃣ 비동기 복제"| R3[("레플리카 3")]
-    R1 --> Q["4️⃣ 읽기 요청\nSELECT"]
+    R1 --> Q["4️⃣ 읽기 요청"]
     R2 --> Q
     R3 --> Q
 ```
@@ -352,10 +352,10 @@ graph TD
 
 ```mermaid
 graph TD
-    App["1️⃣ 애플리케이션"] --> SR["2️⃣ 샤드 라우터\n(어느 샤드"]
-    SR --> S1[("3️⃣ 샤드 1\nUser ID")]
-    SR --> S2[("3️⃣ 샤드 2\nUser ID")]
-    SR --> S3[("3️⃣ 샤드 3\nUser ID")]
+    App["1️⃣ 애플리케이션"] --> SR["2️⃣ 샤드 라우터"]
+    SR --> S1[("3️⃣ 샤드 1")]
+    SR --> S2[("3️⃣ 샤드 2")]
+    SR --> S3[("3️⃣ 샤드 3")]
 ```
 
 **샤딩 전략 비교:**
@@ -379,10 +379,10 @@ graph TD
 
 ```mermaid
 graph LR
-    A["1️⃣ 사용자 요청"] --> B{"2️⃣ 캐시 확인\nRedis"}
-    B -->|"Cache Hit\n캐시 명중"| C["3️⃣ 캐시에서 즉시 반환\n수십"]
-    B -->|"Cache Miss\n캐시 미스"| D["3️⃣ DB 조회\n수십 ms"]
-    D --> E["4️⃣ 캐시에 저장\nTTL 설정"]
+    A["1️⃣ 사용자 요청"] --> B{"2️⃣ 캐시 확인"}
+    B -->|"Cache Hit\n캐시 명중"| C["3️⃣ 캐시에서 즉시 반환"]
+    B -->|"Cache Miss\n캐시 미스"| D["3️⃣ DB 조회"]
+    D --> E["4️⃣ 캐시에 저장"]
     E --> F["5️⃣ 사용자에게 반환"]
 ```
 
@@ -400,14 +400,14 @@ L4 캐시: CDN 엣지 서버 (100ms~, 무한 확장)
 ```mermaid
 graph TD
     A["캐시 전략 선택"]
-    A --> B["Cache-Aside\nLazy"]
+    A --> B["Cache-Aside"]
     A --> C["Write-Through"]
-    A --> D["Write-Behind\nWrit"]
+    A --> D["Write-Behind"]
     A --> E["Read-Through"]
-    B --> F["앱이 직접 캐시 관리\n미스 시"]
+    B --> F["앱이 직접 캐시 관리"]
     C --> G["쓰기 시 캐시+DB 동시 업데이트"]
-    D --> H["캐시 먼저 쓰고 나중에 DB\n쓰"]
-    E --> I["캐시가 DB 조회 대행\n코드 단"]
+    D --> H["캐시 먼저 쓰고 나중에 DB"]
+    E --> I["캐시가 DB 조회 대행"]
 ```
 
 Write-Behind가 왜 위험할까요? 캐시에 먼저 쓰고 DB는 나중에 씁니다. 캐시 서버(Redis)가 죽으면, DB에 아직 반영 안 된 데이터가 사라집니다. 결제 금액이 캐시에만 있다가 사라지는 것입니다. 쓰기 속도가 중요하고 약간의 데이터 손실을 허용할 수 있는 경우에만 사용합니다.
@@ -469,7 +469,7 @@ graph TD
 
 ```mermaid
 graph LR
-    P1["주문 서비스"] --> MQ["Kafka/RabbitMQ\n메시"]
+    P1["주문 서비스"] --> MQ["Kafka/RabbitMQ"]
     P2["결제 서비스"] --> MQ
     P3["배송 서비스"] --> MQ
     MQ --> C1["이메일 발송"]
@@ -494,13 +494,13 @@ graph LR
 ```mermaid
 graph TD
     subgraph "모놀리스 아키텍처"
-        M["하나의 큰 JAR/WAR\n사용자"]
+        M["하나의 큰 JAR/WAR"]
     end
     subgraph "마이크로서비스 아키텍처"
-        US["사용자 서비스\nPort: 808"]
-        OS["주문 서비스\nPort: 8082"]
-        PS["결제 서비스\nPort: 8083"]
-        DS["배송 서비스\nPort: 8084"]
+        US["사용자 서비스"]
+        OS["주문 서비스"]
+        PS["결제 서비스"]
+        DS["배송 서비스"]
     end
     US -->|"HTTP/gRPC"| OS
     OS -->|"HTTP/gRPC"| PS
@@ -529,7 +529,7 @@ graph TD
     DNS --> LB["LB → 웹 서버 1~N"]
     LB --> Cache["Redis 캐시"]
     LB --> DB["Master DB → Replic"]
-    LB --> MQ["Kafka → Worker\n→"]
+    LB --> MQ["Kafka → Worker"]
 ```
 
 ---
@@ -538,13 +538,13 @@ graph TD
 
 ```mermaid
 graph TD
-    Step1["1️⃣ 요구사항 명확화\n5분"] --> Step2["2️⃣ 규모 추정\n5분"]
-    Step2 --> Step3["3️⃣ 고수준 설계\n20-25분"]
-    Step3 --> Step4["4️⃣ 상세 설계 + 개선\n15"]
+    Step1["1️⃣ 요구사항 명확화"] --> Step2["2️⃣ 규모 추정"]
+    Step2 --> Step3["3️⃣ 고수준 설계"]
+    Step3 --> Step4["4️⃣ 상세 설계 + 개선"]
     Step1 --> Q1["기능 요구사항: 무엇을 만드나?\"]
-    Step2 --> Q2["DAU/MAU 추정\nQPS 계산"]
-    Step3 --> Q3["고수준 아키텍처 다이어그램\n핵심"]
-    Step4 --> Q4["병목 구간 해결\n확장성 방안\n"]
+    Step2 --> Q2["DAU/MAU 추정"]
+    Step3 --> Q3["고수준 아키텍처 다이어그램"]
+    Step4 --> Q4["병목 구간 해결"]
 ```
 
 면접에서 가장 많이 하는 실수는 요구사항 확인 없이 바로 설계로 뛰어드는 것입니다. "채팅 시스템 설계해보세요"라는 말에 바로 WebSocket을 그리기 시작하면 안 됩니다. 먼저 "사용자 수는요? 1:1만인가요 그룹도인가요? 메시지 보관은 필요한가요?"를 물어보세요.
@@ -583,8 +583,8 @@ DAU: 1억명
 
 ```mermaid
 graph TD
-    User["1.5억 구독자\n동시 2000만"] --> OCA["OCA (ISP 직접 설치)\n1"]
-    OCA -->|캐시 미스| AWS["AWS 백엔드\n멀티 리전"]
+    User["1.5억 구독자"] --> OCA["OCA (ISP 직접 설치)"]
+    OCA -->|캐시 미스| AWS["AWS 백엔드"]
     AWS --> Auth["인증 (MySQL)"]
     AWS --> Recommend["추천 엔진 (Cassandra)"]
     AWS --> Transcode["트랜스코딩 (S3)"]

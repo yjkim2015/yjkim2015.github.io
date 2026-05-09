@@ -20,7 +20,7 @@ Spring Cloud Gateway는 Spring 생태계의 API Gateway 솔루션이다. Netflix
 
 ```mermaid
 graph TD
-    C["클라이언트"] --> GW["API Gateway\n인증·Ra"]
+    C["클라이언트"] --> GW["API Gateway"]
     GW --> R["라우팅"]
     R --> US["User Service"]
     R --> OS["Order Service"]
@@ -61,7 +61,7 @@ Gateway의 모든 동작은 Route, Predicate, Filter 세 개념으로 설명된�
 
 ```mermaid
 graph LR
-    REQ["요청"] --> P{"Predicate\n조건 일치?"}
+    REQ["요청"] --> P{"Predicate"}
     P -->|"YES"| F["Filter 체인 순차 통과"]
     P -->|"NO"| NEXT["다음 Route 시도"]
     F --> URI["목적지 URI로 전달"]

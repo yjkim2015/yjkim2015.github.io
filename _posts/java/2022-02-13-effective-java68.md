@@ -87,11 +87,11 @@ Optional.valueOf(str);
 ```mermaid
 graph TD
     A["메서드 이름 선택"] --> B{"boolean 반환?"}
-    B -- 예 --> C["is / has 시작\nisEmp"]
+    B -- 예 --> C["is / has 시작"]
     B -- 아니오 --> D{"동작 수행?"}
-    D -- 예 --> E["동사/동사구\nappend, dr"]
+    D -- 예 --> E["동사/동사구"]
     D -- 아니오 --> F{"속성 반환?"}
-    F -- 예 --> G["명사/명사구 또는 get\nsiz"]
+    F -- 예 --> G["명사/명사구 또는 get"]
     F -- 아니오 --> H{"타입 변환?"}
     H -- 예 --> I["toType / asType /"]
     style C fill:#51cf66,color:#fff

@@ -295,10 +295,10 @@ public interface UserDao {
 
 ```mermaid
 graph TD
-    A["DataAccessExceptio"] --> B["NonTransient\nData"]
-    A --> C["Transient\nQueryTi"]
+    A["DataAccessExceptio"] --> B["NonTransient"]
+    A --> C["Transient"]
     B --> D["DuplicateKeyExcept"]
-    E["MySQL 1062\nOracle"] -->|"변환"| D
+    E["MySQL 1062"] -->|"변환"| D
 ```
 
 ---
@@ -350,7 +350,7 @@ graph LR
     C --> F["JVM 불필요"]
     G["기존 JVM 방식"] --> H["JIT 컴파일"]
     H --> I["런타임 최적화"]
-    I --> J["긴 시작 시간\n높은 메모리"]
+    I --> J["긴 시작 시간"]
 ```
 
 ```java
@@ -442,8 +442,8 @@ public class OrderService {
 
 ```mermaid
 graph TD
-    A[SOLID] --> B["SRP: 레이어 분리\nContr"]
-    A --> C["OCP: 인터페이스+DI\n확장에"]
+    A[SOLID] --> B["SRP: 레이어 분리"]
+    A --> C["OCP: 인터페이스+DI"]
     A --> D["LSP: 구현체 계약 준수"]
     A --> E["ISP: DAO 인터페이스 분리"]
     A --> F["DIP: 추상화 의존"]

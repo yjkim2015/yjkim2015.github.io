@@ -75,9 +75,9 @@ graph TD
 
 ```mermaid
 graph TD
-    A["java.time"] --> B["시간대 불필요\nLocal Dat"]
-    A --> C["시간대 필요\nZonedDateT"]
-    A --> D["기간 측정\nPeriod 날짜 ·"]
+    A["java.time"] --> B["시간대 불필요"]
+    A --> C["시간대 필요"]
+    A --> D["기간 측정"]
 ```
 
 ---

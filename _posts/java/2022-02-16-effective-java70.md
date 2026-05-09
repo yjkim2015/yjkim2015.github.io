@@ -17,9 +17,9 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["Throwable"] --> B["검사 예외 (Checked)\nE"]
+    A["Throwable"] --> B["검사 예외 (Checked)"]
     A --> C["런타임 예외 (Unchecked)"]
-    A --> D["에러 (Error)\nJVM 내부"]
+    A --> D["에러 (Error)"]
     style B fill:#f39c12,color:#fff
     style C fill:#ff6b6b,color:#fff
     style D fill:#868e96,color:#fff

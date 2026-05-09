@@ -264,11 +264,11 @@ Java 7부터 기본 활성화된 **Tiered Compilation**은 C1과 C2를 협력시
 
 ```mermaid
 flowchart LR
-    L0["Level 0\n인터프리터\n프로"]
-    --> L1["Level 1\nC1 컴파일\n프"]
-    L0 --> L2["Level 2\nC1 컴파일\n호"]
-    L0 --> L3["Level 3\nC1 컴파일\n전"]
-    L3 --> L4["Level 4\nC2 컴파일\n공"]
+    L0["Level 0"]
+    --> L1["Level 1"]
+    L0 --> L2["Level 2"]
+    L0 --> L3["Level 3"]
+    L3 --> L4["Level 4"]
     L2 --> L3
     L1 --> L4
 ```

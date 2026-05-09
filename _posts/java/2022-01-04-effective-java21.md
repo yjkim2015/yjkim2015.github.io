@@ -21,9 +21,9 @@ graph LR
     B --> C["기존 구현체 전부 컴파일 오류"]
     D["Java 8 이후"] --> E["디폴트 메서드 추가"]
     E --> F["기존 구현체는 디폴트 구현을 상속"]
-    F --> G{"모든 구현체가\n제대로 동작하나?"}
+    F --> G{"모든 구현체가"}
     G -->|"대부분 Yes"| H["정상 동작"]
-    G -->|"일부 No"| I["런타임 오류 또는\n예기치 못한"]
+    G -->|"일부 No"| I["런타임 오류 또는"]
     style I fill:#ff6b6b,color:#fff
 ```
 
@@ -89,11 +89,11 @@ public boolean removeIf(Predicate<? super E> filter) {
 
 ```mermaid
 graph TD
-    A["디폴트 메서드 사용 판단"] --> B{"새로운 인터페이스를\n만드는 경우인가?"}
+    A["디폴트 메서드 사용 판단"] --> B{"새로운 인터페이스를"}
     B -->|"Yes"| C["디폴트 메서드로 편의 기능 제공\"]
     B -->|"No (기존 인터페이스)"| D{"꼭 필요한 경우인가?"}
     D -->|"No"| E["피하는 것이 최선"]
-    D -->|"Yes"| F["가능한 모든 구현체를\n검토하고"]
+    D -->|"Yes"| F["가능한 모든 구현체를"]
     style C fill:#51cf66,color:#fff
     style E fill:#ff6b6b,color:#fff
 ```
@@ -147,12 +147,12 @@ class ReadOnlyService implements MyService { ... }
 
 ```mermaid
 graph TD
-    A["디폴트 메서드 핵심 교훈"] --> B["디폴트 메서드는\n'합의 없는 삽"]
-    A --> C["기존 구현체가 모두\n잘 동작한다"]
+    A["디폴트 메서드 핵심 교훈"] --> B["디폴트 메서드는"]
+    A --> C["기존 구현체가 모두"]
     A --> D["컴파일 성공 ≠ 런타임 안전"]
     B --> E["새 인터페이스: 적극 활용"]
-    B --> F["기존 인터페이스: 신중히\n꼭 필"]
-    D --> G["릴리즈 전 반드시\n다양한 구현체"]
+    B --> F["기존 인터페이스: 신중히"]
+    D --> G["릴리즈 전 반드시"]
     style D fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff
 ```

@@ -103,9 +103,9 @@ public enum Elvis {
 ```mermaid
 graph TD
     A["싱글턴 직렬화 방법 비교"] --> B["일반 클래스 + readResol"]
-    A --> C["열거 타입\nJVM이 유일성 보장"]
-    B --> D["취약\nElvisStealer 공"]
-    C --> E["권장\n선언된 상수 외 인스턴스"]
+    A --> C["열거 타입"]
+    B --> D["취약"]
+    C --> E["권장"]
     style B fill:#f39c12,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#ff6b6b,color:#fff

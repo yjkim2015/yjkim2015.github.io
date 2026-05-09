@@ -19,14 +19,14 @@ toc_label: 목차
 
 ```mermaid
 flowchart TD
-    A["SecurityContextHol"] --> B["저장 전략\n(Storage St"]
-    B --> C["MODE_THREADLOCAL\n"]
+    A["SecurityContextHol"] --> B["저장 전략"]
+    B --> C["MODE_THREADLOCAL"]
     B --> D["MODE_INHERITABLETH"]
-    B --> E["MODE_GLOBAL\n애플리케이"]
-    C --> F["SecurityContext\n("]
+    B --> E["MODE_GLOBAL"]
+    C --> F["SecurityContext"]
     D --> F
     E --> F
-    F --> G["Authentication\n(사"]
+    F --> G["Authentication"]
 ```
 
 ## SecurityContext

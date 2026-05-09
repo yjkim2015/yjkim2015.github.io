@@ -212,9 +212,9 @@ Scheduler가 Pod를 어느 Node에 배치할지 결정하는 과정이다.
 
 ```mermaid
 graph TD
-    POD["새 Pod 배치 요청"] --> F["1️⃣ Filtering\n요구사"]
-    F --> S["2️⃣ Scoring\n남은 No"]
-    S --> B["3️⃣ Binding\n가장 높은"]
+    POD["새 Pod 배치 요청"] --> F["1️⃣ Filtering"]
+    F --> S["2️⃣ Scoring"]
+    S --> B["3️⃣ Binding"]
 ```
 
 ### Node Affinity — 특정 Node에만 배치

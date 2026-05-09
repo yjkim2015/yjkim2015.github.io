@@ -73,11 +73,11 @@ public class MyApplication {
 
 ```mermaid
 graph TD
-    A[@SpringBootApplication] --> B[@SpringBootConfiguration\n@Bean 등록]
-    A --> C[@EnableAutoConfiguration\nAutoConfigurationImportSelector]
-    A --> D[@ComponentScan\n패키지 자동 스캔]
+    A[@SpringBootApplication] --> B[@SpringBootConfiguration]
+    A --> C[@EnableAutoConfiguration]
+    A --> D[@ComponentScan]
     C --> E["imports 파일 → 142개"]
-    E --> F["@Conditional 평가\n→"]
+    E --> F["@Conditional 평가"]
 ```
 
 **`@ComponentScan`의 basePackages가 지정되지 않은 이유:** 지정하지 않으면 `@SpringBootApplication`이 붙은 클래스의 패키지를 기준으로 하위 패키지를 스캔합니다. 그래서 메인 클래스는 항상 최상위 패키지에 위치해야 합니다. 예를 들어 `com.example.MyApplication`이면 `com.example` 하위의 모든 컴포넌트가 스캔됩니다.
@@ -211,12 +211,12 @@ public class DataSourceAutoConfiguration {
 
 ```mermaid
 flowchart TD
-    A[DataSourceAutoConfiguration 평가] --> B{"DataSource.class\n클래스패스에 있음?"}
+    A[DataSourceAutoConfiguration 평가] --> B{"DataSource.class"}
     B -->|"No — JDBC 의존성 없음"| C["자동 구성 완전히 건너뜀"]
-    B -->|"Yes"| D{"DataSource 빈이\n이미 등록됨?"}
-    D -->|"Yes — 개발자가 직접 정의"| E["자동 구성 건너뜀\n개발자 설정"]
-    D -->|"No"| F{"H2/HSQL/Derby\n클래스패스에 있음?"}
-    F -->|"Yes"| G["인메모리 DB 자동 생성\n(개발"]
+    B -->|"Yes"| D{"DataSource 빈이"}
+    D -->|"Yes — 개발자가 직접 정의"| E["자동 구성 건너뜀"]
+    D -->|"No"| F{"H2/HSQL/Derby"}
+    F -->|"Yes"| G["인메모리 DB 자동 생성"]
     F -->|"No"| H{"HikariCP 있음?"}
     H -->|"Yes"| I["HikariDataSource 생"]
     H -->|"No"| J["다른 커넥션 풀 시도"]
@@ -291,12 +291,12 @@ public class AppDataSourceProperties {
 
 ```mermaid
 graph TD
-    A["설정 우선순위 — 위로 갈수록 높"] --> B["1. 커맨드라인 인수\n--ser"]
-    B --> C["2. 환경변수\nSERVER_PO"]
+    A["설정 우선순위 — 위로 갈수록 높"] --> B["1. 커맨드라인 인수"]
+    B --> C["2. 환경변수"]
     C --> D["3. application-{pr"]
     D --> E["4. application.yml"]
     E --> F["5. @PropertySource"]
-    F --> G["6. 기본값\nSpring Boo"]
+    F --> G["6. 기본값"]
 ```
 
 **왜 이 순서가 중요한가?** Docker 컨테이너나 쿠버네티스에서 운영할 때, 코드에 박힌 설정보다 환경변수나 커맨드라인 인수가 항상 이깁니다. 운영 DB 비밀번호를 `application.yml`에 쓰지 않고 환경변수(`DB_PASSWORD`)로 주입하면, 비밀번호가 소스 코드 저장소에 노출되지 않습니다.
@@ -513,10 +513,10 @@ management:
 
 ```mermaid
 graph TD
-    A["Actuator"] --> B["/health\nDB·디스크·캐시"]
-    A --> C["/metrics\nJVM·HTTP"]
-    A --> D["/loggers\n재시작없이 DE"]
-    A --> E["/env\n활성 프로파일·설정값"]
+    A["Actuator"] --> B["/health"]
+    A --> C["/metrics"]
+    A --> D["/loggers"]
+    A --> E["/env"]
     A --> F["/beans & /mappings"]
 ```
 

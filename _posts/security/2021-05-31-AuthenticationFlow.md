@@ -143,11 +143,11 @@ public class CustomUserDetailsService implements UserDetailsService {
 ```mermaid
 flowchart TD
     A["인증 실패"] --> B{"예외 종류"}
-    B -- "UsernameNotFound" --> C["BadCredentials로\n변"]
+    B -- "UsernameNotFound" --> C["BadCredentials로"]
     B -- "BadCredentials" --> D["FailureHandler"]
     B -- "Locked/Disabled\n/Expired" --> D
     C --> D
-    D --> E["실패URL 리다이렉트\n또는 40"]
+    D --> E["실패URL 리다이렉트"]
 ```
 
 `UsernameNotFoundException`을 `BadCredentialsException`으로 변환하는 이유는 사용자 존재 여부를 공격자에게 노출하지 않기 위함입니다. "아이디가 없습니다"와 "비밀번호가 틀립니다"를 구분하면 공격자가 유효한 아이디를 수집하는 데 악용할 수 있습니다.
@@ -215,13 +215,13 @@ public class OtpAuthenticationProvider implements AuthenticationProvider {
 
 ```mermaid
 flowchart LR
-    A["Filter\n(UsernameP"] --> B["AuthenticationMana"]
+    A["Filter"] --> B["AuthenticationMana"]
     B --> C["AuthenticationProv"]
     B --> D["AuthenticationProv"]
     B --> E["부모 ProviderManager"]
     C --> F["UserDetailsService"]
-    C --> G["PasswordEncoder\n("]
-    F --> H["UserDetails\n(사용자"]
+    C --> G["PasswordEncoder"]
+    F --> H["UserDetails"]
 ```
 
 ## 왜 이게 중요한가?

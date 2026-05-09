@@ -710,7 +710,7 @@ redisTemplate.execute((RedisCallback<Long>) conn ->
 ```mermaid
 flowchart LR
     subgraph "네트워크 파티션 발생"
-        A[Process A\n락 보유 중] -. "Step 1.\n네트워크 단절 ✕" .- R[(Redis)]
+        A[Process A] -. "Step 1.\n네트워크 단절 ✕" .- R[(Redis)]
         B[Process B] -->|Step 2. 정상 통신| R
     end
     R -->|Step 3. TTL 만료 → B가 락 획득| B

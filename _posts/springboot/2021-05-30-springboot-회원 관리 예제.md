@@ -42,10 +42,10 @@ graph TD
 ```mermaid
 graph LR
     REQ["요구사항"]
-    REQ --> F1["회원 가입\n이름 입력 → ID"]
-    REQ --> F2["회원 조회\nID 또는 이름으로"]
-    REQ --> F3["중복 검증\n같은 이름 가입 불가"]
-    REQ --> F4["저장소 교체 가능\n인터페이스 설"]
+    REQ --> F1["회원 가입"]
+    REQ --> F2["회원 조회"]
+    REQ --> F3["중복 검증"]
+    REQ --> F4["저장소 교체 가능"]
 ```
 
 ---
@@ -309,9 +309,9 @@ public class MemberService {
 
 ```mermaid
 graph LR
-    GIVEN["given\n테스트 준비\n입력"]
-    WHEN["when\n실행\n테스트 대상 메"]
-    THEN["then\n검증\nassertTh"]
+    GIVEN["given"]
+    WHEN["when"]
+    THEN["then"]
     GIVEN --> WHEN --> THEN
 ```
 
@@ -393,8 +393,8 @@ class MemberServiceTest {
 
 ```mermaid
 graph TD
-    SVC["MemberService\n(변경"]
-    IFACE["MemberRepository\n"]
+    SVC["MemberService"]
+    IFACE["MemberRepository"]
     MEM["MemoryMemberReposi"]
     JPA["JpaMemberRepositor"]
     SVC --> IFACE

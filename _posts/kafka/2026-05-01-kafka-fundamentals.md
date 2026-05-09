@@ -104,11 +104,11 @@ graph LR
 ```mermaid
 graph LR
     subgraph log["Partition 0 — 물리적"]
-        O0["offset=0\nmsg_A"]
-        O1["offset=1\nmsg_B"]
-        O2["offset=2\nmsg_C"]
-        O3["offset=3\nmsg_D"]
-        O4["offset=4\nmsg_E"]
+        O0["offset=0"]
+        O1["offset=1"]
+        O2["offset=2"]
+        O3["offset=3"]
+        O4["offset=4"]
         O0 --> O1 --> O2 --> O3 --> O4
     end
     note1["가장 오래된 메시지"] -.-> O0
@@ -210,12 +210,12 @@ Offset은 파티션 내에서 메시지의 **고유 위치 번호**다. 0부터 
 ```mermaid
 graph LR
     subgraph partition0["Partition 0"]
-        O0["offset=0\nmsg_A"]
-        O1["offset=1\nmsg_B"]
-        O2["offset=2\nmsg_C"]
-        O3["offset=3\nmsg_D"]
-        O4["offset=4\nmsg_E"]
-        O5["offset=5\nmsg_F"]
+        O0["offset=0"]
+        O1["offset=1"]
+        O2["offset=2"]
+        O3["offset=3"]
+        O4["offset=4"]
+        O5["offset=5"]
         O0 --> O1 --> O2 --> O3 --> O4 --> O5
     end
     COMMIT["Consumer committed"] -.-> O4

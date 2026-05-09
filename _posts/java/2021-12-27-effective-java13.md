@@ -19,8 +19,8 @@ toc_label: 목차
 graph TD
     A["Cloneable 인터페이스"] -->|"메서드 없음\n(마커 인터페이스)"| B["구현 여부만 표시"]
     C["Object.clone()"] -->|"protected 메서드"| D["실제 복사 동작"]
-    B --> E["Cloneable 구현 시:\nc"]
-    B --> F["미구현 시:\nclone() →"]
+    B --> E["Cloneable 구현 시:"]
+    B --> F["미구현 시:"]
     style A fill:#ffd43b
     style C fill:#4a9eff,color:#fff
     note["clone()이 Cloneable"]
@@ -85,9 +85,9 @@ copy.push("C");  // 원본 Stack의 elements도 변경됨!
 
 ```mermaid
 graph TD
-    A["original (Stack)"] -->|"참조"| C["elements 배열\n[A, B"]
+    A["original (Stack)"] -->|"참조"| C["elements 배열"]
     B["copy (Stack) — 얕은"] -->|"같은 배열 참조"| C
-    B -->|"push(C)"| D["copy가 C를 씀\n→ 원본도"]
+    B -->|"push(C)"| D["copy가 C를 씀"]
     style D fill:#ff6b6b,color:#fff
 ```
 
@@ -189,11 +189,11 @@ public static Stack newInstance(Stack original) {
 graph TD
     A["복사 생성자 vs Cloneabl"] --> B["복사 생성자/팩토리"]
     A --> C["Cloneable/clone"]
-    B --> B1["생성자를 정상 사용\n(언어 규칙"]
+    B --> B1["생성자를 정상 사용"]
     B --> B2["final 필드 문제 없음"]
     B --> B3["검사 예외 불필요"]
-    B --> B4["인터페이스 타입 인수 가능\n(변"]
-    C --> C1["생성자 없이 객체 생성\n(언어"]
+    B --> B4["인터페이스 타입 인수 가능"]
+    C --> C1["생성자 없이 객체 생성"]
     C --> C2["final 필드 할당 불가"]
     C --> C3["CloneNotSupportedE"]
     style B fill:#51cf66,color:#fff
@@ -227,12 +227,12 @@ Set<String> treeSet = new TreeSet<>(hashSet);  // 자동 정렬된 TreeSet으로
 
 ```mermaid
 graph TD
-    A["객체 복사 방법 선택"] --> B{"Cloneable 이미\n구현된 클래스 확장?"}
-    B -->|"Yes"| C["clone() 올바르게 구현\n("]
+    A["객체 복사 방법 선택"] --> B{"Cloneable 이미"}
+    B -->|"Yes"| C["clone() 올바르게 구현"]
     B -->|"No"| D["복사 생성자 또는 복사 팩토리 사"]
     D --> D1["훨씬 안전하고 유연함"]
     C --> E{"가변 필드 있음?"}
-    E -->|"Yes"| F["깊은 복사 필수\nelements"]
+    E -->|"Yes"| F["깊은 복사 필수"]
     E -->|"No"| G["super.clone()으로 충분"]
     style D fill:#51cf66,color:#fff
     style D1 fill:#51cf66,color:#fff

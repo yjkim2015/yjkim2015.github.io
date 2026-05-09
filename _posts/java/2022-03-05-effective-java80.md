@@ -92,9 +92,9 @@ Integer result = future.get();  // 완료될 때까지 대기 후 결과 수령
 
 ```mermaid
 graph TD
-    A["태스크 추상화"] --> B["Runnable\n반환값 없음\n"]
-    A --> C["Callable\n반환값 있음\n"]
-    D["실행 메커니즘"] --> E["ExecutorService\n태"]
+    A["태스크 추상화"] --> B["Runnable"]
+    A --> C["Callable"]
+    D["실행 메커니즘"] --> E["ExecutorService"]
     B --> E
     C --> E
     style B fill:#f39c12,color:#fff

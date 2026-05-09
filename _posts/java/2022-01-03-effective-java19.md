@@ -17,10 +17,10 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["상속용 클래스 설계 원칙"] --> B["재정의 가능 메서드의\n자기 사용"]
-    A --> C["내부적으로 어떤 메서드가\n어느"]
+    A["상속용 클래스 설계 원칙"] --> B["재정의 가능 메서드의"]
+    A --> C["내부적으로 어떤 메서드가"]
     A --> D["protected hook 메서드"]
-    B --> E["@implSpec 태그로\nJav"]
+    B --> E["@implSpec 태그로"]
     style A fill:#4a9eff,color:#fff
 ```
 
@@ -87,9 +87,9 @@ protected void removeRange(int fromIndex, int toIndex) { ... }
 graph LR
     A["list.subList(2, 5)"] --> B["AbstractList.clear"]
     B --> C["removeRange(2, 5)"]
-    C --> D{"removeRange\n재정의했나?"}
+    C --> D{"removeRange"}
     D -->|"No (기본 구현)"| E["각 원소마다 iterator.re"]
-    D -->|"Yes (ArrayList 등)"| F["배열 복사로 한 번에 제거\n→"]
+    D -->|"Yes (ArrayList 등)"| F["배열 복사로 한 번에 제거"]
     style E fill:#ff6b6b,color:#fff
     style F fill:#51cf66,color:#fff
 ```
@@ -172,8 +172,8 @@ graph TD
     A["clone() / readObje"] --> B["내부적으로 재정의 가능 메서드를\"]
     B --> C["readObject의 경우"]
     B --> D["clone의 경우"]
-    C --> C1["하위 클래스 상태가 미처\n역직렬"]
-    D --> D1["복제본 상태 수정 전에\n재정의한"]
+    C --> C1["하위 클래스 상태가 미처"]
+    D --> D1["복제본 상태 수정 전에"]
     style C1 fill:#ff6b6b,color:#fff
     style D1 fill:#ff6b6b,color:#fff
 ```
@@ -235,9 +235,9 @@ public class Base {
 graph TD
     A["상속용 클래스를 만들어야 한다면"] --> B["자기 사용 패턴 모두 @implS"]
     A --> C["필요한 hook은 protecte"]
-    A --> D["생성자에서 재정의 가능 메서드\n"]
+    A --> D["생성자에서 재정의 가능 메서드"]
     A --> E["clone/readObject에서"]
-    F["상속할 이유가 없다면"] --> G["final 클래스 또는\npriv"]
+    F["상속할 이유가 없다면"] --> G["final 클래스 또는"]
     style D fill:#ff6b6b,color:#fff
     style E fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff

@@ -41,9 +41,9 @@ void copy(Range src, Range dst);
 
 ```mermaid
 graph TD
-    A["긴 매개변수 목록 해결"] --> B["1. 여러 메서드로 쪼개기\nsu"]
+    A["긴 매개변수 목록 해결"] --> B["1. 여러 메서드로 쪼개기"]
     A --> C["2. 도우미 클래스 (정적 멤버"]
-    A --> D["3. 빌더 패턴 응용\n세터로 설"]
+    A --> D["3. 빌더 패턴 응용"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff

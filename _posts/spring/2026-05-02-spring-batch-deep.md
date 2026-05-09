@@ -22,7 +22,7 @@ graph TD
     B --> D[Step2: Chunk]
     D --> R[Reader] --> P[Processor] --> W[Writer]
     B --> E[Step3]
-    K[JobRepository\n메타데이터] --> B
+    K[JobRepository] --> B
     L[JobParameters] --> B
 ```
 
@@ -695,7 +695,7 @@ flowchart TD
     C -->|No| G[Tasklet] --> F
     F --> H{다음 Step?}
     H -->|Yes| B
-    H -->|No| I[Job 완료\n상태 저장]
+    H -->|No| I[Job 완료]
 ```
 
 ---

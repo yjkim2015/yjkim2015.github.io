@@ -45,14 +45,14 @@ public class WordList {
 
 ```mermaid
 graph TD
-    A["compareTo 4대 규약"] --> B["대칭성\n(Antisymmetry"]
-    A --> C["추이성\n(Transitivity"]
-    A --> D["반사성\n(Consistency)"]
-    A --> E["equals와 일관성\n(권고)"]
+    A["compareTo 4대 규약"] --> B["대칭성"]
+    A --> C["추이성"]
+    A --> D["반사성"]
+    A --> E["equals와 일관성"]
     B --> B1["sgn(x.compareTo(y)"]
-    C --> C1["x>y, y>z 이면\nx>z"]
+    C --> C1["x>y, y>z 이면"]
     D --> D1["x.compareTo(y)==0이"]
-    E --> E1["compareTo==0이면\neq"]
+    E --> E1["compareTo==0이면"]
     style E fill:#ffd43b
 ```
 
@@ -198,13 +198,13 @@ TreeSet<Student> set = new TreeSet<>(students);  // 자동 정렬 컬렉션
 
 ```mermaid
 graph TD
-    A["값 클래스를 만든다면"] --> B{"순서 비교가\n필요한가?"}
+    A["값 클래스를 만든다면"] --> B{"순서 비교가"}
     B -->|"Yes (대부분)"| C["Comparable 구현"]
     B -->|"No"| D["구현 불필요"]
     C --> E["compareTo 구현 방법"]
-    E --> F["단순: 핵심 필드부터\nType."]
+    E --> F["단순: 핵심 필드부터"]
     E --> G["복잡: Comparator 체이닝"]
-    E --> H["절대 금지: 값의 차\n(정수 오"]
+    E --> H["절대 금지: 값의 차"]
     style F fill:#51cf66,color:#fff
     style G fill:#51cf66,color:#fff
     style H fill:#ff6b6b,color:#fff

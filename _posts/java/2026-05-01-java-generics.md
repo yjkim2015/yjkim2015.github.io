@@ -642,12 +642,12 @@ graph LR
     SRC["List&lt;String&gt;"]
   end
   subgraph "컴파일러 처리"
-    CHECK["1. 타입 검사\n(List&lt"]
-    ERASE["2. 타입 소거\n(List&lt"]
-    CAST["3. 캐스팅 삽입\n(list.g"]
+    CHECK["1. 타입 검사"]
+    ERASE["2. 타입 소거"]
+    CAST["3. 캐스팅 삽입"]
   end
   subgraph "런타임 바이트코드"
-    BC["List list\nlist.ad"]
+    BC["List list"]
   end
   SRC --> CHECK --> ERASE --> CAST --> BC
 ```

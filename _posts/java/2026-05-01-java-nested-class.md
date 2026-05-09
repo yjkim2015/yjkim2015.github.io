@@ -20,12 +20,12 @@ Java는 클래스 안에 클래스를 선언할 수 있습니다. 이를 중첩 
 ```mermaid
 graph TD
     A["중첩 클래스 (Nested Cla"] --> B["Static Nested Clas"]
-    A --> C["Inner Class\n내부 클래"]
+    A --> C["Inner Class"]
     C --> D["Member Inner Class"]
     C --> E["Local Inner Class\"]
-    C --> F["Anonymous Class\n익"]
-    B --> B1["외부 인스턴스 참조 없음\n독립"]
-    D --> D1["외부 인스턴스 참조 보유\nout"]
+    C --> F["Anonymous Class"]
+    B --> B1["외부 인스턴스 참조 없음"]
+    D --> D1["외부 인스턴스 참조 보유"]
     E --> E1["메서드 내부에서만 선언"]
     F --> F1["이름 없는 즉석 구현"]
 ```

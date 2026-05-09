@@ -79,10 +79,10 @@ try {
 
 ```mermaid
 graph TD
-    A["저수준 예외 처리 전략"] --> B["예외 번역\n추상화 수준에 맞는"]
-    A --> C["예외 연쇄\n고수준 예외 + 저수"]
-    A --> D["저수준 예외 예방\n상위 계층에서"]
-    A --> E["조용히 처리 + 로깅\n예외를 외"]
+    A["저수준 예외 처리 전략"] --> B["예외 번역"]
+    A --> C["예외 연쇄"]
+    A --> D["저수준 예외 예방"]
+    A --> E["조용히 처리 + 로깅"]
     style C fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff
     style B fill:#f39c12,color:#fff

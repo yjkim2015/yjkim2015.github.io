@@ -266,12 +266,12 @@ JVM 메모리는 회사 사무실과 같습니다.
 ```mermaid
 flowchart LR
     subgraph SHARED["공유 영역 (모든 스레드 접근 가"]
-        MA["Method Area\n(Meta"]
-        HP["Heap\n- Young Gen\"]
+        MA["Method Area"]
+        HP["Heap"]
     end
     subgraph THREAD["스레드별 독립 영역"]
-        ST["JVM Stack\n- 스택 프레"]
-        PC["PC Register\n- 다음"]
+        ST["JVM Stack"]
+        PC["PC Register"]
         NS["Native Method Stac"]
     end
 ```
@@ -550,13 +550,13 @@ GC Root가 될 수 있는 것들:
 ```mermaid
 flowchart LR
     subgraph MARK["1. Mark (표시)"]
-        A["GC Root부터\n참조 그래프"]
+        A["GC Root부터"]
     end
     subgraph SWEEP["2. Sweep (제거)"]
-        B["표시되지 않은\n객체 메모리 해제"]
+        B["표시되지 않은"]
     end
     subgraph COMPACT["3. Compact (압축)"]
-        C["살아있는 객체를\n연속된 공간으로"]
+        C["살아있는 객체를"]
     end
     MARK --> SWEEP --> COMPACT
 ```
@@ -597,15 +597,15 @@ byte[] bigArray = new byte[20 * 1024 * 1024];  // 20MB → Old Gen 직행
 
 ```mermaid
 flowchart TD
-    A["Eden 가득 참\n(TLAB 할"] --> B["Minor GC 시작\n(STW"]
+    A["Eden 가득 참"] --> B["Minor GC 시작"]
     B --> C["1. Eden + 현재 Survi"]
-    C --> D["2. 표시된 객체를\n반대쪽 Su"]
-    D --> E{"age >= MaxTenuringThreshold\n(기본값 15)?"}
-    E -->|Yes| F["Old Generation으로\n"]
+    C --> D["2. 표시된 객체를"]
+    D --> E{"age >= MaxTenuringThreshold"}
+    E -->|Yes| F["Old Generation으로"]
     E -->|No| G["Survivor에서 다음 Mino"]
     D --> H["3. Eden + 원래 Survi"]
     H --> I["4. Survivor 역할 교체\"]
-    I --> J["Minor GC 종료\nSTW 해"]
+    I --> J["Minor GC 종료"]
 ```
 
 ### 6.3 GC 알고리즘 — 시대별 진화 과정

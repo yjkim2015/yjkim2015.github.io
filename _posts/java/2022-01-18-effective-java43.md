@@ -47,11 +47,11 @@ service.execute(() -> action());
 
 ```mermaid
 graph TD
-    A["메서드 참조 유형"] --> B["정적 메서드 참조\nInteger"]
-    A --> C["한정적 인스턴스 참조\nInsta"]
-    A --> D["비한정적 인스턴스 참조\nStri"]
-    A --> E["클래스 생성자 참조\nTreeMa"]
-    A --> F["배열 생성자 참조\nint[]::"]
+    A["메서드 참조 유형"] --> B["정적 메서드 참조"]
+    A --> C["한정적 인스턴스 참조"]
+    A --> D["비한정적 인스턴스 참조"]
+    A --> E["클래스 생성자 참조"]
+    A --> F["배열 생성자 참조"]
     style B fill:#4a9eff,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff

@@ -103,9 +103,9 @@ private void readObject(ObjectInputStream s)
 
 ```mermaid
 graph TD
-    A["readObject 안전하게 작성"] --> B["방어적 복사\n가변 참조 필드를"]
-    A --> C["유효성 검사\nInvalidObj"]
-    A --> D["재정의 가능 메서드 호출 금지\n"]
+    A["readObject 안전하게 작성"] --> B["방어적 복사"]
+    A --> C["유효성 검사"]
+    A --> D["재정의 가능 메서드 호출 금지"]
     B --> E["순서: 방어적 복사 → 불변식 검"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff

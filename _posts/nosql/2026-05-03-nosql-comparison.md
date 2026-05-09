@@ -251,13 +251,13 @@ flowchart TD
 flowchart LR
     subgraph "이커머스 플랫폼"
         API["API Gateway"]
-        API --> US["👤 회원 서비스\nPostgreS"]
-        API --> PD["📦 상품 서비스\nMongoDB"]
-        API --> OD["💳 주문/결제\nPostgreSQ"]
-        API --> CA["⚡ 캐시/세션\nRedis"]
-        API --> SR["🔍 검색 서비스\nElastics"]
-        API --> RC["🤝 추천 서비스\nNeo4j"]
-        API --> LG["📊 로그/분석\nCassandra"]
+        API --> US["👤 회원 서비스"]
+        API --> PD["📦 상품 서비스"]
+        API --> OD["💳 주문/결제"]
+        API --> CA["⚡ 캐시/세션"]
+        API --> SR["🔍 검색 서비스"]
+        API --> RC["🤝 추천 서비스"]
+        API --> LG["📊 로그/분석"]
     end
 ```
 
@@ -414,10 +414,10 @@ Cassandra는 파티션 키를 해시 함수에 넣어 0~2^63 범위의 토큰을
 ```mermaid
 graph TB
     subgraph "NoSQL 선택 요약"
-        R["Redis\n초고속 캐시/세션\n"]
-        M["MongoDB\n유연한 문서 저장"]
-        C["Cassandra\n대규모 쓰기\"]
-        N["Neo4j\n관계 탐색\nCP,"]
+        R["Redis"]
+        M["MongoDB"]
+        C["Cassandra"]
+        N["Neo4j"]
     end
     R --- |"조합"| M
     M --- |"조합"| C

@@ -38,10 +38,10 @@ text.applyStyles(STYLE_BOLD | STYLE_ITALIC); // 3 — 무슨 의미인지 불명
 
 ```mermaid
 graph TD
-    A["비트 필드 문제"] --> B["출력값이 숫자\n3이 BOLD+I"]
-    A --> C["타입 안전 없음\n잘못된 정수도\"]
-    A --> D["API 설계 시\n비트 수 미리"]
-    A --> E["원소 순회\n직접 비트 마스크\n"]
+    A["비트 필드 문제"] --> B["출력값이 숫자"]
+    A --> C["타입 안전 없음"]
+    A --> D["API 설계 시"]
+    A --> E["원소 순회"]
     style A fill:#ff6b6b,color:#fff
 ```
 
@@ -74,10 +74,10 @@ text.applyStyles(EnumSet.of(Style.BOLD, Style.ITALIC));
 
 ```mermaid
 graph TD
-    A["EnumSet 내부"] --> B["원소 64개 이하\n(대부분의 경"]
+    A["EnumSet 내부"] --> B["원소 64개 이하"]
     A --> C["원소 65개 이상"]
-    B --> D["long 변수 하나로 표현\nRe"]
-    C --> E["long 배열로 표현\nJumbo"]
+    B --> D["long 변수 하나로 표현"]
+    C --> E["long 배열로 표현"]
     D --> F["removeAll, retainA"]
     style D fill:#51cf66,color:#fff
     style E fill:#51cf66,color:#fff
@@ -103,10 +103,10 @@ boolean hasBold = styles.contains(Style.BOLD);  // 가독성 명확
 graph LR
     A["비교"] --> B["비트 필드"]
     A --> C["EnumSet"]
-    B --> D["출력: 숫자 3\n해석 불가"]
-    C --> E["출력: BOLD ITALIC\n즉"]
-    B --> F["타입: int\n잘못된 값 전달"]
-    C --> G["타입: Set<Style>\n컴파"]
+    B --> D["출력: 숫자 3"]
+    C --> E["출력: BOLD ITALIC"]
+    B --> F["타입: int"]
+    C --> G["타입: Set<Style>"]
     style C fill:#51cf66,color:#fff
     style B fill:#ff6b6b,color:#fff
 ```
@@ -132,8 +132,8 @@ Set<Style> immutableStyles = Collections.unmodifiableSet(
 graph TD
     A["열거 값들을 집합으로 사용"] --> B["비트 필드 금지"]
     A --> C["EnumSet 사용"]
-    B --> D["출력 해석 불가\n타입 안전 없음"]
-    C --> E["명료한 출력\n타입 안전\n성능"]
+    B --> D["출력 해석 불가"]
+    C --> E["명료한 출력"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#51cf66,color:#fff
 ```

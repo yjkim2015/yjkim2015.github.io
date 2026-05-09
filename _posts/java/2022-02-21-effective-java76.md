@@ -43,10 +43,10 @@ public Object pop() {
 
 ```mermaid
 graph TD
-    A["실패 원자성 달성 방법"] --> B["1. 불변 객체로 설계\n태생적으"]
-    A --> C["2. 매개변수 유효성 검사\n상태"]
-    A --> D["3. 임시 복사본에서 작업\n성공"]
-    A --> E["4. 복구 코드\n실패를 가로채어"]
+    A["실패 원자성 달성 방법"] --> B["1. 불변 객체로 설계"]
+    A --> C["2. 매개변수 유효성 검사"]
+    A --> D["3. 임시 복사본에서 작업"]
+    A --> E["4. 복구 코드"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff

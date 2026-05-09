@@ -30,12 +30,12 @@ graph LR
 
 ```mermaid
 graph TD
-    A["hashCode 3대 규약"] --> B["일관성\n(Consistency)"]
+    A["hashCode 3대 규약"] --> B["일관성"]
     A --> C["equals-hashCode 연동"]
     A --> D["다른 객체는 다른 hashCode"]
-    B --> B1["같은 실행 내에서\n항상 같은 값"]
-    C --> C1["equals가 true면\nhas"]
-    D --> D1["다르면 성능 저하\n(O(1) →"]
+    B --> B1["같은 실행 내에서"]
+    C --> C1["equals가 true면"]
+    D --> D1["다르면 성능 저하"]
     style C fill:#ff6b6b,color:#fff
     style C1 fill:#ff6b6b,color:#fff
 ```
@@ -200,7 +200,7 @@ graph TD
     B --> C["같은 객체 → 같은 hashCod"]
     C --> D["HashMap/HashSet 정상"]
     E["hashCode만 같고 equal"] --> F["해시 충돌 — 성능 저하만"]
-    G["equals가 같은데 hashCo"] --> H["치명적 버그!\n컬렉션에서 조회"]
+    G["equals가 같은데 hashCo"] --> H["치명적 버그!"]
     style G fill:#ff6b6b,color:#fff
     style H fill:#ff6b6b,color:#fff
     style D fill:#51cf66,color:#fff

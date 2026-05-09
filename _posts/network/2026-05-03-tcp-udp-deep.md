@@ -149,11 +149,11 @@ sysctl net.ipv4.tcp_max_tw_buckets
 
 ```mermaid
 graph LR
-    A["송신 버퍼\n(응용 프로그램 데이"]
-    B["전송 완료\n+ ACK 수신"]
-    C["전송 완료\n+ ACK 미수신"]
-    D["전송 가능\n(Window 내)"]
-    E["전송 불가\n(Window 초과)"]
+    A["송신 버퍼"]
+    B["전송 완료"]
+    C["전송 완료"]
+    D["전송 가능"]
+    E["전송 불가"]
     A --> B
     B --> C
     C --> D
@@ -203,8 +203,8 @@ AIMD 규칙:
 
 ```mermaid
 graph TD
-    A["Slow Start\ncwnd×2"] -->|"cwnd≥ssthresh"| B["Congestion Avoidan"]
-    B -->|3 Dup ACK| C["Fast Recovery\ncwn"]
+    A["Slow Start"] -->|"cwnd≥ssthresh"| B["Congestion Avoidan"]
+    B -->|3 Dup ACK| C["Fast Recovery"]
     C --> B
     B & A & C -->|Timeout| D["재시작 cwnd=1"]
 ```
@@ -368,8 +368,8 @@ QUIC(Quick UDP Internet Connections)은 Google이 개발하고 IETF가 표준화
 graph TD
     A["TCP 문제점"]
     B["Head-of-Line Block"]
-    C["긴 연결 수립\nTCP 1-RTT"]
-    D["IP 변경 시 연결 재수립\n(모"]
+    C["긴 연결 수립"]
+    D["IP 변경 시 연결 재수립"]
     A --> B
     A --> C
     A --> D
@@ -385,9 +385,9 @@ graph TD
 
 ```mermaid
 graph LR
-    A["HTTP/1.1\nTCP × 6병"]
-    B["HTTP/2\nTCP 1개\n멀티"]
-    C["HTTP/3\nQUIC (UDP)"]
+    A["HTTP/1.1"]
+    B["HTTP/2"]
+    C["HTTP/3"]
     D["패킷 손실 시"]
     A -->|"발전"| B
     B -->|"발전"| C

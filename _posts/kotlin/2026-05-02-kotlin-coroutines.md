@@ -24,16 +24,16 @@ toc_label: 목차
 ```mermaid
 graph TD
     subgraph "전통적 스레드 모델 — 동시 요청 1000개"
-        T1["Thread 1\n~1MB 스택\"]
-        T2["Thread 2\n~1MB 스택\"]
-        T3["Thread 3~1000\n~1M"]
-        Mem1["총 메모리: ~1GB\n실제 CP"]
+        T1["Thread 1"]
+        T2["Thread 2"]
+        T3["Thread 3~1000"]
+        Mem1["총 메모리: ~1GB"]
     end
     subgraph "코루틴 모델 — 동시 요청 1000개"
-        C1["Coroutine 1~1000\n"]
-        Pool["Thread Pool\n8~16개"]
+        C1["Coroutine 1~1000"]
+        Pool["Thread Pool"]
         C1 --> Pool
-        Mem2["총 메모리: ~수십 MB\nCPU"]
+        Mem2["총 메모리: ~수십 MB"]
     end
 ```
 
@@ -114,9 +114,9 @@ suspend fun fetchAll(userId: Long): UserDashboard = coroutineScope {
 
 ```mermaid
 graph TD
-    Parent["부모 coroutineScope"] --> C1["자식 코루틴 1\n프로필 조회"]
-    Parent --> C2["자식 코루틴 2\n주문 조회"]
-    Parent --> C3["자식 코루틴 3\n알림 조회"]
+    Parent["부모 coroutineScope"] --> C1["자식 코루틴 1"]
+    Parent --> C2["자식 코루틴 2"]
+    Parent --> C3["자식 코루틴 3"]
     C3 --> Fail["예외 발생!"]
     Fail --> Cancel["나머지 자식 모두 취소"]
     Cancel --> Parent2["부모에게 예외 전파"]
@@ -164,9 +164,9 @@ suspend fun fetchUserDataResilient(userId: Long): UserData = supervisorScope {
 
 ```mermaid
 graph TD
-    D["Dispatchers"] --> IO["Dispatchers.IO\nI/"]
+    D["Dispatchers"] --> IO["Dispatchers.IO"]
     D --> Default["Dispatchers.Defaul"]
-    D --> Main["Dispatchers.Main\n"]
+    D --> Main["Dispatchers.Main"]
 ```
 
 ```kotlin
@@ -545,8 +545,8 @@ flowchart TD
     Normal["일반 함수"] -->|runBlocking| Scope["코루틴 스코프"]
     Scope -->|launch| Job["Job (결과 없음)"]
     Scope -->|async/await| Deferred["Deferred (결과 있음)"]
-    SuspendFn["suspend fun"] -->|IO| IOPool["I/O 풀\nDB·HTTP·Fil"]
-    SuspendFn -->|Default| CPUPool["CPU 풀\n계산·변환"]
+    SuspendFn["suspend fun"] -->|IO| IOPool["I/O 풀"]
+    SuspendFn -->|Default| CPUPool["CPU 풀"]
     Flow["Flow/StateFlow/Sha"] -->|"emit → collect"| Consume["소비·변환"]
 ```
 

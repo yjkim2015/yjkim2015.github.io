@@ -57,7 +57,7 @@ void startEngine() {
 
 ```mermaid
 graph TD
-    A["예외 선택 기준"] --> B{"인수 값에 상관없이\n항상 실패했을까?"}
+    A["예외 선택 기준"] --> B{"인수 값에 상관없이"}
     B -- 예 --> C["IllegalStateExcept"]
     B -- 아니오 --> D["IllegalArgumentExc"]
     style C fill:#f39c12,color:#fff

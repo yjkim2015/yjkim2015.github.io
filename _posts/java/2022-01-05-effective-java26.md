@@ -55,10 +55,10 @@ for (Stamp stamp : stamps) {
 ```mermaid
 graph TD
     A["Collection stamps"] --> B["stamps.add(new Coi"]
-    B --> C["경고만 출력\n컴파일 성공"]
+    B --> C["경고만 출력"]
     C --> D["런타임: ClassCastExce"]
     E["Collection<Stamp>"] --> F["stamps.add(new Coi"]
-    F --> G["컴파일 오류!\n즉시 발견"]
+    F --> G["컴파일 오류!"]
     style D fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff
 ```
@@ -190,11 +190,11 @@ if (o instanceof Set) {         // 로 타입으로 검사
 
 ```mermaid
 graph TD
-    A["List<E>"] --> B["제네릭 타입\n(Generic T"]
-    C["List<String>"] --> D["매개변수화 타입\n(Paramet"]
-    E["List"] --> F["로 타입\n(Raw Type)"]
-    G["List<?>"] --> H["비한정적 와일드카드 타입\n(Un"]
-    I["List<? extends Num"] --> J["한정적 와일드카드 타입\n(Bou"]
+    A["List<E>"] --> B["제네릭 타입"]
+    C["List<String>"] --> D["매개변수화 타입"]
+    E["List"] --> F["로 타입"]
+    G["List<?>"] --> H["비한정적 와일드카드 타입"]
+    I["List<? extends Num"] --> J["한정적 와일드카드 타입"]
     style F fill:#ff6b6b,color:#fff
     style D fill:#51cf66,color:#fff
     style H fill:#51cf66,color:#fff

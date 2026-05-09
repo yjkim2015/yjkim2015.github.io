@@ -17,8 +17,8 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    A["소스 스트림\n컬렉션·배열·파일\"] --> B["중간 연산\nfilter·map·"]
-    B --> C["종단 연산\ncollect·for"]
+    A["소스 스트림"] --> B["중간 연산"]
+    B --> C["종단 연산"]
     style A fill:#4a9eff,color:#fff
     style B fill:#f39c12,color:#fff
     style C fill:#51cf66,color:#fff
@@ -100,10 +100,10 @@ Java는 `char` 전용 스트림을 제공하지 않습니다. `chars()`는 `IntS
 
 ```mermaid
 graph TD
-    A["코드 블록(반복문)만\n할 수 있"] --> B["지역변수 읽기·수정\n람다는 ef"]
-    A --> C["return으로 메서드 탈출\n람"]
-    A --> D["break·continue로\n반"]
-    A --> E["검사 예외 던지기\n람다에서는 불"]
+    A["코드 블록(반복문)만"] --> B["지역변수 읽기·수정"]
+    A --> C["return으로 메서드 탈출"]
+    A --> D["break·continue로"]
+    A --> E["검사 예외 던지기"]
     style A fill:#ff6b6b,color:#fff
 ```
 
@@ -113,11 +113,11 @@ graph TD
 
 ```mermaid
 graph TD
-    A["스트림이\n적합한 작업"] --> B["원소 시퀀스를\n일관되게 변환"]
-    A --> C["원소 시퀀스를\n필터링"]
-    A --> D["하나의 연산으로 결합\n더하기·연"]
-    A --> E["컬렉션에 모으기\n공통 속성으로"]
-    A --> F["특정 조건을\n만족하는 원소 찾기"]
+    A["스트림이"] --> B["원소 시퀀스를"]
+    A --> C["원소 시퀀스를"]
+    A --> D["하나의 연산으로 결합"]
+    A --> E["컬렉션에 모으기"]
+    A --> F["특정 조건을"]
     style A fill:#51cf66,color:#fff
 ```
 

@@ -32,10 +32,10 @@ if (cheeses != null && cheeses.contains(Cheese.STILTON)) {
 
 ```mermaid
 graph TD
-    A["null 반환의 문제"] --> B["클라이언트마다\nnull 방어 코"]
-    A --> C["방어 코드 빠뜨리면\nNullPo"]
-    A --> D["반환하는 쪽도\n특수 처리 코드"]
-    A --> E["성능 이점도\n거의 없음"]
+    A["null 반환의 문제"] --> B["클라이언트마다"]
+    A --> C["방어 코드 빠뜨리면"]
+    A --> D["반환하는 쪽도"]
+    A --> E["성능 이점도"]
     style A fill:#ff6b6b,color:#fff
 ```
 

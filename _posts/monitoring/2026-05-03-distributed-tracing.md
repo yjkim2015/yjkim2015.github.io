@@ -35,12 +35,12 @@ date: 2026-05-03
 
 ```mermaid
 graph TD
-    TRACE["Trace\n(하나의 요청 전체"]
-    TRACE --> ROOT["Root Span\nAPI Gat"]
-    ROOT --> CHILD1["Child Span\nUser S"]
-    ROOT --> CHILD2["Child Span\nOrder"]
-    CHILD2 --> CHILD3["Child Span\nPaymen"]
-    CHILD3 --> CHILD4["Child Span\nDB Que"]
+    TRACE["Trace"]
+    TRACE --> ROOT["Root Span"]
+    ROOT --> CHILD1["Child Span"]
+    ROOT --> CHILD2["Child Span"]
+    CHILD2 --> CHILD3["Child Span"]
+    CHILD3 --> CHILD4["Child Span"]
 ```
 
 **Trace**는 하나의 요청이 시스템을 관통하는 전체 여정이다. 고유한 Trace ID를 갖는다. **Span**은 그 여정의 각 구간이다. 각 Span은 자신의 Span ID, 부모 Span ID, 시작/종료 시각, 태그(attributes), 이벤트(events)를 갖는다.
@@ -227,8 +227,8 @@ Tempo는 Grafana Labs에서 만든 분산 트레이싱 백엔드다. Jaeger와�
 ```mermaid
 graph LR
     APP["App + OTel"] -->|"OTLP"| DIST["Tempo Distributor"]
-    DIST --> ING["Tempo Ingester\n(W"]
-    ING -->|"블록 플러시"| S3[("Object Storage\nS3")]
+    DIST --> ING["Tempo Ingester"]
+    ING -->|"블록 플러시"| S3[("Object Storage")]
     QUERY["Tempo Query Fronte"] --> S3
     GRAFANA["Grafana"] --> QUERY
 ```
@@ -414,9 +414,9 @@ public class TracingAsyncConfig {
 
 ```mermaid
 graph LR
-    REQ["요청 진입"] --> DECIDE{"확률 판정\n10%?"}
-    DECIDE -->|"샘플링 O\n(flags=01)"| TRACE_YES["전체 Span 기록\n하위 서비스"]
-    DECIDE -->|"샘플링 X\n(flags=00)"| TRACE_NO["Span 미기록\n하위 서비스도"]
+    REQ["요청 진입"] --> DECIDE{"확률 판정"}
+    DECIDE -->|"샘플링 O\n(flags=01)"| TRACE_YES["전체 Span 기록"]
+    DECIDE -->|"샘플링 X\n(flags=00)"| TRACE_NO["Span 미기록"]
 ```
 
 **장점:** 구현이 단순하다. 요청 진입 시 한 번만 결정하고, 모든 서비스가 그 결정을 따른다.
@@ -429,8 +429,8 @@ graph LR
 
 ```mermaid
 graph LR
-    REQ["요청 진입"] --> COLLECT["모든 Span\n일단 수집"]
-    COLLECT --> BUFFER["버퍼에 보관\n(Trace 완성"]
+    REQ["요청 진입"] --> COLLECT["모든 Span"]
+    COLLECT --> BUFFER["버퍼에 보관"]
     BUFFER --> EVAL{"조건 평가"}
     EVAL -->|"에러 포함"| KEEP["저장"]
     EVAL -->|"지연 > 2초"| KEEP

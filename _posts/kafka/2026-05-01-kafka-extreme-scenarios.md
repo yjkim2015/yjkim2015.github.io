@@ -265,7 +265,7 @@ public class StableHashPartitioner implements Partitioner {
 ```mermaid
 graph TD
     RULE1["파티션 수는 처음부터 넉넉하게 설"]
-    RULE2["불가피하게 변경 시:\n1. 키"]
+    RULE2["불가피하게 변경 시:"]
     RULE1 --> RULE2
 ```
 
@@ -278,10 +278,10 @@ graph TD
 ```mermaid
 graph TD
     D80["디스크 80%"] --> D90["90%"] --> D95["95%"] --> D99["99%"] --> D100["100%"]
-    D100 --> E1["새 메시지 쓰기 실패\n→ Kaf"]
+    D100 --> E1["새 메시지 쓰기 실패"]
     D100 --> E2["프로듀서: TimeoutExcep"]
     D100 --> E3["컨슈머: 읽기는 가능하지만 lag"]
-    D100 --> E4["복제 중단: ISR 축소\n→ a"]
+    D100 --> E4["복제 중단: ISR 축소"]
 ```
 
 ### 단계별 장애 확산
@@ -358,10 +358,10 @@ public void adjustRetentionPolicy() {
 ```mermaid
 graph TD
     S0["ISR=B1(Leader),B2,"] -->|"B3 lag 초과"| S1["ISR=B1,B2"]
-    S1 -->|"B2 Full GC"| S2["ISR=B1만\nmin.insyn"]
+    S1 -->|"B2 Full GC"| S2["ISR=B1만"]
     S2 -->|"B1 장애"| S4["ISR 비어있음"]
-    S4 -->|"unclean=true"| UNCLEAN["B3 리더 선출\n→ 100개 유"]
-    S4 -->|"unclean=false"| CLEAN["파티션 불가용\n→ 복구 대기"]
+    S4 -->|"unclean=true"| UNCLEAN["B3 리더 선출"]
+    S4 -->|"unclean=false"| CLEAN["파티션 불가용"]
 ```
 
 ### ISR 모니터링
@@ -425,8 +425,8 @@ default.replication.factor=3         ← 여유 복제본
 ```mermaid
 graph LR
     subgraph lag["Consumer Lag"]
-        LEO["Log End Offset\n(최"]
-        CO["Committed Offset\n"]
+        LEO["Log End Offset"]
+        CO["Committed Offset"]
         LAG["Lag = LEO - Commit"]
         CO -->|차이| LEO
     end
@@ -510,8 +510,8 @@ spec:
 graph TD
     DETECT["Lag 폭증 감지"]
     S1["Step 1: 원인 파악 (5분"]
-    S2["Step 2: 빠른 완화\n처리"]
-    S3["Step 3: 근본 원인 해결\n"]
+    S2["Step 2: 빠른 완화"]
+    S3["Step 3: 근본 원인 해결"]
     S4["Step 4: Lag 해소 모니터"]
     DETECT --> S1 --> S2 --> S3 --> S4
 ```
@@ -532,7 +532,7 @@ graph LR
         B3["Broker 3"]
     end
     B1 ---|네트워크 단절 X| B2
-    Note1["Zone B에서 새 리더 선출\n"]
+    Note1["Zone B에서 새 리더 선출"]
 ```
 
 ### Zombie Leader 문제

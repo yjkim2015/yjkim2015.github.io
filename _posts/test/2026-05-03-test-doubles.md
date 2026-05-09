@@ -20,11 +20,11 @@ date: 2026-05-03
 ```mermaid
 graph LR
     TD["테스트 더블"]
-    TD --> DM["Dummy\n자리만 채움"]
-    TD --> ST["Stub\n정해진 값 반환"]
-    TD --> SP["Spy\n호출 기록"]
-    TD --> MK["Mock\n호출 검증"]
-    TD --> FK["Fake\n간단한 실제 구현"]
+    TD --> DM["Dummy"]
+    TD --> ST["Stub"]
+    TD --> SP["Spy"]
+    TD --> MK["Mock"]
+    TD --> FK["Fake"]
     style DM fill:#ddd,stroke:#999,color:#000
     style ST fill:#8f8,stroke:#080,color:#000
     style SP fill:#ff8,stroke:#880,color:#000
@@ -358,11 +358,11 @@ void BDD_스타일로_작성한_테스트() {
 
 ```mermaid
 flowchart TD
-    Q1{"의존 객체가\n외부 시스템인가?"}
-    Q1 -->|"예\n(결제 API, SMS)"|  MOCK["Mock 사용\n호출 여부만 검증"]
-    Q1 -->|"아니오"| Q2{"의존 객체의 상태가\n중요한가?"}
-    Q2 -->|"예\n(저장 후 조회)"| FAKE["Fake 사용\n인메모리 구현"]
-    Q2 -->|"아니오\n(반환값만 필요)"| STUB["Stub 사용\n고정값 반환"]
+    Q1{"의존 객체가"}
+    Q1 -->|"예\n(결제 API, SMS)"|  MOCK["Mock 사용"]
+    Q1 -->|"아니오"| Q2{"의존 객체의 상태가"}
+    Q2 -->|"예\n(저장 후 조회)"| FAKE["Fake 사용"]
+    Q2 -->|"아니오\n(반환값만 필요)"| STUB["Stub 사용"]
     style MOCK fill:#f88,stroke:#c00,color:#000
     style FAKE fill:#8bf,stroke:#08c,color:#000
     style STUB fill:#8f8,stroke:#080,color:#000

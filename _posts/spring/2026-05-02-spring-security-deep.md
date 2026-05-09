@@ -216,9 +216,9 @@ graph LR
     A[JWT] --> B[Header]
     A --> C[Payload]
     A --> D[Signature]
-    B --> E["alg: HS256\ntyp: J"]
-    C --> F["sub: 사용자 ID\nroles"]
-    D --> G["HMACSHA256(\n  bas"]
+    B --> E["alg: HS256"]
+    C --> F["sub: 사용자 ID"]
+    D --> G["HMACSHA256("]
 ```
 
 Signature의 역할이 핵심입니다. Payload를 아무나 base64 디코딩해서 읽을 수 있습니다(암호화가 아님). 하지만 내용을 조작하면 Signature 검증에서 실패합니다. "userId=1"을 "userId=999"로 바꾸면 서버가 즉시 감지합니다. 따라서 JWT에 민감한 정보(비밀번호 등)를 넣으면 안 됩니다.
@@ -690,7 +690,7 @@ flowchart TD
     C --> D["AuthorizationFilte"]
     D -->|"미인증"| E["401 Authentication"]
     D -->|"권한 없음"| F["403 AccessDeniedHa"]
-    D -->|"통과"| G["Controller → 응답\n→"]
+    D -->|"통과"| G["Controller → 응답"]
 ```
 
 ---

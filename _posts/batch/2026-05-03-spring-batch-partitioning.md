@@ -30,9 +30,9 @@ flowchart TD
     A["병렬 처리 전략"] --> B["Multi-threaded Ste"]
     A --> C["Parallel Step"]
     A --> D["Partitioning"]
-    B --> B1["하나의 Step\n여러 스레드가"]
-    C --> C1["여러 Step이\n동시에 실행"]
-    D --> D1["데이터를 범위로 나눠\n각 파티션"]
+    B --> B1["하나의 Step"]
+    C --> C1["여러 Step이"]
+    D --> D1["데이터를 범위로 나눠"]
     B1 --> B2["⚠ Reader thread-sa"]
     C1 --> C2["✅ Step 간 데이터 독립"]
     D1 --> D2["✅ 가장 안전하고 확장성 좋음"]
@@ -175,11 +175,11 @@ public Job parallelJob(JobRepository jobRepository,
 
 ```mermaid
 flowchart TD
-    A["Master Step\n(Part"] -->|"파티션 1: ID 1~25만"| B["Slave Step 1"]
+    A["Master Step"] -->|"파티션 1: ID 1~25만"| B["Slave Step 1"]
     A -->|"파티션 2: ID 25만~50만"| C["Slave Step 2"]
     A -->|"파티션 3: ID 50만~75만"| D["Slave Step 3"]
     A -->|"파티션 4: ID 75만~100만"| E["Slave Step 4"]
-    B --> F["각 Slave는 독립적인\nRea"]
+    B --> F["각 Slave는 독립적인"]
     C --> F
     D --> F
     E --> F
@@ -421,11 +421,11 @@ ID 범위로 균등 분할해도, **실제 유효 데이터가 특정 범위에 
 ```mermaid
 flowchart LR
     subgraph "편향된 파티셔닝"
-        A["파티션1\n100만 건\n⏱ 30"] --- B["파티션2\n1천 건\n⏱ 1초"]
-        B --- C["파티션3\n80만 건\n⏱ 24분"]
-        C --- D["파티션4\n5백 건\n⏱ 0.5초"]
+        A["파티션1"] --- B["파티션2"]
+        B --- C["파티션3"]
+        C --- D["파티션4"]
     end
-    E["전체 소요: 30분\n(가장 느린"]
+    E["전체 소요: 30분"]
 ```
 
 파티션 2와 4는 금방 끝나지만, 파티션 1이 30분 걸리면 전체도 30분이 걸립니다. 병렬 처리의 의미가 퇴색됩니다.

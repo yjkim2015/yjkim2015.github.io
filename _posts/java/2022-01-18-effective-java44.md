@@ -55,12 +55,12 @@ BiPredicate<Map<K,V>, Map.Entry<K,V>>  // 동일한 구조
 
 ```mermaid
 graph TD
-    A["기본 6종"] --> B["UnaryOperator\n입출력"]
-    A --> C["BinaryOperator\n입출"]
-    A --> D["Predicate\n조건 검사\n"]
-    A --> E["Function\n입출력 타입 다"]
-    A --> F["Supplier\n값 제공\n()"]
-    A --> G["Consumer\n값 소비\nT"]
+    A["기본 6종"] --> B["UnaryOperator"]
+    A --> C["BinaryOperator"]
+    A --> D["Predicate"]
+    A --> E["Function"]
+    A --> F["Supplier"]
+    A --> G["Consumer"]
     style A fill:#4a9eff,color:#fff
 ```
 
@@ -96,10 +96,10 @@ IntUnaryOperator f = x -> x + 1;            // int 사용
 
 ```mermaid
 graph TD
-    A["전용 함수형 인터페이스\n직접 작"] --> B["API에서 자주 쓰이며\n이름이"]
-    A --> C["구현하는 쪽이 반드시\n지켜야 할"]
-    A --> D["유용한 디폴트 메서드가\n여러 개"]
-    B --> E["Comparator<T> 예시\n"]
+    A["전용 함수형 인터페이스"] --> B["API에서 자주 쓰이며"]
+    A --> C["구현하는 쪽이 반드시"]
+    A --> D["유용한 디폴트 메서드가"]
+    B --> E["Comparator<T> 예시"]
     style E fill:#51cf66,color:#fff
 ```
 

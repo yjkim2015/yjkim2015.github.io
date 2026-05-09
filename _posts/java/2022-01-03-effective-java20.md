@@ -17,12 +17,12 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["다중 구현 메커니즘"] --> B["추상 클래스\n(Abstract"]
-    A --> C["인터페이스\n(Interface)"]
-    B --> B1["단일 상속만 허용\n→ 반드시 그"]
-    B --> B2["기존 클래스에 끼워 넣기\n매우"]
-    C --> C1["다중 구현 가능\n→ 어떤 클래스"]
-    C --> C2["기존 클래스에도\n손쉽게 추가 가"]
+    A["다중 구현 메커니즘"] --> B["추상 클래스"]
+    A --> C["인터페이스"]
+    B --> B1["단일 상속만 허용"]
+    B --> B2["기존 클래스에 끼워 넣기"]
+    C --> C1["다중 구현 가능"]
+    C --> C2["기존 클래스에도"]
     style C fill:#51cf66,color:#fff
     style B fill:#ffd43b
 ```
@@ -152,8 +152,8 @@ public interface Collection<E> {
 
 ```mermaid
 graph TD
-    A["인터페이스\n(타입 정의 + 일부"] --> C["골격 구현 클래스\nAbstrac"]
-    C --> D["구체 구현 클래스\n(핵심 메서드"]
+    A["인터페이스"] --> C["골격 구현 클래스"]
+    C --> D["구체 구현 클래스"]
     style A fill:#4a9eff,color:#fff
     style C fill:#51cf66,color:#fff
 ```
@@ -201,8 +201,8 @@ static List<Integer> intArrayAsList(int[] a) {
 
 ```mermaid
 graph TD
-    A["1단계: 기반 메서드 선정\n다른"] --> B["2단계: 기반 메서드로 구현 가능"]
-    B --> C["3단계: 남은 메서드는\n골격 구"]
+    A["1단계: 기반 메서드 선정"] --> B["2단계: 기반 메서드로 구현 가능"]
+    B --> C["3단계: 남은 메서드는"]
     style A fill:#4a9eff,color:#fff
     style B fill:#51cf66,color:#fff
     style C fill:#ffd43b
@@ -280,13 +280,13 @@ public class MyList extends OtherBase implements List<Integer> {
 
 ```mermaid
 graph TD
-    A["다중 구현 타입 선택"] --> B{"기존 클래스에 추가\n가능해야 하나?"}
+    A["다중 구현 타입 선택"] --> B{"기존 클래스에 추가"}
     B -->|"Yes"| C["인터페이스 필수"]
-    B -->|"No"| D{"구현 코드를\n함께 제공해야 하나?"}
+    B -->|"No"| D{"구현 코드를"}
     D -->|"No"| C
     D -->|"Yes"| E["인터페이스 + 골격 구현 클래스\"]
-    E --> F["인터페이스: 타입 정의\n+ 명백"]
-    E --> G["골격 구현: 나머지 구현\n+ e"]
+    E --> F["인터페이스: 타입 정의"]
+    E --> G["골격 구현: 나머지 구현"]
     style C fill:#51cf66,color:#fff
     style E fill:#4a9eff,color:#fff
 ```

@@ -66,15 +66,15 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    App["모바일 앱\n(고객/라이더)"] --> API["API Gateway\n(인증/라"]
-    API --> Search["가게 검색 서비스\n(Geohas"]
-    API --> Track["위치 추적 서비스\n(Redis"]
-    API --> Match["배달 매칭 서비스\n(라이더 할당"]
-    Search --> GeoCache["Redis\n(Geohash 캐시"]
-    Search --> ShopDB[("MySQL\n가게 정보 + 위치")]
-    Track --> RedisPos["Redis\n(라이더 현재 위치)"]
+    App["모바일 앱"] --> API["API Gateway"]
+    API --> Search["가게 검색 서비스"]
+    API --> Track["위치 추적 서비스"]
+    API --> Match["배달 매칭 서비스"]
+    Search --> GeoCache["Redis"]
+    Search --> ShopDB[("MySQL")]
+    Track --> RedisPos["Redis"]
     Track --> HistDB[("TimescaleDB\n위치 히스토리)"]
-    Match --> ETA["ETA 서비스\n(OSRM/Goo"]
+    Match --> ETA["ETA 서비스"]
 ```
 
 ### 4개 핵심 서비스 역할 분담
@@ -146,12 +146,12 @@ Geohash는 지구를 재귀적으로 절반씩 나누면서 각 영역에 문자
 
 ```mermaid
 graph TD
-    Problem["경계 문제\n셀 경계에 위치한 가"]
-    Problem --> Ex["사용자: wydm6w\n가게: w"]
-    Ex --> Sol["해결책:\n인접 8개 셀도 함께"]
+    Problem["경계 문제"]
+    Problem --> Ex["사용자: wydm6w"]
+    Ex --> Sol["해결책:"]
     Sol --> N["wydm6w (내 셀)"]
     Sol --> Adj["wydm6v wydm6y wydm"]
-    N --> Filter["Haversine로\n정확한 거리"]
+    N --> Filter["Haversine로"]
     Adj --> Filter
 ```
 
@@ -198,15 +198,15 @@ geohashes = get_nearby_geohashes(37.5172, 127.0473, precision=6)
 
 ```mermaid
 graph TD
-    Root["전국 지도\n(500,000 가게"]
-    Root --> NW["북서\n(10,000)"]
-    Root --> NE["북동\n(200,000)"]
-    Root --> SW["남서\n(50,000)"]
-    Root --> SE["남동\n(240,000)"]
-    NE --> NE_NW["강남 북서\n(80,000) →"]
-    NE --> NE_NE["강남 북동\n(40,000)"]
-    NE --> NE_SW["강남 남서\n(50,000) →"]
-    NE --> NE_SE["강남 남동\n(30,000)"]
+    Root["전국 지도"]
+    Root --> NW["북서"]
+    Root --> NE["북동"]
+    Root --> SW["남서"]
+    Root --> SE["남동"]
+    NE --> NE_NW["강남 북서"]
+    NE --> NE_NE["강남 북동"]
+    NE --> NE_SW["강남 남서"]
+    NE --> NE_SE["강남 남동"]
 ```
 
 ```
@@ -609,11 +609,11 @@ async def find_best_rider(shop_lat: float, shop_lon: float,
 ```mermaid
 graph TD
     Input["출발지 + 목적지 좌표"]
-    Input --> OSRM["OSRM\n(Open Source"]
+    Input --> OSRM["OSRM"]
     Input --> Google["Google Directions"]
-    Input --> Kakao["카카오 모빌리티 API\n국내 도"]
-    OSRM --> Static["정적 ETA\n(현재 교통 미반영"]
-    Google --> Dynamic["동적 ETA\n(실시간 교통 반영"]
+    Input --> Kakao["카카오 모빌리티 API"]
+    OSRM --> Static["정적 ETA"]
+    Google --> Dynamic["동적 ETA"]
     Kakao --> Dynamic
 ```
 
@@ -697,13 +697,13 @@ CREATE TABLE orders (
 
 ```mermaid
 graph TD
-    Update["라이더 위치 업데이트\n(5초마다"]
-    Update --> Check["Geofence 체크\n라이더 v"]
-    Check --> Far["30m 초과\n→ 일반 추적 계속"]
-    Check --> Near["30m 이내 진입\n→ '라이더"]
+    Update["라이더 위치 업데이트"]
+    Update --> Check["Geofence 체크"]
+    Check --> Far["30m 초과"]
+    Check --> Near["30m 이내 진입"]
     Near --> Wait["30m 이내 5분 이상 체류"]
     Wait --> Exit["영역 이탈"]
-    Exit --> Complete["배달 완료 자동 처리\n→ 결제"]
+    Exit --> Complete["배달 완료 자동 처리"]
 ```
 
 ### Geofencing 구현
@@ -757,7 +757,7 @@ async def check_delivery_geofence(rider_id: str, lat: float, lon: float):
 graph TD
     Request["가게 검색 요청"]
     Request --> L1["L1: 로컬 캐시 (Caffein"]
-    L1 -->|미스| L2["L2: Redis 클러스터\nGe"]
+    L1 -->|미스| L2["L2: Redis 클러스터"]
     L2 -->|미스| DB["MySQL + Spatial In"]
     DB --> L2Write["L2 캐시 기록"]
     L2Write --> L1Write["L1 캐시 기록"]

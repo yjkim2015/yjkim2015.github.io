@@ -72,10 +72,10 @@ public class IndexOutOfBoundsException extends RuntimeException {
 
 ```mermaid
 graph TD
-    A["예외 상세 메시지에 포함할 것"] --> B["실패에 관여된\n모든 매개변수 값"]
-    A --> C["실패에 관여된\n관련 필드 값\n"]
-    A --> D["포함하지 말 것\n보안 정보\n비"]
-    A --> E["필요 없는 것\n소스코드나 문서에"]
+    A["예외 상세 메시지에 포함할 것"] --> B["실패에 관여된"]
+    A --> C["실패에 관여된"]
+    A --> D["포함하지 말 것"]
+    A --> E["필요 없는 것"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#ff6b6b,color:#fff

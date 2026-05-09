@@ -94,12 +94,12 @@ public static void main(String[] args) {
 
 ```mermaid
 graph TD
-    A["정확한 수 계산이 필요"] --> B{"성능보다 편의가 중요\n또는 반올림 모드 필요?"}
-    B -- 예 --> C["BigDecimal\n문자열 생성"]
+    A["정확한 수 계산이 필요"] --> B{"성능보다 편의가 중요"}
+    B -- 예 --> C["BigDecimal"]
     B -- 아니오 --> D{"값의 범위"}
-    D --> E["9자리 이하 십진수\n→ int"]
-    D --> F["18자리 이하 십진수\n→ lon"]
-    D --> G["18자리 초과\n→ BigDeci"]
+    D --> E["9자리 이하 십진수"]
+    D --> F["18자리 이하 십진수"]
+    D --> G["18자리 초과"]
     style C fill:#51cf66,color:#fff
     style E fill:#51cf66,color:#fff
     style F fill:#51cf66,color:#fff

@@ -169,7 +169,7 @@ try (DatabaseConnection conn = new DatabaseConnection(url)) {
 
 ```mermaid
 graph TD
-    A["Java 객체"] -->|"JNI 호출"| B["네이티브 피어\n(C/C++ 객체"]
+    A["Java 객체"] -->|"JNI 호출"| B["네이티브 피어"]
     C["GC"] -->|"Java 객체 회수"| A
     C -->|"네이티브 피어는 모름!"| D["네이티브 메모리 누수"]
     B -->|"cleaner로 회수"| E["네이티브 메모리 해제"]
@@ -249,12 +249,12 @@ class Teenager {
 
 ```mermaid
 graph TD
-    A["자원 회수가 필요한 클래스"] --> B{"AutoCloseable\n구현 가능?"}
-    B -->|"Yes (대부분)"| C["AutoCloseable 구현\n"]
-    B -->|"네이티브 피어"| D["cleaner를 안전망으로만\n("]
+    A["자원 회수가 필요한 클래스"] --> B{"AutoCloseable"}
+    B -->|"Yes (대부분)"| C["AutoCloseable 구현"]
+    B -->|"네이티브 피어"| D["cleaner를 안전망으로만"]
     C --> C1["즉시·확실하게 자원 회수"]
     C --> C2["예외 안전 보장"]
-    D --> D1["언제 실행될지 보장 없음\n안전망"]
+    D --> D1["언제 실행될지 보장 없음"]
     style C fill:#51cf66,color:#fff
     style D fill:#ffd43b
 ```

@@ -19,11 +19,11 @@ toc_label: 목차
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["서블릿 컨테이너\n(Tomcat)"]
-    B --> C["서블릿 필터 체인\n(javax."]
+    A["HTTP 요청"] --> B["서블릿 컨테이너"]
+    B --> C["서블릿 필터 체인"]
     C --> D["DelegatingFilterPr"]
-    D <-- "Spring 빈 조회\n(springSecurityFilterChain)" --> E["Spring 컨테이너\n(Appl"]
-    E --> F["FilterChainProxy\n"]
+    D <-- "Spring 빈 조회\n(springSecurityFilterChain)" --> E["Spring 컨테이너"]
+    E --> F["FilterChainProxy"]
     F --> G["보안 필터 체인 실행"]
     G --> H["DispatcherServlet\"]
 ```
@@ -96,11 +96,11 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 flowchart TD
     A["HTTP 요청"] --> B["FilterChainProxy"]
     B --> C["등록된 SecurityFilter"]
-    C --> D{"요청 URL이\n/api/** 매칭?"}
+    C --> D{"요청 URL이"}
     D -- "예" --> E["ApiSecurityConfig의"]
-    D -- "아니오" --> F{"요청 URL이\n/** 매칭?"}
+    D -- "아니오" --> F{"요청 URL이"}
     F -- "예" --> G["WebSecurityConfig의"]
-    F -- "아니오" --> H["매칭되는 체인 없음\n→ 다음 서"]
+    F -- "아니오" --> H["매칭되는 체인 없음"]
     E --> I["보안 처리 완료"]
     G --> I
 ```

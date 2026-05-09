@@ -51,7 +51,7 @@ public String statement() {
 
 ```mermaid
 graph TD
-    A["문자열 연결 방법 비교"] --> B["String + 연산\n매 연결마"]
+    A["문자열 연결 방법 비교"] --> B["String + 연산"]
     A --> C["StringBuilder.appe"]
     A --> D["String.join() / Co"]
     style B fill:#ff6b6b,color:#fff

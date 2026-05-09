@@ -148,10 +148,10 @@ private void notifyElementAdded(E element) {
 ```mermaid
 graph TD
     A["동기화 블록 안 외계인 메서드 문"] --> B["ConcurrentModifica"]
-    A --> C["교착 상태\n메인 락 보유 + 배"]
-    B --> D["해결: 스냅샷 복사\nnew Ar"]
+    A --> C["교착 상태"]
+    B --> D["해결: 스냅샷 복사"]
     C --> D
-    D --> E["더 나은 해결:\nCopyOnWr"]
+    D --> E["더 나은 해결:"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#ff6b6b,color:#fff
     style D fill:#f39c12,color:#fff

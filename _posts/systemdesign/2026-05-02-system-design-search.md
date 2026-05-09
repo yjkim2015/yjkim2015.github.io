@@ -64,12 +64,12 @@ graph TD
 
 ```mermaid
 graph TD
-    Source["문서 소스\n(웹 크롤러/DB/파"] --> Kafka["Kafka 문서 큐"]
-    Kafka --> Parser["파서\nHTML/PDF → 텍스트"]
-    Parser --> Tokenizer["토크나이저\n단어 분리"]
-    Tokenizer --> Normalizer["정규화\n소문자 변환, 어간 추출"]
+    Source["문서 소스"] --> Kafka["Kafka 문서 큐"]
+    Kafka --> Parser["파서"]
+    Parser --> Tokenizer["토크나이저"]
+    Tokenizer --> Normalizer["정규화"]
     Normalizer --> Builder["역인덱스 빌더"]
-    Builder --> ES["Elasticsearch\n역인덱"]
+    Builder --> ES["Elasticsearch"]
 ```
 
 ```python
@@ -220,12 +220,12 @@ def index_document(doc_id: int, text: str):
 
 ```mermaid
 graph TD
-    Client["검색 API"] --> Coord["코디네이터 노드\n쿼리 라우팅"]
-    Coord --> S1["샤드 1\n문서 0~20%"]
-    Coord --> S2["샤드 2\n문서 20~40%"]
-    Coord --> S3["샤드 3\n문서 40~60%"]
-    Coord --> S4["샤드 4\n문서 60~80%"]
-    Coord --> S5["샤드 5\n문서 80~100%"]
+    Client["검색 API"] --> Coord["코디네이터 노드"]
+    Coord --> S1["샤드 1"]
+    Coord --> S2["샤드 2"]
+    Coord --> S3["샤드 3"]
+    Coord --> S4["샤드 4"]
+    Coord --> S5["샤드 5"]
     S1 --> R1["레플리카 1 (고가용성)"]
     S2 --> R2["레플리카 2"]
 ```
@@ -381,10 +381,10 @@ def search_with_cache(query: str) -> list:
 
 ```mermaid
 graph LR
-    Searches["모든 검색 요청"] --> Kafka["Kafka\nsearch-even"]
-    Kafka --> Flink["Flink\n5분 슬라이딩 윈도우"]
-    Flink --> TrendCalc["급증 감지\n이전 대비 3배 이상"]
-    TrendCalc --> Redis["Redis Sorted Set\n"]
+    Searches["모든 검색 요청"] --> Kafka["Kafka"]
+    Kafka --> Flink["Flink"]
+    Flink --> TrendCalc["급증 감지"]
+    TrendCalc --> Redis["Redis Sorted Set"]
     Redis --> API["트렌딩 API"]
 ```
 

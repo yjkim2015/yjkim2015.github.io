@@ -44,11 +44,11 @@ public interface Authentication extends Principal, Serializable {
 
 ```mermaid
 flowchart TD
-    A["Authentication 객체"] --> B["principal\n인증 전: 사"]
-    A --> C["credentials\n비밀번호"]
-    A --> D["authorities\n인증된 사"]
-    A --> E["details\n인증 부가 정보\"]
-    A --> F["authenticated\n인증"]
+    A["Authentication 객체"] --> B["principal"]
+    A --> C["credentials"]
+    A --> D["authorities"]
+    A --> E["details"]
+    A --> F["authenticated"]
 ```
 
 ### principal (주체)

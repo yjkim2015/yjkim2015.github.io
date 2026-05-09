@@ -96,9 +96,9 @@ public class MathUtils {
 
 ```mermaid
 graph TD
-    A["private 생성자 효과"] --> B["외부 클래스에서\nnew Math"]
-    A --> C["하위 클래스 생성 불가\n상위 생"]
-    A --> D["컴파일러 기본 생성자\n자동 생성"]
+    A["private 생성자 효과"] --> B["외부 클래스에서"]
+    A --> C["하위 클래스 생성 불가"]
+    A --> D["컴파일러 기본 생성자"]
     style A fill:#4a9eff,color:#fff
 ```
 

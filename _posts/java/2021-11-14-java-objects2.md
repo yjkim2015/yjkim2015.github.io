@@ -21,11 +21,11 @@ Java에서는 **타입 상속**으로 다형성을 구현합니다.
 
 ```mermaid
 graph TD
-    A["타입 상속 두 가지"] --> B["인터페이스 상속\n타입 정의만 상"]
-    A --> C["구현 상속\n코드까지 상속\nex"]
-    B --> B1["다중 구현 가능\n여러 인터페이스"]
+    A["타입 상속 두 가지"] --> B["인터페이스 상속"]
+    A --> C["구현 상속"]
+    B --> B1["다중 구현 가능"]
     B --> B2["결합도 낮음 ✓"]
-    C --> C1["단일 상속만 가능\nextends"]
+    C --> C1["단일 상속만 가능"]
     C --> C2["결합도 높음 — 주의 필요"]
 ```
 
@@ -100,7 +100,7 @@ public class DataFlowController {
 
 ```mermaid
 graph LR
-    A["ByteSource 인터페이스\n"] --> B["FileDataReader"]
+    A["ByteSource 인터페이스"] --> B["FileDataReader"]
     A --> C["HttpDataReader"]
     A --> D["SocketDataReader ("]
     E["DataFlowController"] -->|"ByteSource 타입으로만 사"| A
@@ -259,8 +259,8 @@ void testDataFlowController() {
 
 ```mermaid
 graph TD
-    A["추상화 적용 기준"] --> B["변화 가능성 높음\n→ 인터페이스"]
-    A --> C["변화 가능성 낮음\n→ 콘크리트"]
+    A["추상화 적용 기준"] --> B["변화 가능성 높음"]
+    A --> C["변화 가능성 낮음"]
     B --> B1["외부 시스템 연동 (DB, HTT"]
     B --> B2["비즈니스 규칙이 자주 바뀌는 부분"]
     C --> C1["단순 유틸리티 메서드"]
@@ -273,9 +273,9 @@ graph TD
 
 ```mermaid
 graph TD
-    A["다형성 & 추상화 핵심"] --> B["다형성\n한 객체가 여러 타입으로"]
-    A --> C["추상 타입\n공통 개념을 인터페이"]
-    A --> D["팩토리 패턴\n객체 생성 책임 분"]
+    A["다형성 & 추상화 핵심"] --> B["다형성"]
+    A --> C["추상 타입"]
+    A --> D["팩토리 패턴"]
     A --> E["Program to Interfa"]
     B --> B1["인터페이스 상속: 다중 구현 가능"]
     C --> C1["요구사항 추가 시 기존 코드 수정"]

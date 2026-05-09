@@ -68,12 +68,12 @@ try {
 
 ```mermaid
 graph TD
-    A["예외 처리 결정"] --> B{"예외가 발생하면\n어떻게 해야 하는가?"}
-    B --> C["복구 가능\n→ 적절한 조치 후"]
-    B --> D["복구 불가\n→ 비검사 예외로 재"]
-    B --> E["무시해도 되는 경우\n→ catc"]
-    C --> F["catch 블록에\n실제 처리 코"]
-    D --> G["catch 블록에서\nthrow"]
+    A["예외 처리 결정"] --> B{"예외가 발생하면"}
+    B --> C["복구 가능"]
+    B --> D["복구 불가"]
+    B --> E["무시해도 되는 경우"]
+    C --> F["catch 블록에"]
+    D --> G["catch 블록에서"]
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff
     style E fill:#868e96,color:#fff

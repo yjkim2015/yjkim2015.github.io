@@ -17,9 +17,9 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["java.util.concurre"] --> B["실행자 프레임워크\nExecuto"]
-    A --> C["동시성 컬렉션\nConcurren"]
-    A --> D["동기화 장치\nCountDownL"]
+    A["java.util.concurre"] --> B["실행자 프레임워크"]
+    A --> C["동시성 컬렉션"]
+    A --> D["동기화 장치"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#51cf66,color:#fff

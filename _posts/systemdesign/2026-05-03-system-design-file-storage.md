@@ -410,10 +410,10 @@ v2: [hash_A, hash_B, hash_E, hash_D]  ← hash_C만 hash_E로 교체
 
 ```mermaid
 graph LR
-    A["Short Polling\n매 N"]
-    B["Long Polling\n응답 올"]
-    C["WebSocket\n양방향 영구"]
-    D["SSE\n서버→클라이언트 단방향"]
+    A["Short Polling"]
+    B["Long Polling"]
+    C["WebSocket"]
+    D["SSE"]
     A -->|"낭비 심함"| X["비추천"]
     B -->|"서버 부하"| Y["보통"]
     C -->|"양방향 불필요"| Z["과스펙"]
@@ -438,7 +438,7 @@ data: {"event":"file_created","parent_id":100,"file_id":12346}
 ```mermaid
 graph LR
     API["API 서버"]
-    KAFKA["Kafka 토픽\nfile-cha"]
+    KAFKA["Kafka 토픽"]
     NOTIF["알림 서비스"]
     CLIENT["각 디바이스"]
     API -->|"파일 변경 이벤트 발행"| KAFKA
@@ -582,9 +582,9 @@ download_count = 0
 
 ```mermaid
 graph TD
-    OWNER["Owner\n모든 권한"]
-    EDITOR["Editor\n읽기+쓰기+공유"]
-    VIEWER["Viewer\n읽기 전용"]
+    OWNER["Owner"]
+    EDITOR["Editor"]
+    VIEWER["Viewer"]
     OWNER -->|"권한 위임"| EDITOR
     OWNER -->|"권한 위임"| VIEWER
     EDITOR -->|"제한적 공유"| VIEWER

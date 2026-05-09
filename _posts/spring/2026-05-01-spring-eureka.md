@@ -217,8 +217,8 @@ eureka:
 ```mermaid
 graph TD
     subgraph "HA Eureka 클러스터"
-        ES1["Eureka Server 1\n:"]
-        ES2["Eureka Server 2\n:"]
+        ES1["Eureka Server 1"]
+        ES2["Eureka Server 2"]
         ES1 <-->|"Peer Replication"| ES2
     end
     MS1["Order Service"] -->|"Register"| ES1

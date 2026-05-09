@@ -245,8 +245,8 @@ providerManager.setEraseCredentialsAfterAuthentication(true);  // 기본값: tru
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["SecurityFilter\n→"]
-    B --> C["DaoProvider\nUserD"]
+    A["HTTP 요청"] --> B["SecurityFilter"]
+    B --> C["DaoProvider"]
     B --> D["RememberMeProvider"]
     C -->|성공| E["Authentication 생성\"]
     C -->|실패| F["AuthenticationExce"]

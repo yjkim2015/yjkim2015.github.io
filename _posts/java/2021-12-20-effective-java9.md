@@ -210,7 +210,7 @@ try (DatabaseConnection db = new DatabaseConnection(url)) {
 
 ```mermaid
 graph TD
-    A["자원 닫기"] --> B["try-finally\n중첩 지옥"]
+    A["자원 닫기"] --> B["try-finally"]
     A --> C["try-with-resources"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#51cf66,color:#fff

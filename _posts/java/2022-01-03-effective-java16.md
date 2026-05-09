@@ -85,8 +85,8 @@ graph TD
     A -->|"point.setX(5)"| C["setter 메서드"]
     B --> D["private double x"]
     C --> D
-    C --> E["검증 로직\n(음수 방지 등)"]
-    C --> F["부수 작업\n(이벤트 발행 등)"]
+    C --> E["검증 로직"]
+    C --> F["부수 작업"]
     style D fill:#4a9eff,color:#fff
 ```
 
@@ -153,7 +153,7 @@ public final class Time {
 graph TD
     A["필드 공개 여부 결정"] --> B{"public 클래스인가?"}
     B -->|"Yes"| C["반드시 private + 접근자"]
-    B -->|"No (package-privat"| D["필드 직접 공개 가능\n(수정 범"]
+    B -->|"No (package-privat"| D["필드 직접 공개 가능"]
     C --> E["장점"]
     E --> E1["내부 표현 변경 자유"]
     E --> E2["불변식 보장"]

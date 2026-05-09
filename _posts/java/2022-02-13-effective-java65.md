@@ -43,9 +43,9 @@ Object value = field.get(obj);
 
 ```mermaid
 graph TD
-    A["리플렉션의 단점"] --> B["컴파일타임 검사 없음\n존재하지"]
-    A --> C["코드가 지저분하고 장황\n생성자"]
-    A --> D["성능 저하\n일반 메서드 호출보다"]
+    A["리플렉션의 단점"] --> B["컴파일타임 검사 없음"]
+    A --> C["코드가 지저분하고 장황"]
+    A --> D["성능 저하"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#f39c12,color:#fff
     style D fill:#f39c12,color:#fff

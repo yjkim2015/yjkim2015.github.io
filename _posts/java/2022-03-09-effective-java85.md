@@ -63,9 +63,9 @@ static byte[] bomb() {
 
 ```mermaid
 graph TD
-    A["데이터 직렬화 선택"] --> B["자바 직렬화\nSerializab"]
-    A --> C["JSON\n텍스트 기반, 사람이"]
-    A --> D["Protocol Buffers\n"]
+    A["데이터 직렬화 선택"] --> B["자바 직렬화"]
+    A --> C["JSON"]
+    A --> D["Protocol Buffers"]
     B --> E["사용 금지 (새 시스템)"]
     C --> F["권장: 텍스트 기반 API"]
     D --> G["권장: 고성능 내부 통신"]

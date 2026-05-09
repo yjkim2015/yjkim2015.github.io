@@ -45,9 +45,9 @@ public enum Orange { NAVEL, TEMPLE, BLOOD }
 
 ```mermaid
 graph TD
-    A["열거 타입의 장점"] --> B["컴파일타임 타입 안전성\nAppl"]
-    A --> C["각자의 이름공간\nApple.FU"]
-    A --> D["상수 값 변경해도\n재컴파일 불필"]
+    A["열거 타입의 장점"] --> B["컴파일타임 타입 안전성"]
+    A --> C["각자의 이름공간"]
+    A --> D["상수 값 변경해도"]
     A --> E["toString으로 의미 있는 출"]
     A --> F["values()로 전체 순회 가능"]
     A --> G["메서드와 필드 추가 가능"]

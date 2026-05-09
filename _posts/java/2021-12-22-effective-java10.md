@@ -56,11 +56,11 @@ public boolean equals(Object o) {
 
 ```mermaid
 graph TD
-    A["equals 5대 규약"] --> B["반사성\nx.equals(x)=="]
-    A --> C["대칭성\nx==y → y==x"]
-    A --> D["추이성\nx==y,y==z → x"]
-    A --> E["일관성\n항상 동일 결과"]
-    A --> F["null-아님\nx.equals("]
+    A["equals 5대 규약"] --> B["반사성"]
+    A --> C["대칭성"]
+    A --> D["추이성"]
+    A --> E["일관성"]
+    A --> F["null-아님"]
 ```
 
 ### 규약 1: 반사성 (Reflexivity)
@@ -222,7 +222,7 @@ graph TD
     A --> D["지나치게 복잡하게 만들지 말 것"]
     B --> B1["Item 11 — HashMap/"]
     C --> C1["Object가 아니면 오버로딩!\"]
-    D --> D1["별칭·심볼릭 링크 비교는 금지\n"]
+    D --> D1["별칭·심볼릭 링크 비교는 금지"]
 ```
 
 **흔한 실수 — 오버라이딩이 아닌 오버로딩:**
@@ -269,11 +269,11 @@ public record PhoneNumber(short areaCode, short prefix, short lineNum) {}
 
 ```mermaid
 graph TD
-    A["equals 재정의 필요한가?"] --> B{"논리적 동치성\n비교가 필요한가?"}
-    B -->|"No"| C["재정의 불필요\nObject.eq"]
-    B -->|"Yes"| D{"상위 클래스 equals가\n충분한가?"}
-    D -->|"Yes"| E["재정의 불필요\n상속된 equal"]
-    D -->|"No"| F["재정의 필요\n5대 규약 준수 +"]
+    A["equals 재정의 필요한가?"] --> B{"논리적 동치성"}
+    B -->|"No"| C["재정의 불필요"]
+    B -->|"Yes"| D{"상위 클래스 equals가"}
+    D -->|"Yes"| E["재정의 불필요"]
+    D -->|"No"| F["재정의 필요"]
     style C fill:#51cf66,color:#fff
     style E fill:#51cf66,color:#fff
     style F fill:#4a9eff,color:#fff

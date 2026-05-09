@@ -195,10 +195,10 @@ PUT /products
 
 ```mermaid
 flowchart LR
-    INPUT["원본 텍스트\n'무선 블루투스 이"] --> CF["1️⃣ Character Filt"]
-    CF --> TK["2️⃣ Tokenizer\n형태소"]
-    TK --> TF["3️⃣ Token Filter\n"]
-    TF --> TERMS["토큰\n무선 | 블루투스 | 이어"]
+    INPUT["원본 텍스트"] --> CF["1️⃣ Character Filt"]
+    CF --> TK["2️⃣ Tokenizer"]
+    TK --> TF["3️⃣ Token Filter"]
+    TF --> TERMS["토큰"]
 ```
 
 ### 4-3. Nori: 한국어 형태소 분석기
@@ -521,7 +521,7 @@ flowchart TD
     Q1{"예상 데이터 크기?"} --> |"< 30GB"| S1["1 Primary + 1 Repl"]
     Q1 --> |"30~150GB"| S3["3~5 Primary + 1 Re"]
     Q1 --> |"150GB~1TB"| S10["5~20 Primary + 1 R"]
-    Q1 --> |"> 1TB"| ILM["시계열 → ILM 롤오버\n비시계"]
+    Q1 --> |"> 1TB"| ILM["시계열 → ILM 롤오버"]
 ```
 
 ### 7-4. JVM Heap 설정
@@ -667,13 +667,13 @@ ELK는 Elasticsearch + Logstash + Kibana의 조합이다. **Logstash**가 다양
 graph TB
     subgraph "Elasticsearch 아키텍처 요약"
         CL["Cluster"]
-        CL --> N1["Node 1\nMaster"]
-        CL --> N2["Node 2\nData"]
-        CL --> N3["Node 3\nData"]
+        CL --> N1["Node 1"]
+        CL --> N2["Node 2"]
+        CL --> N3["Node 3"]
         N2 --> IDX["Index = 논리 단위"]
         IDX --> SH["Shard = Lucene Ind"]
         SH --> SEG["Segment = 불변 역인덱스"]
-        SEG --> II["역인덱스\nTerm → Posti"]
+        SEG --> II["역인덱스"]
     end
 ```
 

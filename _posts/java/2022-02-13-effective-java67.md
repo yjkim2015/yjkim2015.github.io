@@ -76,12 +76,12 @@ int height = component.getHeight();  // 기본 타입 반환 — 복사 없음
 ```mermaid
 graph TD
     A["최적화 절차"] --> B["1. 좋은 구조로 프로그램 완성"]
-    B --> C["2. 성능 측정\n충분히 빠른가?"]
+    B --> C["2. 성능 측정"]
     C -- 예 --> D["완료"]
     C -- 아니오 --> E["3. 프로파일러로 병목 지점 찾기"]
-    E --> F["4. 알고리즘 검토\nO(n²)"]
+    E --> F["4. 알고리즘 검토"]
     F --> G["5. 최적화 시도"]
-    G --> H["6. 다시 성능 측정\n정말 빨라"]
+    G --> H["6. 다시 성능 측정"]
     H --> C
     style D fill:#51cf66,color:#fff
     style E fill:#f39c12,color:#fff

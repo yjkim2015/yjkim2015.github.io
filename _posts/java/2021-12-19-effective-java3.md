@@ -163,10 +163,10 @@ President.INSTANCE.governe();
 
 ```mermaid
 graph TD
-    A["Enum 싱글톤의 보장"] --> B["리플렉션 공격 차단\nJVM이 E"]
-    A --> C["직렬화 자동 처리\nreadRes"]
-    A --> D["스레드 안전\nJVM 클래스 로딩"]
-    A --> E["간결함\n5줄로 완성"]
+    A["Enum 싱글톤의 보장"] --> B["리플렉션 공격 차단"]
+    A --> C["직렬화 자동 처리"]
+    A --> D["스레드 안전"]
+    A --> E["간결함"]
 ```
 
 **리플렉션 공격 불가:**
@@ -201,9 +201,9 @@ c.newInstance("INSTANCE", 0);
 
 ```mermaid
 graph TD
-    A["싱글톤 선택 가이드"] --> B["상속이 필요 없다\n→ Enum"]
-    A --> C["API 유연성이 필요하다\n→ 정"]
-    A --> D["단순하고 API 노출이 필요\n→"]
+    A["싱글톤 선택 가이드"] --> B["상속이 필요 없다"]
+    A --> C["API 유연성이 필요하다"]
+    A --> D["단순하고 API 노출이 필요"]
     B --> B1["리플렉션/직렬화 걱정 없음"]
     C --> C1["readResolve() + 리플"]
     D --> D1["readResolve() + 리플"]

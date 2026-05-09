@@ -21,9 +21,9 @@ Java 네트워크 API는 계층 구조에 따라 역할이 나뉩니다. 응용 
 
 ```mermaid
 graph TD
-    A["4. 응용\nHTTP/FTP/DN"] --> B["3. 전송\nTCP/UDP · S"]
-    B --> C["2. 인터넷\nIP · InetA"]
-    C --> D["1. 네트워크\nEthernet"]
+    A["4. 응용"] --> B["3. 전송"]
+    B --> C["2. 인터넷"]
+    C --> D["1. 네트워크"]
 ```
 
 ### 1.2 소켓(Socket)이란?

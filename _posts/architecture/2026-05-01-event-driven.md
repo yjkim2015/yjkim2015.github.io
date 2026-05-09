@@ -26,7 +26,7 @@ date: 2026-05-01
 graph LR
     subgraph "동기 호출 (문제 상황)"
         OS1["Order Service"]
-        PS1["Payment Service\n("]
+        PS1["Payment Service"]
         IS1["Inventory Service"]
         NS1["Notification Servi"]
         OS1 -->|"1️⃣ 결제 요청\n응답 대기.."| PS1
@@ -144,16 +144,16 @@ public record OrderCreatedEventV2(
 ```mermaid
 graph LR
     subgraph "전통적 방식 (상태 저장)"
-        DB1[("orders 테이블\nid=1\n")]
+        DB1[("orders 테이블")]
     end
     subgraph "Event Sourcing (이벤트 저장)"
-        E1["OrderCreated\nt=0\"]
-        E2["PaymentCharged\nt="]
+        E1["OrderCreated"]
+        E2["PaymentCharged"]
         E3["InventoryReserved\"]
-        E4["OrderShipped\nt=3\"]
+        E4["OrderShipped"]
         E1 --> E2 --> E3 --> E4
     end
-    E4 -->|"이벤트 재생\n→ 현재 상태"| STATE["status=SHIPPED\nam"]
+    E4 -->|"이벤트 재생\n→ 현재 상태"| STATE["status=SHIPPED"]
 ```
 
 ```

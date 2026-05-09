@@ -53,9 +53,9 @@ public class Order implements Serializable {
 
 ```mermaid
 graph TD
-    A["Serializable 구현의 비"] --> B["유지보수 어려움\n직렬화 형태가"]
-    A --> C["보안 취약성\n역직렬화 = 숨은"]
-    A --> D["테스트 부담 증가\n신버전 ↔ 구"]
+    A["Serializable 구현의 비"] --> B["유지보수 어려움"]
+    A --> C["보안 취약성"]
+    A --> D["테스트 부담 증가"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#ff6b6b,color:#fff
     style D fill:#ff6b6b,color:#fff

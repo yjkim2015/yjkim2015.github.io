@@ -18,7 +18,7 @@ toc_label: 목차
 ```mermaid
 graph TD
     A["상속 문제"] --> B["상위 클래스 내부 구현에 종속"]
-    B --> C["상위 클래스 릴리즈 변경 시\n하"]
+    B --> C["상위 클래스 릴리즈 변경 시"]
     C --> D["코드 한 줄 안 건드렸는데 버그!"]
     style D fill:#ff6b6b,color:#fff
 ```
@@ -89,7 +89,7 @@ sequenceDiagram
 ```mermaid
 graph TD
     A["InstrumentedSet (래"] -->|"private 필드로 보유"| B["ForwardingSet"]
-    B -->|"전달(forwarding)"| C["Set 구현체\n(HashSet,"]
+    B -->|"전달(forwarding)"| C["Set 구현체"]
     A -->|"구현"| D["Set 인터페이스"]
     style A fill:#51cf66,color:#fff
 ```
@@ -230,7 +230,7 @@ graph TD
     A["코드 재사용 방법 선택"] --> B{"is-a 관계인가?"}
     B -->|"Yes + 상위 클래스가 잘 설계"| C["상속 사용 가능"]
     B -->|"No 또는 has-a 관계"| D["컴포지션 + 전달(forwardi"]
-    D --> E["래퍼 클래스\n(데코레이터 패턴)"]
+    D --> E["래퍼 클래스"]
     E --> E1["어떤 구현체든 감쌀 수 있어 유연"]
     E --> E2["상위 클래스 변경에 영향 없음"]
     E --> E3["API 결함을 숨길 수 있음"]

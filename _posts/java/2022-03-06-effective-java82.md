@@ -25,11 +25,11 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["스레드 안전성 수준 (높은 순)"] --> B["불변(immutable)\nStr"]
-    A --> C["무조건적 스레드 안전\nAtomi"]
-    A --> D["조건부 스레드 안전\nCollec"]
-    A --> E["스레드 안전하지 않음\nArray"]
-    A --> F["스레드 적대적\n외부 동기화로도"]
+    A["스레드 안전성 수준 (높은 순)"] --> B["불변(immutable)"]
+    A --> C["무조건적 스레드 안전"]
+    A --> D["조건부 스레드 안전"]
+    A --> E["스레드 안전하지 않음"]
+    A --> F["스레드 적대적"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff

@@ -84,10 +84,10 @@ opt.ifPresent(n -> System.out.println("안녕하세요, " + n));
 
 ```mermaid
 graph TD
-    A["Optional<T> 처리"] --> B["orElse(기본값)\n항상 기본"]
+    A["Optional<T> 처리"] --> B["orElse(기본값)"]
     A --> C["orElseGet(Supplier"]
     A --> D["orElseThrow(Suppli"]
-    A --> E["get()\n항상 있다고 확신할"]
+    A --> E["get()"]
     A --> F["ifPresent(Consumer"]
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff
@@ -166,10 +166,10 @@ graph TD
     A["Optional 사용 판단"] --> B{"반환 타입인가?"}
     B -- 예 --> C{"기본형인가?"}
     C -- 예 --> D["OptionalInt / Long"]
-    C -- 아니오 --> E{"컨테이너 타입인가?\nList, Set, Map, 배열"}
-    E -- 예 --> F["빈 컨테이너 반환\nOptiona"]
+    C -- 아니오 --> E{"컨테이너 타입인가?"}
+    E -- 예 --> F["빈 컨테이너 반환"]
     E -- 아니오 --> G["Optional<T> 적합"]
-    B -- 아니오 --> H["필드·매개변수·컬렉션 원소\n="]
+    B -- 아니오 --> H["필드·매개변수·컬렉션 원소"]
     style D fill:#51cf66,color:#fff
     style G fill:#51cf66,color:#fff
     style F fill:#f39c12,color:#fff

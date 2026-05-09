@@ -33,12 +33,12 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    Single["단일 테이블 1억 건\n풀 스캔"]
+    Single["단일 테이블 1억 건"]
     Single --> Part["파티셔닝 적용"]
-    Part --> P2020["파티션 p2020\n2020년 데"]
-    Part --> P2021["파티션 p2021\n2021년 데"]
-    Part --> P2022["파티션 p2022\n2022년 데"]
-    Part --> P2023["파티션 p2023\n2023년 데"]
+    Part --> P2020["파티션 p2020"]
+    Part --> P2021["파티션 p2021"]
+    Part --> P2022["파티션 p2022"]
+    Part --> P2023["파티션 p2023"]
     Query["WHERE order_date ="] -->|"파티션 프루닝"| P2023
     Query -.->|"p2020, p2021, p202"| Skip["스캔 생략 75%"]
 ```
@@ -55,9 +55,9 @@ graph TD
 
 ```mermaid
 graph LR
-    Original["원본 테이블\nid 1~4 전체"]
-    Original --> PA["파티션 A\nid 1~2\nKim"]
-    Original --> PB["파티션 B\nid 3~4\nPar"]
+    Original["원본 테이블"]
+    Original --> PA["파티션 A"]
+    Original --> PB["파티션 B"]
     Query["WHERE id = 3"] -->|"파티션 프루닝"| PB
     Query -.->|"건너뜀"| PA
 ```
@@ -72,9 +72,9 @@ MySQL의 `PARTITION BY` 문법이 지원하는 것이 바로 수평 파티셔닝
 
 ```mermaid
 graph TD
-    Original["원본 테이블\nid, name,"]
-    Original --> Hot["핫 테이블 자주 조회\nid, n"]
-    Original --> Cold["콜드 테이블 드물게 조회\nid,"]
+    Original["원본 테이블"]
+    Original --> Hot["핫 테이블 자주 조회"]
+    Original --> Cold["콜드 테이블 드물게 조회"]
     Hot -->|"캐시 효율 높음"| BufferPool["Buffer Pool에 더 많이"]
     Cold -->|"필요할 때만 로드"| Disk["디스크 접근 최소화"]
 ```

@@ -37,9 +37,9 @@ public class User implements Serializable {
 
 ```mermaid
 graph TD
-    A["마커 인터페이스"] --> B["어엿한 타입\n매개변수 타입으로"]
+    A["마커 인터페이스"] --> B["어엿한 타입"]
     B --> C["컴파일타임에 오류 검출"]
-    D["마커 애너테이션"] --> E["타입이 아님\n런타임에만 확인 가"]
+    D["마커 애너테이션"] --> E["타입이 아님"]
     E --> F["런타임에야 오류 발견"]
     style C fill:#51cf66,color:#fff
     style F fill:#ff6b6b,color:#fff
@@ -83,11 +83,11 @@ public interface FancyList extends List {
 
 ```mermaid
 graph TD
-    A["마킹이 필요한 상황"] --> B{"클래스·인터페이스에만\n적용?"}
+    A["마킹이 필요한 상황"] --> B{"클래스·인터페이스에만"}
     B -->|"No\n메서드·필드·패키지 등"| C["마커 애너테이션 사용"]
-    B -->|"Yes"| D{"마킹된 객체를\n매개변수로 받는\n메서드를 작성할 예정?"}
-    D -->|"Yes"| E["마커 인터페이스 사용\n컴파일타임"]
-    D -->|"No"| F{"애너테이션을\n적극 활용하는\n프레임워크?"}
+    B -->|"Yes"| D{"마킹된 객체를"}
+    D -->|"Yes"| E["마커 인터페이스 사용"]
+    D -->|"No"| F{"애너테이션을"}
     F -->|"Yes"| C
     F -->|"No"| G["마커 인터페이스 고려"]
     style E fill:#51cf66,color:#fff

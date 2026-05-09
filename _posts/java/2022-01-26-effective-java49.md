@@ -19,8 +19,8 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A["매개변수 검사 부재"] --> B["나쁨: 메서드 실행 중\n모호한"]
-    A --> C["더 나쁨: 메서드는 성공하나\n잘"]
+    A["매개변수 검사 부재"] --> B["나쁨: 메서드 실행 중"]
+    A --> C["더 나쁨: 메서드는 성공하나"]
     A --> D["최악: 객체가 이상한 상태로 변해"]
     style B fill:#f39c12,color:#fff
     style C fill:#e67e22,color:#fff

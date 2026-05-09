@@ -114,7 +114,7 @@ graph TD
         RR["msg1→P0, msg2→P1,"]
     end
     subgraph sticky["Sticky Partitioner"]
-        ST1["msg1,2,3 모두 P0 누적\"] --> ST2["전송 후 파티션 전환\n→ 큰 배"]
+        ST1["msg1,2,3 모두 P0 누적\"] --> ST2["전송 후 파티션 전환"]
     end
 ```
 
@@ -579,8 +579,8 @@ graph TD
         DIRTY["Dirty 영역 (컴팩션 대상)\"]
     end
     subgraph process["Log Cleaner 스레드 동작"]
-        SCAN["1. Dirty 영역 스캔\nk1"]
-        NEW["2. 새 세그먼트 생성\nk1:v"]
+        SCAN["1. Dirty 영역 스캔"]
+        NEW["2. 새 세그먼트 생성"]
         REPLACE["3. 오래된 세그먼트 교체"]
         SCAN --> NEW --> REPLACE
     end
@@ -607,7 +607,7 @@ producer.send(new ProducerRecord<>("user-profile", "user-1", null));
 ```mermaid
 graph LR
     T1["k1:v1"] --> T2["k1:v2"] --> T3["k1:null (tombstone"]
-    T3 -->|컴팩션| GONE["k1 관련 모든 레코드 삭제\n("]
+    T3 -->|컴팩션| GONE["k1 관련 모든 레코드 삭제"]
 ```
 
 ### 컴팩션 설정

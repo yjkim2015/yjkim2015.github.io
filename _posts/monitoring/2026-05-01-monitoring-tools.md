@@ -18,10 +18,10 @@ date: 2026-05-01
 
 ```mermaid
 graph TD
-    OBS["Observability\n(시스"]
-    OBS --> METRICS["Metrics\n숫자로 측정\nC"]
-    OBS --> LOGS["Logs\n이벤트 기록\n오류 상"]
-    OBS --> TRACES["Traces\n요청 흐름 추적\n"]
+    OBS["Observability"]
+    OBS --> METRICS["Metrics"]
+    OBS --> LOGS["Logs"]
+    OBS --> TRACES["Traces"]
     METRICS --> PROM["Prometheus + Grafa"]
     LOGS --> ELK["ELK Stack / Loki"]
     TRACES --> JAEGER["Jaeger / Zipkin /"]
@@ -237,10 +237,10 @@ Counter는 단조 증가만 하므로 `rate()`로 초당 변화량을 계산한�
 
 ```mermaid
 graph LR
-    APP["Spring App\n(Logba"] -->|"JSON 로그"| FB["Filebeat\n(로그 파일 감"]
-    FB -->|"전송"| LS["Logstash\n(파싱/필터링/"]
-    LS -->|"저장"| ES[("Elasticsearch\n(검색")]
-    ES -->|"쿼리"| KI["Kibana\n(시각화/검색)"]
+    APP["Spring App"] -->|"JSON 로그"| FB["Filebeat"]
+    FB -->|"전송"| LS["Logstash"]
+    LS -->|"저장"| ES[("Elasticsearch")]
+    ES -->|"쿼리"| KI["Kibana"]
 ```
 
 ### Spring Logback JSON 설정

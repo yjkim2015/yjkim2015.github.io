@@ -20,10 +20,10 @@ date: 2026-05-01
 
 ```mermaid
 graph LR
-    OS["Order Service\nINS"]
+    OS["Order Service"]
     IS["Inventory Service\"]
-    PS["Payment Service\nI"]
-    FAIL["하나라도 실패하면?\nDB A 커"]
+    PS["Payment Service"]
+    FAIL["하나라도 실패하면?"]
     OS -->|"성공"| IS -->|"성공"| PS -->|"실패"| FAIL
     style FAIL fill:#f88,stroke:#c00,color:#000
 ```

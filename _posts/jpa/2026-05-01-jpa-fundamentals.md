@@ -84,7 +84,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
 ```mermaid
 graph LR
-    APP["App\nem.persist()"] --> PC1["1차 캐시"] & PC2["쓰기지연 SQL"]
+    APP["App"] --> PC1["1차 캐시"] & PC2["쓰기지연 SQL"]
     subgraph EM["EntityManager (1 트"]
         PC1
         PC2
@@ -493,9 +493,9 @@ public class Movie extends Item {
 
 ```mermaid
 graph TD
-    ITEM["ITEM 테이블\nid │ nam"]
-    ALBUM["ALBUM 테이블\nitem_id"]
-    MOVIE["MOVIE 테이블\nitem_id"]
+    ITEM["ITEM 테이블"]
+    ALBUM["ALBUM 테이블"]
+    MOVIE["MOVIE 테이블"]
     ITEM -->|"1:1 JOIN"| ALBUM
     ITEM -->|"1:1 JOIN"| MOVIE
 ```
@@ -507,8 +507,8 @@ graph TD
 
 ```mermaid
 graph TD
-    ITEM["ITEM 테이블 (단일)\nid"]
-    NOTE["null 허용 컬럼 多\n→ no"]
+    ITEM["ITEM 테이블 (단일)"]
+    NOTE["null 허용 컬럼 多"]
     ITEM --> NOTE
 ```
 

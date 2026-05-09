@@ -101,7 +101,7 @@ sequenceDiagram
 ```mermaid
 graph TD
     A["@Override 사용 시점"] --> B["클래스의 상위 클래스 메서드 재정"]
-    A --> C["인터페이스 메서드 구현\n→ 달면"]
+    A --> C["인터페이스 메서드 구현"]
     A --> D["구체 클래스의 추상 메서드 구현\"]
     style B fill:#51cf66,color:#fff
     style C fill:#51cf66,color:#fff

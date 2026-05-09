@@ -48,10 +48,10 @@ public class Chemistry implements PhysicalConstants {
 
 ```mermaid
 graph TD
-    A["상수 인터페이스의 문제"] --> B["내부 구현 세부사항을\nAPI로"]
-    A --> C["클라이언트 코드가\n내부 상수에"]
-    A --> D["상수가 더 이상 필요 없어도\n바"]
-    A --> E["하위 클래스 네임스페이스가\n상수"]
+    A["상수 인터페이스의 문제"] --> B["내부 구현 세부사항을"]
+    A --> C["클라이언트 코드가"]
+    A --> D["상수가 더 이상 필요 없어도"]
+    A --> E["하위 클래스 네임스페이스가"]
     style A fill:#ff6b6b,color:#fff
 ```
 
@@ -114,11 +114,11 @@ double energy = BOLTZMANN_CONSTANT * temp;
 
 ```mermaid
 graph TD
-    A["상수 공개 방법 선택"] --> B{"상수가 특정\n클래스와 연관?"}
-    B -->|"Yes"| C["해당 클래스에 직접 선언\n예:"]
-    B -->|"No"| D{"열거 타입으로\n표현 가능?"}
-    D -->|"Yes"| E["열거 타입 사용\n예: DayOf"]
-    D -->|"No"| F["인스턴스화 불가\n유틸리티 클래스"]
+    A["상수 공개 방법 선택"] --> B{"상수가 특정"}
+    B -->|"Yes"| C["해당 클래스에 직접 선언"]
+    B -->|"No"| D{"열거 타입으로"}
+    D -->|"Yes"| E["열거 타입 사용"]
+    D -->|"No"| F["인스턴스화 불가"]
     style C fill:#51cf66,color:#fff
     style E fill:#51cf66,color:#fff
     style F fill:#51cf66,color:#fff
@@ -150,9 +150,9 @@ static final long CREDIT_CARD_NUMBER = 1234_5678_9012_3456L;
 
 ```mermaid
 graph TD
-    A["인터페이스의 올바른 용도"] --> B["타입을 정의하는 것\n→ 클라이언"]
-    C["인터페이스의 잘못된 용도"] --> D["상수 인터페이스\n→ 타입 정의와"]
-    D --> E["내부 구현이 API로 노출됨\n→"]
+    A["인터페이스의 올바른 용도"] --> B["타입을 정의하는 것"]
+    C["인터페이스의 잘못된 용도"] --> D["상수 인터페이스"]
+    D --> E["내부 구현이 API로 노출됨"]
     style B fill:#51cf66,color:#fff
     style D fill:#ff6b6b,color:#fff
 ```

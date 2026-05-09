@@ -49,7 +49,7 @@ String result = future.get(); // 블로킹
 
 ```mermaid
 flowchart LR
-    A["supplyAsync()\n비동기"] --> B["작업 실행 중\n(스레드풀에서)"]
+    A["supplyAsync()"] --> B["작업 실행 중"]
     B --> C{"완료?"}
     C -->|"성공"| D["thenApply/thenComp"]
     C -->|"실패"| E["exceptionally/hand"]

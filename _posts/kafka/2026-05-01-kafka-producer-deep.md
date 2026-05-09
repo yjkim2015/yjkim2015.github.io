@@ -82,10 +82,10 @@ max.in.flight.requests.per.connection=5  # 브로커당 동시 미확인 요청 
 ```mermaid
 graph LR
     subgraph "linger.ms=0 (기본: 지연 최소화)"
-        L0["메시지 도착 즉시 전송\n단일 메"]
+        L0["메시지 도착 즉시 전송"]
     end
     subgraph "linger.ms=10 (처리량 최적화)"
-        L10["10ms 대기 후 배치로 전송\n"]
+        L10["10ms 대기 후 배치로 전송"]
     end
     style L0 fill:#3498db,color:#fff
     style L10 fill:#2ecc71,color:#fff
@@ -344,9 +344,9 @@ delivery.timeout.ms=120000          # 전체 전송 타임아웃 (기본 2분)
 
 ```mermaid
 graph TD
-    Q1{"중복 방지 범위"} -->|단일 파티션| S1["멱등성 Producer\nenab"]
-    Q1 -->|여러 파티션/토픽| S2["트랜잭션 Producer\ntra"]
-    Q1 -->|Kafka 설정 무관| S3["앱 멱등 키\nConsumer 중"]
+    Q1{"중복 방지 범위"} -->|단일 파티션| S1["멱등성 Producer"]
+    Q1 -->|여러 파티션/토픽| S2["트랜잭션 Producer"]
+    Q1 -->|Kafka 설정 무관| S3["앱 멱등 키"]
     Q1 -->|DB 트랜잭션 필요| S4["Outbox 패턴"]
 ```
 

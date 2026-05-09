@@ -20,9 +20,9 @@ date: 2026-05-03
 ```mermaid
 graph TD
     subgraph "테스트 피라미드"
-        E2E["E2E 테스트\n느림 · 비쌈 ·"]
-        INT["통합 테스트\n중간 속도 · 실제"]
-        UNIT["단위 테스트\n빠름 · 격리 ·"]
+        E2E["E2E 테스트"]
+        INT["통합 테스트"]
+        UNIT["단위 테스트"]
     end
     E2E --> INT --> UNIT
     style E2E fill:#f88,stroke:#c00,color:#000
@@ -44,9 +44,9 @@ Spring Boot는 테스트 범위에 따라 다른 어노테이션을 제공한다
 
 ```mermaid
 graph LR
-    A["@SpringBootTest\n전"]
-    B["@WebMvcTest\nContr"]
-    C["@DataJpaTest\nJPA+"]
+    A["@SpringBootTest"]
+    B["@WebMvcTest"]
+    C["@DataJpaTest"]
     A --- B --- C
 ```
 
@@ -470,10 +470,10 @@ Spring Boot는 동일한 설정의 ApplicationContext를 캐싱한다. `@MockBea
 
 ```mermaid
 flowchart TD
-    A["테스트 클래스 A\n@Spring"] --> CTX1["Context 1"]
-    B["테스트 클래스 B\n@Spring"] --> CTX1
-    C["테스트 클래스 C\n@Spring"] --> CTX2["Context 2"]
-    D["테스트 클래스 D\n@WebMvc"] --> CTX3["Context 3"]
+    A["테스트 클래스 A"] --> CTX1["Context 1"]
+    B["테스트 클래스 B"] --> CTX1
+    C["테스트 클래스 C"] --> CTX2["Context 2"]
+    D["테스트 클래스 D"] --> CTX3["Context 3"]
     CTX1 -->|"같은 설정 = 캐시 히트"| FAST["빠름"]
     CTX2 -->|"다른 MockBean = 새 컨텍"| SLOW["느림"]
     CTX3 -->|"다른 어노테이션 = 새 컨텍스트"| SLOW

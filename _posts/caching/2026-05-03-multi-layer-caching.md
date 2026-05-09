@@ -45,11 +45,11 @@ graph LR
 
 ```mermaid
 graph TD
-    Client["클라이언트\n(브라우저)"] -->|"1️⃣ CDN Hit: 5~50m"| CDN["CDN\n(CloudFront,"]
-    CDN -->|"Miss"| GW["2️⃣ API Gateway\n("]
+    Client["클라이언트"] -->|"1️⃣ CDN Hit: 5~50m"| CDN["CDN"]
+    CDN -->|"Miss"| GW["2️⃣ API Gateway"]
     GW -->|"Miss"| L1["3️⃣ L1 Local Cache"]
     L1 -->|"Miss"| L2["4️⃣ L2 Remote Cach"]
-    L2 -->|"Miss"| DB["5️⃣ Database\n(MyS"]
+    L2 -->|"Miss"| DB["5️⃣ Database"]
 ```
 
 ### 계층별 특성 비교
@@ -78,9 +78,9 @@ Caffeine은 Google Guava Cache의 후속작으로, W-TinyLFU 알고리즘을 사
 
 ```mermaid
 graph LR
-    New["새 항목"] -->|"1️⃣ Window Cache\n"| WC["Window\nLRU"]
-    WC -->|"2️⃣ 빈도 비교"| Filter{"TinyLFU\n빈도 필터"}
-    Filter -->|"신규가 더 자주 사용"| Main["Main Cache\n(전체의 9"]
+    New["새 항목"] -->|"1️⃣ Window Cache\n"| WC["Window"]
+    WC -->|"2️⃣ 빈도 비교"| Filter{"TinyLFU"}
+    Filter -->|"신규가 더 자주 사용"| Main["Main Cache"]
     Filter -->|"기존이 더 자주 사용"| Evict["신규 항목 폐기"]
     Main -->|"Probation → Protec"| Main
 ```
@@ -511,13 +511,13 @@ public class GatewayCacheConfig {
 
 ```mermaid
 graph TD
-    Total["100K TPS 유입"] --> CDN["CDN Hit 70%\n70,00"]
-    Total --> GW["Gateway Hit 5%\n5,"]
-    Total --> Miss1["CDN+GW Miss\n25,00"]
-    Miss1 --> L1["L1 Hit 80%\n20,000"]
-    Miss1 --> Miss2["L1 Miss\n5,000 TPS"]
-    Miss2 --> L2["L2 Hit 90%\n4,500"]
-    Miss2 --> DB["L2 Miss → DB\n500"]
+    Total["100K TPS 유입"] --> CDN["CDN Hit 70%"]
+    Total --> GW["Gateway Hit 5%"]
+    Total --> Miss1["CDN+GW Miss"]
+    Miss1 --> L1["L1 Hit 80%"]
+    Miss1 --> Miss2["L1 Miss"]
+    Miss2 --> L2["L2 Hit 90%"]
+    Miss2 --> DB["L2 Miss → DB"]
 ```
 
 ### 계층별 부하 분석
@@ -712,11 +712,11 @@ API 응답에 `Cache-Control: max-age=3600`을 설정해놓고, 긴급 데이터
 ```mermaid
 graph LR
     subgraph "계층별 역할"
-        CDN["CDN\n정적자원, 공개API\n"]
-        GW["API Gateway\n인증, R"]
-        L1["L1 Caffeine\nHot 데"]
-        L2["L2 Redis\n공유 캐시\n전"]
-        DB["DB\n원본 데이터\n최후 방어선"]
+        CDN["CDN"]
+        GW["API Gateway"]
+        L1["L1 Caffeine"]
+        L2["L2 Redis"]
+        DB["DB"]
     end
     CDN --> GW --> L1 --> L2 --> DB
 ```

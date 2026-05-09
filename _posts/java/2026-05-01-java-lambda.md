@@ -368,7 +368,7 @@ graph TD
     A["메서드 레퍼런스 4종"] --> B["1️⃣ Class::staticM"]
     A --> C["2️⃣ instance::meth"]
     A --> D["3️⃣ Class::instanc"]
-    A --> E["4️⃣ Class::new\n생성"]
+    A --> E["4️⃣ Class::new"]
 ```
 
 ---
@@ -802,11 +802,11 @@ list.forEach(System.out::println);
 ```mermaid
 graph TD
     A["람다 핵심 포인트"] --> B["1️⃣ 함수형 인터페이스의 인스턴"]
-    A --> C["2️⃣ 타입 추론\n대입 컨텍스트"]
+    A --> C["2️⃣ 타입 추론"]
     A --> D["3️⃣ effectively fi"]
-    A --> E["4️⃣ this\n람다 안의 th"]
-    A --> F["5️⃣ 메서드 레퍼런스\n이름 있"]
+    A --> E["4️⃣ this"]
+    A --> F["5️⃣ 메서드 레퍼런스"]
     A --> G["6️⃣ java.util.func"]
-    A --> H["7️⃣ 내부 구현\ninvoked"]
-    A --> I["8️⃣ 성능\n비캡처링 람다는 재"]
+    A --> H["7️⃣ 내부 구현"]
+    A --> I["8️⃣ 성능"]
 ```

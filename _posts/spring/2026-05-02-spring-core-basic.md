@@ -200,14 +200,14 @@ public class MemberServiceImpl implements MemberService {
 
 ```mermaid
 graph TD
-    A["@Component\n(모든 컴포"] --> B["@Controller\n웹 요청"]
-    A --> C["@Service\n비즈니스 로직"]
-    A --> D["@Repository\n데이터 접"]
-    A --> E["@Configuration\n설정"]
+    A["@Component"] --> B["@Controller"]
+    A --> C["@Service"]
+    A --> D["@Repository"]
+    A --> E["@Configuration"]
     B -->|"추가 기능"| F["HandlerMapping에 등록"]
-    C -->|"추가 기능"| G["(의미론적 분류만)\n트랜잭션 경"]
+    C -->|"추가 기능"| G["(의미론적 분류만)"]
     D -->|"추가 기능"| H["DataAccessExceptio"]
-    E -->|"추가 기능"| I["CGLIB 프록시 적용\n싱글톤"]
+    E -->|"추가 기능"| I["CGLIB 프록시 적용"]
 ```
 
 `@Repository`가 특히 중요한 이유를 설명하겠습니다. JPA를 쓰다 보면 `EntityNotFoundException`, `PersistenceException` 등 JPA 전용 예외가 발생합니다. 만약 서비스 레이어에서 이 예외를 잡으려면 JPA에 종속된 코드를 작성해야 합니다. 나중에 MyBatis로 바꾸면 다른 예외가 나오므로 서비스 코드도 바꿔야 합니다.
@@ -308,12 +308,12 @@ public class OrderServiceImpl implements OrderService {
 ```mermaid
 flowchart TD
     A["DI 방법 선택"] --> B{"필수 의존관계?"}
-    B -->|"예 — 없으면 동작 불가"| C["1️⃣ 생성자 주입\nfinal"]
+    B -->|"예 — 없으면 동작 불가"| C["1️⃣ 생성자 주입"]
     B -->|"아니오 — 없어도 됨"| D{"런타임 변경 필요?"}
-    D -->|"예"| E["2️⃣ 수정자 주입\nrequir"]
+    D -->|"예"| E["2️⃣ 수정자 주입"]
     D -->|"아니오"| C
     C --> G["장점: final, 테스트 쉬움,"]
-    E --> H["장점: 선택적 의존관계,\n변경"]
+    E --> H["장점: 선택적 의존관계,"]
 ```
 
 ---
@@ -618,15 +618,15 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    A["XML 설정\n(ClassPath"] --> C["BeanDefinitionRead"]
+    A["XML 설정"] --> C["BeanDefinitionRead"]
     B["자바 @Configuration\"] --> C
-    D["@ComponentScan\n자동"] --> C
+    D["@ComponentScan"] --> C
     C --> E["BeanDefinition 생성\"]
-    E --> F["Spring Container\n"]
-    E --> G["beanClassName\n구현"]
-    E --> H["scope\nsingleton/p"]
-    E --> I["lazyInit\n지연 로딩 여부"]
-    E --> J["initMethodName\n초기"]
+    E --> F["Spring Container"]
+    E --> G["beanClassName"]
+    E --> H["scope"]
+    E --> I["lazyInit"]
+    E --> J["initMethodName"]
 ```
 
 이 추상화 덕분에 Spring 컨테이너는 XML이든 자바 코드든 상관없이 동일한 방식으로 빈을 처리합니다. 개발자 입장에서는 설정 방식을 언제든지 바꿀 수 있습니다.
@@ -774,10 +774,10 @@ IoC는 여러 곳에서 이미 사용되고 있는 범용적인 원리이다.
 ```mermaid
 graph TD
     IOC["IoC 제어의 역전"]
-    IOC --> SERVLET["서블릿\n개발자가 실행 시점을 제"]
-    IOC --> TEMPLATE["템플릿 메소드 패턴\n추상 메소드"]
-    IOC --> FRAMEWORK["프레임워크\n개발자 코드를 프레임"]
-    IOC --> SPRING["Spring IoC 컨테이너\n빈"]
+    IOC --> SERVLET["서블릿"]
+    IOC --> TEMPLATE["템플릿 메소드 패턴"]
+    IOC --> FRAMEWORK["프레임워크"]
+    IOC --> SPRING["Spring IoC 컨테이너"]
 ```
 
 서블릿의 `doGet()`, `doPost()`는 개발자가 직접 호출하지 않는다. 서블릿 컨테이너(Tomcat)가 적절한 시점에 호출한다. 프레임워크와 라이브러리의 차이도 IoC에 있다. 라이브러리는 개발자 코드가 라이브러리를 호출하지만, 프레임워크는 프레임워크가 개발자 코드를 호출한다.

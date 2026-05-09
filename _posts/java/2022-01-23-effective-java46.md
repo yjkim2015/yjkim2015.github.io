@@ -44,8 +44,8 @@ try (Stream<String> words = new Scanner(file).tokens()) {
 
 ```mermaid
 graph TD
-    A["핵심 수집기 5종"] --> B["toList()\n리스트로 수집"]
-    A --> C["toSet()\n집합으로 수집"]
+    A["핵심 수집기 5종"] --> B["toList()"]
+    A --> C["toSet()"]
     A --> D["toMap(keyMapper, v"]
     A --> E["groupingBy(classif"]
     A --> F["joining(delimiter)"]

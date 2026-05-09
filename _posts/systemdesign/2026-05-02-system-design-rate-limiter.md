@@ -32,7 +32,7 @@ Rate Limiter 없으면 어떤 일이 생기는가:
 
 ```mermaid
 graph LR
-    Refill["매초 2개 토큰 보충"] --> Bucket["버킷\n현재: 7개"]
+    Refill["매초 2개 토큰 보충"] --> Bucket["버킷"]
     Request["요청 도착"] --> Check{"토큰 있나?"}
     Check -->|"Yes: 1개 소비"| Allow["허용"]
     Check -->|"No: 0개"| Deny["429 Too Many Reque"]
@@ -142,16 +142,16 @@ class SlidingWindowCounter:
 ```mermaid
 graph TD
     User["사용자: 분당 100건 한도"]
-    Req1["요청 60건"] --> S1["서버 1\n카운터: 60"]
-    Req2["요청 60건"] --> S2["서버 2\n카운터: 60"]
-    Problem["문제: 실제 120건인데\n각 서"]
+    Req1["요청 60건"] --> S1["서버 1"]
+    Req2["요청 60건"] --> S2["서버 2"]
+    Problem["문제: 실제 120건인데"]
 ```
 
 **해결: 중앙화된 Redis**로 카운터를 공유한다.
 
 ```mermaid
 graph TD
-    S1["서버 1"] --> R["Redis 클러스터\n중앙 카운터"]
+    S1["서버 1"] --> R["Redis 클러스터"]
     S2["서버 2"] --> R
     S3["서버 3"] --> R
     R --> Count["user_id별 통합 카운터"]
@@ -209,10 +209,10 @@ Retry-After: 60              → 재시도 가능까지 대기 초
 
 ```mermaid
 graph TD
-    Req["요청"] --> L1["L1: IP 레벨\n초당 100건"]
-    L1 --> L2["L2: API 키 레벨\n시간당"]
-    L2 --> L3["L3: 엔드포인트별\n/login"]
-    L3 --> L4["L4: 사용자 티어\n유료 플랜"]
+    Req["요청"] --> L1["L1: IP 레벨"]
+    L1 --> L2["L2: API 키 레벨"]
+    L2 --> L3["L3: 엔드포인트별"]
+    L3 --> L4["L4: 사용자 티어"]
     L4 --> API["API 서버"]
 ```
 
@@ -238,11 +238,11 @@ ENDPOINT_LIMITS = {
 
 ```mermaid
 graph TD
-    DDoS["봇넷\n1만 IP × 초당 100"] --> CF["Cloudflare\n네트워크 레"]
-    CF --> WAF["AWS WAF\nL7 규칙 매칭"]
-    WAF --> LB["로드밸런서\n연결 수 제한"]
-    LB --> AppRL["애플리케이션\nRate Limit"]
-    AppRL --> API["API 서버\n정상 트래픽만 도달"]
+    DDoS["봇넷"] --> CF["Cloudflare"]
+    CF --> WAF["AWS WAF"]
+    WAF --> LB["로드밸런서"]
+    LB --> AppRL["애플리케이션"]
+    AppRL --> API["API 서버"]
 ```
 
 **자동 IP 차단:**

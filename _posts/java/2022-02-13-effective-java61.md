@@ -92,9 +92,9 @@ long sum = 0L;
 
 ```mermaid
 graph TD
-    A["박싱된 기본 타입 사용 시 위험"] --> B["== 비교\n객체 참조 비교\n값"]
-    A --> C["null 언박싱\nNullPoin"]
-    A --> D["반복 박싱/언박싱\n성능 저하\n"]
+    A["박싱된 기본 타입 사용 시 위험"] --> B["== 비교"]
+    A --> C["null 언박싱"]
+    A --> D["반복 박싱/언박싱"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#ff6b6b,color:#fff
     style D fill:#f39c12,color:#fff

@@ -162,9 +162,9 @@ http
 ```mermaid
 flowchart TD
     A["HTTP 요청"] --> B["CsrfFilter"]
-    B --> C{"GET, HEAD, TRACE,\nOPTIONS 요청?"}
-    C -- "예 (읽기 전용)" --> D["CSRF 검증 생략\n(상태 변경"]
-    C -- "아니오 (POST, PUT, DELETE, PATCH)" --> E["요청에서 CSRF 토큰 추출\n("]
+    B --> C{"GET, HEAD, TRACE,"}
+    C -- "예 (읽기 전용)" --> D["CSRF 검증 생략"]
+    C -- "아니오 (POST, PUT, DELETE, PATCH)" --> E["요청에서 CSRF 토큰 추출"]
     E --> F["세션에 저장된 토큰과 비교"]
     F --> G{"일치?"}
     G -- "예" --> H["다음 필터로 진행"]

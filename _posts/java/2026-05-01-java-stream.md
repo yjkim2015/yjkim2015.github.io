@@ -74,7 +74,7 @@ graph LR
     B["filter → map → fla"]
   end
   subgraph "3단계: 최종 연산 (Terminal)"
-    C["collect / count\nf"]
+    C["collect / count"]
   end
   A -->|"Stream&lt;T&gt; 반환"| B
   B -->|"스트림 아님\n즉시 실행 (eag"| C
@@ -707,7 +707,7 @@ Stream<Integer> sequential = numbers.parallelStream().sequential();
 ```mermaid
 graph TD
   subgraph "ForkJoinPool 병렬 처리"
-    DATA["전체 데이터"] -->|분할| T1["Thread 1\n부분합"] & T2["Thread 2\n부분합"] & T3["Thread 3\n부분합"]
+    DATA["전체 데이터"] -->|분할| T1["Thread 1"] & T2["Thread 2"] & T3["Thread 3"]
     T1 & T2 & T3 -->|합산| FINAL["최종 결과"]
   end
 ```

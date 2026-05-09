@@ -122,8 +122,8 @@ private static long sum() {
 
 ```mermaid
 graph LR
-    A["long i = 1"] -->|"오토박싱"| B["Long sum에 더할 때\n새"]
-    B -->|"루프 21억 회"| C["Long 객체 21억 개\nGC"]
+    A["long i = 1"] -->|"오토박싱"| B["Long sum에 더할 때"]
+    B -->|"루프 21억 회"| C["Long 객체 21억 개"]
     style C fill:#ff6b6b,color:#fff
 ```
 
@@ -178,12 +178,12 @@ public class Period {
 
 ```mermaid
 graph TD
-    A["불필요한 객체 생성 패턴 3가지"] --> B["String 리터럴 대신\nnew"]
-    A --> C["비싼 객체 반복 생성\nPatte"]
-    A --> D["박싱 타입으로 인한\n오토박싱 반"]
-    B --> B1["해결: 리터럴 사용\nString"]
+    A["불필요한 객체 생성 패턴 3가지"] --> B["String 리터럴 대신"]
+    A --> C["비싼 객체 반복 생성"]
+    A --> D["박싱 타입으로 인한"]
+    B --> B1["해결: 리터럴 사용"]
     C --> C1["해결: static final로\"]
-    D --> D1["해결: 기본 타입 우선 사용\nl"]
+    D --> D1["해결: 기본 타입 우선 사용"]
 ```
 
 **핵심 규칙:**

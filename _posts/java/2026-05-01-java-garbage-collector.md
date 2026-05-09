@@ -156,9 +156,9 @@ graph LR
 ```mermaid
 graph LR
     subgraph "Young Generation"
-        Eden["Eden (전체의 약 80%)\n"]
+        Eden["Eden (전체의 약 80%)"]
         S0["S0 (Survivor From)"]
-        S1["S1 (Survivor To)\n"]
+        S1["S1 (Survivor To)"]
     end
     TLAB["TLAB: Thread-Local"]
     Eden --> S0
@@ -171,7 +171,7 @@ graph LR
 graph TD
     MinorGC["Minor GC (Young GC"]
     MajorGC["Major GC (Old GC)\"]
-    FullGC["Full GC\n트리거: 힙 전체"]
+    FullGC["Full GC"]
     MinorGC -->|"STW 짧음"| MajorGC
     MajorGC -->|"STW 더 김"| FullGC
 ```
@@ -294,7 +294,7 @@ graph TD
         R5["H (Humongous)"]
         R6["빈 Region"]
     end
-    LEGEND["E: Eden Region\nS:"]
+    LEGEND["E: Eden Region"]
 ```
 
 **G1 GC 동작 단계**:
@@ -537,7 +537,7 @@ graph TD
 
 ```mermaid
 graph TD
-    LOG["GC 로그 분석\nGC(42) P"]
+    LOG["GC 로그 분석"]
     LOG --> A["GC(42): 42번째 GC"]
     LOG --> B["Pause Young: Minor"]
     LOG --> C["512M→256M: 힙 감소"]
@@ -573,7 +573,7 @@ graph TD
 
 ```mermaid
 graph LR
-    UPLOAD["GC 로그 파일 업로드\nhttp"] --> ANALYZE["자동 분석"]
+    UPLOAD["GC 로그 파일 업로드"] --> ANALYZE["자동 분석"]
     ANALYZE --> R1["GC 발생 빈도 및 패턴"]
     ANALYZE --> R2["STW 시간 분포"]
     ANALYZE --> R3["힙 사용량 추이"]
@@ -626,8 +626,8 @@ public class BoundedCache {
 
 ```mermaid
 graph TD
-    SMALL["힙이 너무 작음\nGC 빈도 증가"]
-    LARGE["힙이 너무 큼\nGC 당 STW"]
+    SMALL["힙이 너무 작음"]
+    LARGE["힙이 너무 큼"]
     OPT["권장: 실제 워킹셋의 2~3배 설"]
     SMALL --> OPT
     LARGE --> OPT
@@ -811,10 +811,10 @@ jstat -gcutil <pid> 2000  # 2초 간격
 ```mermaid
 graph TD
     BATCH["배치 처리 / 데이터 파이프라인\"]
-    WEB["일반 웹 서비스 API\n(균형형"]
-    LOWLAT["저지연 서비스\n(실시간 거래,"]
-    SHEN["저지연 + 범용\n(ZGC보다 C"]
-    MICRO["마이크로서비스 / 컨테이너\n(소"]
+    WEB["일반 웹 서비스 API"]
+    LOWLAT["저지연 서비스"]
+    SHEN["저지연 + 범용"]
+    MICRO["마이크로서비스 / 컨테이너"]
 ```
 
 ### 선택 플로우차트
@@ -851,7 +851,7 @@ graph TD
 ```mermaid
 graph TD
     S1["1. 기본 설정으로 부하 테스트"]
-    S2["2. GC 로그 수집\n-Xlog"]
+    S2["2. GC 로그 수집"]
     S3["3. GCEasy 또는 GCVie"]
     S4["4. 파라미터 조정 → 재측정 반"]
     S5["5. 안정화 후 운영 배포"]
@@ -1045,10 +1045,10 @@ public class OffHeapCache {
 graph TD
     subgraph "100K TPS GC 전략"
         Z["ZGC / Generational"]
-        OH["Off-heap 캐시\nDirec"]
-        OBJ["객체 풀링\nApache Comm"]
+        OH["Off-heap 캐시"]
+        OBJ["객체 풀링"]
         VAL["Value Objects 최소화\"]
-        MON["실시간 모니터링\nJFR + Pr"]
+        MON["실시간 모니터링"]
     end
     Z -->|"STW 1ms 이하"| MON
     OH -->|"GC 압력 감소"| MON

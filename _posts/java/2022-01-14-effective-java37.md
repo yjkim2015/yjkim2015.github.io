@@ -76,10 +76,10 @@ System.out.println(plantsByLifeCycle);
 
 ```mermaid
 graph TD
-    A["EnumMap 장점"] --> B["키가 열거 타입\n타입 안전 보장"]
-    A --> C["내부는 배열로 구현\n성능 동등"]
+    A["EnumMap 장점"] --> B["키가 열거 타입"]
+    A --> C["내부는 배열로 구현"]
     A --> D["toString이 키 이름 제공\"]
-    A --> E["열거 타입 순서 변경\n영향 없음"]
+    A --> E["열거 타입 순서 변경"]
     style A fill:#51cf66,color:#fff
 ```
 
@@ -188,8 +188,8 @@ public enum Phase {
 graph TD
     A["새 상태 추가 시"] --> B["ordinal 배열 방식"]
     A --> C["EnumMap 방식"]
-    B --> D["Phase에 1개\nTransit"]
-    C --> E["Phase에 1개\nTransit"]
+    B --> D["Phase에 1개"]
+    C --> E["Phase에 1개"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#51cf66,color:#fff
 ```

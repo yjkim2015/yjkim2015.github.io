@@ -25,9 +25,9 @@ date: 2026-05-01
 ```mermaid
 graph TD
     subgraph "TraceId: abc123 (하나의 주문 요청)"
-        A["API Gateway\nSpanI"]
-        B["Order Service\nSpa"]
-        C["Payment Service\nS"]
+        A["API Gateway"]
+        B["Order Service"]
+        C["Payment Service"]
         D["Inventory Service\"]
         E["Notification Servi"]
     end
