@@ -544,3 +544,17 @@ cat /proc/net/snmp | grep Tcp
 tcpdump -i eth0 'tcp[tcpflags] & (tcp-syn|tcp-fin) != 0'
 tcpdump -i eth0 port 8080 -w capture.pcap
 ```
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **TIME_WAIT 상태 소켓 고갈** — 짧은 연결을 대량으로 생성하는 서비스에서 TIME_WAIT 소켓이 수만 개 쌓여 포트가 고갈된다. `SO_REUSEADDR` 옵션이나 `net.ipv4.tcp_tw_reuse=1` 커널 파라미터를 적용하고, 가능하면 커넥션을 재사용(Keep-Alive)해야 한다.
+
+2. **TCP Keep-Alive 미설정으로 좀비 연결 방치** — 중간 방화벽이 idle 연결을 끊어도 애플리케이션이 이를 감지하지 못해 죽은 연결에 계속 쓰기를 시도한다. `SO_KEEPALIVE`와 `tcp_keepalive_time`을 설정해 좀비 연결을 주기적으로 감지해야 한다.
+
+3. **UDP 수신 버퍼 크기 미조정으로 패킷 유실** — 고속 UDP 스트림에서 수신 버퍼가 작으면 OS가 패킷을 드롭한다. `/proc/sys/net/core/rmem_max`와 `SO_RCVBUF`를 충분히 키워야 한다.
+
+4. **Nagle 알고리즘이 켜진 채로 실시간 통신 구현** — TCP는 기본적으로 작은 패킷을 모아 보내는 Nagle 알고리즘을 적용한다. 게임, 채팅처럼 즉각 전송이 필요한 경우 `TCP_NODELAY` 옵션으로 Nagle을 비활성화해야 한다.
+
+5. **SYN Flood 방어 없이 공개 서버 운영** — 악의적인 클라이언트가 SYN 패킷만 보내 서버의 연결 대기 큐를 소진시킨다. `net.ipv4.tcp_syncookies=1`로 SYN Cookie를 활성화하고, iptables나 클라우드 WAF로 비정상 SYN을 차단해야 한다.
