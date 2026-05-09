@@ -85,7 +85,6 @@ sequenceDiagram
     participant FR as FileReader("데이터 읽기")
     participant EN as Encryptor("암호화")
     participant FW as FileWriter("파일 쓰기")
-
     FC->>FR: 1️⃣ read() 메시지 전송
     FR-->>FC: byte[] data 반환
     FC->>EN: 2️⃣ encrypt(data) 메시지 전송
@@ -254,16 +253,10 @@ graph TD
 
 ```mermaid
 graph TD
-    A["객체지향 핵심 개념"] --> B["객체\n기능을 제공하는 단위"]
-    A --> C["책임\n객체가 담당하는 기능의 범위"]
-    A --> D["의존\n다른 객체 생성/호출/전달받기"]
-    A --> E["캡슐화\n내부 구현 감추기"]
-    B --> B1["시그니처: 이름+파라미터+반환타입"]
-    B --> B2["메시지: 메서드 호출 = 메시지 전송"]
-    C --> C1["SRP: 책임은 작을수록 좋다"]
-    D --> D1["순환 의존 피하기 (DIP)"]
-    E --> E1["Tell, Don't Ask"]
-    E --> E2["데미테르의 법칙"]
+    A["객체지향"] --> B["객체\n시그니처·메시지"]
+    A --> C["책임\nSRP: 작을수록 좋다"]
+    A --> D["의존\n순환 피하기 DIP"]
+    A --> E["캡슐화\nTell Don't Ask\n데미테르 법칙"]
 ```
 
 ---

@@ -36,7 +36,6 @@ sequenceDiagram
     participant App as 애플리케이션
     participant GC as GC
     participant FZ as finalizer 큐
-
     App->>App: 객체 참조 해제 (obj = null)
     Note over App: 여기서 finalizer 실행? NO!
     App->>GC: GC 발생 (언제? 모름)

@@ -22,7 +22,6 @@ graph LR
     A[개념적 모델링<br>무엇을 저장할까?<br>엔티티 식별] -->
     B[논리적 모델링<br>어떻게 구조화할까?<br>속성, 관계, 정규화] -->
     C[물리적 모델링<br>어떻게 구현할까?<br>테이블, 인덱스, 파티션]
-
     style A fill:#AED6F1
     style B fill:#A9DFBF
     style C fill:#F9E79F
@@ -62,40 +61,11 @@ graph LR
 
 ```mermaid
 erDiagram
-    CUSTOMER {
-        bigint customer_id PK
-        varchar name
-        varchar email
-        varchar phone
-        datetime created_at
-    }
-    ORDER {
-        bigint order_id PK
-        bigint customer_id FK
-        varchar status
-        decimal total_amount
-        datetime ordered_at
-    }
-    ORDER_ITEM {
-        bigint order_item_id PK
-        bigint order_id FK
-        bigint product_id FK
-        int quantity
-        decimal unit_price
-    }
-    PRODUCT {
-        bigint product_id PK
-        bigint category_id FK
-        varchar name
-        decimal price
-        int stock
-    }
-    CATEGORY {
-        bigint category_id PK
-        bigint parent_id FK
-        varchar name
-    }
-
+    CUSTOMER { bigint customer_id PK }
+    ORDER { bigint order_id PK }
+    ORDER_ITEM { bigint order_item_id PK }
+    PRODUCT { bigint product_id PK }
+    CATEGORY { bigint category_id PK }
     CUSTOMER ||--o{ ORDER : "places"
     ORDER ||--|{ ORDER_ITEM : "contains"
     PRODUCT ||--o{ ORDER_ITEM : "included in"
@@ -189,22 +159,13 @@ CREATE TABLE enrollments (
 
 ```mermaid
 erDiagram
-    ORDER {
-        bigint order_id PK
-    }
-    ORDER_ITEM_식별 {
-        bigint order_id PK_FK
-        int item_seq PK
-        string 설명 "부모PK가 자식PK에 포함"
-    }
-    DELIVERY_비식별 {
-        bigint delivery_id PK
-        bigint order_id FK
-        string 설명 "자체PK 독립적"
-    }
-
-    ORDER ||--|{ ORDER_ITEM_식별 : "식별관계 (실선)"
-    ORDER ||--o{ DELIVERY_비식별 : "비식별관계 (점선)"
+    ORDER { bigint order_id PK }
+    ORDER_ITEM { bigint order_id PK_FK
+        int item_seq PK }
+    DELIVERY { bigint delivery_id PK
+        bigint order_id FK }
+    ORDER ||--|{ ORDER_ITEM : "식별관계"
+    ORDER ||--o{ DELIVERY : "비식별관계"
 ```
 
 ### 식별 관계 (Identifying Relationship)

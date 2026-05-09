@@ -103,22 +103,15 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant S1 as "Sentinel 1 (감시자)"
-    participant S23 as "Sentinel 2,3 (동료)"
-    participant M as "Master (다운)"
-    participant R1 as "Replica 1 (후보)"
-    participant C as "Client"
-
-    Note over M: 💀 마스터 다운
-    S1->>M: PING (응답 없음)
-    Note over S1: 1단계. SDOWN 선언 (나 혼자 판단)
-    S1->>S23: "마스터가 안 응답해, 너희도 그래?"
-    S23->>M: PING (응답 없음)
-    Note over S1,S23: 2단계. ODOWN 선언 (quorum 이상 동의)
-    Note over S1: 3단계. 페일오버 리더 투표
-    S1->>R1: REPLICAOF NO ONE (4단계. 승격)
-    Note over R1: 새 마스터로 승격
-    S1-->>C: 5단계. 새 마스터 주소 알림
+    participant S1 as Sentinel1
+    participant S23 as Sentinel2,3
+    participant R1 as Replica1
+    participant C as Client
+    S1->>S1: SDOWN 선언(PING 무응답)
+    S1->>S23: quorum 확인 요청
+    Note over S1,S23: ODOWN 선언
+    S1->>R1: REPLICAOF NO ONE(승격)
+    S1-->>C: 새 마스터 주소 알림
 ```
 
 **SDOWN vs ODOWN**:
@@ -256,21 +249,16 @@ redis-cli --cluster create \
 
 ```mermaid
 sequenceDiagram
-    participant MA as "마스터 A (다운)"
-    participant MB as "마스터 B"
-    participant MC as "마스터 C"
-    participant RA as "레플리카 A (후보)"
-
-    Note over MA: 💀 마스터 A 다운
-    MB->>MA: PING (응답 없음)
-    MC->>MA: PING (응답 없음)
-    Note over MB,MC: 1. 과반수 마스터 동의 → FAIL 선언
-    RA->>MB: "나를 마스터로 선출해줘" (투표 요청)
-    RA->>MC: "나를 마스터로 선출해줘"
-    MB-->>RA: 투표 승인
-    MC-->>RA: 투표 승인
-    Note over RA: 2. 과반수 승인 → 새 마스터 승격
-    Note over RA: 3. 슬롯 0~5460 담당 인계
+    participant MB as MasterB
+    participant MC as MasterC
+    participant RA as ReplicaA(후보)
+    MB->>MB: MasterA PING 무응답→FAIL 선언
+    MC->>MC: 동의
+    RA->>MB: 투표 요청
+    RA->>MC: 투표 요청
+    MB-->>RA: 승인
+    MC-->>RA: 승인
+    Note over RA: 새 마스터 승격, 슬롯 0~5460 인계
 ```
 
 ---

@@ -59,12 +59,10 @@ sequenceDiagram
     participant Dev as 개발자
     participant Javac as 컴파일러
     participant Result as 결과
-
     Dev->>Javac: javac Main.java Utensil.java
     Javac->>Javac: Main.java 처리 → Utensil 참조 발견
     Javac->>Javac: Utensil.java 로드 (pan, cake)
     Javac-->>Result: 출력: pancake
-
     Dev->>Javac: javac Dessert.java Main.java
     Javac->>Javac: Dessert.java 처리 → pot, pie 로드
     Javac->>Javac: Main.java 처리

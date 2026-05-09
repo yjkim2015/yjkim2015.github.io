@@ -62,7 +62,6 @@ classDiagram
     class "Adaptee (기존 클래스)" {
         +specificRequest()
     }
-
     "Target 인터페이스" <|.. "Adapter"
     "Adapter" --> "Adaptee (기존 클래스)" : "위임"
 ```
@@ -99,34 +98,15 @@ public class PaymentAdapter implements NewPayment {
 
 ```mermaid
 classDiagram
-    class "Remote (추상화)" {
-        -device: Device
-        +togglePower()
-        +volumeUp()
-    }
-    class "BasicRemote" {
-        +togglePower()
-        +volumeUp()
-    }
-    class "Device (구현 인터페이스)" {
-        +isEnabled()
+    class Remote { -device: Device
+        +togglePower() }
+    class Device { <<interface>>
         +enable()
-        +getVolume()
-        +setVolume()
-    }
-    class "TV" {
-        +isEnabled()
-        +enable()
-    }
-    class "Radio" {
-        +isEnabled()
-        +enable()
-    }
-
-    "Remote (추상화)" <|-- "BasicRemote"
-    "Device (구현 인터페이스)" <|.. "TV"
-    "Device (구현 인터페이스)" <|.. "Radio"
-    "Remote (추상화)" --> "Device (구현 인터페이스)" : "브릿지"
+        +setVolume() }
+    Remote <|-- BasicRemote
+    Device <|.. TV
+    Device <|.. Radio
+    Remote --> Device
 ```
 
 Bridge 패턴은 추상화 계층(리모컨)과 구현 계층(기기 종류)을 **독립적으로 확장** 가능하게 분리한다. 리모컨 종류를 추가해도, 기기 종류를 추가해도 서로 영향을 주지 않는다.
@@ -168,32 +148,14 @@ FileSystemItem root = new Directory("project");
 
 ```mermaid
 classDiagram
-    class "Coffee (컴포넌트)" {
+    class Coffee { <<interface>>
         +getCost(): int
-        +getDescription(): String
-    }
-    class "SimpleCoffee (Leaf)" {
-        +getCost(): int
-        +getDescription(): String
-    }
-    class "CoffeeDecorator (추상 데코레이터)" {
-        -coffee: Coffee
-        +getCost(): int
-        +getDescription(): String
-    }
-    class "MilkDecorator" {
-        +getCost(): int
-        +getDescription(): String
-    }
-    class "SugarDecorator" {
-        +getCost(): int
-        +getDescription(): String
-    }
-
-    "Coffee (컴포넌트)" <|.. "SimpleCoffee (Leaf)"
-    "Coffee (컴포넌트)" <|.. "CoffeeDecorator (추상 데코레이터)"
-    "CoffeeDecorator (추상 데코레이터)" <|-- "MilkDecorator"
-    "CoffeeDecorator (추상 데코레이터)" <|-- "SugarDecorator"
+        +getDescription(): String }
+    class CoffeeDecorator { -coffee: Coffee }
+    Coffee <|.. SimpleCoffee
+    Coffee <|.. CoffeeDecorator
+    CoffeeDecorator <|-- MilkDecorator
+    CoffeeDecorator <|-- SugarDecorator
 ```
 
 ```java
@@ -234,7 +196,6 @@ sequenceDiagram
     participant L as "LightSystem"
     participant S as "SecuritySystem"
     participant A as "AirConditioner"
-
     C->>F: "1. sleepMode() 호출"
     F->>L: "2. turnOffAllLights()"
     F->>S: "3. lockAllDoors()"
@@ -322,22 +283,14 @@ Spring의 `@Transactional`, `@Cacheable`이 동적 프록시로 동작한다.
 
 ```mermaid
 flowchart TD
-    Q{"어떤 문제인가?"}
-    Q --> A["호환되지 않는 인터페이스 연결"]
-    Q --> B["객체에 기능을 동적으로 추가"]
-    Q --> C["복잡한 시스템을 단순하게 사용"]
-    Q --> D["트리 구조로 객체 관리"]
-    Q --> E["대량 객체 메모리 절약"]
-    Q --> F["객체 접근 제어 / 부가 기능"]
-    Q --> G["추상화와 구현을 독립 확장"]
-
-    A --> A1["Adapter"]
-    B --> B1["Decorator"]
-    C --> C1["Facade"]
-    D --> D1["Composite"]
-    E --> E1["Flyweight"]
-    F --> F1["Proxy"]
-    G --> G1["Bridge"]
+    Q{"어떤 문제?"}
+    Q --> A1["Adapter: 인터페이스 연결"]
+    Q --> B1["Decorator: 기능 동적 추가"]
+    Q --> C1["Facade: 복잡계 단순화"]
+    Q --> D1["Composite: 트리구조 관리"]
+    Q --> E1["Flyweight: 객체 메모리절약"]
+    Q --> F1["Proxy: 접근제어/부가기능"]
+    Q --> G1["Bridge: 추상화·구현 독립확장"]
 ```
 
 ---

@@ -76,7 +76,6 @@ sequenceDiagram
     participant Client as 클라이언트
     participant Car as Car
     participant Engine as Engine (인터페이스)
-
     Client->>Engine: 1️⃣ new GasEngine() 또는 new ElectricEngine()
     Client->>Car: 2️⃣ new Car(engine) — 외부에서 주입
     Car->>Engine: 3️⃣ engine.start() — 어떤 구현이든 동작
@@ -199,16 +198,11 @@ public class CarService {
 
 ```mermaid
 graph TD
-    A["의존 객체 주입 핵심"] --> B["직접 생성(new) 금지\n외부에서 주입받기"]
-    A --> C["장점"]
-    A --> D["주입 방식"]
-    C --> C1["유연성: 구현체 교체 용이"]
-    C --> C2["재사용성: 다양한 환경에서 사용"]
-    C --> C3["테스트 용이성: Mock 주입 가능"]
-    D --> D1["생성자 주입 (권장)"]
-    D --> D2["정적 팩토리 주입"]
-    D --> D3["빌더 주입"]
-    D --> D4["Supplier 팩토리 주입"]
+    A["의존 객체 주입\nnew 직접 생성 금지"] --> B["장점\n유연성·재사용성·테스트"]
+    A --> C["주입 방식"]
+    C --> D["생성자 주입 권장"]
+    C --> E["정적 팩토리 / 빌더"]
+    C --> F["Supplier 팩토리"]
 ```
 
 > 클래스가 하나 이상의 자원에 의존하고 그 자원이 동작에 영향을 준다면, 자원을 직접 생성하지 마세요. 생성자(또는 팩토리/빌더)에 자원을 넘겨받는 의존 객체 주입을 사용하면 유연성·재사용성·테스트 용이성이 크게 향상됩니다.

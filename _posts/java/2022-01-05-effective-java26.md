@@ -57,10 +57,8 @@ graph TD
     A["Collection stamps (로 타입)"] --> B["stamps.add(new Coin())"]
     B --> C["경고만 출력\n컴파일 성공"]
     C --> D["런타임: ClassCastException\n원인 코드와 오류 위치가 멀리 떨어짐"]
-
     E["Collection<Stamp> stamps"] --> F["stamps.add(new Coin())"]
     F --> G["컴파일 오류!\n즉시 발견"]
-
     style D fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff
 ```

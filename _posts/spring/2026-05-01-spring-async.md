@@ -28,7 +28,6 @@ sequenceDiagram
     participant P as "Proxy"
     participant Q as "TaskExecutor 스레드 풀"
     participant M as "실제 메서드"
-
     C->>P: sendWelcomeEmail(userId) 호출
     P->>Q: 1️⃣ 작업 큐에 제출
     P-->>C: 2️⃣ 즉시 반환 (비동기)

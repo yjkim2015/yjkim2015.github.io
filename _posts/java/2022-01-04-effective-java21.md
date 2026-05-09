@@ -59,7 +59,6 @@ sequenceDiagram
     participant Thread2 as 스레드 2
     participant SC as SynchronizedCollection
     participant Lock as Lock 객체
-
     Note over SC: 모든 메서드는 락 객체로 동기화
     Thread1->>SC: add("A") → synchronized(lock)
     Thread2->>SC: removeIf(pred) → ???

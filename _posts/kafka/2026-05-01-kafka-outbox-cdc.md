@@ -34,22 +34,8 @@ public void placeOrder(Order order) {
 
 ```mermaid
 graph TD
-    subgraph "시나리오 1: DB 성공 + Kafka 실패"
-        S1A["DB에 주문 저장 성공"]
-        S1B["Kafka 발행 실패\n(네트워크 오류, 브로커 장애)"]
-        S1C["DB에는 주문 있음\n다른 서비스는 주문 모름\n→ 데이터 불일치"]
-        S1A --> S1B --> S1C
-    end
-
-    subgraph "시나리오 2: Kafka 성공 + DB 실패"
-        S2A["Kafka 발행 성공"]
-        S2B["DB 커밋 실패 (롤백)"]
-        S2C["DB에는 주문 없음\n다른 서비스는 주문 처리 시작\n→ 유령 이벤트"]
-        S2A --> S2B --> S2C
-    end
-
-    style S1C fill:#e74c3c,color:#fff
-    style S2C fill:#e74c3c,color:#fff
+    S1A["DB 저장 성공"] --> S1B["Kafka 발행 실패"] --> S1C["데이터 불일치"]
+    S2A["Kafka 발행 성공"] --> S2B["DB 커밋 실패"] --> S2C["유령 이벤트"]
 ```
 
 분산 트랜잭션(2PC)으로 해결하려 하면 성능 문제와 가용성 감소를 초래한다. Kafka는 XA 트랜잭션을 지원하지 않으므로 2PC 자체가 적용 불가능하다.
@@ -64,22 +50,9 @@ graph TD
 
 ```mermaid
 flowchart TD
-    subgraph "Application (단일 트랜잭션)"
-        APP["@Transactional\norderRepository.save(order)\noutboxRepository.save(event)"]
-        NOTE["두 INSERT가 같은 트랜잭션\n→ 둘 다 성공 또는 둘 다 실패"]
-    end
-    APP --> NOTE
-
-    subgraph "Message Relay (별도 프로세스)"
-        RELAY["outbox 테이블 폴링 또는 CDC\n→ Kafka 발행\n→ outbox 레코드 삭제/마킹"]
-    end
-
-    NOTE -->|"DB 커밋 완료"| RELAY
-    RELAY -->|"발행"| KAFKA["Kafka Topic"]
-
-    style APP fill:#3498db,color:#fff
-    style RELAY fill:#e67e22,color:#fff
-    style KAFKA fill:#2ecc71,color:#fff
+    APP["@Transactional: order저장+outbox저장(원자적)"]
+    APP -->|"DB 커밋"| RELAY["Relay: outbox 폴링/CDC → Kafka 발행"]
+    RELAY --> KAFKA["Kafka Topic"]
 ```
 
 ### Outbox 테이블 스키마
@@ -191,10 +164,8 @@ flowchart LR
     DB["MySQL / PostgreSQL\n(binlog / WAL 생성)"]
     DEB["Debezium Connector\n(binlog/WAL 실시간 읽기)"]
     KAFKA["Kafka Topic\n(변경 이벤트 스트림)"]
-
     DB -->|"binlog / WAL"| DEB
     DEB -->|"이벤트 발행"| KAFKA
-
     style DB fill:#3498db,color:#fff
     style DEB fill:#e67e22,color:#fff
     style KAFKA fill:#2ecc71,color:#fff
@@ -244,7 +215,6 @@ flowchart TD
     end
     DB["MySQL / PostgreSQL"] -->|"binlog / WAL"| READER
     SMT -->|"이벤트 발행"| KAFKA["Kafka Topic"]
-
     style DB fill:#3498db,color:#fff
     style KAFKA fill:#2ecc71,color:#fff
 ```
@@ -310,24 +280,11 @@ outbox INSERT (aggregate_type='Payment')
 
 ```mermaid
 flowchart TD
-    START["Outbox 방식 선택"]
-    Q1{"서비스 규모 / 처리량"}
-    Q2{"레이턴시 요구"}
-
-    POLL["Outbox 폴링 방식\n단순하고 충분\n소규모 서비스, 낮은 처리량"]
-    CDC["Outbox + Debezium CDC\n낮은 레이턴시, 높은 처리량\nKafka Connect 운영 필요"]
-    LEGACY["직접 CDC\n레거시 DB, 코드 변경 불가\n이벤트 스키마 통제 어려움 주의"]
-
-    START --> Q1
-    Q1 -->|"소규모"| POLL
-    Q1 -->|"대규모"| Q2
-    Q2 -->|"수백ms 허용"| POLL
-    Q2 -->|"수십ms 요구"| CDC
-    Q1 -->|"코드 변경 불가"| LEGACY
-
-    style POLL fill:#2ecc71,color:#fff
-    style CDC fill:#3498db,color:#fff
-    style LEGACY fill:#e67e22,color:#fff
+    Q1{"서비스 규모"} -->|소규모| POLL["Outbox 폴링"]
+    Q1 -->|코드변경불가| LEGACY["직접 CDC"]
+    Q1 -->|대규모| Q2{"레이턴시"}
+    Q2 -->|수백ms 허용| POLL
+    Q2 -->|수십ms| CDC["Outbox + Debezium CDC"]
 ```
 
 ---
@@ -362,13 +319,11 @@ sequenceDiagram
     participant OS as "주문 서비스"
     participant IS as "재고 서비스"
     participant PS as "결제 서비스"
-
     OS ->> OS: "주문 저장 + OrderPlaced 이벤트 Outbox 저장"
     OS ->> IS: "OrderPlaced (Kafka)"
     IS ->> IS: "재고 예약 + StockReserved 이벤트 Outbox 저장"
     IS ->> PS: "StockReserved (Kafka)"
     PS ->> PS: "결제 처리 + PaymentCompleted 이벤트 Outbox 저장"
-
     Note over OS,PS: 각 서비스는 자신의 DB 트랜잭션만 관리<br>보상 트랜잭션도 동일한 Outbox 패턴으로 발행
 ```
 

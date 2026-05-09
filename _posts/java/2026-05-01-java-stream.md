@@ -706,17 +706,9 @@ Stream<Integer> sequential = numbers.parallelStream().sequential();
 
 ```mermaid
 graph TD
-  subgraph "ForkJoinPool.commonPool() 병렬 처리"
-    DATA["전체 데이터 [1..1,000,000]"]
-    DATA -->|"1. 분할"| T1["Thread 1\n[1..250k]"]
-    DATA -->|"1. 분할"| T2["Thread 2\n[250k..500k]"]
-    DATA -->|"1. 분할"| T3["Thread 3\n[500k..750k]"]
-    DATA -->|"1. 분할"| T4["Thread 4\n[750k..1M]"]
-    T1 -->|"2. 처리"| R1["부분합 1"]
-    T2 -->|"2. 처리"| R2["부분합 2"]
-    T3 -->|"2. 처리"| R3["부분합 3"]
-    T4 -->|"2. 처리"| R4["부분합 4"]
-    R1 & R2 & R3 & R4 -->|"3. 합산 (combine)"| FINAL["최종 결과"]
+  subgraph "ForkJoinPool 병렬 처리"
+    DATA["전체 데이터"] -->|분할| T1["Thread 1\n부분합"] & T2["Thread 2\n부분합"] & T3["Thread 3\n부분합"]
+    T1 & T2 & T3 -->|합산| FINAL["최종 결과"]
   end
 ```
 

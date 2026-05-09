@@ -64,22 +64,16 @@ System.out.println(s.getAddCount());  // 예상: 3, 실제: 6!
 
 ```mermaid
 sequenceDiagram
-    participant Client as 클라이언트
+    participant C as Client
     participant IHS as InstrumentedHashSet
-    participant HS as HashSet (상위)
-    participant AC as AbstractCollection.addAll
-
-    Client->>IHS: addAll(["A","B","C"])
-    IHS->>IHS: addCount += 3 (addCount=3)
-    IHS->>HS: super.addAll(["A","B","C"])
-    HS->>AC: AbstractCollection.addAll 실행
-    AC->>IHS: add("A") 호출 (재정의된 add!)
-    IHS->>IHS: addCount++ (addCount=4)
-    AC->>IHS: add("B") 호출
-    IHS->>IHS: addCount++ (addCount=5)
-    AC->>IHS: add("C") 호출
-    IHS->>IHS: addCount++ (addCount=6)
-    Note over Client: getAddCount() == 6
+    participant AC as AbstractCollection
+    C->>IHS: addAll([A,B,C])
+    IHS->>IHS: addCount+=3 (=3)
+    IHS->>AC: super.addAll([A,B,C])
+    AC->>IHS: add(A) → addCount++ (=4)
+    AC->>IHS: add(B) → addCount++ (=5)
+    AC->>IHS: add(C) → addCount++ (=6)
+    Note over C: getAddCount()==6 (버그!)
 ```
 
 `HashSet.addAll()`은 내부적으로 `add()`를 반복 호출합니다. 재정의된 `add()`가 매번 `addCount`를 증가시키므로 3 + 3 = 6이 됩니다. 이것이 **자기 사용(self-use)** 문제입니다.

@@ -100,7 +100,6 @@ sequenceDiagram
     participant S as Singleton.INSTANCE
     participant F as 파일(직렬화)
     participant D as 역직렬화 결과
-
     S->>F: ObjectOutputStream.writeObject(INSTANCE)
     F->>D: ObjectInputStream.readObject()
     Note over D: 새 인스턴스 생성! hashCode 다름

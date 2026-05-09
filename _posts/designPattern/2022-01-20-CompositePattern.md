@@ -41,30 +41,15 @@ toc_label: 목차
 classDiagram
     class FileSystemComponent {
         <<interface>>
-        +getName(): String
-        +getSize(): int
-        +print(indent: String): void
+        +getName() String
+        +getSize() int
+        +print(indent) void
     }
-    class File {
-        -name: String
-        -size: int
-        +getName(): String
-        +getSize(): int
-        +print(indent: String): void
-    }
-    class Directory {
-        -name: String
-        -children: List
-        +getName(): String
-        +getSize(): int
-        +print(indent: String): void
-        +add(component: FileSystemComponent): void
-        +remove(component: FileSystemComponent): void
-    }
-
+    class File { -name String }
+    class Directory { -children List }
     FileSystemComponent <|.. File
     FileSystemComponent <|.. Directory
-    Directory --> FileSystemComponent : "자식 보관 (0..*)"
+    Directory --> FileSystemComponent : 자식(0..*)
 ```
 
 ---
@@ -277,20 +262,16 @@ public class Manager implements Employee {
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant R as "Directory(root)"
-    participant D as "Directory(src)"
-    participant F1 as "File(readme.txt)"
-    participant F2 as "File(App.java)"
-
-    C->>R: "1. print() 호출"
-    R->>F1: "2. child.print() — Leaf 직접 출력"
-    F1-->>R: "3. 완료"
-    R->>D: "4. child.print() — Composite에 위임"
-    D->>F2: "5. child.print() — 재귀 호출"
-    F2-->>D: "6. 완료"
-    D-->>R: "7. 완료"
-    R-->>C: "8. 전체 트리 출력 완료"
+    participant C as 클라이언트
+    participant R as Directory(root)
+    participant D as Directory(src)
+    participant F1 as File(readme)
+    participant F2 as File(App)
+    C->>R: print()
+    R->>F1: child.print()
+    R->>D: child.print()
+    D->>F2: child.print()
+    R-->>C: 완료
 ```
 
 ---

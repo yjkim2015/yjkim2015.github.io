@@ -21,41 +21,13 @@ Java는 성능과 객체지향이라는 두 가지 목표를 동시에 추구했
 
 ```mermaid
 graph LR
-    subgraph "기본형 (Primitive)"
-        P1["byte"]
-        P2["short"]
-        P3["int"]
-        P4["long"]
-        P5["float"]
-        P6["double"]
-        P7["char"]
-        P8["boolean"]
-    end
-
-    subgraph "래퍼 클래스 (Wrapper)"
-        W1["Byte"]
-        W2["Short"]
-        W3["Integer"]
-        W4["Long"]
-        W5["Float"]
-        W6["Double"]
-        W7["Character"]
-        W8["Boolean"]
-    end
-
-    subgraph "참조형 (Reference)"
-        R1["String"]
-        R2["List&lt;T&gt;"]
-        R3["Object"]
-        R4["모든 클래스"]
-    end
-
-    P1 <-->|"박싱/언박싱"| W1
-    P3 <-->|"박싱/언박싱"| W3
-    P6 <-->|"박싱/언박싱"| W6
-    W1 --> R3
-    W3 --> R3
-    W6 --> R3
+    P1["byte/short/int/long"] <-->|"박싱/언박싱"| W1["Byte/Short/Integer/Long"]
+    P2["float/double"] <-->|"박싱/언박싱"| W2["Float/Double"]
+    P3["char/boolean"] <-->|"박싱/언박싱"| W3["Character/Boolean"]
+    W1 --> OBJ["Object (참조형 계층)"]
+    W2 --> OBJ
+    W3 --> OBJ
+    OBJ --> REF["String / List&lt;T&gt; / 모든 클래스"]
 ```
 
 ### 메모리 저장 방식 비교
@@ -156,7 +128,6 @@ sequenceDiagram
     participant 소스코드
     participant 컴파일러
     participant 바이트코드
-
     소스코드->>컴파일러: Integer n = 42;
     컴파일러->>바이트코드: Integer n = Integer.valueOf(42);
     소스코드->>컴파일러: int i = n;
@@ -235,7 +206,6 @@ graph TD
     (항상 동일한 객체)"]
     NEW["new Integer(n) 생성
     (매번 새 객체)"]
-
     VALUEOF --> CHECK
     CHECK -->|"예"| CACHE
     CHECK -->|"아니오"| NEW
@@ -482,29 +452,9 @@ assert a == b;  // 운영: 실패! 다른 객체
 ```mermaid
 graph TD
     WRAPPER["래퍼 클래스 핵심 정리"]
-
-    PRIM["기본형 vs 참조형
-    기본형: 스택, 빠름, null 불가
-    참조형: 힙, 느림, null 가능, 제네릭 허용"]
-
-    BOXING["오토박싱
-    컴파일러가 Integer.valueOf() / intValue() 삽입
-    null 언박싱 → NPE 주의"]
-
-    CACHE["Integer 캐시 함정
-    -128~127 범위는 == 우연히 동작
-    항상 equals() 사용할 것"]
-
-    PERF["성능
-    반복문 내 박싱 금지 → 기본형 사용
-    스트림: IntStream / LongStream / DoubleStream 우선"]
-
-    NULL["null 처리
-    Optional / OptionalInt 활용"]
-
-    WRAPPER --> PRIM
-    WRAPPER --> BOXING
-    WRAPPER --> CACHE
-    WRAPPER --> PERF
-    WRAPPER --> NULL
+    WRAPPER --> PRIM["기본형=스택/빠름/null불가 vs 참조형=힙/null가능/제네릭"]
+    WRAPPER --> BOXING["오토박싱: valueOf()/intValue() 자동 삽입 / null 언박싱→NPE"]
+    WRAPPER --> CACHE["Integer 캐시: -128~127은 == 동작 / 항상 equals()"]
+    WRAPPER --> PERF["반복문 박싱 금지 / IntStream/LongStream/DoubleStream 우선"]
+    WRAPPER --> NULL["null 처리: Optional / OptionalInt"]
 ```

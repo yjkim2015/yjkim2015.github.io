@@ -1045,22 +1045,12 @@ Function<String, String> timedAndLogged  = withTiming.apply(withLogging.apply(ba
 
 ```mermaid
 graph LR
-    subgraph "객체지향 프로그래밍 (OOP)"
-        O1["데이터 + 동작 = 객체"]
-        O2["상태 변경 허용"]
-        O3["상속으로 재사용"]
-        O4["명령형 스타일"]
-        O5["캡슐화로 복잡도 관리"]
-        O6["is-a 관계"]
-    end
-    subgraph "함수형 프로그래밍 (FP)"
-        F1["데이터와 함수는 분리"]
-        F2["불변 데이터 선호"]
-        F3["합성으로 재사용"]
-        F4["선언적 스타일"]
-        F5["순수 함수로 복잡도 관리"]
-        F6["변환 파이프라인"]
-    end
+    OOP["OOP"] --> O1["데이터+동작=객체"]
+    OOP --> O2["상태 변경 허용"]
+    OOP --> O3["상속으로 재사용/캡슐화/명령형"]
+    FP["FP"] --> F1["데이터와 함수 분리"]
+    FP --> F2["불변 데이터 선호"]
+    FP --> F3["합성/순수함수/선언적/파이프라인"]
 ```
 
 ### Java에서의 조화 전략

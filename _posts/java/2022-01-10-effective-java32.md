@@ -46,7 +46,6 @@ sequenceDiagram
     participant Caller as 호출자
     participant Method as dangerous()
     participant Heap as 힙
-
     Caller->>Method: dangerous(List<String>을 담은 배열)
     Method->>Heap: List<Integer>를 Object[]에 저장
     Note over Heap: stringLists[0]은 실제로 List<Integer>

@@ -80,11 +80,9 @@ sequenceDiagram
     participant Dev as 개발자
     participant Compiler as 컴파일러
     participant Runtime as 런타임
-
     Dev->>Compiler: equals(Bigram b) 작성 (@Override 없음)
     Compiler->>Runtime: 컴파일 통과 (다중정의로 인식)
     Runtime-->>Dev: Set.size() = 260 (버그 발견 — 늦음)
-
     Dev->>Compiler: @Override 추가 후 재컴파일
     Compiler-->>Dev: 즉시 오류 — supertype 메서드 없음
     Dev->>Compiler: equals(Object o)로 수정

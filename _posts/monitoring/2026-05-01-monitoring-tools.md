@@ -22,7 +22,6 @@ graph TD
     OBS --> METRICS["Metrics\n숫자로 측정\nCPU, TPS, 에러율"]
     OBS --> LOGS["Logs\n이벤트 기록\n오류 상세, 감사 추적"]
     OBS --> TRACES["Traces\n요청 흐름 추적\n분산 트레이싱"]
-
     METRICS --> PROM["Prometheus + Grafana"]
     LOGS --> ELK["ELK Stack / Loki"]
     TRACES --> JAEGER["Jaeger / Zipkin / Tempo"]
@@ -48,20 +47,15 @@ Prometheus는 **Pull 방식**으로 동작한다. 각 서비스가 메트릭 엔
 
 ```mermaid
 sequenceDiagram
-    participant APP as "Spring App\n(/actuator/prometheus)"
-    participant PROM as "Prometheus Server"
-    participant ALERT as "Alertmanager"
-    participant GRAF as "Grafana"
-    participant SLACK as "Slack"
-
-    PROM->>APP: 1️⃣ Scrape (15초마다 Pull)
-    APP-->>PROM: "메트릭 데이터 반환"
-    PROM->>PROM: 2️⃣ TSDB에 시계열 저장
-    GRAF->>PROM: 3️⃣ PromQL 쿼리
-    PROM-->>GRAF: "데이터 반환"
-    GRAF-->>GRAF: 4️⃣ 대시보드 렌더링
-    PROM->>ALERT: 5️⃣ 알림 규칙 위반 감지
-    ALERT->>SLACK: 6️⃣ Slack 알림 발송
+    participant APP as SpringApp
+    participant PROM as Prometheus
+    participant GRAF as Grafana
+    participant SLACK as Slack
+    PROM->>APP: Scrape(15초마다)
+    APP-->>PROM: 메트릭 반환
+    GRAF->>PROM: PromQL 쿼리
+    PROM-->>GRAF: 데이터 반환
+    PROM->>SLACK: 알림 규칙 위반시 발송
 ```
 
 ### Prometheus 설정

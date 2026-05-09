@@ -447,16 +447,12 @@ OBJECT ENCODING key
 
 ```mermaid
 graph TD
-    Q1{"무엇을 저장하려는가?"}
-    Q1 -->|"단순 값, 카운터, 세션"| STRING["String"]
-    Q1 -->|"순서 있는 목록, 큐"| LIST["List"]
-    Q1 -->|"중복 없는 집합, 관계"| Q2{"집합 연산이 필요한가?"}
-    Q1 -->|"순위, 점수 기반 정렬"| ZSET["Sorted Set"]
-    Q1 -->|"객체의 필드별 접근"| HASH["Hash"]
-    Q1 -->|"대규모 불리언 플래그"| BITMAP["Bitmap"]
-    Q1 -->|"대규모 유니크 카운팅"| HLL["HyperLogLog"]
-    Q1 -->|"영속적 메시지 처리"| STREAM["Stream"]
-    Q1 -->|"위치 기반 검색"| GEO["Geospatial"]
-    Q2 -->|"Yes"| SET["Set"]
-    Q2 -->|"No"| STRING
+    Q1{"저장 목적"} -->|값·카운터·세션| STRING["String"]
+    Q1 -->|순서 있는 목록·큐| LIST["List"]
+    Q1 -->|중복 없는 집합| Q2{"집합 연산?"}
+    Q1 -->|순위·점수 정렬| ZSET["Sorted Set"]
+    Q1 -->|필드별 객체| HASH["Hash"]
+    Q1 -->|불리언·유니크·메시지·위치| OTHER["Bitmap/HLL/Stream/Geo"]
+    Q2 -->|Yes| SET["Set"]
+    Q2 -->|No| STRING
 ```

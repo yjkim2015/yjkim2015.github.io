@@ -29,7 +29,6 @@ graph TD
         T3["Thread 3~1000\n~1MB 스택\n대기 중..."]
         Mem1["총 메모리: ~1GB\n실제 CPU 사용: 8코어만"]
     end
-
     subgraph "코루틴 모델 — 동시 요청 1000개"
         C1["Coroutine 1~1000\n수십 KB 힙 메모리"]
         Pool["Thread Pool\n8~16개 스레드만"]
@@ -118,11 +117,9 @@ graph TD
     Parent["부모 coroutineScope"] --> C1["자식 코루틴 1\n프로필 조회"]
     Parent --> C2["자식 코루틴 2\n주문 조회"]
     Parent --> C3["자식 코루틴 3\n알림 조회"]
-
     C3 --> Fail["예외 발생!"]
     Fail --> Cancel["나머지 자식 모두 취소"]
     Cancel --> Parent2["부모에게 예외 전파"]
-
     style Fail fill:#f88,stroke:#c00,color:#000
     style Cancel fill:#ff8,stroke:#880,color:#000
 ```
@@ -545,23 +542,12 @@ class OrderServiceTest {
 
 ```mermaid
 flowchart TD
-    Normal["일반 함수"] -->|"runBlocking (테스트/main)"| Scope["코루틴 스코프"]
-
-    Scope -->|launch| Job["Job\n결과 없음"]
-    Scope -->|async| Deferred["Deferred<T>\n결과 있음"]
-
-    Job -->|cancel| Cancel["취소"]
-    Deferred -->|await| Result["결과 수신\n(일시 중단)"]
-
-    SuspendFn["suspend fun"] -->|"Dispatchers.IO"| IOPool["I/O 스레드풀\nDB, HTTP, File"]
-    SuspendFn -->|"Dispatchers.Default"| CPUPool["CPU 스레드풀\n계산, 변환"]
-
-    Flow["Flow<T>"] -->|emit| Stream["비동기 스트림"]
-    Stream -->|collect| Consume["소비"]
-    Stream -->|"map, filter, flatMap"| Transform["변환"]
-
-    StateFlow["StateFlow\n현재 상태 보유"] -->|"UI 상태"| UIState["Android ViewModel"]
-    SharedFlow["SharedFlow\n이벤트 방출"] -->|"이벤트 버스"| Events["알림, 로그"]
+    Normal["일반 함수"] -->|runBlocking| Scope["코루틴 스코프"]
+    Scope -->|launch| Job["Job (결과 없음)"]
+    Scope -->|async/await| Deferred["Deferred (결과 있음)"]
+    SuspendFn["suspend fun"] -->|IO| IOPool["I/O 풀\nDB·HTTP·File"]
+    SuspendFn -->|Default| CPUPool["CPU 풀\n계산·변환"]
+    Flow["Flow/StateFlow/SharedFlow"] -->|"emit → collect"| Consume["소비·변환"]
 ```
 
 ---

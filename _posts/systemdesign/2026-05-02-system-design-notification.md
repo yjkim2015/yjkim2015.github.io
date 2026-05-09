@@ -53,30 +53,13 @@ SMS:          100만 건/일 →  11 QPS
 
 ```mermaid
 graph TD
-    Services["마이크로서비스들<br>(주문·결제·마케팅)"] --> API["알림 API 게이트웨이"]
-
-    API --> PrefCheck["1. 사용자 수신 설정 확인 (Redis 캐시)"]
-    API --> Dedup["2. 중복 방지 (Redis SET NX)"]
-    API --> Priority["3. 우선순위 분류"]
-
-    Priority --> P0["Kafka: notifications-critical<br>파티션 20개"]
-    Priority --> P1["Kafka: notifications-high<br>파티션 10개"]
-    Priority --> P2["Kafka: notifications-normal"]
-    Priority --> P3["Kafka: notifications-low"]
-
-    P0 & P1 --> PushWorker["푸시 워커 × 10"]
-    P0 & P1 --> SMSWorker["SMS 워커 × 5"]
-    P2 & P3 --> EmailWorker["이메일 워커 × 10"]
-
-    PushWorker -->|"실패"| DLQ["Dead Letter Queue"]
-    SMSWorker -->|"실패"| DLQ
-    EmailWorker -->|"실패"| DLQ
-
-    PushWorker --> APNs["Apple APNs"]
-    PushWorker --> FCM["Google FCM"]
-    SMSWorker --> Twilio["Twilio (1차)"]
-    SMSWorker --> Nexmo["Nexmo (fallback)"]
-    EmailWorker --> SendGrid["SendGrid"]
+    Svc["마이크로서비스"] --> API["알림 API GW"]
+    API --> P0["Kafka: critical/high"]
+    API --> P2["Kafka: normal/low"]
+    P0 --> Push["푸시 워커"] --> APNs["APNs/FCM"]
+    P0 --> SMS["SMS 워커"] --> Twilio["Twilio/Nexmo"]
+    P2 --> Email["이메일 워커"] --> SendGrid
+    Push & SMS & Email -->|실패| DLQ
 ```
 
 ---
@@ -89,26 +72,16 @@ APNs(Apple)와 FCM(Google)은 각각 다른 프로토콜과 토큰 형식을 사
 
 ```mermaid
 sequenceDiagram
-    participant API as "알림 API"
-    participant Kafka as "Kafka"
-    participant Worker as "푸시 워커"
-    participant APNs as "Apple APNs"
-    participant FCM as "Google FCM"
-
-    API->>API: 1. 사용자 기기 정보 조회 (device_token, platform)
-    API->>API: 2. 중복 체크 (Redis)
-    API->>Kafka: 3. 메시지 발행 (비동기)
-    API-->>API: 4. 202 Accepted 즉시 반환
-
-    Kafka->>Worker: 5. 메시지 소비
-    alt iOS 기기 (platform = 'ios')
-        Worker->>APNs: HTTP/2 + device_token
-        APNs-->>Worker: 200 OK
-    else Android 기기 (platform = 'android')
-        Worker->>FCM: HTTP + registration_token
-        FCM-->>Worker: success: 1
+    participant API as 알림API
+    participant K as Kafka
+    participant W as 워커
+    API->>K: 발행(비동기)
+    K->>W: 소비
+    alt iOS
+        W->>APNs: HTTP/2 → 200 OK
+    else Android
+        W->>FCM: HTTP → success
     end
-    Worker->>LogDB: 6. 전송 결과 기록
 ```
 
 왜 API가 즉시 202를 반환하는가? 실제 전송은 수백ms~수초가 걸린다. 동기로 기다리면 API 서버의 스레드가 모두 블로킹된다. Kafka에 발행하고 즉시 반환한다.
@@ -119,21 +92,15 @@ Twilio가 장애나면 SMS가 전혀 안 간다. 주문 완료 SMS가 안 오면
 
 ```mermaid
 sequenceDiagram
-    participant W as "SMS 워커"
-    participant T as "Twilio (1차)"
-    participant N as "Nexmo (2차)"
-
+    participant W as Worker
+    participant T as Twilio
+    participant N as Nexmo
     W->>T: SMS 발송
     alt 성공
         T-->>W: 200 OK
-    else 실패 (3회 재시도 후)
-        W->>N: 대체 공급자로 발송
-        alt Nexmo 성공
-            N-->>W: 200 OK
-        else 모두 실패
-            W->>DLQ: Dead Letter Queue
-            W->>Alert: 운영팀 알림
-        end
+    else 3회 실패
+        W->>N: 대체 발송
+        N-->>W: 결과
     end
 ```
 
@@ -281,6 +248,27 @@ graph TD
 ```
 
 **왜 속도 제한이 필요한가?** APNs/FCM은 초당 처리 한도가 있다. 한도 초과 시 IP 차단 → 모든 푸시 불가. 초당 1만 건 이하로 제어해서 차단을 피한다.
+
+---
+
+## 보안 고려사항
+
+> **비유**: 택배 기사가 집 주소를 알아도, 그 주소가 진짜 수신인의 것인지 확인하지 않으면 엉뚱한 사람에게 배달된다. 디바이스 토큰 관리가 바로 그 주소 검증이다.
+
+**디바이스 토큰 라이프사이클**
+
+APNs·FCM의 디바이스 토큰은 앱 재설치, OS 업그레이드, 기기 교체 시 변경된다. 무효 토큰으로 계속 발송하면 리소스 낭비와 APNs 차단 위험이 생긴다.
+
+```
+등록: 앱 실행 시 토큰을 서버에 등록 (user_id + device_id + token)
+갱신: APNs/FCM이 "토큰 변경됨" 응답 시 DB 즉시 업데이트
+무효화: "등록 해제됨(InvalidRegistration)" 응답 시 해당 토큰 삭제
+재등록: 앱 재설치 후 새 토큰으로 자동 재등록
+```
+
+**알림 스푸핑 방지**
+
+외부 서비스가 알림 API를 직접 호출하지 못하도록 내부 전용 엔드포인트로 격리하고, 서비스 간 mTLS 인증을 적용한다. 알림 페이로드에 민감 정보(잔액, 개인정보)를 직접 담지 않고, 앱이 열리면 서버에서 조회하도록 설계한다.
 
 ---
 ## 핵심 설계 결정 요약

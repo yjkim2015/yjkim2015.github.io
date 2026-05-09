@@ -29,17 +29,11 @@ graph LR
         PS1["Payment Service\n(다운!)"]
         IS1["Inventory Service"]
         NS1["Notification Service"]
-
         OS1 -->|"1️⃣ 결제 요청\n응답 대기..."| PS1
         PS1 -.->|"❌ 타임아웃!"| OS1
         OS1 -.->|"❌ 주문 실패"| IS1
         OS1 -.->|"❌ 실행 안됨"| NS1
     end
-
-    classDef down fill:#F8CECC,stroke:#B85450
-    classDef normal fill:#DAE8FC,stroke:#6C8EBF
-    class PS1 down
-    class OS1,IS1,NS1 normal
 ```
 
 ```
@@ -54,28 +48,11 @@ graph LR
 
 ```mermaid
 graph LR
-    subgraph "EDA (이벤트 기반)"
-        OS2["Order Service\n(Producer)"]
-        EB["Event Bus\nKafka / RabbitMQ"]
-        PS2["Payment Service"]
-        IS2["Inventory Service"]
-        NS2["Notification Service"]
-        AN["Analytics Service\n(신규 추가 — Producer 수정 없음)"]
-
-        OS2 -->|"1️⃣ OrderCreated 이벤트 발행"| EB
-        EB -->|"2️⃣ 독립 소비"| PS2
-        EB -->|"2️⃣ 독립 소비"| IS2
-        EB -->|"2️⃣ 독립 소비"| NS2
-        EB -->|"2️⃣ 독립 소비"| AN
-    end
-
-    classDef producer fill:#D5E8D4,stroke:#82B366
-    classDef broker fill:#FFE6CC,stroke:#D6B656,stroke-width:3px
-    classDef consumer fill:#DAE8FC,stroke:#6C8EBF
-
-    class OS2 producer
-    class EB broker
-    class PS2,IS2,NS2,AN consumer
+    OS["Order Service"] -->|"OrderCreated"| EB["Event Bus (Kafka)"]
+    EB -->|"소비"| PS["Payment Service"]
+    EB -->|"소비"| IS["Inventory Service"]
+    EB -->|"소비"| NS["Notification Service"]
+    EB -->|"소비"| AN["Analytics Service"]
 ```
 
 ```
@@ -169,7 +146,6 @@ graph LR
     subgraph "전통적 방식 (상태 저장)"
         DB1[("orders 테이블\nid=1\nstatus=SHIPPED\namount=50000\nupdatedAt=...")]
     end
-
     subgraph "Event Sourcing (이벤트 저장)"
         E1["OrderCreated\nt=0\n{amount:50000}"]
         E2["PaymentCharged\nt=1\n{method:card}"]
@@ -177,14 +153,7 @@ graph LR
         E4["OrderShipped\nt=3\n{tracking:KR123}"]
         E1 --> E2 --> E3 --> E4
     end
-
     E4 -->|"이벤트 재생\n→ 현재 상태"| STATE["status=SHIPPED\namount=50000\ntracking=KR123"]
-
-    classDef event fill:#DAE8FC,stroke:#6C8EBF
-    classDef state fill:#D5E8D4,stroke:#82B366,stroke-width:2px
-
-    class E1,E2,E3,E4 event
-    class STATE state
 ```
 
 ```
@@ -325,35 +294,14 @@ Event Sourcing은 CQRS와 함께 쓸 때 강력합니다.
 
 ```mermaid
 graph TD
-    subgraph "Command Side (쓰기)"
-        CMD["Command\n주문 생성/취소"] --> AGG["Order Aggregate\n이벤트 발행"]
-        AGG --> ES[("Event Store\n이벤트 영구 저장")]
-    end
-
-    subgraph "이벤트 전파"
-        ES -->|"1️⃣ 이벤트 발행"| KB["Kafka\n이벤트 브로커"]
-    end
-
-    subgraph "Query Side (Projection — 읽기 전용 뷰)"
-        KB -->|"2️⃣ 소비"| P1["Order Status Projection\n주문 상태 뷰"]
-        KB -->|"2️⃣ 소비"| P2["Order List Projection\n목록 뷰"]
-        KB -->|"2️⃣ 소비"| P3["Analytics Projection\n통계 뷰"]
-        P1 --> DB1[("Status DB\nMySQL")]
-        P2 --> DB2[("List DB\nElasticsearch")]
-        P3 --> DB3[("Analytics DB\nClickHouse")]
-    end
-
-    Q1["조회 요청"] -->|"빠른 조회"| DB1
-    Q2["검색 요청"] -->|"전문 검색"| DB2
-    Q3["통계 요청"] -->|"집계 쿼리"| DB3
-
-    classDef command fill:#F8CECC,stroke:#B85450
-    classDef query fill:#D5E8D4,stroke:#82B366
-    classDef broker fill:#FFE6CC,stroke:#D6B656,stroke-width:2px
-
-    class CMD,AGG,ES command
-    class P1,P2,P3,DB1,DB2,DB3,Q1,Q2,Q3 query
-    class KB broker
+    CMD["Command"] --> AGG["Order Aggregate"] --> ES[("Event Store")]
+    ES --> KB["Kafka"]
+    KB --> P1["Status Projection"] --> DB1[("MySQL")]
+    KB --> P2["List Projection"] --> DB2[("Elasticsearch")]
+    KB --> P3["Analytics Projection"] --> DB3[("ClickHouse")]
+    Q1["조회"] --> DB1
+    Q2["검색"] --> DB2
+    Q3["통계"] --> DB3
 ```
 
 ---

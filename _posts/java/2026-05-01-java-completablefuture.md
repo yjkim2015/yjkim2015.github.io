@@ -255,20 +255,13 @@ CompletableFuture<User> future = CompletableFuture
 
 ```mermaid
 flowchart TD
-    subgraph "thenCombine — 두 작업 병렬"
-        A1["fetchUser()"] --> C1["결합\n(user, orders)"]
-        B1["fetchOrders()"] --> C1
-    end
-    subgraph "allOf — 모두 완료 대기"
-        A2["callApi1()"] --> D["모두 완료 후\n결과 수집"]
-        B2["callApi2()"] --> D
-        C2["callApi3()"] --> D
-    end
-    subgraph "anyOf — 가장 빠른 결과"
-        A3["us-east"] --> E["첫 번째\n완료된 결과"]
-        B3["eu-west"] --> E
-        C3["ap-northeast"] --> E
-    end
+    A1["fetchUser()"] --> C1["thenCombine 결합"]
+    B1["fetchOrders()"] --> C1
+    A2["api1"] --> D["allOf 완료대기"]
+    B2["api2"] --> D
+    C2["api3"] --> D
+    A3["us-east"] --> E["anyOf 첫완료"]
+    B3["eu-west"] --> E
 ```
 
 ### thenCombine — 두 Future 결과 합치기
@@ -490,7 +483,6 @@ flowchart TD
     B --> C["I/O 블로킹 작업 투입"]
     C --> D["스레드 고갈"]
     D --> E["JVM 전체 비동기 성능 저하"]
-
     F["커스텀 ExecutorService"] --> G["I/O에 맞는 스레드 수 설정"]
     G --> H["I/O 블로킹 격리"]
     H --> I["안정적인 성능"]

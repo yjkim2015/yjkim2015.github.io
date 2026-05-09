@@ -220,18 +220,16 @@ public class ReactiveController {
 
 ```mermaid
 graph LR
-    subgraph TOMCAT["Tomcat — Thread-Per-Request — 1,000 동시 요청"]
-        T1["스레드 최대 200개\n나머지 800개는 대기 큐"]
-        T2["200개 스레드 BLOCKED 상태"]
-        T3["메모리: 200 × 1MB ≈ 200MB"]
-        T1 --> T2 --> T3
+    subgraph TOMCAT["Tomcat (1,000 요청)"]
+        T1["스레드 200개 한도\n800개 대기 큐"]
+        T2["200 스레드 BLOCKED\n≈ 200MB"]
     end
-    subgraph NETTY["Netty — EventLoop — 1,000 동시 연결"]
-        N1["EventLoop 스레드 8개\nCPU 4코어 × 2"]
-        N2["I/O 대기 중 다른 채널 처리\n8개로 1,000개 처리 가능"]
-        N3["메모리: 8 × 1MB ≈ 8MB"]
-        N1 --> N2 --> N3
+    subgraph NETTY["Netty (1,000 연결)"]
+        N1["EventLoop 8개\n(CPU×2)"]
+        N2["8개로 1,000 처리\n≈ 8MB"]
     end
+    T1 --> T2
+    N1 --> N2
 ```
 
 ### I/O 바운드 vs CPU 바운드

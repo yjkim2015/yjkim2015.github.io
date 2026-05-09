@@ -42,20 +42,9 @@ console.log(vault.check('wrongpass')); // false
 
 ```mermaid
 graph TD
-    subgraph "전역 스코프"
-        G[x = 1]
-        subgraph "outer() 스코프"
-            O[y = 2]
-            subgraph "inner() 스코프"
-                I[z = 3]
-                I_ACCESS["x 접근 가능<br>y 접근 가능<br>z 접근 가능"]
-            end
-        end
-        G_ACCESS["y 접근 불가<br>z 접근 불가"]
-    end
-
-    style I_ACCESS fill:#2ecc71,color:#fff
-    style G_ACCESS fill:#e74c3c,color:#fff
+    G["전역: x=1"] --> O["outer: y=2"] --> I["inner: z=3"]
+    I --> IA["x,y,z 접근 가능"]
+    G --> GA["y,z 접근 불가"]
 ```
 
 ```javascript
@@ -89,22 +78,9 @@ outer();
 
 ```mermaid
 flowchart LR
-    subgraph "outer() 실행 완료 후"
-        subgraph "클로저"
-            FN["inner 함수"]
-            ENV["렉시컬 환경<br>count = 0 (유지!)"]
-            FN -.->|"참조"| ENV
-        end
-    end
-
-    A["outer() 호출"] --> B["count = 0 생성"]
-    B --> C["inner 함수 반환"]
-    C --> D["outer() 스택에서 제거"]
-    D --> E["일반적으로 count 사라져야 하지만..."]
-    E --> F["inner가 count를 참조 중이므로 유지!"]
-
-    style ENV fill:#e74c3c,color:#fff
-    style F fill:#f39c12,color:#fff
+    A["outer() 호출"] --> B["count=0 생성"] --> C["inner 반환"] --> D["outer 제거"]
+    D --> F["inner가 count 참조중 - 유지!"]
+    FN["inner 함수"] -.->|"참조"| ENV["렉시컬 환경 count=0"]
 ```
 
 ```javascript
@@ -129,23 +105,17 @@ console.log(counter()); // 3
 
 ```mermaid
 sequenceDiagram
-    participant Runtime as JS 런타임
-    participant MakeCounter as makeCounter()
-    participant Counter as counter 함수
-    participant Heap as 힙 메모리
-
-    Runtime->>MakeCounter: makeCounter() 호출
-    MakeCounter->>Heap: count=0 생성 (렉시컬 환경)
-    MakeCounter->>Counter: inner 함수 생성
-    Counter->>Heap: 렉시컬 환경 참조 저장
-    MakeCounter-->>Runtime: inner 함수 반환
-
-    Note over MakeCounter: 실행 컨텍스트 스택에서 제거
-    Note over Heap: count는 counter가 참조 중이므로 GC 대상 아님
-
-    Runtime->>Counter: counter() 호출
-    Counter->>Heap: count 읽고 증가
-    Counter-->>Runtime: 1 반환
+    participant R as JS 런타임
+    participant M as makeCounter()
+    participant C as counter 함수
+    participant H as 힙 메모리
+    R->>M: makeCounter() 호출
+    M->>H: count=0 생성
+    M->>C: inner 함수 생성 + 힙 참조 저장
+    M-->>R: inner 반환 (M 스택 제거, count는 GC 제외)
+    R->>C: counter() 호출
+    C->>H: count 읽고 증가
+    C-->>R: 1 반환
 ```
 
 ---
@@ -250,31 +220,9 @@ console.log(TodoModule.getPending());
 
 ```mermaid
 graph TD
-    subgraph "IIFE + 클로저 모듈"
-        subgraph "private (외부 접근 불가)"
-            todos["todos: []"]
-            nextId["nextId: 1"]
-            validate["validate()"]
-        end
-
-        subgraph "public API"
-            add["add()"]
-            complete["complete()"]
-            getAll["getAll()"]
-            getPending["getPending()"]
-        end
-
-        add -->|"접근"| todos
-        add -->|"접근"| nextId
-        add -->|"사용"| validate
-        complete -->|"접근"| todos
-        getAll -->|"읽기"| todos
-        getPending -->|"읽기"| todos
-    end
-
-    style todos fill:#e74c3c,color:#fff
-    style nextId fill:#e74c3c,color:#fff
-    style validate fill:#e74c3c,color:#fff
+    PRIV["private: todos, nextId, validate()"]
+    PUB["public API: add(), complete(), getAll(), getPending()"]
+    PUB -->|"클로저로 접근"| PRIV
 ```
 
 ---
@@ -390,20 +338,10 @@ console.timeEnd('두 번째 계산'); // 거의 0ms — 캐시 히트!
 flowchart TD
     A["함수 호출"] --> B{"캐시에 있나?"}
     B -->|"예"| C["캐시에서 반환"]
-    B -->|"아니오"| D["실제 함수 실행"]
-    D --> E["결과 캐시에 저장"]
-    E --> F["결과 반환"]
-
-    subgraph "클로저"
-        CACHE["(cache Map)"]
-    end
-
-    B -->|"확인"| CACHE
-    E -->|"저장"| CACHE
-    C -->|"읽기"| CACHE
-
-    style CACHE fill:#3498db,color:#fff
-    style C fill:#2ecc71,color:#fff
+    B -->|"아니오"| D["함수 실행"] --> E["캐시 저장"] --> F["결과 반환"]
+    CACHE["cache Map (클로저)"] -.-> B
+    C -.-> CACHE
+    E -.-> CACHE
 ```
 
 ---
@@ -435,12 +373,10 @@ graph TD
         LD --> D["실제 사용: largeData[0] 하나뿐"]
         D --> WASTE["나머지 999,999개 낭비"]
     end
-
     subgraph "해결책"
         GF2["getFirst2 함수"] -->|"클로저 참조"| FIRST["first = largeData[0]만 보관"]
         FIRST --> LD2["largeData 원본 GC 가능"]
     end
-
     style WASTE fill:#e74c3c,color:#fff
     style LD2 fill:#2ecc71,color:#fff
 ```
@@ -519,7 +455,6 @@ graph TD
         B3["buttons[3]"] -->|"참조"| I
         B4["buttons[4]"] -->|"참조"| I
     end
-
     style I fill:#e74c3c,color:#fff
 ```
 
@@ -676,22 +611,14 @@ class Counter {
 mindmap
   root((클로저))
     정의
-      함수 + 렉시컬 환경
-      외부 변수를 기억
+      함수+렉시컬환경
+      외부 변수 기억
     활용
-      데이터 은닉
-      모듈 패턴
-      함수 팩토리
-      메모이제이션
-      커링/부분 적용
-    주의사항
-      메모리 누수
-      for+var 버그
-      불필요한 참조
-    해결책
-      let/const 사용
-      필요한 값만 캡처
-      명시적 null 처리
+      데이터 은닉/모듈 패턴
+      메모이제이션/커링
+    주의 및 해결
+      메모리 누수 → null 처리
+      for+var 버그 → let/const
 ```
 
 클로저는 단순히 "외부 변수에 접근하는 함수"가 아닙니다. 자바스크립트의 함수형 프로그래밍, 모듈 시스템, 상태 관리의 근간이 되는 핵심 개념입니다. React Hooks, Redux, 모든 JavaScript 라이브러리가 클로저를 기반으로 동작합니다. 클로저를 이해하면 이 모든 것의 동작 원리가 보이기 시작합니다.

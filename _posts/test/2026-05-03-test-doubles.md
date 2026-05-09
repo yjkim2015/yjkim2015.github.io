@@ -25,7 +25,6 @@ graph LR
     TD --> SP["Spy\n호출 기록"]
     TD --> MK["Mock\n호출 검증"]
     TD --> FK["Fake\n간단한 실제 구현"]
-
     style DM fill:#ddd,stroke:#999,color:#000
     style ST fill:#8f8,stroke:#080,color:#000
     style SP fill:#ff8,stroke:#880,color:#000
@@ -364,7 +363,6 @@ flowchart TD
     Q1 -->|"아니오"| Q2{"의존 객체의 상태가\n중요한가?"}
     Q2 -->|"예\n(저장 후 조회)"| FAKE["Fake 사용\n인메모리 구현"]
     Q2 -->|"아니오\n(반환값만 필요)"| STUB["Stub 사용\n고정값 반환"]
-
     style MOCK fill:#f88,stroke:#c00,color:#000
     style FAKE fill:#8bf,stroke:#08c,color:#000
     style STUB fill:#8f8,stroke:#080,color:#000
@@ -476,24 +474,12 @@ Sociable Test는 테스트 대상과 그 의존성을 함께 실행한다. Mock 
 
 ```mermaid
 graph LR
-    subgraph "Solitary Test"
-        S1["테스트 대상"] --> SM1["Mock A"]
-        S1 --> SM2["Mock B"]
-        S1 --> SM3["Mock C"]
-    end
-
-    subgraph "Sociable Test"
-        T1["테스트 대상"] --> R1["실제 A"]
-        T1 --> R2["Fake B"]
-        R1 --> R3["실제 C"]
-    end
-
-    style SM1 fill:#f88,stroke:#c00,color:#000
-    style SM2 fill:#f88,stroke:#c00,color:#000
-    style SM3 fill:#f88,stroke:#c00,color:#000
-    style R1 fill:#8f8,stroke:#080,color:#000
-    style R2 fill:#8bf,stroke:#08c,color:#000
-    style R3 fill:#8f8,stroke:#080,color:#000
+    S1["Solitary: 대상"] --> SM1["Mock A"]
+    S1 --> SM2["Mock B"]
+    S1 --> SM3["Mock C"]
+    T1["Sociable: 대상"] --> R1["실제 A"]
+    T1 --> R2["Fake B"]
+    R1 --> R3["실제 C"]
 ```
 
 Solitary Test는 테스트 대상만 실제이고 나머지는 모두 Mock이다. 격리도가 높지만 실제 협력을 검증하지 못한다. Sociable Test는 테스트 대상과 협력 객체를 함께 실행하므로 "실제로 맞물려 돌아가는가"를 확인할 수 있다.

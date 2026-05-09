@@ -20,31 +20,12 @@ K8s 클러스터는 Control Plane(마스터)과 Worker Node로 구성된다. Con
 
 ```mermaid
 graph TD
-    subgraph "Control Plane (마스터)"
-        API["API Server\n모든 요청의 진입점"]
-        ETCD[("etcd\n클러스터 상태 저장")]
-        SCHED["Scheduler\nPod 배치 결정"]
-        CM["Controller Manager\n원하는 상태 유지"]
-        API --> ETCD
-        API --> SCHED
-        API --> CM
-    end
-
-    subgraph "Worker Node 1"
-        KL1["kubelet\nAPI Server와 통신"]
-        KP1["kube-proxy\n네트워크 규칙 관리"]
-        C1["Pod: app-1"]
-        C2["Pod: app-2"]
-        KL1 --> C1
-        KL1 --> C2
-    end
-
-    subgraph "Worker Node 2"
-        KL2["kubelet"]
-        C3["Pod: app-3"]
-        KL2 --> C3
-    end
-
+    API["API Server"] --> ETCD[("etcd")]
+    API --> SCHED["Scheduler"]
+    API --> CM["Controller Manager"]
+    KL1["kubelet(Node1)"] --> C1["Pod: app-1"]
+    KL1 --> C2["Pod: app-2"]
+    KL2["kubelet(Node2)"] --> C3["Pod: app-3"]
     API -->|"명령"| KL1
     API -->|"명령"| KL2
 ```

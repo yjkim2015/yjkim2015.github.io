@@ -30,10 +30,8 @@ graph TD
         INT["통합 테스트<br>중간 속도, 중간 비용<br>적당히 20%"]
         UNIT["단위 테스트<br>빠름, 비용 낮음, 안정적<br>많이 작성 70%"]
     end
-
     UNIT --> INT
     INT --> E2E
-
     style E2E fill:#e74c3c,color:#fff
     style INT fill:#f39c12,color:#fff
     style UNIT fill:#2ecc71,color:#fff
@@ -362,22 +360,11 @@ describe('쇼핑 플로우', () => {
 ## 6. 테스트 작성 원칙 — 좋은 테스트 vs 나쁜 테스트
 
 ```mermaid
-mindmap
-  root((테스트 원칙))
-    FIRST
-      Fast 빠르게
-      Isolated 독립적으로
-      Repeatable 반복 가능하게
-      Self-validating 자체 검증
-      Timely 적시에
-    RTL 철학
-      구현 세부사항 X
-      사용자 행동 테스트
-      접근성 셀렉터 사용
-    좋은 테스트
-      실패 이유가 명확
-      유지보수 쉬움
-      빠른 피드백
+graph TD
+    ROOT["테스트 원칙"]
+    ROOT --> FIRST["FIRST: Fast/Isolated/Repeatable/Self-validating/Timely"]
+    ROOT --> RTL["RTL: 구현세부사항X, 사용자행동 테스트, 접근성셀렉터"]
+    ROOT --> GOOD["좋은 테스트: 실패이유명확, 유지보수쉬움, 빠른피드백"]
 ```
 
 ```javascript
@@ -418,7 +405,6 @@ sequenceDiagram
     participant COMP as SearchInput
     participant API1 as 요청1 사과
     participant API2 as 요청2 바나나
-
     USER->>COMP: 사과 입력
     COMP->>API1: 사과 검색 요청
     USER->>COMP: 바나나로 변경

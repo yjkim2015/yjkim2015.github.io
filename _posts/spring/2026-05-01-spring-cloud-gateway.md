@@ -20,13 +20,8 @@ Spring Cloud Gateway는 Spring 생태계의 API Gateway 솔루션이다. Netflix
 
 ```mermaid
 graph TD
-    C["클라이언트"] --> GW["API Gateway\n(단일 진입점)"]
-    GW --> A1["1️⃣ 인증/인가 검사"]
-    GW --> A2["2️⃣ Rate Limiting"]
-    GW --> A3["3️⃣ 요청 로깅/추적"]
-    GW --> A4["4️⃣ SSL 종료"]
-    GW --> A5["5️⃣ 로드밸런싱"]
-    A5 --> R["라우팅 결정"]
+    C["클라이언트"] --> GW["API Gateway\n인증·RateLimit·로깅·SSL·LB"]
+    GW --> R["라우팅"]
     R --> US["User Service"]
     R --> OS["Order Service"]
     R --> PS["Product Service"]
@@ -298,23 +293,17 @@ routes:
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant GW as "API Gateway"
-    participant AUTH as "인증 필터"
-    participant RL as "Rate Limiter"
-    participant CB as "Circuit Breaker"
-    participant SVC as "하위 서비스"
-
-    C->>GW: 1️⃣ HTTP 요청
-    GW->>GW: 2️⃣ Predicate 매칭 (어느 Route?)
-    GW->>AUTH: 3️⃣ JWT 검증
-    AUTH-->>GW: X-User-Id 헤더 추가
-    GW->>RL: 4️⃣ Rate Limit 확인
-    RL-->>GW: 허용
-    GW->>CB: 5️⃣ Circuit Breaker 상태 확인
-    CB->>SVC: 6️⃣ 실제 서비스 호출
-    SVC-->>GW: 7️⃣ 응답
-    GW-->>C: 8️⃣ 응답 반환
+    participant C as Client
+    participant GW as Gateway
+    participant AUTH as AuthFilter
+    participant RL as RateLimiter
+    participant SVC as Service
+    C->>GW: HTTP 요청
+    GW->>GW: Route Predicate 매칭
+    GW->>AUTH: JWT 검증
+    GW->>RL: Rate Limit 확인
+    GW->>SVC: CircuitBreaker 서비스 호출
+    SVC-->>C: 응답
 ```
 
 ---

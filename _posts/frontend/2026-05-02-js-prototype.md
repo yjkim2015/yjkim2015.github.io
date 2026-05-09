@@ -31,11 +31,9 @@ graph LR
     ANIMAL_PROTO["Animal.prototype<br>speak()<br>eat()"]
     OBJ_PROTO["Object.prototype<br>toString()<br>hasOwnProperty()"]
     NULL[null]
-
     DOG -->|"[[Prototype]]"| ANIMAL_PROTO
     ANIMAL_PROTO -->|"[[Prototype]]"| OBJ_PROTO
     OBJ_PROTO -->|"[[Prototype]]"| NULL
-
     style DOG fill:#e74c3c,color:#fff
     style ANIMAL_PROTO fill:#3498db,color:#fff
     style OBJ_PROTO fill:#2ecc71,color:#fff
@@ -79,7 +77,6 @@ flowchart TD
     D -->|"아니오"| F{"Object.prototype에<br>speak가 있나?"}
     F -->|"예"| G["Object.prototype.speak 실행"]
     F -->|"아니오"| H["null — undefined 반환"]
-
     style C fill:#2ecc71,color:#fff
     style E fill:#3498db,color:#fff
     style H fill:#e74c3c,color:#fff
@@ -126,22 +123,9 @@ myDog.toString(); // '[object Object]' — Object.prototype에서 찾음
 
 ```mermaid
 graph TD
-    subgraph "함수"
-        F["Dog 함수"]
-        FP["Dog.prototype 객체"]
-        F -->|".prototype"| FP
-    end
-
-    subgraph "인스턴스"
-        I["myDog 인스턴스"]
-        I -->|".__proto__<br>(= [[Prototype]])"| FP
-    end
-
+    F["Dog 함수"] -->|".prototype"| FP["Dog.prototype"]
+    I["myDog 인스턴스"] -->|".__proto__"| FP
     FP -->|".constructor"| F
-
-    style F fill:#e74c3c,color:#fff
-    style FP fill:#3498db,color:#fff
-    style I fill:#2ecc71,color:#fff
 ```
 
 ```javascript
@@ -210,14 +194,11 @@ graph LR
         PF["function Animal(name)"]
         PP["Animal.prototype.speak"]
     end
-
     subgraph "클래스 방식"
         CC["class Animal { speak() {} }"]
     end
-
     PF -.->|"동일한 결과"| CC
     PP -.->|"동일한 결과"| CC
-
     style CC fill:#9b59b6,color:#fff
 ```
 
@@ -306,19 +287,12 @@ console.log(buddy instanceof Animal);          // true
 
 ```mermaid
 graph BT
-    BUDDY["buddy<br>name: '버디'"]
-    GR_PROTO["GoldenRetriever.prototype<br>fetch()"]
-    DOG_PROTO["Dog.prototype<br>bark(), speak()"]
-    ANIMAL_PROTO["Animal.prototype<br>speak()"]
-    OBJ_PROTO["Object.prototype<br>hasOwnProperty()<br>toString()"]
+    BUDDY["buddy\nname:'버디'"]
+    GR["GoldenRetriever.prototype\nfetch()"]
+    DOG["Dog.prototype\nbark()"]
+    OBJ["Object.prototype\nhasOwnProperty()"]
     NULL[null]
-
-    BUDDY -->|"__proto__"| GR_PROTO
-    GR_PROTO -->|"__proto__"| DOG_PROTO
-    DOG_PROTO -->|"__proto__"| ANIMAL_PROTO
-    ANIMAL_PROTO -->|"__proto__"| OBJ_PROTO
-    OBJ_PROTO -->|"__proto__"| NULL
-
+    BUDDY -->|__proto__| GR -->|__proto__| DOG -->|__proto__| OBJ -->|__proto__| NULL
     style BUDDY fill:#e74c3c,color:#fff
 ```
 
@@ -489,21 +463,13 @@ Array.prototype.first = function() {
 mindmap
   root((프로토타입))
     기본 개념
-      모든 객체는 프로토타입 보유
-      체인을 따라 속성 탐색
-      null이 체인의 끝
+      체인으로 속성 탐색/null이 끝
     주요 API
-      Object.create()
-      Object.getPrototypeOf()
-      hasOwnProperty()
-    클래스와의 관계
-      class는 문법적 설탕
-      내부는 프로토타입 기반
-      extends로 상속
+      Object.create/getPrototypeOf/hasOwnProperty
+    클래스 관계
+      class는 문법적설탕/extends상속
     주의사항
-      프로토타입 오염
-      내장 프로토타입 수정 금지
-      체인 길이 성능 영향
+      오염방지/내장수정금지/체인성능
 ```
 
 프로토타입은 자바스크립트의 근본 메커니즘입니다. ES6 클래스 문법을 사용하더라도 내부적으로는 프로토타입이 동작합니다. 이를 이해하면 `instanceof`가 어떻게 동작하는지, 메서드를 prototype에 정의하는 것이 왜 성능상 좋은지, 그리고 보안 취약점을 어떻게 방어하는지까지 모두 연결됩니다.

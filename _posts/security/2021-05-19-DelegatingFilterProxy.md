@@ -44,14 +44,12 @@ sequenceDiagram
     participant "DelegatingFilterProxy" as DFP
     participant "Spring ApplicationContext" as AC
     participant "FilterChainProxy" as FCP
-
     SC->>DFP: 1. 최초 요청 수신
     DFP->>AC: 2. "springSecurityFilterChain" 이름의 빈 조회
     AC-->>DFP: 3. FilterChainProxy 빈 반환
     DFP->>FCP: 4. doFilter() 위임 (실제 보안 처리)
     FCP-->>DFP: 5. 처리 완료
     DFP-->>SC: 6. 다음 필터로 전달
-
     note over DFP,AC: 이후 요청에서는 캐싱된 빈을 바로 사용
 ```
 

@@ -64,18 +64,13 @@ graph TD
         B["MemberService"] --> F
         C["ItemService"] --> F
     end
-
     subgraph "Aspect — 한 곳에서 관리"
         G["LogAspect\n로그 처리"]
         H["TransactionAspect\n트랜잭션 처리"]
     end
-
     G -. "자동 적용 (프록시)" .--> A
     G -. "자동 적용 (프록시)" .--> B
     G -. "자동 적용 (프록시)" .--> C
-
-    classDef green fill:#d4edda,stroke:#28a745
-    class G,H green
 ```
 
 `LogAspect` 하나만 바꾸면 100개 서비스에 일괄 적용됩니다. 새 서비스를 추가해도 자동으로 로그가 붙습니다. 비즈니스 로직에는 단 한 줄도 추가할 필요가 없습니다.
@@ -94,19 +89,12 @@ classDiagram
         <<interface>>
         +operation() String
     }
-    class RealSubject {
-        +operation() String
-    }
-    class Proxy {
-        -target: RealSubject
-        +operation() String
-    }
-
+    class RealSubject { +operation() String }
+    class Proxy { -target: RealSubject
+        +operation() String }
     Subject <|-- RealSubject
     Subject <|-- Proxy
-    Proxy --> RealSubject : "실제 작업 위임"
-
-    note for Proxy "클라이언트는 Subject만 알면 됨\n프록시인지 실제 객체인지 몰라도 됨"
+    Proxy --> RealSubject : 위임
 ```
 
 클라이언트는 `Subject` 인터페이스만 알고 있습니다. 실제로 `RealSubject`를 받든 `Proxy`를 받든 코드를 바꿀 필요가 없습니다. Spring이 이 원리를 이용해서, 기존 `OrderService` 코드를 건드리지 않고 앞에 프록시를 세워 로그를 추가합니다.
@@ -152,16 +140,12 @@ sequenceDiagram
     participant T as TimeDecorator
     participant CP as CacheProxy
     participant R as RealSubject
-
     C->>T: operation()
-    T->>T: 1️⃣ 시간 측정 시작
-    T->>CP: operation() 위임
-    CP->>CP: 2️⃣ 캐시 확인
+    T->>CP: 위임 (시간측정 시작)
     CP->>R: operation() (캐시 없을 때만)
-    R-->>CP: 결과 반환
-    CP-->>T: 결과 반환 (캐시 저장)
-    T->>T: 3️⃣ 시간 측정 종료, 로그 출력
-    T-->>C: 결과 반환
+    R-->>CP: 결과
+    CP-->>T: 결과 (캐시 저장)
+    T-->>C: 결과 (시간 로그)
 ```
 
 시간 측정 → 캐시 → 실제 로직 순서로 연결됩니다. 순서를 바꾸고 싶거나 새 기능을 추가하고 싶으면 체인에 하나만 추가하면 됩니다. `RealSubject`는 전혀 건드리지 않습니다.
@@ -271,14 +255,8 @@ flowchart TD
     A["ProxyFactory 생성\nnew ProxyFactory(target)"] --> B{"인터페이스 있음?"}
     B -->|"있음 + proxyTargetClass=false"| C["JDK 동적 프록시 생성"]
     B -->|"없음 또는 proxyTargetClass=true\n(Spring Boot 기본)"| D["CGLIB 생성"]
-
     E["Advice 추가\n부가 기능 로직"] --> A
     F["Pointcut 설정\n어디에 적용?"] --> A
-
-    classDef green fill:#d4edda,stroke:#28a745
-    classDef blue fill:#cce5ff,stroke:#007bff
-    class C,D green
-    class A blue
 ```
 
 ```java
@@ -315,22 +293,11 @@ proxy.save();
 
 ```mermaid
 graph TD
-    A["AOP 개념 체계"] --> B["Aspect\n부가 기능 모듈"]
-    A --> C["Join Point\n적용 가능 지점"]
-    A --> D["Pointcut\n적용 위치 선택"]
-    A --> E["Advice\n실제 부가 기능"]
-    A --> F["Weaving\n어드바이스 적용"]
-
-    B -->|"구현"| I["@Aspect 클래스"]
-    C -->|"Spring AOP 지원"| J["메서드 실행 시점만"]
-    D -->|"표현식"| K["execution(* hello..*.*(..))"]
-    E -->|"종류"| L["@Before, @After, @Around"]
-    F -->|"시점"| M["런타임 (프록시 생성)"]
-
-    classDef blue fill:#cce5ff,stroke:#007bff
-    classDef green fill:#d4edda,stroke:#28a745
-    class B,D,E green
-    class C,F blue
+    A["AOP 개념 체계"] --> B["Aspect / @Aspect 클래스"]
+    A --> C["Join Point\n메서드 실행 시점만"]
+    A --> D["Pointcut\nexecution(* hello..*.*(..))"]
+    A --> E["Advice\n@Before·@After·@Around"]
+    A --> F["Weaving\n런타임(프록시 생성)"]
 ```
 
 **왜 Spring AOP는 메서드 실행 시점만 지원하는가?** AspectJ는 필드 접근, 생성자 호출, 정적 메서드 등 모든 지점에 적용할 수 있습니다. 하지만 그만큼 설정이 복잡하고 컴파일 시점 위빙이 필요합니다. Spring AOP는 런타임 프록시만 사용하므로 별도 설정 없이 쓸 수 있고, 실무에서 필요한 99%의 케이스(서비스 메서드 감싸기)를 커버합니다.
@@ -400,22 +367,17 @@ public class AllLogAspect {
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant AR as @Around (전)
+    participant AR as @Around
     participant B as @Before
-    participant T as Target Method
-    participant ARF as @Around (후)
-    participant AF as @AfterReturning/@AfterThrowing
-    participant A as @After
-
-    C->>AR: 호출
-    AR->>B: proceed() 이전
-    Note over B: @Before 실행
-    B->>T: 대상 메서드 실행
-    T-->>ARF: 결과 반환
-    Note over ARF: @Around 후처리
-    ARF->>AF: @AfterReturning 또는 @AfterThrowing
-    AF->>A: @After (항상)
-    A-->>C: 최종 반환
+    participant T as Target
+    participant AF as @After*
+    C->>AR: 호출 (proceed 전)
+    AR->>B: @Before 실행
+    B->>T: 메서드 실행
+    T-->>AR: 결과 반환
+    AR->>AF: @AfterReturning or @AfterThrowing
+    AF->>AF: @After (항상)
+    AF-->>C: 최종 반환
 ```
 
 ---
@@ -521,11 +483,6 @@ graph LR
     A --> C["Advice\n무엇을?"]
     B --> D["execution 표현식\n@annotation 등"]
     C --> E["로깅, 트랜잭션\n캐싱, 보안 등"]
-
-    classDef blue fill:#cce5ff,stroke:#007bff
-    classDef green fill:#d4edda,stroke:#28a745
-    class B blue
-    class C green
 ```
 
 여러 Advisor가 같은 메서드에 적용될 때는 `@Order`로 순서를 지정합니다. 트랜잭션 Advisor가 로그 Advisor보다 바깥에 있어야 "로그 기록 → 트랜잭션 시작 → 비즈니스 로직 → 트랜잭션 커밋 → 로그 종료" 순서가 됩니다. 반대로 하면 트랜잭션이 커밋되기 전에 로그가 끝납니다.
@@ -540,23 +497,15 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    participant C as Spring Container
+    participant C as Container
     participant O as 원본 빈
     participant BPP as BeanPostProcessor
     participant P as 프록시 빈
-
-    Note over C,O: 1️⃣ 빈 생성
-    C->>O: 빈 생성 (new)
-    C->>O: 의존관계 주입
-    C->>O: @PostConstruct 실행
-
-    Note over C,BPP: 2️⃣ 초기화 후 후처리 ← 프록시 생성 시점!
-    C->>BPP: postProcessAfterInitialization(bean, beanName)
-    BPP->>BPP: Pointcut과 매칭 확인
-    BPP->>P: 매칭되면 ProxyFactory로 프록시 생성
-    C-->>P: 컨테이너에 프록시 등록 (원본 빈 대신!)
-
-    Note over C: 이후 getBean() 호출 시 프록시가 반환됨
+    C->>O: new + 의존주입 + @PostConstruct
+    C->>BPP: postProcessAfterInitialization()
+    BPP->>BPP: Pointcut 매칭 확인
+    BPP->>P: 매칭 시 ProxyFactory로 프록시 생성
+    C-->>P: 컨테이너에 프록시 등록
 ```
 
 이 사실이 중요한 이유: `@PostConstruct`는 원본 빈에서 실행됩니다. 하지만 컨테이너에 등록되는 것은 프록시입니다. 즉, `@PostConstruct` 안에서 `this`는 원본 객체이고, 외부에서 주입받는 것은 프록시입니다. 대부분의 경우 문제없지만, `@PostConstruct` 안에서 프록시 메서드를 호출해야 하는 상황이라면 주의가 필요합니다.
@@ -573,11 +522,6 @@ flowchart TD
     C -->|"미매칭"| E["원본 빈 그대로 등록"]
     D --> F["프록시 빈을 컨테이너에 등록"]
     E --> F
-
-    classDef green fill:#d4edda,stroke:#28a745
-    classDef blue fill:#cce5ff,stroke:#007bff
-    class D green
-    class B blue
 ```
 
 개발자가 해야 할 일은 `@Aspect` 클래스를 작성하고 `@Component`로 등록하는 것뿐입니다. 나머지는 Spring이 알아서 합니다. 그러나 내부 동작을 모르면, "왜 이 메서드에는 AOP가 안 먹히지?"라는 문제를 해결하기 어렵습니다.
@@ -707,7 +651,6 @@ sequenceDiagram
     participant C as Client
     participant P as CallService Proxy
     participant T as CallService (원본)
-
     C->>P: external() 호출
     P->>T: external() 위임 (AOP 없음, external은 @Transactional 없음)
     T->>T: this.internal() 직접 호출
@@ -769,25 +712,13 @@ public class InternalService {
 
 ```mermaid
 flowchart TD
-    A["Spring Boot 시작"] --> B["@Aspect 클래스 스캔\n@Component로 빈 등록"]
-    B --> C["AnnotationAwareAspectJAutoProxyCreator 등록\n(BeanPostProcessor 구현체)"]
-    C --> D["모든 빈 생성 시작"]
-    D --> E["개별 빈 생성 및 의존관계 주입"]
-    E --> F["postProcessAfterInitialization() 호출"]
-    F --> G{"등록된 Pointcut과\n매칭되는 Advisor 있음?"}
-    G -->|"있음"| H["1️⃣ ProxyFactory 생성\n2️⃣ Advisor 등록\n3️⃣ 프록시 생성 (JDK or CGLIB)"]
-    G -->|"없음"| I["원본 빈 그대로 등록"]
-    H --> J["프록시 빈을 ApplicationContext에 등록"]
-    I --> J
-    J --> K["클라이언트 호출"]
-    K --> L["1️⃣ 프록시가 요청 가로챔\n2️⃣ Advice 실행 (Before)\n3️⃣ 실제 메서드 실행\n4️⃣ Advice 실행 (After)\n5️⃣ 결과 반환"]
-
-    classDef green fill:#d4edda,stroke:#28a745
-    classDef blue fill:#cce5ff,stroke:#007bff
-    classDef orange fill:#fff3cd,stroke:#ffc107
-    class H green
-    class C,F blue
-    class L orange
+    A["Spring Boot 시작\n@Aspect 스캔·BeanPostProcessor 등록"] --> B["빈 생성 및 의존관계 주입"]
+    B --> C["postProcessAfterInitialization()"]
+    C --> D{"Pointcut 매칭 Advisor?"}
+    D -->|"있음"| E["ProxyFactory → JDK/CGLIB 프록시 생성"]
+    D -->|"없음"| F["원본 빈 등록"]
+    E & F --> G["ApplicationContext 등록"]
+    G --> H["클라이언트 호출\nBefore → 실제 메서드 → After"]
 ```
 
 ---

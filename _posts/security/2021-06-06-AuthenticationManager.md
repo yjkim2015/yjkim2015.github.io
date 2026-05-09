@@ -38,21 +38,17 @@ Spring Security에서 `AuthenticationManager`의 기본 구현체는 `ProviderMa
 
 ```mermaid
 flowchart TD
-    A["인증 요청\n(Authentication Token)"] --> B["ProviderManager"]
-    B --> C["등록된 Provider 목록 순서대로 확인"]
-    C --> D["Provider 1\n(DaoAuthenticationProvider)\nprovider.supports(token.class)?"]
-    D -- "supports=true" --> E["provider.authenticate(token) 실행"]
-    E --> F{"결과"}
-    F -- "인증된 Authentication 반환" --> G["인증 성공!"]
-    F -- "null 반환" --> H["다음 Provider 시도"]
-    F -- "AuthenticationException" --> I["예외 기록 후\n다음 Provider 시도"]
-    D -- "supports=false" --> H
-    H --> J["Provider 2\n(OAuth2AuthenticationProvider)"]
-    J --> K{"더 이상 Provider 없음?"}
-    K -- "있음" --> L["계속 탐색"]
-    K -- "없음" --> M{"부모 ProviderManager\n존재?"}
-    M -- "있음" --> N["부모에게 위임"]
-    M -- "없음" --> O["마지막 예외 발생\n(인증 실패)"]
+    A["인증 요청"] --> B["ProviderManager"]
+    B --> C{"supports?"}
+    C -->|true| D["authenticate()"]
+    D -->|성공| E["인증 성공"]
+    D -->|실패| F["다음 Provider"]
+    C -->|false| F
+    F --> G{"소진?"}
+    G -->|No| C
+    G -->|Yes| H{"부모 PM?"}
+    H -->|Yes| I["부모 위임"]
+    H -->|No| J["인증 실패"]
 ```
 
 ## ProviderManager 구현 상세
@@ -249,20 +245,12 @@ providerManager.setEraseCredentialsAfterAuthentication(true);  // 기본값: tru
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["Security Filter\n(UsernamePasswordAuthenticationFilter 등)"]
-    B --> C["AuthenticationManager\n(ProviderManager)"]
-    C --> D["AuthenticationProvider 목록\n(supports() 확인)"]
-    D --> E["DaoAuthenticationProvider"]
-    D --> F["RememberMeAuthenticationProvider"]
-    D --> G["커스텀 Provider"]
-    E --> H["UserDetailsService\n(DB 조회)"]
-    E --> I["PasswordEncoder\n(비밀번호 검증)"]
-    H --> J["UserDetails"]
-    I --> K{"검증 결과"}
-    K -- "성공" --> L["인증된 Authentication 생성\n(credentials=null)"]
-    K -- "실패" --> M["AuthenticationException 발생"]
-    L --> N["SecurityContext에 저장"]
-    M --> O["AuthenticationFailureHandler"]
+    A["HTTP 요청"] --> B["SecurityFilter\n→ ProviderManager"]
+    B --> C["DaoProvider\nUserDetailsService+PasswordEncoder"]
+    B --> D["RememberMeProvider"]
+    C -->|성공| E["Authentication 생성\n→ SecurityContext"]
+    C -->|실패| F["AuthenticationException\n→ FailureHandler"]
+    D -->|성공| E
 ```
 
 ## 왜 이게 중요한가?

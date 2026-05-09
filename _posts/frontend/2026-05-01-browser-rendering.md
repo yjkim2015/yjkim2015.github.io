@@ -29,37 +29,15 @@ toc_label: 목차
 
 ```mermaid
 flowchart TD
-    subgraph "1️⃣ 파싱 단계"
-        HTML["HTML 바이트 수신"] --> DOM["DOM 트리 생성"]
-        CSS["CSS 바이트 수신"] --> CSSOM["CSSOM 트리 생성"]
-        JS["JavaScript 파일"] --> EXEC["JS 엔진 실행\n(DOM/CSSOM 변경 가능)"]
-    end
-
-    subgraph "2️⃣ 렌더 트리 단계"
-        DOM --> RT["렌더 트리 생성\n(보이는 노드만)"]
-        CSSOM --> RT
-        EXEC -->|DOM/CSSOM 수정| RT
-    end
-
-    subgraph "3️⃣ 레이아웃 단계"
-        RT --> LAYOUT["Layout / Reflow\n위치·크기 계산"]
-    end
-
-    subgraph "4️⃣ 페인트 단계"
-        LAYOUT --> PAINT["Paint / Repaint\n픽셀 채우기"]
-    end
-
-    subgraph "5️⃣ 합성 단계"
-        PAINT --> COMPOSITE["Composite\n레이어 합성 (GPU)"]
-        COMPOSITE --> SCREEN["🖥️ 화면 출력"]
-    end
-
-    style DOM fill:#e74c3c,color:#fff
-    style CSSOM fill:#3498db,color:#fff
-    style RT fill:#9b59b6,color:#fff
-    style LAYOUT fill:#f39c12,color:#fff
-    style PAINT fill:#2ecc71,color:#fff
-    style COMPOSITE fill:#1abc9c,color:#fff
+    HTML["HTML"] --> DOM["DOM 트리"]
+    CSS["CSS"] --> CSSOM["CSSOM 트리"]
+    JS["JS 실행"] -->|"DOM/CSSOM 수정"| RT
+    DOM --> RT["렌더 트리 (보이는 노드만)"]
+    CSSOM --> RT
+    RT --> LAYOUT["Layout: 위치/크기 계산"]
+    LAYOUT --> PAINT["Paint: 픽셀 채우기"]
+    PAINT --> COMPOSITE["Composite: GPU 레이어 합성"]
+    COMPOSITE --> SCREEN["화면 출력"]
 ```
 
 ---
@@ -82,7 +60,6 @@ flowchart LR
     B --> C["토큰\nStartTag: html\nStartTag: body"]
     C --> D["노드\nHTMLElement\nBodyElement"]
     D --> E["🌳 DOM 트리"]
-
     style A fill:#95a5a6,color:#fff
     style E fill:#e74c3c,color:#fff
 ```
@@ -123,7 +100,6 @@ sequenceDiagram
     participant PARSER as HTML 파서
     participant NETWORK as 네트워크
     participant JS as JS 엔진
-
     PARSER->>PARSER: 1️⃣ HTML 파싱 진행
     PARSER->>NETWORK: 2️⃣ script 태그 발견 → JS 다운로드 요청
     Note over PARSER: ⛔ 파싱 일시 중단!
@@ -205,34 +181,12 @@ body div p span { color: red; }
 DOM + CSSOM을 합쳐 **실제로 화면에 그려질 노드만** 포함한 트리입니다. 비시각적 노드는 제외됩니다.
 
 ```mermaid
-flowchart TD
-    subgraph "DOM 트리"
-        DH[html]
-        DB[body]
-        DH1[h1: 안녕]
-        DP[p: 단락]
-        DS["span (display:none)"]
-        DHEAD["head, script, meta"]
-    end
-
-    subgraph "렌더 트리 (보이는 것만)"
-        RR[렌더 루트]
-        RB[body]
-        RH1["h1: 안녕"]
-        RP["p: 단락"]
-        EXCL1["❌ span 제외\n(display:none)"]
-        EXCL2["❌ head/script/meta 제외"]
-    end
-
-    DH -->|포함| RR
-    DB -->|포함| RB
-    DH1 -->|포함| RH1
-    DP -->|포함| RP
-    DS -->|제외| EXCL1
-    DHEAD -->|제외| EXCL2
-
-    style EXCL1 fill:#e74c3c,color:#fff
-    style EXCL2 fill:#e74c3c,color:#fff
+flowchart LR
+    DOM["DOM: html, body, h1, p, span(none), head/script/meta"]
+    RT["렌더 트리: body, h1, p"]
+    EXCL["제외: span(display:none), head, script, meta"]
+    DOM -->|"보이는 노드만"| RT
+    DOM -->|"비표시/비시각"| EXCL
 ```
 
 | 요소/속성 | 렌더 트리 포함 여부 | 공간 차지 |
@@ -262,7 +216,6 @@ flowchart LR
     C --> D["위치 결정\n(절대/상대 좌표)"]
     D --> E["자식 노드 재귀 계산"]
     E --> F["✅ 레이아웃 완료\n(픽셀 단위 좌표)"]
-
     style F fill:#f39c12,color:#fff
 ```
 
@@ -331,7 +284,6 @@ element.style.visibility      = 'hidden'; // 레이아웃 그대로
 ```mermaid
 graph LR
     A["💸💸💸 Reflow\n크기·위치 변경"] --> B["💸💸 Repaint\n색상·배경 변경"] --> C["💸 Composite\ntransform·opacity"]
-
     style A fill:#e74c3c,color:#fff
     style B fill:#f39c12,color:#fff
     style C fill:#2ecc71,color:#fff
@@ -388,7 +340,6 @@ flowchart TD
         F["6️⃣ 리소스 힌트\n(preload, preconnect)"]
     end
     A --> B --> C --> D --> E --> F
-
     style A fill:#3498db,color:#fff
     style B fill:#2ecc71,color:#fff
     style C fill:#f39c12,color:#fff
@@ -470,20 +421,15 @@ sequenceDiagram
     participant WIN as window
     participant DOC as document
     participant BODY as body
-    participant DIV as div
-    participant BTN as button (클릭!)
-
-    Note over WIN,BTN: 1️⃣ 캡처링 단계 (위 → 아래)
-    WIN  ->>  DOC:  이벤트 전파
-    DOC  ->>  BODY: 이벤트 전파
-    BODY ->>  DIV:  이벤트 전파
-    DIV  ->>  BTN:  이벤트 도착 → 타깃 단계
-
-    Note over WIN,BTN: 3️⃣ 버블링 단계 (아래 → 위)
-    BTN  ->>  DIV:  버블링
-    DIV  ->>  BODY: 버블링
-    BODY ->>  DOC:  버블링
-    DOC  ->>  WIN:  버블링
+    participant BTN as button
+    Note over WIN,BTN: 캡처링 (위→아래)
+    WIN->>DOC: 전파
+    DOC->>BODY: 전파
+    BODY->>BTN: 타깃 도착
+    Note over WIN,BTN: 버블링 (아래→위)
+    BTN->>BODY: 버블링
+    BODY->>DOC: 버블링
+    DOC->>WIN: 버블링
 ```
 
 ```javascript

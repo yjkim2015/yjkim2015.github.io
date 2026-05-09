@@ -118,30 +118,18 @@ public class EmailService {
 
 ```mermaid
 sequenceDiagram
-    participant "클라이언트" as Client
-    participant "SecurityContextPersistenceFilter" as SCPF
-    participant "SecurityContextHolder" as SCH
-    participant "UsernamePasswordAuthFilter" as UPAF
-    participant "컨트롤러" as Controller
-    participant "서비스" as Service
-
-    Client->>SCPF: 1. HTTP 요청 수신
-    SCPF->>SCPF: 2. 세션에서 SecurityContext 로드
-    SCPF->>SCH: 3. ThreadLocal에 SecurityContext 저장
-    SCH->>UPAF: 4. 필터 체인 계속 진행
-    UPAF->>UPAF: 5. 인증 처리 (필요시)
-    UPAF->>SCH: 6. 인증 완료 후 Authentication 저장
-    SCH->>Controller: 7. 컨트롤러로 요청 전달
-    Controller->>SCH: 8. 현재 사용자 정보 조회
-    SCH-->>Controller: 9. Authentication 반환
-    Controller->>Service: 10. 비즈니스 로직 실행
-    Service->>SCH: 11. 서비스에서도 사용자 정보 조회 가능
-    SCH-->>Service: 12. 동일 스레드이므로 동일 Authentication 반환
-    Service-->>Controller: 13. 결과 반환
-    Controller-->>SCPF: 14. 응답 생성
-    SCPF->>SCPF: 15. SecurityContext를 세션에 저장
-    SCPF->>SCH: 16. ThreadLocal에서 SecurityContext 제거 (clearContext)
-    SCPF-->>Client: 17. HTTP 응답 전송
+    participant Client
+    participant SCPF as SCPFilter
+    participant SCH as SCHolder
+    participant Controller
+    Client->>SCPF: HTTP 요청
+    SCPF->>SCH: 세션 → ThreadLocal 저장
+    SCH->>Controller: 요청 전달
+    Controller->>SCH: Authentication 조회
+    Controller->>SCH: Service에서도 Authentication 조회
+    Controller-->>SCPF: 응답
+    SCPF->>SCH: clearContext()
+    SCPF-->>Client: HTTP 응답
 ```
 
 ## 실무 활용 패턴

@@ -17,21 +17,13 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    A[JobLauncher] -->|"실행"| B[Job]
-    B -->|"포함"| C[Step 1]
-    B -->|"포함"| D[Step 2]
-    B -->|"포함"| E[Step 3]
-
-    C --> F["Tasklet 방식"]
-    D --> G["Chunk 방식"]
-    G --> H[ItemReader]
-    G --> I[ItemProcessor]
-    G --> J[ItemWriter]
-
-    K[JobRepository] -->|"메타데이터 저장"| B
-    K -->|"실행 이력 관리"| C
-
-    L[JobParameters] -->|"파라미터 전달"| B
+    A[JobLauncher] --> B[Job]
+    B --> C[Step1: Tasklet]
+    B --> D[Step2: Chunk]
+    D --> R[Reader] --> P[Processor] --> W[Writer]
+    B --> E[Step3]
+    K[JobRepository\n메타데이터] --> B
+    L[JobParameters] --> B
 ```
 
 ### 2.1 메타 테이블 구조
@@ -41,33 +33,10 @@ Spring Batch는 실행 이력을 DB에 저장합니다.
 ```mermaid
 erDiagram
     BATCH_JOB_INSTANCE ||--o{ BATCH_JOB_EXECUTION : "has"
-    BATCH_JOB_EXECUTION ||--o{ BATCH_JOB_EXECUTION_PARAMS : "has"
     BATCH_JOB_EXECUTION ||--o{ BATCH_STEP_EXECUTION : "has"
-    BATCH_JOB_EXECUTION ||--|| BATCH_JOB_EXECUTION_CONTEXT : "has"
-    BATCH_STEP_EXECUTION ||--|| BATCH_STEP_EXECUTION_CONTEXT : "has"
-
-    BATCH_JOB_INSTANCE {
-        BIGINT JOB_INSTANCE_ID PK
-        VARCHAR JOB_NAME
-        VARCHAR JOB_KEY
-    }
-    BATCH_JOB_EXECUTION {
-        BIGINT JOB_EXECUTION_ID PK
-        BIGINT JOB_INSTANCE_ID FK
-        VARCHAR STATUS
-        VARCHAR EXIT_CODE
-        DATETIME START_TIME
-        DATETIME END_TIME
-    }
-    BATCH_STEP_EXECUTION {
-        BIGINT STEP_EXECUTION_ID PK
-        BIGINT JOB_EXECUTION_ID FK
-        VARCHAR STEP_NAME
-        BIGINT READ_COUNT
-        BIGINT WRITE_COUNT
-        BIGINT SKIP_COUNT
-        VARCHAR STATUS
-    }
+    BATCH_JOB_INSTANCE { BIGINT ID PK; VARCHAR JOB_NAME }
+    BATCH_JOB_EXECUTION { BIGINT ID PK; VARCHAR STATUS; VARCHAR EXIT_CODE }
+    BATCH_STEP_EXECUTION { BIGINT ID PK; VARCHAR STEP_NAME; BIGINT READ_COUNT; BIGINT WRITE_COUNT }
 ```
 
 ---
@@ -129,24 +98,16 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     participant S as Step
-    participant R as ItemReader
-    participant P as ItemProcessor
-    participant W as ItemWriter
-    participant TX as Transaction
-
+    participant R as Reader
+    participant P as Processor
+    participant W as Writer
+    participant TX as TX
     S->>TX: 트랜잭션 시작
-    loop chunk-size 만큼 반복
-        S->>R: read() 호출
-        R-->>S: 아이템 1개
-        S->>P: process(item)
-        P-->>S: 처리된 아이템
-    end
-    S->>W: write(chunk) 한 번에 전달
+    S->>R: read() → 아이템
+    S->>P: process(item) → 변환
+    S->>W: write(chunk) 일괄 전달
     W-->>S: 완료
-    S->>TX: 트랜잭션 커밋
-
-    Note over S: null 반환될 때까지 반복
-    Note over S: 다음 chunk 시작
+    S->>TX: 커밋 (null 반환 시 종료)
 ```
 
 ### 4.2 기본 Chunk Step 구성
@@ -459,7 +420,6 @@ graph TD
     B --> D["Worker Step 2: ID 100001~200000"]
     B --> E["Worker Step 3: ID 200001~300000"]
     B --> F["Worker Step N: ..."]
-
     C --> G["각자 독립적으로 처리"]
     D --> G
     E --> G
@@ -726,23 +686,16 @@ public class LargeScaleBatchConfig {
 
 ```mermaid
 flowchart TD
-    A[JobLauncher.run] --> B["JobRepository에 JobExecution 생성"]
-    B --> C["Job 실행"]
-    C --> D["Step 1 시작"]
-    D --> E{"Chunk 기반?"}
-    E -->|Yes| F[ItemReader.read × chunkSize]
-    F --> G[ItemProcessor.process × chunkSize]
-    G --> H[ItemWriter.write chunk]
-    H --> I["트랜잭션 커밋"]
-    I --> J{"더 읽을 데이터?"}
-    J -->|Yes| F
-    J -->|No| K["Step 완료"]
-    E -->|No| L[Tasklet.execute]
-    L --> K
-    K --> M{"다음 Step?"}
-    M -->|Yes| D
-    M -->|No| N["Job 완료"]
-    N --> O["JobRepository에 상태 저장"]
+    A[JobLauncher] --> B[Step 시작]
+    B --> C{Chunk?}
+    C -->|Yes| D[Reader→Processor→Writer]
+    D --> E{더 있음?}
+    E -->|Yes| D
+    E -->|No| F[Step 완료]
+    C -->|No| G[Tasklet] --> F
+    F --> H{다음 Step?}
+    H -->|Yes| B
+    H -->|No| I[Job 완료\n상태 저장]
 ```
 
 ---

@@ -51,23 +51,17 @@ T(cold start) = T(스케줄링)
 
 ```mermaid
 sequenceDiagram
-    participant HPA as "HPA Controller"
-    participant Sched as "kube-scheduler"
-    participant Kubelet as "kubelet"
-    participant Registry as "Image Registry"
-    participant App as "Application"
-    participant EP as "Service/Endpoints"
-
-    HPA->>Sched: "Pod 생성 요청 (1~2초)"
-    Sched->>Kubelet: "노드 선택 & 바인딩 (1~3초)"
-    Kubelet->>Registry: "이미지 풀링 요청"
-    Registry-->>Kubelet: "이미지 전송 완료 (0~120초)"
-    Kubelet->>App: "컨테이너 시작 (0.5~2초)"
-    App->>App: "JVM 초기화 (2~10초)"
-    App->>App: "Spring 컨텍스트 로딩 (5~30초)"
-    App-->>Kubelet: "/health/ready 성공"
-    Kubelet->>EP: "Endpoint 등록 (0.5~3초)"
-    EP-->>HPA: "트래픽 라우팅 시작"
+    participant HPA
+    participant Sched as Scheduler
+    participant K as kubelet
+    participant App
+    HPA->>Sched: Pod 생성(1~2s)
+    Sched->>K: 노드 바인딩(1~3s)
+    K->>K: 이미지 풀(0~120s)
+    K->>App: 컨테이너 시작(0.5~2s)
+    App->>App: JVM+Spring 초기화(7~40s)
+    App-->>K: /health/ready OK
+    K-->>HPA: 트래픽 시작
 ```
 
 ### 이미지 풀링 — 가장 큰 변수 (0~120초)
@@ -452,7 +446,6 @@ sequenceDiagram
     participant S as "Service (트래픽)"
     participant B as "Blue (현재 운영)"
     participant G as "Green (새 버전)"
-
     Note over B: 운영 중
     S->>B: "트래픽 100%"
     Note over G: Green 배포 시작
@@ -532,17 +525,12 @@ kubectl get pods -o json | jq -r '
 
 ```mermaid
 graph LR
-    Measure["현재 Cold Start 측정"] --> Identify["병목 단계 식별"]
-    Identify --> B{"주요 원인"}
-    B -->|"이미지 풀링이 길다"| ImageOpt["멀티스테이지 빌드\nPre-pull DaemonSet"]
-    B -->|"JVM 기동이 길다"| JvmOpt["GraalVM Native\n또는 CDS + lazy-init"]
-    B -->|"readinessProbe 대기"| ProbeOpt["Probe 파라미터 최적화\nstartupProbe 추가"]
-    B -->|"트래픽 예측 가능"| Cron["CronHPA 적용"]
-    ImageOpt --> Remeasure["변경 후 재측정"]
-    JvmOpt --> Remeasure
-    ProbeOpt --> Remeasure
-    Cron --> Remeasure
-    Remeasure --> Measure
+    Measure["Cold Start 측정"] --> B{"병목 원인"}
+    B -->|"이미지"| ImageOpt["멀티스테이지 빌드\nPre-pull DaemonSet"]
+    B -->|"JVM"| JvmOpt["GraalVM / CDS"]
+    B -->|"Probe"| ProbeOpt["startupProbe 최적화"]
+    B -->|"트래픽 예측"| Cron["CronHPA"]
+    ImageOpt & JvmOpt & ProbeOpt & Cron --> Measure
 ```
 
 ---

@@ -22,10 +22,8 @@ sequenceDiagram
     participant R as "Redis"
     participant S1 as "Subscriber 1 (서버 2)"
     participant S2 as "Subscriber 2 (서버 3)"
-
     S1->>R: SUBSCRIBE chat:room1
     S2->>R: SUBSCRIBE chat:room1
-
     P->>R: PUBLISH chat:room1 "안녕하세요!"
     R-->>S1: "안녕하세요!" 전달
     R-->>S2: "안녕하세요!" 전달
@@ -268,7 +266,6 @@ sequenceDiagram
     participant P as "Publisher"
     participant R as "Redis"
     participant S as "Subscriber (잠깐 다운)"
-
     P->>R: PUBLISH news "중요한 소식"
     Note over S: 💀 잠깐 다운
     R-->>S: 전달 실패 (아무도 없음)

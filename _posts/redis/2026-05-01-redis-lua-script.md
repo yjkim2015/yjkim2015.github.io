@@ -32,7 +32,6 @@ Redis는 **싱글 스레드**로 명령어 큐를 처리한다. Lua 스크립트
 sequenceDiagram
     participant Q as "명령어 큐"
     participant R as "Redis (싱글 스레드)"
-
     Note over Q: [GET a] [EVAL script...] [SET b] [GET c]
     Q->>R: GET a 실행
     Q->>R: EVAL script 시작
@@ -91,11 +90,9 @@ redisTemplate.execute(
 sequenceDiagram
     participant C as "Client"
     participant R as "Redis Server"
-
     Note over C,R: 1단계. 스크립트 등록
     C->>R: SCRIPT LOAD "스크립트 전문..."
     R-->>C: "abc123..." (SHA1 해시 반환)
-
     Note over C,R: 2단계. 이후 호출은 SHA1만 전송
     C->>R: EVALSHA abc123... 1 mykey
     R-->>C: 실행 결과

@@ -17,20 +17,10 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    subgraph app["Application Thread"]
-        SEND["producer.send(record)"]
-        SER["Serializer"]
-        PART["Partitioner"]
-        ACC["RecordAccumulator\nP0 batch | P1 batch | P2 batch"]
-        SEND --> SER --> PART --> ACC
-    end
-    subgraph net["Network Thread (I/O Thread)"]
-        SENDER["Sender"]
-        NC["NetworkClient"]
-        BROKERS["Broker 1, 2, 3 ..."]
-        SENDER --> NC --> BROKERS
-    end
-    ACC -->|"ready batches"| SENDER
+    SEND["send(record)"] --> SER["Serializer"] --> PART["Partitioner"]
+    PART --> ACC["RecordAccumulator(배치)"]
+    ACC -->|"ready batches"| SENDER["Sender"]
+    SENDER --> NC["NetworkClient"] --> BROKERS["Brokers"]
 ```
 
 ### 배치(Batch) 처리
@@ -63,20 +53,9 @@ props.put(ProducerConfig.LINGER_MS_CONFIG, 20);         // 20ms 대기
 
 ```mermaid
 graph TD
-    subgraph linger0["linger.ms=0 (기본) — 네트워크 요청 3번"]
-        L0A["t=0: msg1 → 즉시 전송"]
-        L0B["t=1: msg2 → 즉시 전송"]
-        L0C["t=2: msg3 → 즉시 전송"]
-    end
-    subgraph linger20["linger.ms=20 — 네트워크 요청 1번 (처리량 3배, 지연 20ms 증가)"]
-        L1A["t=0: msg1 도착 → 대기"]
-        L1B["t=5: msg2 도착 → 대기"]
-        L1C["t=18: msg3 도착 → 대기"]
-        L1D["t=20: 배치 전송 [msg1, msg2, msg3]"]
-        L1A --> L1D
-        L1B --> L1D
-        L1C --> L1D
-    end
+    A["linger.ms=0: msg1→즉시, msg2→즉시, msg3→즉시(3번)"]
+    B["linger.ms=20: msg1,msg2,msg3 대기"]
+    B --> C["t=20: 배치 전송(1번, 처리량 3배)"]
 ```
 
 ### 압축(Compression)
@@ -131,17 +110,11 @@ public class RegionPartitioner implements Partitioner {
 
 ```mermaid
 graph TD
-    subgraph rr["키 없는 메시지의 라운드로빈 문제"]
-        RR1["msg1 → P0 (배치 즉시 전송)"]
-        RR2["msg2 → P1 (배치 즉시 전송)"]
-        RR3["msg3 → P2 (배치 즉시 전송)"]
-        RRNOTE["배치가 작아 압축 효율 저하, 네트워크 요청 증가"]
+    subgraph rr["라운드로빈 (비효율)"]
+        RR["msg1→P0, msg2→P1, msg3→P2\n소배치 즉시 전송 → 압축 효율 저하"]
     end
-    subgraph sticky["Sticky Partitioner"]
-        ST1["msg1, msg2, msg3 → 모두 P0에 쌓음 (배치 꽉 찰 때까지)"]
-        ST2["배치 전송 후 → 다음 파티션으로 전환"]
-        ST1 --> ST2
-        STNOTE["큰 배치 = 좋은 압축 효율"]
+    subgraph sticky["Sticky Partitioner (효율)"]
+        ST1["msg1,2,3 모두 P0 누적\n배치 꽉 찰 때까지 대기"] --> ST2["전송 후 파티션 전환\n→ 큰 배치 = 좋은 압축"]
     end
 ```
 
@@ -275,21 +248,15 @@ max.poll.interval.ms:
 
 ```mermaid
 graph TD
-    subgraph before["초기 상태"]
-        C1A["Consumer 1: P0, P1"]
-        C2A["Consumer 2: P2, P3"]
-    end
-    subgraph phase1["Phase 1 — Stop the World (모두 멈춤!)"]
-        C1B["Consumer 1: 없음 (처리 중단)"]
-        C2B["Consumer 2: 없음 (처리 중단)"]
-        C3B["Consumer 3: 없음 (대기)"]
-    end
-    subgraph phase2["Phase 2 — Reassignment"]
-        C1C["Consumer 1: P0, P1"]
-        C2C["Consumer 2: P2"]
-        C3C["Consumer 3: P3 (신규)"]
-    end
-    before --> phase1 --> phase2
+    A["초기: C1=P0,P1 / C2=P2,P3"]
+    B["Phase1 Stop-the-World: 전체 중단"]
+    C1C["C1=P0,P1"]
+    C2C["C2=P2"]
+    C3C["C3=P3 (신규)"]
+    A --> B
+    B -->|"Phase2 재배정"| C1C
+    B --> C2C
+    B --> C3C
 ```
 
 **문제점:**
@@ -301,22 +268,8 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph before["초기 상태"]
-        C1A["Consumer 1: P0, P1"]
-        C2A["Consumer 2: P2, P3"]
-    end
-    subgraph round1["Round 1 — 이동할 파티션만 해제"]
-        C1B["Consumer 1: P0, P1 (유지, 계속 처리!)"]
-        C2B["Consumer 2: P2 (유지, 계속 처리!)"]
-        C2R["Consumer 2: P3만 해제"]
-        C3B["Consumer 3: 없음 (대기)"]
-    end
-    subgraph round2["Round 2 — 해제된 파티션만 재할당"]
-        C1C["Consumer 1: P0, P1 (변화 없음)"]
-        C2C["Consumer 2: P2 (변화 없음)"]
-        C3C["Consumer 3: P3 (신규 할당)"]
-    end
-    before --> round1 --> round2
+    A["초기: C1=P0+P1, C2=P2+P3"] --> B["Round1: C1=P0+P1 유지, C2=P2 유지, P3만 해제"]
+    B --> C["Round2: C3=P3 신규 할당 (나머지 변화 없음)"]
 ```
 
 **차이점:**
@@ -334,20 +287,16 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 
 ```mermaid
 sequenceDiagram
-    participant C1 as Consumer (Leader)
-    participant C2 as Consumer (Others)
-    participant GC as Group Coordinator
-    C1->>GC: 1. JoinGroup Request
-    C2->>GC: 1. JoinGroup Request
-    Note over GC: 2. 첫 번째 JoinGroup 보낸 컨슈머 = Group Leader 선정
-    GC-->>C1: JoinGroup Response (Leader)
-    GC-->>C2: JoinGroup Response
-    Note over C1: 3. 파티션 할당 계획 수립
-    C1->>GC: SyncGroup Request (할당 계획 포함)
-    C2->>GC: SyncGroup Request (빈 요청)
-    GC-->>C1: 4. SyncGroup Response (자신의 파티션 할당 결과)
-    GC-->>C2: 4. SyncGroup Response (자신의 파티션 할당 결과)
-    Note over C1,C2: 5. 처리 재개
+    participant C1 as Consumer(Leader)
+    participant C2 as Consumer
+    participant GC as GroupCoordinator
+    C1->>GC: JoinGroup
+    C2->>GC: JoinGroup
+    GC-->>C1: Leader 선정
+    C1->>GC: SyncGroup(할당계획)
+    C2->>GC: SyncGroup
+    GC-->>C1: 파티션 할당
+    GC-->>C2: 파티션 할당
 ```
 
 ---
@@ -429,22 +378,15 @@ sequenceDiagram
 sequenceDiagram
     participant P as Producer
     participant B as Broker
-    Note over P,B: 멱등성 없을 때 (중복 발생)
-    P->>B: msg(seq=1) 전송
-    Note over B: 저장 완료
+    Note over P,B: 멱등성 없음
+    P->>B: msg(seq=1)
+    B-->>P: ACK(손실) → P->>B: 재전송
+    Note over B: 중복 저장!
+    Note over P,B: 멱등성 있음
+    P->>B: msg(PID=100,seq=1)
+    B-->>P: ACK(손실) → P->>B: 재전송
+    Note over B: seq=1 중복 무시
     B-->>P: ACK
-    Note over P: ACK 손실!
-    P->>B: msg(seq=1) 재전송
-    Note over B: 중복 저장! 문제!
-
-    Note over P,B: 멱등성 있을 때 (중복 방지)
-    P->>B: msg(PID=100, seq=1) 전송
-    Note over B: 저장, seq=1 기록
-    B-->>P: ACK
-    Note over P: ACK 손실!
-    P->>B: msg(PID=100, seq=1) 재전송
-    Note over B: seq=1 이미 처리됨 → 중복 무시
-    B-->>P: ACK (정상 응답)
 ```
 
 Broker는 각 프로듀서(PID)마다 최근 5개의 시퀀스 번호를 기억한다.
@@ -500,19 +442,15 @@ public class OrderTransactionalService {
 ```mermaid
 sequenceDiagram
     participant P as Producer
-    participant TC as Transaction Coordinator
-    participant PL as Partition Leader
-    participant CGC as Consumer Group Coordinator
-    P->>TC: 1. initTransactions()
-    TC-->>P: PID + epoch 발급
-    Note over P: 2. beginTransaction() — 로컬 상태만 변경
-    P->>PL: 3. send() — 메시지 기록 (uncommitted 상태)
-    P->>TC: 4. sendOffsetsToTransaction()
-    TC->>CGC: offset을 트랜잭션에 포함
-    P->>TC: 5. commitTransaction()
-    TC->>PL: COMMITTED 마커 전송
-    Note over PL: 컨슈머는 이제 메시지를 읽을 수 있음
-    Note over P,TC: 실패 시: abortTransaction() → ABORTED 마커 → uncommitted 메시지 무시
+    participant TC as TxCoordinator
+    participant PL as PartitionLeader
+    P->>TC: initTransactions()
+    TC-->>P: PID+epoch
+    P->>PL: send()(uncommitted)
+    P->>TC: sendOffsetsToTransaction()
+    P->>TC: commitTransaction()
+    TC->>PL: COMMITTED 마커
+    Note over P,TC: 실패시 abortTransaction()→ABORTED
 ```
 
 ### Exactly-Once Semantics (EOS) 전체 그림
@@ -603,18 +541,13 @@ ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러
 
 ```mermaid
 graph TD
-    subgraph zk["ZooKeeper 방식"]
-        ZKA["브로커들이 /controller 노드 생성 시도"]
-        ZKB["먼저 생성한 브로커 = 컨트롤러"]
-        ZKA --> ZKB
+    subgraph zk["ZooKeeper"]
+        ZKA["브로커 /controller 선점 경쟁"] --> ZKB["먼저 생성한 브로커 = 컨트롤러"]
     end
-    subgraph kraft["KRaft 방식"]
-        KRA["Raft 합의 알고리즘"]
-        KRB["과반수(quorum) 투표로 Active Controller 선출"]
-        KRC["안정적이고 빠른 failover"]
-        KRA --> KRB --> KRC
+    subgraph kraft["KRaft"]
+        KRA["Raft 합의"] --> KRB["quorum 투표 → Active 선출\n빠른 failover"]
     end
-    DUTIES["컨트롤러 책임:\n파티션 리더 선출\nISR 변경 관리\n브로커 등록/해제 감지\n토픽/파티션 생성/삭제"]
+    ZKB & KRB --> DUTIES["역할: 리더 선출·ISR·토픽 관리"]
 ```
 
 ---
@@ -656,24 +589,8 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph before["컴팩션 전"]
-        B0["offset 0\nk1:v1"]
-        B1["offset 1\nk2:v1"]
-        B2["offset 2\nk1:v2"]
-        B3["offset 3\nk3:v1"]
-        B4["offset 4\nk2:v2"]
-        B5["offset 5\nk1:v3"]
-        B6["offset 6\nk3:v2"]
-        B0 --> B1 --> B2 --> B3 --> B4 --> B5 --> B6
-    end
-    subgraph after["컴팩션 후 (offset은 변하지 않음)"]
-        A2["offset 2\nk1:v2"]
-        A4["offset 4\nk2:v2"]
-        A5["offset 5\nk1:v3"]
-        A6["offset 6\nk3:v2"]
-        A2 --> A4 --> A5 --> A6
-    end
-    before -->|컴팩션| after
+    B0["0:k1v1"] --> B1["1:k2v1"] --> B2["2:k1v2"] --> B3["3:k3v1"] --> B4["4:k2v2"] --> B5["5:k1v3"] --> B6["6:k3v2"]
+    B6 -->|컴팩션| A2["2:k1v2"] --> A4["4:k2v2"] --> A5["5:k1v3"] --> A6["6:k3v2"]
 ```
 
 **주의:** 컴팩션 후에도 offset은 변하지 않는다. 일부 offset이 없는 sparse log가 된다.

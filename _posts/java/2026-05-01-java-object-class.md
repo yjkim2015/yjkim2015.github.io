@@ -19,18 +19,7 @@ Java는 **단일 루트 계층(Single Root Hierarchy)** 을 채택합니다. 모
 
 ```mermaid
 graph TD
-    Object["Object"]
-    String["String"]
-    Integer["Integer"]
-    ArrayList["ArrayList"]
-    MyClass["MyCustomClass"]
-    Etc["... (모든 클래스)"]
-
-    Object --> String
-    Object --> Integer
-    Object --> ArrayList
-    Object --> MyClass
-    Object --> Etc
+    Object --> String & Integer & ArrayList & MyClass["MyCustomClass"] & Etc["... (모든 클래스)"]
 ```
 
 ```java
@@ -170,7 +159,6 @@ graph LR
         B1["변수 b"] -->|"참조"| O2["객체 @3c4d"]
         R1["a == b → false (다른 주소)"]
     end
-
     subgraph "동등성 (equals)"
         A2["변수 a"] -->|"내용: hello"| C1["✓ 같은 내용"]
         B2["변수 b"] -->|"내용: hello"| C1
@@ -313,7 +301,6 @@ graph TD
     EQUALS["3. 버킷에서 key.equals()로 탐색"]
     STORE["4. 일치하면 value 저장/반환"]
     CHAIN["해시 충돌 시: 같은 버킷에 체이닝"]
-
     PUT --> HASH --> BUCKET --> EQUALS --> STORE
     BUCKET --> CHAIN --> EQUALS
 ```
@@ -410,7 +397,6 @@ graph TD
         C1["clone"] -->|"arr 필드 (같은 참조)"| ARR
         NOTE1["⚠️ 한쪽 수정 시 양쪽 영향"]
     end
-
     subgraph "깊은 복사 (Deep Copy)"
         O2["original"] -->|"arr 필드"| ARR2["int[] {1,2,3}"]
         C2["clone"] -->|"arr 필드 (별도 복사)"| ARR3["int[] {1,2,3} (다른 배열)"]
@@ -600,7 +586,6 @@ sequenceDiagram
     participant 생산자
     participant 모니터
     participant 소비자
-
     생산자->>모니터: synchronized 진입 (락 획득)
     생산자->>모니터: 버퍼 가득 참 → wait() 호출
     모니터-->>생산자: 락 반납, WAITING 상태
@@ -720,47 +705,13 @@ map.get(key);   // null — hashCode가 바뀌어 다른 버킷 탐색
 
 ```mermaid
 graph TD
-    OBJECT["Object 메서드 오버라이딩 가이드"]
-
-    TOSTRING["toString()
-    항상 오버라이딩
-    디버깅에 유용"]
-
-    EQUALS["equals()
-    5가지 계약 준수
-    hashCode와 반드시 함께"]
-
-    HASHCODE["hashCode()
-    equals와 일관성 필수
-    HashMap 정상 동작 보장"]
-
-    CLONE["clone()
-    Cloneable 필요
-    복사 생성자 대안 권장"]
-
-    GETCLASS["getClass()
-    final, 오버라이딩 불가
-    리플렉션 활용"]
-
-    FINALIZE["finalize()
-    절대 사용 금지
-    AutoCloseable 사용"]
-
-    WAITNOTIFY["wait/notify
-    synchronized 내부에서만
-    concurrent 패키지 선호"]
-
-    GOLDEN["황금 법칙:
-    equals() 오버라이딩 시
-    반드시 hashCode()도 오버라이딩"]
-
-    OBJECT --> TOSTRING
-    OBJECT --> EQUALS
-    OBJECT --> HASHCODE
-    OBJECT --> CLONE
-    OBJECT --> GETCLASS
-    OBJECT --> FINALIZE
-    OBJECT --> WAITNOTIFY
-    EQUALS --> GOLDEN
+    OBJECT["Object 메서드 가이드"]
+    OBJECT --> TOSTRING["toString() - 항상 오버라이딩"]
+    OBJECT --> EQUALS["equals() - 5가지 계약 준수"]
+    OBJECT --> HASHCODE["hashCode() - equals와 함께 필수"]
+    OBJECT --> CLONE["clone() - 복사 생성자 권장"]
+    OBJECT --> FINALIZE["finalize() - 사용 금지 / AutoCloseable"]
+    OBJECT --> WAITNOTIFY["wait/notify - synchronized 내부 / concurrent 선호"]
+    EQUALS --> GOLDEN["황금 법칙: equals 오버라이딩 시 hashCode도 필수"]
     HASHCODE --> GOLDEN
 ```

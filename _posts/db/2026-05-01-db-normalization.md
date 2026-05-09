@@ -23,7 +23,6 @@ graph TD
     NF1 -->|부분 종속 제거| NF2[2NF<br>PK 전체에 종속]
     NF2 -->|이행 종속 제거| NF3[3NF<br>비키 → 비키 종속 없음]
     NF3 -->|모든 결정자가 후보키| BCNF[BCNF<br>숨은 결정자 없음]
-
     style UNF fill:#F5B7B1
     style NF1 fill:#FADBD8
     style NF2 fill:#D5F5E3
@@ -294,7 +293,6 @@ graph LR
     NORM[정규화] -->|더 많은 JOIN| SLOW_READ[느린 읽기]
     NORM -->|데이터 중복 없음| CONSIST[데이터 정합성 높음]
     NORM -->|쓰기 1곳만| FAST_WRITE[빠른 쓰기]
-
     DENORM[반정규화] -->|JOIN 감소| FAST_READ[빠른 읽기]
     DENORM -->|중복 데이터| INCONSIST[정합성 관리 필요]
     DENORM -->|여러 곳 동기화| SLOW_WRITE[느린/복잡한 쓰기]
@@ -306,22 +304,11 @@ graph LR
 
 ```mermaid
 flowchart TD
-    START[쿼리 성능 문제 발생] --> MEASURE{측정했는가?}
-    MEASURE -->|아니오| DO_MEASURE[EXPLAIN + 슬로우 쿼리 로그 분석]
-    DO_MEASURE --> MEASURE
-    MEASURE -->|예| INDEX{인덱스로 해결?}
-    INDEX -->|예| ADD_IDX[인덱스 추가/튜닝]
-    INDEX -->|아니오| CACHE{캐시로 해결?}
-    CACHE -->|예| ADD_CACHE[Redis/로컬 캐시 도입]
-    CACHE -->|아니오| DENORM[반정규화 검토]
-    DENORM --> SYNC{동기화 전략<br>수립 가능?}
-    SYNC -->|예| APPLY[반정규화 적용 +<br>트리거/이벤트 동기화]
-    SYNC -->|아니오| RECHECK[설계 재검토<br>또는 DB 분리]
-
-    style START fill:#F5B7B1
-    style APPLY fill:#A9DFBF
-    style ADD_IDX fill:#AED6F1
-    style ADD_CACHE fill:#AED6F1
+    START["성능 문제\n→ EXPLAIN 분석"] --> INDEX{"인덱스로 해결?"}
+    INDEX -->|"예"| ADD_IDX["인덱스 추가"]
+    INDEX -->|"아니오"| CACHE{"캐시로 해결?"}
+    CACHE -->|"예"| ADD_CACHE["Redis 캐시"]
+    CACHE -->|"아니오"| APPLY["반정규화 적용"]
 ```
 
 ```

@@ -241,22 +241,15 @@ singleton.businessLogic();
 
 ```mermaid
 sequenceDiagram
-    participant C1 as "스레드 1"
-    participant C2 as "스레드 2"
-    participant S as "Singleton 클래스"
-
-    Note over C1,C2: "첫 번째 호출 (인스턴스 없음)"
-    C1->>S: "1. getInstance() 호출"
-    S->>S: "2. instance == null 확인"
-    S->>S: "3. 인스턴스 생성"
-    S-->>C1: "4. 새 인스턴스 반환"
-
-    Note over C1,C2: "두 번째 이후 호출"
-    C2->>S: "5. getInstance() 호출"
-    S->>S: "6. instance != null 확인"
-    S-->>C2: "7. 기존 인스턴스 반환 (동일 객체)"
-
-    Note over C1,C2: "C1과 C2가 받은 인스턴스는 동일한 객체"
+    participant C1 as 스레드1
+    participant C2 as 스레드2
+    participant S as Singleton
+    C1->>S: getInstance()
+    S->>S: null → 인스턴스 생성
+    S-->>C1: 새 인스턴스 반환
+    C2->>S: getInstance()
+    S->>S: not null 확인
+    S-->>C2: 기존 인스턴스 반환(동일 객체)
 ```
 
 ---

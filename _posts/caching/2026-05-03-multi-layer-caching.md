@@ -31,20 +31,10 @@ date: 2026-05-03
 
 ```mermaid
 graph LR
-    subgraph "단일 Redis"
-        S1["서버 1"] -->|"RTT 1ms"| R1["Redis"]
-        S2["서버 2"] -->|"RTT 1ms"| R1
-        S3["서버 N"] -->|"RTT 1ms"| R1
-        R1 -->|"Miss"| DB1["DB"]
-    end
-
-    subgraph "멀티 레이어"
-        S4["서버 1"] -->|"0ns"| L1A["L1 Local"]
-        S5["서버 2"] -->|"0ns"| L1B["L1 Local"]
-        L1A -->|"Miss → 1ms"| R2["L2 Redis"]
-        L1B -->|"Miss → 1ms"| R2
-        R2 -->|"Miss"| DB2["DB"]
-    end
+    S1["서버1~N"] -->|"1ms"| R1["Redis"] -->|"Miss"| DB1["DB (단일 Redis)"]
+    S2["서버1"] -->|"0ns"| L1A["L1 Local"]
+    S3["서버2"] -->|"0ns"| L1B["L1 Local"]
+    L1A & L1B -->|"Miss 1ms"| R2["L2 Redis"] -->|"Miss"| DB2["DB (멀티 레이어)"]
 ```
 
 ---
@@ -201,31 +191,17 @@ Spring의 Cache 추상화를 활용하면 L1(Caffeine)과 L2(Redis)를 투명하
 
 ```mermaid
 sequenceDiagram
-    participant App as "애플리케이션"
-    participant L1 as "L1 Caffeine"
-    participant L2 as "L2 Redis"
-    participant DB as "DB"
-
-    Note over App,DB: 시나리오 1: L1 Hit (최고 성능)
-    App->>L1: 1️⃣ GET product:42
-    L1-->>App: Hit (~100ns)
-
-    Note over App,DB: 시나리오 2: L1 Miss, L2 Hit
-    App->>L1: 1️⃣ GET product:42
-    L1-->>App: Miss
-    App->>L2: 2️⃣ GET product:42
-    L2-->>App: Hit (~1ms)
-    App->>L1: 3️⃣ L1에 저장 (다음부터 L1 Hit)
-
-    Note over App,DB: 시나리오 3: L1 Miss, L2 Miss
-    App->>L1: 1️⃣ GET product:42
-    L1-->>App: Miss
-    App->>L2: 2️⃣ GET product:42
-    L2-->>App: Miss
-    App->>DB: 3️⃣ SELECT (5~200ms)
-    DB-->>App: 데이터
-    App->>L2: 4️⃣ L2에 저장
-    App->>L1: 5️⃣ L1에 저장
+    participant App
+    participant L1 as Caffeine
+    participant L2 as Redis
+    participant DB
+    App->>L1: GET key
+    alt Hit
+        L1-->>App: 100ns
+    else Miss
+        App->>L2: GET key
+        L2-->>App: Hit(1ms) or Miss→DB조회→L2/L1 저장
+    end
 ```
 
 아래 코드는 L1+L2 계층형 캐시의 전체 구현이다. `TwoLevelCache` 클래스가 Spring의 `Cache` 인터페이스를 구현하며, 내부적으로 Caffeine(L1)과 Redis(L2)를 순차적으로 조회한다.
@@ -374,7 +350,6 @@ sequenceDiagram
     participant Redis as "Redis Pub/Sub"
     participant SB as "서버 B"
     participant SC as "서버 C"
-
     SA->>SA: 1️⃣ 데이터 변경
     SA->>SA: 2️⃣ 자신의 L1 삭제
     SA->>Redis: 3️⃣ PUBLISH l1:invalidate products:42
@@ -539,10 +514,8 @@ graph TD
     Total["100K TPS 유입"] --> CDN["CDN Hit 70%\n70,000 TPS\n응답: 10ms"]
     Total --> GW["Gateway Hit 5%\n5,000 TPS\n응답: 3ms"]
     Total --> Miss1["CDN+GW Miss\n25,000 TPS"]
-
     Miss1 --> L1["L1 Hit 80%\n20,000 TPS\n응답: 0.1ms"]
     Miss1 --> Miss2["L1 Miss\n5,000 TPS"]
-
     Miss2 --> L2["L2 Hit 90%\n4,500 TPS\n응답: 1ms"]
     Miss2 --> DB["L2 Miss → DB\n500 TPS\n응답: 50ms"]
 ```
@@ -745,7 +718,6 @@ graph LR
         L2["L2 Redis\n공유 캐시\n전 서버 일관성"]
         DB["DB\n원본 데이터\n최후 방어선"]
     end
-
     CDN --> GW --> L1 --> L2 --> DB
 ```
 

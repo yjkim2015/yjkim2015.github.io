@@ -22,21 +22,13 @@ React 16.8에서 Hooks가 등장하면서 함수형 컴포넌트에서도 상태
 ```mermaid
 mindmap
   root((React Hooks))
-    기본 Hooks
-      useState
-      useEffect
-      useContext
-    추가 Hooks
-      useReducer
-      useMemo
-      useCallback
-      useRef
-      useLayoutEffect
-    커스텀 Hooks
-      useDebounce
-      useFetch
-      useLocalStorage
-      useEventListener
+    기본
+      useState/useEffect/useContext
+    추가
+      useReducer/useMemo/useCallback
+      useRef/useLayoutEffect
+    커스텀
+      useDebounce/useFetch/useLocalStorage
 ```
 
 ---
@@ -108,22 +100,11 @@ useEffect(() => {
 
 ```mermaid
 sequenceDiagram
-    participant RENDER as 렌더링
-    participant DOM as DOM 업데이트
-    participant EFFECT as useEffect
-
-    RENDER->>DOM: 첫 렌더링
-    DOM->>EFFECT: useEffect 실행
-    Note over EFFECT: cleanup 없음 (첫 실행)
-    EFFECT->>EFFECT: effect1 실행
-
-    RENDER->>DOM: 의존성 변경으로 재렌더링
-    DOM->>EFFECT: 이전 effect cleanup 실행
-    EFFECT->>EFFECT: cleanup1 실행
-    EFFECT->>EFFECT: effect2 실행
-
-    RENDER->>EFFECT: 컴포넌트 언마운트
-    EFFECT->>EFFECT: 마지막 cleanup 실행
+    participant R as 렌더링
+    participant E as useEffect
+    R->>E: 첫 렌더링 - effect1 실행
+    R->>E: 의존성 변경 - cleanup1 후 effect2 실행
+    R->>E: 언마운트 - 마지막 cleanup 실행
 ```
 
 ### Stale Closure — 가장 흔한 useEffect 버그
@@ -201,11 +182,9 @@ flowchart TD
     A{"계산이<br>비싼가?"}
     A -->|"예 복잡한 연산"| B["useMemo 사용"]
     A -->|"아니오 간단한 계산"| C["useMemo 불필요"]
-
     D{"자식 컴포넌트에<br>전달하는 객체인가?"}
     D -->|"예"| E["useMemo 사용 — 참조 안정화"]
     D -->|"아니오"| F["불필요"]
-
     style B fill:#2ecc71,color:#fff
     style C fill:#e74c3c,color:#fff
     style E fill:#2ecc71,color:#fff
@@ -326,7 +305,6 @@ sequenceDiagram
     participant LAY as useLayoutEffect
     participant PAINT as 브라우저 페인팅
     participant EFF as useEffect
-
     RENDER->>DOM: DOM 업데이트
     DOM->>LAY: useLayoutEffect 동기 실행
     LAY->>LAY: DOM 읽기 수정 (깜빡임 없음)
@@ -456,15 +434,12 @@ function SearchInput() {
 graph TD
     A["Hooks 규칙"] --> B["최상위에서만 호출"]
     A --> C["React 함수에서만 호출"]
-
     B --> B1["조건문 안 호출 금지"]
     B --> B2["루프 안 호출 금지"]
     B --> B3["중첩 함수 안 호출 금지"]
-
     C --> C1["함수형 컴포넌트 OK"]
     C --> C2["커스텀 훅 OK"]
     C --> C3["일반 함수 금지"]
-
     style B1 fill:#e74c3c,color:#fff
     style B2 fill:#e74c3c,color:#fff
     style B3 fill:#e74c3c,color:#fff
@@ -487,23 +462,11 @@ function BadComponent({ isAdmin }) {
 ## 2번 다이어그램 - Hooks 선택 가이드
 
 ```mermaid
-mindmap
-  root((Hooks 선택))
-    상태 관리
-      useState 단순 상태
-      useReducer 복잡한 상태
-    부작용
-      useEffect 비동기 DOM 외
-      useLayoutEffect DOM 측정 수정
-    최적화
-      useMemo 비싼 계산 캐싱
-      useCallback 함수 참조 안정화
-    참조
-      useRef DOM 뮤터블 값
-    공유
-      useContext Context 구독
-    재사용
-      커스텀 훅 로직 분리 재사용
+graph TD
+    ROOT["Hooks 선택"] --> S["상태: useState / useReducer"]
+    ROOT --> E["부작용: useEffect / useLayoutEffect"]
+    ROOT --> O["최적화: useMemo / useCallback"]
+    ROOT --> R["참조/공유: useRef / useContext / 커스텀훅"]
 ```
 
 Hooks를 올바르게 사용하는 핵심은 두 가지입니다. **의존성 배열을 정확히 관리하고, 불필요한 최적화를 피하는 것.** `useMemo`와 `useCallback`은 실제 성능 문제가 측정되었을 때만 사용하세요. 모든 함수에 `useCallback`을 붙이는 것은 오히려 코드를 복잡하게 만들고, 메모이제이션 비용이 더 클 수 있습니다.

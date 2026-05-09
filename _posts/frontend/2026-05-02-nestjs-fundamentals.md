@@ -28,22 +28,9 @@ NestJS는 Angular에서 영감을 받아 **모듈-컨트롤러-서비스**라는
 
 ```mermaid
 graph TD
-    CLIENT["클라이언트"] --> MW["미들웨어"]
-    MW --> GUARD["가드 인증/인가"]
-    GUARD --> INTERCEPTOR1["인터셉터 전처리"]
-    INTERCEPTOR1 --> PIPE["파이프 유효성 검사"]
-    PIPE --> CTRL["컨트롤러"]
-    CTRL --> SERVICE["서비스 비즈니스 로직"]
-    SERVICE --> REPO["레포지토리 DB"]
-    REPO --> SERVICE
-    SERVICE --> CTRL
-    CTRL --> INTERCEPTOR2["인터셉터 후처리"]
-    INTERCEPTOR2 --> CLIENT
-
-    style GUARD fill:#e74c3c,color:#fff
-    style PIPE fill:#f39c12,color:#fff
-    style SERVICE fill:#2ecc71,color:#fff
-    style INTERCEPTOR1 fill:#3498db,color:#fff
+    CLIENT --> MW["미들웨어"] --> GUARD["가드"] --> PIPE["파이프"] --> CTRL["컨트롤러"]
+    CTRL --> SERVICE["서비스"] --> REPO["레포지토리"]
+    REPO --> SERVICE --> CTRL --> INTR["인터셉터"] --> CLIENT
 ```
 
 이 파이프라인이 중요한 이유가 있습니다. 왜냐하면 인증, 로깅, 유효성 검사 같은 **횡단 관심사(Cross-cutting Concerns)**를 비즈니스 로직과 완전히 분리할 수 있기 때문입니다. 컨트롤러와 서비스는 순수하게 자신의 일만 합니다.
@@ -70,29 +57,12 @@ export class UsersModule {}
 
 ```mermaid
 graph TD
-    subgraph "UsersModule"
-        UC["UsersController"]
-        US["UsersService"]
-        UE["User Entity"]
-    end
-
-    subgraph "EmailModule"
-        ES["EmailService"]
-    end
-
-    subgraph "AppModule 루트"
-        AM["AppModule"]
-        AM --> UsersModule
-        AM --> EmailModule
-    end
-
-    UC --> US
-    US --> UE
-    US -->|"imports EmailModule"| ES
-
-    style AM fill:#e74c3c,color:#fff
-    style UC fill:#3498db,color:#fff
-    style US fill:#2ecc71,color:#fff
+    AM["AppModule"] --> UM["UsersModule"]
+    AM --> EM["EmailModule"]
+    UM --> UC["UsersController"]
+    UM --> US["UsersService"]
+    UM --> UE["User Entity"]
+    US -->|"imports"| ES["EmailService"]
 ```
 
 > 비유: `exports`는 모듈의 공개 API입니다. exports에 포함되지 않은 서비스는 "이 진료과 내부에서만 쓰는 것"이고, exports에 포함된 서비스는 "다른 진료과에서도 의뢰할 수 있는 것"입니다.
@@ -319,27 +289,15 @@ sequenceDiagram
     participant C as 클라이언트
     participant MW as 미들웨어
     participant G as 가드
-    participant INT as 인터셉터
     participant PIPE as 파이프
     participant CTRL as 컨트롤러
-    participant SVC as 서비스
-    participant DB as 데이터베이스
-
-    C->>MW: HTTP 요청
-    MW->>MW: 로깅, CORS 처리
-    MW->>G: 가드 실행
-    G->>G: JWT 검증, 권한 확인
-    G->>INT: 인터셉터 전처리
-    INT->>PIPE: 파이프 실행
-    PIPE->>PIPE: DTO 유효성 검사, 타입 변환
-    PIPE->>CTRL: 컨트롤러 메서드 호출
+    participant SVC as 서비스/DB
+    C->>MW: HTTP 요청 (로깅/CORS)
+    MW->>G: JWT 검증/권한 확인
+    G->>PIPE: DTO 유효성 검사/타입 변환
+    PIPE->>CTRL: 컨트롤러 호출
     CTRL->>SVC: 비즈니스 로직 위임
-    SVC->>DB: DB 쿼리
-    DB-->>SVC: 결과
-    SVC-->>CTRL: 처리 결과
-    CTRL-->>INT: 응답
-    INT->>INT: 응답 변환
-    INT-->>C: 최종 응답
+    SVC-->>C: 최종 응답
 ```
 
 ---
@@ -388,25 +346,10 @@ export class UsersService {
 ```mermaid
 mindmap
   root((NestJS))
-    구성 요소
-      Module 기능 단위
-      Controller 라우팅
-      Service 비즈니스 로직
-      Provider DI 등록
-    요청 처리 파이프라인
-      Middleware 전처리
-      Guard 인증 인가
-      Interceptor 전후처리
-      Pipe 변환 검증
-    데이터 레이어
-      TypeORM
-      Entity
-      Repository
-    고급 기능
-      동적 모듈
-      커스텀 데코레이터
-      이벤트 이미터
-      WebSocket
+    구성: Module, Controller, Service, Provider
+    파이프라인: Middleware, Guard, Interceptor, Pipe
+    데이터: TypeORM, Entity, Repository
+    고급: 동적 모듈, 커스텀 데코레이터, WebSocket
 ```
 
 NestJS는 **Angular에서 영감을 받은 아키텍처**로, 규모가 커져도 유지보수 가능한 백엔드를 만들기 위한 강제적인 구조를 제공합니다. 처음에는 보일러플레이트가 많다고 느낄 수 있습니다. 하지만 팀이 커지고 기능이 복잡해질수록, 이 구조가 있느냐 없느냐의 차이는 엄청납니다. 6개월 후의 자신을 위해 구조를 투자하는 것입니다.

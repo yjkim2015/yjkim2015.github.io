@@ -26,33 +26,16 @@ Spring Security의 인증 흐름이 이 과정과 동일합니다.
 
 ```mermaid
 sequenceDiagram
-    participant "사용자" as User
-    participant "UsernamePasswordAuthenticationFilter" as UPAF
-    participant "AuthenticationManager\n(ProviderManager)" as AM
-    participant "AuthenticationProvider\n(DaoAuthenticationProvider)" as AP
-    participant "UserDetailsService" as UDS
-    participant "PasswordEncoder" as PE
-    participant "SecurityContext" as SC
-
-    User->>UPAF: 1. POST /login (username=user, password=1234)
-    UPAF->>UPAF: 2. UsernamePasswordAuthenticationToken 생성\n(principal=user, credentials=1234, authenticated=false)
-    UPAF->>AM: 3. authenticate(token) 호출
-    AM->>AM: 4. 처리 가능한 AuthenticationProvider 탐색
-    AM->>AP: 5. 인증 처리 위임
-    AP->>UDS: 6. loadUserByUsername("user") 호출
-    UDS->>UDS: 7. DB에서 사용자 정보 조회
-    UDS-->>AP: 8. UserDetails 반환 (username, encodedPassword, authorities)
-    AP->>PE: 9. matches("1234", encodedPassword) 비밀번호 검증
-    PE-->>AP: 10. 검증 결과 반환
-    alt "비밀번호 일치"
-        AP-->>AM: 11a. 인증된 Authentication Token 반환\n(principal=UserDetails, credentials=null, authenticated=true)
-        AM-->>UPAF: 12a. 인증 완료
-        UPAF->>SC: 13a. SecurityContext에 Authentication 저장
-        UPAF-->>User: 14a. 로그인 성공 → 리다이렉트
-    else "비밀번호 불일치"
-        AP-->>AM: 11b. BadCredentialsException 발생
-        AM-->>UPAF: 12b. 예외 전파
-        UPAF-->>User: 13b. 로그인 실패 → 실패 URL로 리다이렉트
+    participant U as User
+    participant F as AuthFilter
+    participant AP as AuthProvider
+    U->>F: POST /login
+    F->>AP: authenticate(token)
+    AP->>AP: UserDetails 조회+검증
+    alt 일치
+        AP-->>U: 로그인 성공
+    else 불일치
+        AP-->>U: BadCredentials
     end
 ```
 
@@ -159,18 +142,12 @@ public class CustomUserDetailsService implements UserDetailsService {
 
 ```mermaid
 flowchart TD
-    A["인증 실패 발생"] --> B{"예외 종류"}
-    B -- "UsernameNotFoundException\n(사용자 없음)" --> C["BadCredentialsException으로\n변환 (사용자 존재 여부 숨김)"]
-    B -- "BadCredentialsException\n(비밀번호 오류)" --> D["실패 처리"]
-    B -- "LockedException\n(계정 잠금)" --> E["실패 처리"]
-    B -- "DisabledException\n(계정 비활성화)" --> F["실패 처리"]
-    B -- "AccountExpiredException\n(계정 만료)" --> G["실패 처리"]
+    A["인증 실패"] --> B{"예외 종류"}
+    B -- "UsernameNotFound" --> C["BadCredentials로\n변환(존재여부 숨김)"]
+    B -- "BadCredentials" --> D["FailureHandler"]
+    B -- "Locked/Disabled\n/Expired" --> D
     C --> D
-    D --> H["AuthenticationFailureHandler 호출"]
-    E --> H
-    F --> H
-    G --> H
-    H --> I["실패 URL로 리다이렉트\n또는 401 JSON 응답"]
+    D --> E["실패URL 리다이렉트\n또는 401 응답"]
 ```
 
 `UsernameNotFoundException`을 `BadCredentialsException`으로 변환하는 이유는 사용자 존재 여부를 공격자에게 노출하지 않기 위함입니다. "아이디가 없습니다"와 "비밀번호가 틀립니다"를 구분하면 공격자가 유효한 아이디를 수집하는 데 악용할 수 있습니다.

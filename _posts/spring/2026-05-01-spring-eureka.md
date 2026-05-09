@@ -27,20 +27,18 @@ date: 2026-05-01
 
 ```mermaid
 sequenceDiagram
-    participant S as "서비스 인스턴스"
-    participant E as "Eureka Server"
-    participant C as "클라이언트 서비스"
-
-    S->>E: 1️⃣ POST /eureka/apps/{appName} (Register)
-    Note over E: "레지스트리에 인스턴스 추가"
-    loop "매 10초 (lease-renewal-interval)"
-        S->>E: 2️⃣ PUT /eureka/apps/{appName}/{instanceId} (Heartbeat)
+    participant S as Service
+    participant E as EurekaServer
+    participant C as Client
+    S->>E: POST /eureka/apps/{appName} (Register)
+    loop 매 10초
+        S->>E: PUT Heartbeat
         E-->>S: 200 OK
     end
-    C->>E: 3️⃣ 서비스 이름으로 인스턴스 목록 조회
-    E-->>C: 인스턴스 목록 반환
-    C->>S: 4️⃣ 직접 HTTP 호출
-    S->>E: DELETE /eureka/apps/{appName}/{instanceId} (Deregister)
+    C->>E: 인스턴스 목록 조회
+    E-->>C: 목록 반환
+    C->>S: 직접 HTTP 호출
+    S->>E: DELETE (Deregister)
 ```
 
 ---
@@ -49,25 +47,13 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    subgraph "Eureka Server 클러스터"
-        ES1["Eureka Server 1"]
-        ES2["Eureka Server 2"]
-        ES1 <-->|"Peer Replication"| ES2
-    end
-
-    subgraph "마이크로서비스들"
-        OS["Order Service\nEureka Client"]
-        US["User Service\nEureka Client"]
-        PS["Product Service\nEureka Client"]
-    end
-
-    OS -->|"Register/Heartbeat"| ES1
-    US -->|"Register/Heartbeat"| ES2
-    PS -->|"Register/Heartbeat"| ES1
-
-    OS -->|"Discover user-service"| ES1
-    ES1 -->|"인스턴스 목록"| OS
-    OS -->|"직접 HTTP 호출"| US
+    ES1["Eureka Server 1"] <-->|Peer Replication| ES2["Eureka Server 2"]
+    OS["Order Service"] -->|Register/Heartbeat| ES1
+    US["User Service"] -->|Register/Heartbeat| ES2
+    PS["Product Service"] -->|Register/Heartbeat| ES1
+    OS -->|Discover| ES1
+    ES1 -->|인스턴스 목록| OS
+    OS -->|HTTP 직접 호출| US
 ```
 
 ---
@@ -235,11 +221,9 @@ graph TD
         ES2["Eureka Server 2\n:8762"]
         ES1 <-->|"Peer Replication"| ES2
     end
-
     MS1["Order Service"] -->|"Register"| ES1
     MS2["User Service"] -->|"Register"| ES2
     MS3["Product Service"] -->|"Register"| ES1
-
     MS1 -->|"Discovery"| ES1
     MS1 -.->|"Fallback"| ES2
 ```

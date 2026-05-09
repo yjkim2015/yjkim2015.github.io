@@ -84,7 +84,6 @@ sequenceDiagram
     participant C1 as Complex(3, 4)
     participant C2 as Complex(1, 2)
     participant Result as Complex(4, 6)
-
     Client->>C1: plus(c2)
     C1->>Result: new Complex(3+1, 4+2) 생성
     Result-->>Client: 새 객체 반환

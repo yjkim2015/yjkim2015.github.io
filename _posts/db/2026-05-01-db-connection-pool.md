@@ -40,23 +40,15 @@ Spring Boot 2.x+의 기본 커넥션 풀. "빠른 커넥션 풀" 표방.
 
 ```mermaid
 graph TD
-    subgraph "HikariCP"
-        POOL[커넥션 풀\nConcurrentBag]
-        C1[Connection 1\n대기중]
-        C2[Connection 2\n대기중]
-        C3[Connection 3\n사용중]
-        C4[Connection 4\n대기중]
-        POOL --- C1
-        POOL --- C2
-        POOL --- C3
-        POOL --- C4
-    end
-
-    T1[스레드 1] -->|getConnection| POOL
+    POOL["HikariCP 커넥션 풀"]
+    POOL --- C1["Connection 1 (대기)"]
+    POOL --- C2["Connection 2 (대기)"]
+    POOL --- C3["Connection 3 (사용중)"]
+    POOL --- C4["Connection 4 (대기)"]
+    T1["스레드 1"] -->|getConnection| POOL
     POOL -->|대여| T1
-    T1 -->|close 호출\n실제 반납| POOL
-
-    T2[스레드 2] -->|getConnection\n대기중| POOL
+    T1 -->|close(반납)| POOL
+    T2["스레드 2"] -->|대기중| POOL
 ```
 
 ### 커넥션 생명주기
@@ -74,16 +66,12 @@ graph TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> 생성: Pool 초기화 / 신규 생성
-    생성 --> 대기: 풀에 등록
+    [*] --> 대기: Pool 초기화
     대기 --> 사용중: getConnection()
-    사용중 --> 대기: close() (반납)
-    대기 --> 헬스체크: keepalive-time 도래
-    헬스체크 --> 대기: SELECT 1 성공
-    헬스체크 --> 폐기: 응답 없음
-    대기 --> 폐기: idleTimeout 초과
-    사용중 --> 폐기: maxLifetime 초과 (반납 시)
-    폐기 --> 생성: minimumIdle 미달 시 재생성
+    사용중 --> 대기: close() 반납
+    대기 --> 폐기: idleTimeout / 헬스체크 실패
+    사용중 --> 폐기: maxLifetime 초과
+    폐기 --> 대기: minimumIdle 미달 시 재생성
     폐기 --> [*]: 풀 충분
 ```
 
@@ -177,25 +165,17 @@ TPS 기반 계산:
 
 ```mermaid
 sequenceDiagram
-    participant T1 as 스레드 1~10
-    participant Pool as HikariCP (size=10)
+    participant T1 as 스레드1~10
+    participant Pool as HikariCP(size=10)
     participant DB as MySQL
-    participant API as 외부 API
-
-    T1->>Pool: getConnection() x 10
-    Pool->>DB: 10개 커넥션 전부 대여
-    Note over T1: @Transactional 내부에서<br/>외부 API 호출 (3초 소요)
-    T1->>API: HTTP 호출 (블로킹)
-
-    rect rgb(255, 230, 230)
-        Note over Pool: 남은 커넥션: 0개
-        T1->>Pool: 스레드 11~200 대기열 진입
-        Note over Pool: pending 스레드 190개<br/>connectionTimeout 30초 카운트다운
-    end
-
+    participant API as 외부API
+    T1->>Pool: getConnection() x10
+    Pool->>DB: 커넥션 10개 대여 (풀 소진)
+    T1->>API: HTTP 호출 (블로킹 3초)
+    Note over Pool: 스레드11~200 대기, timeout 30s
     API-->>T1: 3초 후 응답
     T1->>Pool: close() 반납
-    Pool-->>T1: 대기 스레드에 커넥션 재배분
+    Pool-->>T1: 대기 스레드에 재배분
 ```
 
 ```
@@ -292,7 +272,6 @@ sequenceDiagram
     participant TA as 스레드 A
     participant Pool as HikariCP (size=1)
     participant TB as 스레드 B (REQUIRES_NEW)
-
     TA->>Pool: getConnection() - 커넥션 1 획득
     Note over TA: @Transactional 시작
     TA->>TA: orderRepository.save()

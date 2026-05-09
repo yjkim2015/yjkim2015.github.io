@@ -21,16 +21,11 @@ Spring Security의 AnonymousAuthenticationFilter가 바로 이 역할입니다. 
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["UsernamePasswordAuthenticationFilter\n(폼 로그인 시도)"]
-    B --> C["RememberMeAuthenticationFilter\n(자동 로그인 시도)"]
-    C --> D["AnonymousAuthenticationFilter"]
-    D --> E{"SecurityContext에\nAuthentication 존재?"}
-    E -- "있음 (인증된 사용자)" --> F["필터 통과\n(다음 필터로 진행)"]
-    E -- "없음 (미인증)" --> G["AnonymousAuthenticationToken 생성\n(principal: anonymousUser\n권한: ROLE_ANONYMOUS)"]
-    G --> H["SecurityContextHolder에 저장"]
-    H --> I["다음 필터로 진행"]
-    F --> J["FilterSecurityInterceptor\n(접근 권한 결정)"]
-    I --> J
+    A["HTTP 요청"] --> B["폼/RememberMe 필터"] --> D["AnonymousAuthenticationFilter"]
+    D --> E{"Authentication 존재?"}
+    E -->|있음| F["필터 통과"]
+    E -->|없음| G["AnonymousAuthenticationToken 생성\nROLE_ANONYMOUS"] --> H["SecurityContextHolder 저장"]
+    F & H --> J["FilterSecurityInterceptor\n접근 권한 결정"]
 ```
 
 핵심은 이 필터가 인증 객체를 **새로 생성하거나 덮어쓰지 않는다**는 점입니다. SecurityContext에 이미 Authentication 객체가 있으면 아무것도 하지 않습니다. 오직 Authentication이 없을 때만 익명 인증 토큰을 생성합니다.
@@ -129,7 +124,6 @@ sequenceDiagram
     participant "브라우저" as Browser
     participant "AnonymousAuthenticationFilter" as AAF
     participant "세션" as Session
-
     Browser->>AAF: 1. GET /public (쿠키 없음)
     AAF->>AAF: 2. SecurityContext 확인 → Authentication 없음
     AAF->>AAF: 3. AnonymousAuthenticationToken 생성

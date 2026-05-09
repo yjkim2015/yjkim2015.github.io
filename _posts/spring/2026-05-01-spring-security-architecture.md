@@ -99,24 +99,17 @@ public class SecurityConfig {
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant F as "UsernamePasswordAuthenticationFilter"
-    participant AM as "AuthenticationManager"
-    participant AP as "DaoAuthenticationProvider"
-    participant UDS as "UserDetailsService"
-    participant SC as "SecurityContextHolder"
-
-    C->>F: POST /login (username, password)
-    F->>F: 1️⃣ UsernamePasswordAuthenticationToken 생성 (미인증)
-    F->>AM: 2️⃣ authenticate()
-    AM->>AP: 적절한 AuthenticationProvider 탐색
-    AP->>UDS: 3️⃣ loadUserByUsername(username)
-    UDS-->>AP: UserDetails 반환
-    AP->>AP: 4️⃣ 비밀번호 검증 (PasswordEncoder)
-    AP-->>AM: 5️⃣ 인증 성공 → 완전한 Authentication 반환
-    AM-->>F: Authentication 반환
-    F->>SC: 6️⃣ SecurityContext에 Authentication 저장
-    F-->>C: 성공 응답
+    participant C as Client
+    participant F as AuthFilter
+    participant AM as AuthManager
+    participant AP as AuthProvider/UDS
+    participant SC as SecurityContext
+    C->>F: POST /login
+    F->>AM: authenticate()
+    AM->>AP: loadUserByUsername()+비밀번호검증
+    AP-->>AM: 인증 성공
+    AM-->>F: Authentication
+    F->>SC: 저장 후 성공 응답
 ```
 
 ---
@@ -249,21 +242,15 @@ Spring Security는 서버가 발급한 CSRF 토큰을 요청에 포함시켜야�
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트 (브라우저)"
-    participant CF as "CsrfFilter"
-    participant S as "서버"
-
-    C->>CF: GET /form-page
-    CF->>CF: CsrfToken 생성 (랜덤 값), 세션에 저장
-    CF-->>C: 폼 응답 (hidden input _csrf=토큰값 포함)
-
-    C->>CF: POST /submit (데이터 + _csrf=토큰값)
-    CF->>CF: 1️⃣ 요청의 _csrf 값과 서버 저장값 비교
-    alt "불일치 (다른 사이트 요청)"
+    participant C as Client
+    participant CF as CsrfFilter
+    C->>CF: GET /form
+    CF-->>C: 폼(hidden _csrf)
+    C->>CF: POST /submit (_csrf)
+    alt 불일치
         CF-->>C: 403 Forbidden
-    else "일치 (정상 요청)"
-        CF->>S: 2️⃣ 다음 필터로 전달
-        S-->>C: 정상 응답
+    else 일치
+        CF-->>C: 정상 응답
     end
 ```
 

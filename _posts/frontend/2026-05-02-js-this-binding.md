@@ -21,21 +21,15 @@ toc_label: 목차
 
 ```mermaid
 flowchart TD
-    A["함수 호출"] --> B{"new로 호출?"}
-    B -->|"예"| C["new 바인딩<br>새 객체가 this"]
-    B -->|"아니오"| D{"call/apply/bind 사용?"}
-    D -->|"예"| E["명시적 바인딩<br>첫 인자가 this"]
-    D -->|"아니오"| F{"메서드로 호출?<br>obj.method()"}
-    F -->|"예"| G["암시적 바인딩<br>점 앞 객체가 this"]
+    A["함수 호출"] --> B{"new?"}
+    B -->|"예"| C["new 바인딩: 새 객체"]
+    B -->|"아니오"| D{"call/apply/bind?"}
+    D -->|"예"| E["명시적 바인딩: 첫 인자"]
+    D -->|"아니오"| F{"obj.method()?"}
+    F -->|"예"| G["암시적 바인딩: 점 앞 객체"]
     F -->|"아니오"| H{"엄격 모드?"}
     H -->|"예"| I["undefined"]
-    H -->|"아니오"| J["기본 바인딩<br>전역 객체 window/global"]
-
-    style C fill:#e74c3c,color:#fff
-    style E fill:#3498db,color:#fff
-    style G fill:#2ecc71,color:#fff
-    style I fill:#95a5a6,color:#fff
-    style J fill:#f39c12,color:#fff
+    H -->|"아니오"| J["전역 window/global"]
 ```
 
 이 다이어그램이 `this`의 모든 진실입니다. 복잡해 보이지만, **위에서 아래로 순서대로 적용**하는 단순한 규칙입니다. `this`가 헷갈릴 때마다 이 순서도를 따라가면 반드시 답을 찾을 수 있습니다.
@@ -145,13 +139,10 @@ sequenceDiagram
     participant Obj as person 객체
     participant Fn as greet 함수
     participant Win as window
-
     Dev->>Obj: person.greet() 호출
     Obj->>Fn: this = person으로 실행
     Fn-->>Dev: '이영희' 출력
-
     Note over Dev,Win: 함수 참조를 변수에 복사하면...
-
     Dev->>Fn: greetFn() 직접 호출
     Win->>Fn: this = window로 실행
     Fn-->>Dev: undefined 출력
@@ -218,25 +209,9 @@ boundIntroduce('대전');
 
 ```mermaid
 graph TD
-    A["명시적 바인딩 메서드"] --> B[call]
-    A --> C[apply]
-    A --> D[bind]
-
-    B --> B1["fn.call(thisArg, arg1, arg2)"]
-    B --> B2["즉시 호출"]
-    B --> B3["인자: 쉼표 구분"]
-
-    C --> C1["fn.apply(thisArg, [arg1, arg2])"]
-    C --> C2["즉시 호출"]
-    C --> C3["인자: 배열"]
-
-    D --> D1["fn.bind(thisArg, arg1)"]
-    D --> D2["새 함수 반환"]
-    D --> D3["나중에 호출"]
-
-    style B fill:#3498db,color:#fff
-    style C fill:#3498db,color:#fff
-    style D fill:#3498db,color:#fff
+    A["명시적 바인딩"] --> B["call(thisArg, a, b) - 즉시호출, 쉼표인자"]
+    A --> C["apply(thisArg, [a,b]) - 즉시호출, 배열인자"]
+    A --> D["bind(thisArg, a) - 새함수반환, 나중호출"]
 ```
 
 ### 실용적인 예제
@@ -286,7 +261,6 @@ flowchart LR
     C --> D["생성자 함수 실행<br>this.name = '김민준'<br>this.age = 25"]
     D --> E["명시적 반환값 없으면<br>this 반환"]
     E --> F["kim = { name: '김민준', age: 25 }"]
-
     style C fill:#e74c3c,color:#fff
     style F fill:#2ecc71,color:#fff
 ```
@@ -323,7 +297,6 @@ graph TD
     B --> C["렉시컬 스코프의 this 사용"]
     C --> D["정의된 시점의 this 캡처"]
     D --> E["call/apply/bind로 변경 불가"]
-
     style A fill:#9b59b6,color:#fff
     style E fill:#e74c3c,color:#fff
 ```
@@ -504,13 +477,10 @@ graph TD
     PROBLEM["this 손실 문제"] --> P1["패턴 1: 클로저"]
     PROBLEM --> P2["패턴 2: bind"]
     PROBLEM --> P3["패턴 3: 화살표 함수"]
-
     P1 --> P1D["const self = this<br>self로 참조"]
     P2 --> P2D["setTimeout(fn.bind(this), 0)<br>즉시 고정"]
     P3 --> P3D["setTimeout(() => ..., 0)<br>렉시컬 this"]
-
     P3 --> BEST["권장"]
-
     style BEST fill:#2ecc71,color:#fff
     style P3 fill:#9b59b6,color:#fff
 ```
@@ -612,24 +582,15 @@ console.log(calculator.addToValue(3)); // ??
 
 ```mermaid
 flowchart TD
-    A["함수 호출 시 this 결정"] --> B["1. 화살표 함수?"]
-    B -->|"예"| B1["렉시컬 스코프의 this<br>정의 시점에 고정됨"]
-    B -->|"아니오"| C["2. new 키워드?"]
-    C -->|"예"| C1["새로 생성된 객체"]
-    C -->|"아니오"| D["3. call/apply/bind?"]
-    D -->|"예"| D1["첫 번째 인자로 지정한 값"]
-    D -->|"아니오"| E["4. obj.method() 형태?"]
-    E -->|"예"| E1["점 앞의 객체 obj"]
-    E -->|"아니오"| F["5. 기본 바인딩"]
-    F -->|"엄격 모드"| F1["undefined"]
-    F -->|"비엄격 모드"| F2["전역 객체 window/global"]
-
-    style B1 fill:#9b59b6,color:#fff
-    style C1 fill:#e74c3c,color:#fff
-    style D1 fill:#3498db,color:#fff
-    style E1 fill:#2ecc71,color:#fff
-    style F1 fill:#95a5a6,color:#fff
-    style F2 fill:#f39c12,color:#fff
+    A["this 결정"] --> B{"화살표 함수?"}
+    B -->|예| B1["렉시컬 this(고정)"]
+    B -->|아니오| C{"new?"}
+    C -->|예| C1["새 객체"]
+    C -->|아니오| D{"call/apply/bind?"}
+    D -->|예| D1["지정 값"]
+    D -->|아니오| E{"obj.method()?"}
+    E -->|예| E1["obj"]
+    E -->|아니오| F1["엄격: undefined / 비엄격: window"]
 ```
 
 이 5단계 체크리스트만 있으면 어떤 `this` 문제도 해결할 수 있습니다.

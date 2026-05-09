@@ -23,21 +23,9 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph "일반 코드 흐름"
-        S1["소스코드 (.java)"]
-        B1["바이트코드 (.class)"]
-        E1["실행 — 타입 컴파일 시 확정"]
-        S1 -->|"컴파일"| B1 -->|"JVM 로딩"| E1
-    end
-
-    subgraph "리플렉션 흐름"
-        JVM["실행 중인 JVM"]
-        META["Class 객체 (메타데이터)
-        java.lang.Class
-        java.lang.reflect.*"]
-        OP["구조 조회 / 동적 호출"]
-        JVM -->|"getClass() / Class.forName()"| META -->|"invoke() / set() / newInstance()"| OP
-    end
+    S1[".java"] -->|"컴파일"| B1[".class"] -->|"JVM 로딩"| E1["실행(타입 고정)"]
+    JVM["실행 중 JVM"] -->|"getClass()/forName()"| META["Class 메타데이터"]
+    META -->|"invoke()/newInstance()"| OP["동적 조회/호출"]
 ```
 
 ### 왜 필요한가?
@@ -575,7 +563,6 @@ graph TD
     JIT 인라이닝 불가"]
     WRAP["5. 예외 래핑
     실제 예외 → InvocationTargetException"]
-
     INVOKE --> CHECK --> ARRAY --> BOX --> DISPATCH --> WRAP
 ```
 
@@ -774,7 +761,6 @@ sequenceDiagram
     participant 프록시
     participant InvocationHandler
     participant 실제객체
-
     클라이언트->>프록시: findById(1L) 호출
     프록시->>InvocationHandler: invoke(proxy, method, args)
     InvocationHandler->>InvocationHandler: 부가 기능 처리 (로깅, 트랜잭션 등)
@@ -1054,48 +1040,12 @@ try {
 
 ```mermaid
 graph TD
-    REFLECT["java.lang.reflect 패키지"]
-
-    CLASS["Class&lt;T&gt;
-    forName() / .class / getClass()
-    getFields() → Field[]
-    getMethods() → Method[]
-    getConstructors() → Constructor[]
-    getAnnotations()
-    getSuperclass() / getInterfaces()"]
-
-    FIELD["Field
-    get(obj) / set(obj, value)
-    setAccessible(true)
-    getAnnotation() / getType()"]
-
-    METHOD["Method
-    invoke(obj, args...)
-    setAccessible(true)
-    getReturnType() / getParameters()
-    getAnnotation()"]
-
-    CONSTRUCTOR["Constructor&lt;T&gt;
-    newInstance(args...)
-    setAccessible(true)
-    getParameterTypes()"]
-
-    PROXY["Proxy
-    newProxyInstance(classLoader, interfaces[], handler)
-    인터페이스 기반 동적 프록시 생성"]
-
-    INVOKE["java.lang.invoke 패키지
-    MethodHandles.Lookup
-    findVirtual() / findStatic()
-    findConstructor() / findGetter/Setter()
-    privateLookupIn()"]
-
-    REFLECT --> CLASS
-    CLASS --> FIELD
-    CLASS --> METHOD
-    CLASS --> CONSTRUCTOR
-    CLASS --> PROXY
-    REFLECT --> INVOKE
+    REFLECT["java.lang.reflect"] --> CLASS["Class&lt;T&gt; (forName/.class/getClass)"]
+    CLASS --> FIELD["Field (get/set, setAccessible)"]
+    CLASS --> METHOD["Method (invoke, setAccessible)"]
+    CLASS --> CONSTRUCTOR["Constructor (newInstance)"]
+    CLASS --> PROXY["Proxy (newProxyInstance, 동적 프록시)"]
+    REFLECT --> INVOKE["java.lang.invoke (MethodHandles.Lookup, findVirtual/findStatic)"]
 ```
 
 ### 핵심 정리

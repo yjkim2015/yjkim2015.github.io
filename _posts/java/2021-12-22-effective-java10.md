@@ -56,16 +56,11 @@ public boolean equals(Object o) {
 
 ```mermaid
 graph TD
-    A["equals 5대 규약"] --> B["반사성\n(Reflexivity)"]
-    A --> C["대칭성\n(Symmetry)"]
-    A --> D["추이성\n(Transitivity)"]
-    A --> E["일관성\n(Consistency)"]
-    A --> F["null-아님\n(Non-nullity)"]
-    B --> B1["x.equals(x) == true"]
-    C --> C1["x.equals(y)==true\n이면 y.equals(x)==true"]
-    D --> D1["x==y, y==z\n이면 x==z"]
-    E --> E1["결과가 항상 동일\n(비결정적 자원 금지)"]
-    F --> F1["x.equals(null) == false"]
+    A["equals 5대 규약"] --> B["반사성\nx.equals(x)==true"]
+    A --> C["대칭성\nx==y → y==x"]
+    A --> D["추이성\nx==y,y==z → x==z"]
+    A --> E["일관성\n항상 동일 결과"]
+    A --> F["null-아님\nx.equals(null)==false"]
 ```
 
 ### 규약 1: 반사성 (Reflexivity)

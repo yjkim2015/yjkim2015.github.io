@@ -19,20 +19,10 @@ date: 2026-05-01
 
 ```mermaid
 graph LR
-    subgraph "캐시 없음 (총 300ms)"
-        C1["클라이언트"] -->|100ms| A1["Application"]
-        A1 -->|200ms| DB1["DB"]
-    end
-    subgraph "Cache Hit (총 101ms)"
-        C2["클라이언트"] -->|100ms| A2["Application"]
-        A2 -->|1ms| CACHE["Cache"]
-    end
-    subgraph "Cache Miss (최초 1회 302ms)"
-        C3["클라이언트"] -->|100ms| A3["Application"]
-        A3 -->|1ms| CM["Cache Miss"]
-        CM -->|200ms| DB3["DB"]
-        DB3 -->|1ms| STORE["Cache 저장 후 반환"]
-    end
+    C1["클라이언트"] -->|100ms| A1["App"] -->|200ms| DB1["DB (300ms)"]
+    C2["클라이언트"] -->|100ms| A2["App"] -->|1ms| CA["Cache Hit (101ms)"]
+    C3["클라이언트"] -->|100ms| A3["App"] -->|1ms| CM["Cache Miss"]
+    CM -->|200ms| DB3["DB"] -->|1ms| ST["저장 후 반환 (302ms)"]
 ```
 
 ```

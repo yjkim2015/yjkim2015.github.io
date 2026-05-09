@@ -25,7 +25,6 @@ graph LR
         S --> P1["Partition p1"]
         S --> P2["Partition p2"]
     end
-
     subgraph "샤딩 (다중 서버)"
         SH0["Shard 0\nMySQL #1\nuser 0~33%"]
         SH1["Shard 1\nMySQL #2\nuser 33~66%"]
@@ -140,19 +139,10 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "가상 노드 배치 (링 순서)"
-        V1["N0_vn3 (위치35)"]
-        V2["N1_vn47 (위치62)"]
-        V3["N2_vn91 (위치89)"]
-        V4["N0_vn15 (위치130)"]
-        V5["N1_vn62 (위치175)"]
-        V1 --> V2 --> V3 --> V4 --> V5
-    end
-    V1 --> RN0["실제 Node 0"]
-    V2 --> RN1["실제 Node 1"]
-    V3 --> RN2["실제 Node 2"]
-    V4 --> RN0
-    V5 --> RN1
+    V1["N0_vn3(35)"] --> V2["N1_vn47(62)"] --> V3["N2_vn91(89)"] --> V4["N0_vn15(130)"] --> V5["N1_vn62(175)"]
+    V1 & V4 --> RN0["Node 0"]
+    V2 & V5 --> RN1["Node 1"]
+    V3 --> RN2["Node 2"]
 ```
 
 ### Directory-based Sharding
@@ -249,7 +239,6 @@ sequenceDiagram
     participant TC as "트랜잭션 코디네이터"
     participant SA as "Shard A"
     participant SB as "Shard B"
-
     TC->>SA: "Phase 1: PREPARE (Tentative Write)"
     TC->>SB: "Phase 1: PREPARE (Tentative Write)"
     SA-->>TC: "OK"
@@ -528,19 +517,13 @@ public class SnowflakeIdGenerator {
 
 ```mermaid
 graph TD
-    A["성능/확장성 문제 발생"] --> B{"읽기 과부하?\n(읽기:쓰기 = 9:1 이상)"}
-    B -->|"YES"| C["캐싱 적용 (Redis 등)"]
-    C --> C2{"캐시 히트율 < 80%?"}
-    C2 -->|"YES"| C3["읽기 복제 (Read Replica) 추가"]
-    C3 --> C4{"Replica 5대 이상에도 부족?"}
-    C4 -->|"YES"| F["샤딩 도입 검토"]
+    A["성능 문제"] --> B{"읽기 과부하?"}
+    B -->|"YES"| C["캐싱 → Read Replica"]
+    C -->|"여전히 부족"| F["샤딩"]
     B -->|"NO"| D{"쓰기 과부하?"}
-    D -->|"YES"| E{"데이터 크기 TB 수준?"}
-    E -->|"YES"| F
-    E -->|"NO"| G["파티셔닝 고려"]
-    D -->|"NO"| H{"레이턴시 문제?"}
-    H -->|"YES"| I["인덱스/쿼리 최적화"]
-    H -->|"NO"| J["수직 확장 검토"]
+    D -->|"TB 수준"| F
+    D -->|"그 이하"| G["파티셔닝"]
+    D -->|"NO"| I["인덱스 최적화"]
 ```
 
 ### 각 전략의 적합한 상황

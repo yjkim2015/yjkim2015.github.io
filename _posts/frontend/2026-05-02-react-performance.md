@@ -31,7 +31,6 @@ flowchart TD
     C --> D["번들 사이즈 분석"]
     D --> E["Lighthouse 점수 확인"]
     E --> F["Core Web Vitals 측정"]
-
     style A fill:#e74c3c,color:#fff
     style F fill:#2ecc71,color:#fff
 ```
@@ -132,21 +131,10 @@ function ProductList({ products, category, onPurchase }) {
 
 ```mermaid
 graph TD
-    subgraph "useMemo 효과"
-        A["products 변경"] --> B["filteredProducts 재계산"]
-        C["category 변경"] --> B
-        D["다른 상태 변경"] --> E["재계산 스킵!"]
-    end
-
-    subgraph "useCallback 효과"
-        F["category 변경"] --> G["handlePurchase 새 함수"]
-        H["다른 상태 변경"] --> I["같은 함수 참조 유지"]
-        I --> J["ProductCard 리렌더링 스킵"]
-    end
-
-    style E fill:#2ecc71,color:#fff
-    style I fill:#2ecc71,color:#fff
-    style J fill:#2ecc71,color:#fff
+    A["products/category 변경"] --> B["filteredProducts 재계산"]
+    D["다른 상태 변경"] --> E["재계산 스킵 (useMemo)"]
+    F["category 변경"] --> G["handlePurchase 새 함수"]
+    H["다른 상태 변경"] --> I["같은 참조 유지 (useCallback)"] --> J["리렌더링 스킵"]
 ```
 
 ---
@@ -160,7 +148,6 @@ graph LR
     subgraph "스플리팅 전"
         BUNDLE["app.js 5MB<br>유저가 모든 코드 다운로드"]
     end
-
     subgraph "스플리팅 후"
         MAIN["main.js 500KB"]
         ROUTE1["route-home.js 100KB"]
@@ -168,7 +155,6 @@ graph LR
         ROUTE3["route-profile.js 150KB"]
         USER2["현재 페이지만 다운로드"]
     end
-
     style BUNDLE fill:#e74c3c,color:#fff
     style MAIN fill:#2ecc71,color:#fff
 ```
@@ -258,13 +244,11 @@ graph TD
         MEM1["메모리 수백 MB"]
         PERF1["스크롤 느림"]
     end
-
     subgraph "가상화 10000개"
         DOM2["DOM에 20~30개 노드만"]
         MEM2["메모리 수 MB"]
         PERF2["스크롤 빠름"]
     end
-
     style DOM1 fill:#e74c3c,color:#fff
     style DOM2 fill:#2ecc71,color:#fff
 ```
@@ -446,7 +430,6 @@ flowchart TD
     F --> G["6. useMemo/useCallback 적용"]
     G --> H["7. 가상화 (목록이 긴 경우)"]
     H --> I["다시 측정해서 효과 확인"]
-
     style B fill:#e74c3c,color:#fff
     style C fill:#f39c12,color:#fff
 ```

@@ -152,7 +152,6 @@ graph TD
     CALC["예상 요청 수 계산\n= 80 × (1 - 0.75) + 30\n= 20 + 30 = 50건"]
     RESULT["한도 100 미만 → 허용"]
     style RESULT fill:#8f8,stroke:#080,color:#000
-
     PW & CW & NOW --> CALC --> RESULT
 ```
 

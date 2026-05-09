@@ -21,18 +21,12 @@ toc_label: 목차
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청 수신"] --> B["SecurityContextPersistenceFilter\n(필터 체인의 첫 번째)"]
-    B --> C{"세션에 저장된\nSecurityContext 존재?"}
-    C -- "있음 (이전에 인증함)" --> D["세션에서 SecurityContext 로드\nThreadLocal에 저장"]
-    C -- "없음 (새 세션 또는 익명)" --> E["빈 SecurityContext 새로 생성\nThreadLocal에 저장"]
-    D --> F["나머지 필터 체인 실행\n(인증/인가 처리 등)"]
-    E --> F
-    F --> G["컨트롤러 실행"]
-    G --> H["응답 생성 완료"]
-    H --> I["SecurityContextPersistenceFilter\n(응답 처리 단계)"]
-    I --> J["ThreadLocal의 SecurityContext를\n세션에 저장 (인증 정보가 있는 경우)"]
-    J --> K["SecurityContextHolder.clearContext()\nThreadLocal 초기화"]
-    K --> L["HTTP 응답 전송"]
+    A["HTTP 요청"] --> B{"세션에\nSecurityContext?"}
+    B -- "있음" --> C["세션 로드\n→ ThreadLocal"]
+    B -- "없음" --> D["빈 Context 생성\n→ ThreadLocal"]
+    C & D --> E["필터체인 + 컨트롤러"]
+    E --> F["SecurityContext\n→ 세션 저장"]
+    F --> G["clearContext()\n→ HTTP 응답"]
 ```
 
 ## 사용자 유형별 처리 방식
@@ -41,64 +35,52 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-    participant "브라우저" as Browser
-    participant "SecurityContextPersistenceFilter" as SCPF
-    participant "ThreadLocal" as TL
-    participant "AnonymousAuthFilter" as AAF
-
-    Browser->>SCPF: 1. GET /public (세션 없음)
-    SCPF->>SCPF: 2. 세션에서 SecurityContext 없음 확인
-    SCPF->>TL: 3. 빈 SecurityContext 생성 후 저장
-    SCPF->>AAF: 4. 다음 필터로 진행
-    AAF->>TL: 5. AnonymousAuthenticationToken 저장
-    TL-->>SCPF: 6. 응답 완료 후 SecurityContext 확인
-    SCPF->>SCPF: 7. AnonymousAuthenticationToken은 세션에 저장 안 함
-    SCPF->>TL: 8. clearContext() 호출
-    SCPF-->>Browser: 9. 응답 전송
+    participant B as Browser
+    participant SCPF as SCPersistenceFilter
+    participant TL as ThreadLocal
+    participant AAF as AnonymousAuthFilter
+    B->>SCPF: GET /public (세션 없음)
+    SCPF->>TL: 빈 SecurityContext 생성
+    SCPF->>AAF: 다음 필터로 진행
+    AAF->>TL: AnonymousAuthenticationToken 저장
+    SCPF->>SCPF: AnonymousToken 세션 저장 안 함
+    SCPF->>TL: clearContext()
+    SCPF-->>B: 응답 전송
 ```
 
 ### 2. 최초 인증 시
 
 ```mermaid
 sequenceDiagram
-    participant "브라우저" as Browser
-    participant "SecurityContextPersistenceFilter" as SCPF
-    participant "ThreadLocal" as TL
-    participant "UsernamePasswordAuthFilter" as UPAF
-    participant "세션" as Session
-
-    Browser->>SCPF: 1. POST /login (username, password)
-    SCPF->>TL: 2. 빈 SecurityContext 생성
-    SCPF->>UPAF: 3. 인증 필터로 진행
-    UPAF->>UPAF: 4. 인증 처리 완료
-    UPAF->>TL: 5. 인증된 Authentication을 SecurityContext에 저장
-    TL-->>SCPF: 6. 응답 직전 SecurityContext 확인
-    SCPF->>Session: 7. 인증된 SecurityContext를 세션에 저장
-    SCPF->>TL: 8. clearContext()
-    SCPF-->>Browser: 9. 로그인 성공 응답 (JSESSIONID 쿠키)
+    participant B as Browser
+    participant SCPF as SCPersistenceFilter
+    participant TL as ThreadLocal
+    participant UPAF as AuthFilter
+    participant S as Session
+    B->>SCPF: POST /login
+    SCPF->>TL: 빈 SecurityContext 생성
+    SCPF->>UPAF: 인증 필터로 진행
+    UPAF->>TL: 인증된 Authentication 저장
+    SCPF->>S: SecurityContext 세션 저장
+    SCPF->>TL: clearContext()
+    SCPF-->>B: 로그인 성공(JSESSIONID)
 ```
 
 ### 3. 인증 후 재방문
 
 ```mermaid
 sequenceDiagram
-    participant "브라우저" as Browser
-    participant "SecurityContextPersistenceFilter" as SCPF
-    participant "ThreadLocal" as TL
-    participant "세션" as Session
-    participant "컨트롤러" as Controller
-
-    Browser->>SCPF: 1. GET /mypage (JSESSIONID=xxx)
-    SCPF->>Session: 2. JSESSIONID=xxx로 SecurityContext 조회
-    Session-->>SCPF: 3. 인증된 SecurityContext 반환
-    SCPF->>TL: 4. SecurityContext를 ThreadLocal에 저장
-    SCPF->>Controller: 5. 인증된 상태로 컨트롤러 실행
-    Controller->>TL: 6. 사용자 정보 조회 (SecurityContextHolder)
-    TL-->>Controller: 7. 인증된 Authentication 반환
-    Controller-->>SCPF: 8. 응답 생성
-    SCPF->>Session: 9. SecurityContext 세션에 다시 저장 (변경사항 반영)
-    SCPF->>TL: 10. clearContext()
-    SCPF-->>Browser: 11. 마이페이지 응답
+    participant Browser
+    participant SCPF as SCPFilter
+    participant Session
+    participant Controller
+    Browser->>SCPF: GET /mypage (JSESSIONID)
+    SCPF->>Session: SecurityContext 조회
+    Session-->>SCPF: 인증된 Context
+    SCPF->>Controller: ThreadLocal 저장 후 실행
+    Controller-->>SCPF: 응답
+    SCPF->>Session: Context 재저장
+    SCPF-->>Browser: clearContext() 후 응답
 ```
 
 ## HttpSessionSecurityContextRepository

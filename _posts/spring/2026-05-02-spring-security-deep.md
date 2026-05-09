@@ -31,23 +31,14 @@ Spring Security를 처음 보면 복잡해 보입니다. 하지만 핵심은 단
 
 ```mermaid
 graph TD
-    A["HTTP 요청"] --> B["DelegatingFilterProxy\n(서블릿 컨테이너 등록)"]
-    B -->|"Spring 빈에 위임"| C["FilterChainProxy\n(Spring Bean)"]
-    C --> D["SecurityFilterChain 1\n/admin/** 전용"]
-    C --> E["SecurityFilterChain 2\n/api/** 전용"]
-    C --> F["SecurityFilterChain 3\n나머지 전용"]
-
-    D --> G["SecurityContextPersistenceFilter"]
-    G --> H["UsernamePasswordAuthenticationFilter"]
-    H --> I["JwtAuthenticationFilter"]
-    I --> J["ExceptionTranslationFilter"]
-    J --> K["AuthorizationFilter"]
-
-    K --> L{"인증됨?"}
-    L -->|"No"| M["AuthenticationEntryPoint\n401 반환"]
-    L -->|"Yes"| N{"권한 있음?"}
-    N -->|"No"| O["AccessDeniedHandler\n403 반환"]
-    N -->|"Yes"| P["Controller"]
+    A["HTTP 요청"] --> B["DelegatingFilterProxy\n→ FilterChainProxy"]
+    B --> C["Chain:/admin/**"]
+    B --> D["Chain:/api/**"]
+    C & D --> E["SecurityContext→Auth→JWT→Authorization"]
+    E --> F{"인증·권한?"}
+    F -->|"미인증"| G["401"]
+    F -->|"권한없음"| H["403"]
+    F -->|"통과"| I["Controller"]
 ```
 
 `FilterChainProxy`가 여러 개의 `SecurityFilterChain`을 가질 수 있는 것이 중요합니다. 관리자 API(`/admin/**`)와 일반 API(`/api/**`)에 서로 다른 보안 정책을 독립적으로 적용할 수 있기 때문입니다. 하나의 설정으로 모든 경로를 처리하다가 충돌하는 문제를 피할 수 있습니다.
@@ -135,25 +126,17 @@ public class SecurityConfig {
 ```mermaid
 sequenceDiagram
     participant U as 사용자
-    participant F as UsernamePasswordAuthenticationFilter
-    participant AM as AuthenticationManager
-    participant AP as DaoAuthenticationProvider
-    participant UDS as UserDetailsService
+    participant F as AuthFilter
+    participant AP as DaoAuthProvider
     participant DB as Database
-
-    U->>F: POST /login (username, password)
-    F->>F: 1️⃣ UsernamePasswordAuthenticationToken 생성<br>(아직 인증 안 됨 — authenticated=false)
-    F->>AM: 2️⃣ authenticate(token) 호출
-    AM->>AP: 3️⃣ 지원 가능한 Provider에게 위임
-    AP->>UDS: 4️⃣ loadUserByUsername(username)
-    UDS->>DB: 5️⃣ 사용자 조회
-    DB-->>UDS: 6️⃣ 사용자 정보 반환
-    UDS-->>AP: 7️⃣ UserDetails 반환
-    AP->>AP: 8️⃣ BCrypt 비밀번호 검증
-    AP-->>AM: 9️⃣ 인증된 Authentication 반환 (authenticated=true)
-    AM-->>F: 10️⃣ 인증 성공
-    F->>F: 11️⃣ SecurityContextHolder에 저장
-    F-->>U: 12️⃣ 로그인 성공 응답 (JWT 발급)
+    U->>F: POST /login
+    F->>AP: authenticate(token)
+    AP->>DB: loadUserByUsername()
+    DB-->>AP: UserDetails
+    AP->>AP: BCrypt 검증
+    AP-->>F: authenticated=true
+    F->>F: SecurityContextHolder 저장
+    F-->>U: JWT 발급
 ```
 
 **AuthenticationManager가 직접 처리하지 않고 AuthenticationProvider에게 위임하는 이유:** 여러 종류의 인증 방식(폼 로그인, OAuth2, 인증서 기반 등)을 지원하기 위해서입니다. `ProviderManager`(AuthenticationManager 구현체)는 등록된 `AuthenticationProvider` 목록을 순회하면서 현재 토큰을 처리할 수 있는 Provider를 찾습니다. 새로운 인증 방식을 추가할 때 기존 코드를 수정하지 않고 새 Provider만 등록하면 됩니다.
@@ -233,7 +216,6 @@ graph LR
     A[JWT] --> B[Header]
     A --> C[Payload]
     A --> D[Signature]
-
     B --> E["alg: HS256\ntyp: JWT"]
     C --> F["sub: 사용자 ID\nroles: 권한 목록\niat: 발급 시간\nexp: 만료 시간"]
     D --> G["HMACSHA256(\n  base64(header) + '.' + base64(payload),\n  서버만 아는 secret\n)"]
@@ -363,29 +345,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 sequenceDiagram
     participant C as Client
     participant S as Server
-    participant DB as Redis (RefreshToken 저장)
-
-    Note over C,DB: 정상 사용 흐름
-    C->>S: API 요청 (유효한 액세스 토큰)
-    S-->>C: 200 OK
-
-    Note over C,DB: 액세스 토큰 만료
-    C->>S: API 요청 (만료된 액세스 토큰)
-    S-->>C: 401 Unauthorized
-
-    Note over C,DB: 토큰 갱신
-    C->>S: POST /auth/refresh (리프레시 토큰)
-    S->>DB: 1️⃣ 리프레시 토큰 유효성 검증
-    DB-->>S: 유효함
-    S->>DB: 2️⃣ 기존 리프레시 토큰 삭제 (재사용 방지)
-    S->>DB: 3️⃣ 새 리프레시 토큰 저장
-    S-->>C: 새 액세스 토큰 + 새 리프레시 토큰
-
-    Note over C,DB: 탈취된 리프레시 토큰 사용 시도
-    C->>S: POST /auth/refresh (이미 사용된 리프레시 토큰)
-    S->>DB: 조회
-    DB-->>S: 존재하지 않음 (이미 삭제됨)
-    S-->>C: 401 — 모든 토큰 무효화, 재로그인 필요
+    participant DB as Redis
+    C->>S: API 요청 (유효 토큰) → 200
+    C->>S: API 요청 (만료 토큰) → 401
+    C->>S: POST /auth/refresh
+    S->>DB: 검증 후 토큰 교체
+    S-->>C: 새 Access+Refresh 토큰
+    C->>S: 탈취 토큰 재사용 시도
+    S->>DB: 조회 없음 → 전체 무효화
+    S-->>C: 401
 ```
 
 **RTR(Refresh Token Rotation)을 쓰는 이유:** 리프레시 토큰을 한 번 쓰면 새것으로 교체합니다. 만약 탈취된 리프레시 토큰을 공격자가 사용하면, 정상 사용자가 다음에 갱신을 시도할 때 "이미 사용된 토큰"임을 감지합니다. 리프레시 토큰이 Redis에 저장되는 이유는 서버 재시작 시에도 토큰이 유지되어야 하고, 강제 로그아웃(토큰 즉시 무효화)도 가능해야 하기 때문입니다.
@@ -403,21 +371,16 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant U as 사용자
-    participant A as 우리 앱 (Client)
-    participant K as 카카오 (Authorization Server)
-    participant R as 카카오 Resource Server
-
-    U->>A: 1️⃣ 카카오로 로그인 클릭
-    A-->>U: 2️⃣ 카카오 인증 페이지로 리다이렉트
-    U->>K: 3️⃣ 카카오 로그인 + 권한 동의
-    K-->>U: 4️⃣ Authorization Code와 함께 리다이렉트
-    U->>A: 5️⃣ Authorization Code 전달
-    A->>K: 6️⃣ Code + Client Secret으로 액세스 토큰 요청
-    K-->>A: 7️⃣ 카카오 Access Token + Refresh Token
-    A->>R: 8️⃣ 카카오 토큰으로 사용자 프로필 요청
-    R-->>A: 9️⃣ 이름, 이메일, 프로필 사진
-    A->>A: 10️⃣ DB에서 회원 조회 또는 신규 가입
-    A-->>U: 11️⃣ 우리 앱 JWT 발급 + 로그인 완료
+    participant A as 우리앱
+    participant K as 카카오
+    U->>A: 카카오 로그인
+    A-->>U: 인증 페이지
+    U->>K: 로그인+동의
+    K-->>U: Auth Code
+    U->>A: Code 전달
+    A->>K: Code → Token
+    K-->>A: Access Token
+    A-->>U: JWT 발급
 ```
 
 **Authorization Code를 직접 토큰으로 교환하는 이유:** 4번 단계에서 Authorization Code가 브라우저 URL에 노출됩니다. 만약 여기서 바로 액세스 토큰을 주면 토큰이 URL에 노출됩니다. 브라우저 히스토리, 서버 로그, 프록시 로그에 남을 수 있습니다. Authorization Code는 짧은 유효 시간을 가진 일회용 코드이므로, 설령 노출되더라도 즉시 무효화됩니다. 6번 단계에서 서버 간 통신으로 토큰을 교환하기 때문에 토큰이 외부에 노출되지 않습니다.
@@ -490,12 +453,10 @@ sequenceDiagram
     participant U as 사용자
     participant B as 은행 (bank.com)
     participant M as 악성 사이트 (evil.com)
-
     U->>B: 로그인 (은행 쿠키 발급)
     M-->>U: "경품 당첨" 링크 클릭 유도
     U->>B: POST /transfer?to=hacker&amount=1000000 (자동으로 쿠키 포함!)
     Note over B: 유효한 쿠키이므로 송금 처리
-
     Note over B: CSRF 토큰으로 방어하면
     B-->>U: 폼 제출 시 숨겨진 CSRF 토큰 포함
     U->>B: 토큰 포함 요청
@@ -724,17 +685,12 @@ public class MultiSecurityConfig {
 
 ```mermaid
 flowchart TD
-    A["HTTP 요청"] --> B["SecurityContextPersistenceFilter\n기존 인증 정보 복원 (세션 기반 앱에서)"]
-    B --> C["JwtAuthenticationFilter\nJWT 파싱 및 SecurityContext 저장"]
-    C --> D{"SecurityContext에\n인증 정보 있음?"}
-    D -->|"Yes"| E["AuthorizationFilter"]
-    D -->|"No"| E
-    E --> F{"요청 경로 권한 체크"}
-    F -->|"인증 필요 + 미인증"| G["AuthenticationEntryPoint\n401 반환"]
-    F -->|"권한 없음"| H["AccessDeniedHandler\n403 반환"]
-    F -->|"통과"| I["Controller 실행"]
-    I --> J["응답 반환"]
-    J --> K["SecurityContextPersistenceFilter\nSecurityContext 정리"]
+    A["HTTP 요청"] --> B["SecurityContextPersistenceFilter\n인증 정보 복원"]
+    B --> C["JwtAuthenticationFilter\nJWT 파싱→SecurityContext 저장"]
+    C --> D["AuthorizationFilter\n경로 권한 체크"]
+    D -->|"미인증"| E["401 AuthenticationEntryPoint"]
+    D -->|"권한 없음"| F["403 AccessDeniedHandler"]
+    D -->|"통과"| G["Controller → 응답\n→ SecurityContext 정리"]
 ```
 
 ---

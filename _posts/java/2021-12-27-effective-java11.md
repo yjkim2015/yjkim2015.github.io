@@ -64,7 +64,6 @@ sequenceDiagram
     participant Bucket as 버킷 42 (hashCode=임의값1)
     participant Get as get(new PhoneNumber(...))
     participant Bucket2 as 버킷 99 (hashCode=임의값2)
-
     Put->>Bucket: hashCode()=임의값1 → 버킷 42에 저장
     Get->>Bucket2: hashCode()=임의값2 → 버킷 99를 찾음
     Bucket2-->>Get: 버킷 99는 비어있음 → null 반환

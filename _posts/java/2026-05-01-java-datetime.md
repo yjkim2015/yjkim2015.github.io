@@ -75,17 +75,9 @@ graph TD
 
 ```mermaid
 graph TD
-    A["java.time 클래스 선택"] --> B["시간대 불필요"]
-    A --> C["시간대 필요"]
-    A --> D["기간/경과 측정"]
-    B --> E["LocalDate: 날짜만 (2026-05-01)"]
-    B --> F["LocalTime: 시간만 (14:30:00)"]
-    B --> G["LocalDateTime: 날짜+시간"]
-    C --> H["ZonedDateTime: 시간대 이름 포함"]
-    C --> I["OffsetDateTime: UTC 오프셋 포함"]
-    C --> J["Instant: 머신 타임(epoch 나노초)"]
-    D --> K["Period: 날짜 기반 (년/월/일)"]
-    D --> L["Duration: 시간 기반 (초/나노초)"]
+    A["java.time"] --> B["시간대 불필요\nLocal Date/Time/DateTime"]
+    A --> C["시간대 필요\nZonedDateTime · OffsetDateTime · Instant"]
+    A --> D["기간 측정\nPeriod 날짜 · Duration 시간"]
 ```
 
 ---

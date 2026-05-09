@@ -56,26 +56,15 @@ HTTP 요청이 들어오면 DispatcherServlet이 8단계를 거쳐 처리한다.
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant DS as "DispatcherServlet"
-    participant HM as "HandlerMapping"
-    participant HA as "HandlerAdapter"
-    participant IC as "Interceptor Chain"
-    participant CM as "Controller Method"
-    participant VR as "ViewResolver"
-
-    C->>DS: HTTP 요청 GET /orders/1
-    DS->>HM: 1️⃣ getHandler()
-    HM-->>DS: HandlerExecutionChain 반환
-    DS->>HA: 2️⃣ getHandlerAdapter()
-    DS->>IC: 3️⃣ Interceptor.preHandle()
-    DS->>CM: 4️⃣ handle() - 컨트롤러 실행
-    Note over CM: ArgumentResolver로 파라미터 바인딩<br>비즈니스 로직 실행
-    CM-->>DS: ModelAndView 반환
-    DS->>IC: 5️⃣ Interceptor.postHandle()
-    DS->>VR: 6️⃣ processDispatchResult()
-    Note over VR: @ResponseBody면 MessageConverter 사용
-    DS->>IC: 7️⃣ Interceptor.afterCompletion()
+    participant C as Client
+    participant DS as DispatcherServlet
+    participant CM as Controller
+    C->>DS: HTTP 요청
+    DS->>DS: preHandle()
+    DS->>CM: 컨트롤러 실행
+    CM-->>DS: ModelAndView
+    DS->>DS: postHandle() / View렌더링
+    DS->>DS: afterCompletion()
     DS-->>C: HTTP 응답
 ```
 

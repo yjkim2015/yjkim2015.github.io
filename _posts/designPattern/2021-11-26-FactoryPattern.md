@@ -41,34 +41,14 @@ toc_label: 목차
 
 ```mermaid
 classDiagram
-    class Creator {
-        <<abstract>>
-        +factoryMethod(): Product
-        +operation(): void
-    }
-    class ConcreteCreatorA {
-        +factoryMethod(): Product
-    }
-    class ConcreteCreatorB {
-        +factoryMethod(): Product
-    }
-    class Product {
-        <<interface>>
-        +use(): void
-    }
-    class ConcreteProductA {
-        +use(): void
-    }
-    class ConcreteProductB {
-        +use(): void
-    }
-
+    class Creator { <<abstract>> +factoryMethod() Product }
+    class Product { <<interface>> }
     Creator <|-- ConcreteCreatorA
     Creator <|-- ConcreteCreatorB
     Product <|.. ConcreteProductA
     Product <|.. ConcreteProductB
-    ConcreteCreatorA ..> ConcreteProductA : "생성"
-    ConcreteCreatorB ..> ConcreteProductB : "생성"
+    ConcreteCreatorA ..> ConcreteProductA : 생성
+    ConcreteCreatorB ..> ConcreteProductB : 생성
 ```
 
 ---
@@ -211,7 +191,6 @@ sequenceDiagram
     participant F as "LogisticsFactory (추상)"
     participant CF as "RoadLogistics (구체 팩토리)"
     participant P as "Truck (구체 제품)"
-
     C->>CF: "1. planDelivery() 호출"
     CF->>CF: "2. createTransport() 호출 (추상 메서드)"
     CF->>P: "3. new Truck() 생성"

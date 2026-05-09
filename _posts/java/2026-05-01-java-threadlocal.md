@@ -66,21 +66,10 @@ public class Thread implements Runnable {
 
 ```mermaid
 graph TD
-    GET["ThreadLocal.get() 호출"]
-    CURRENT["Thread.currentThread()
-    현재 스레드 참조 획득"]
-    MAP["thread.threadLocals
-    Thread 내부 ThreadLocalMap 접근"]
-    ENTRY["map.getEntry(this)
-    ThreadLocal 인스턴스를 키로 엔트리 검색"]
-    VALUE["entry.value
-    저장된 값 반환"]
-    INIT["setInitialValue()
-    맵 없거나 엔트리 없으면 초기값 설정"]
-
-    GET --> CURRENT --> MAP --> ENTRY
-    ENTRY -->|"엔트리 있음"| VALUE
-    ENTRY -->|"엔트리 없음"| INIT --> VALUE
+    GET["get() 호출"] --> MAP["ThreadLocalMap 접근"]
+    MAP --> ENTRY["getEntry(this)"]
+    ENTRY -->|"있음"| VALUE["값 반환"]
+    ENTRY -->|"없음"| INIT["setInitialValue()"] --> VALUE
 ```
 
 ```java
@@ -108,25 +97,14 @@ ThreadLocalMap getMap(Thread t) {
 
 ```mermaid
 graph TD
-    TLA["ThreadLocal-A (공유 인스턴스)"]
-    TLB["ThreadLocal-B (공유 인스턴스)"]
-
-    T1["Thread-1 threadLocals"]
-    T2["Thread-2 threadLocals"]
-
-    E1A["Entry: key=TLA(WeakRef), value=Value-1"]
-    E1B["Entry: key=TLB(WeakRef), value=Value-2"]
-    E2A["Entry: key=TLA(WeakRef), value=Value-X"]
-    E2B["Entry: key=TLB(WeakRef), value=Value-Y"]
-
-    T1 --> E1A
+    TLA["ThreadLocal-A"] -.->|키| E1A["T1: Value-1"]
+    TLA -.->|키| E2A["T2: Value-X"]
+    TLB["ThreadLocal-B"] -.->|키| E1B["T1: Value-2"]
+    TLB -.->|키| E2B["T2: Value-Y"]
+    T1["Thread-1"] --> E1A
     T1 --> E1B
-    T2 --> E2A
+    T2["Thread-2"] --> E2A
     T2 --> E2B
-    TLA -.->|"키로 참조"| E1A
-    TLA -.->|"키로 참조"| E2A
-    TLB -.->|"키로 참조"| E1B
-    TLB -.->|"키로 참조"| E2B
 ```
 
 ---
@@ -192,30 +170,11 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 초기 상태(배열 크기 8)에서 ThreadLocal-A와 ThreadLocal-B가 모두 인덱스 3에 해시되면, B는 4번 슬롯으로 밀립니다. 이후 A가 GC로 수거되면 인덱스 3의 키(WeakRef)는 null이 되지만 value는 남아 만료 엔트리(stale entry)가 됩니다.
 
 ```mermaid
-graph LR
-    subgraph "ThreadLocal-A 삽입 (hash→3)"
-        I0["[0] -"]
-        I1["[1] -"]
-        I2["[2] -"]
-        I3["[3] A"]
-        I4["[4] -"]
-    end
-
-    subgraph "ThreadLocal-B 삽입 (hash→3, 충돌)"
-        J0["[0] -"]
-        J1["[1] -"]
-        J2["[2] -"]
-        J3["[3] A"]
-        J4["[4] B (다음 슬롯 사용)"]
-    end
-
-    subgraph "ThreadLocal-A GC 수거 후"
-        K0["[0] -"]
-        K1["[1] -"]
-        K2["[2] -"]
-        K3["[3] null키/값 잔류 ← stale entry"]
-        K4["[4] B"]
-    end
+graph TD
+    S1["A 삽입(hash→3): [_][_][_][A][_]"]
+    S2["B 삽입(hash→3, 충돌→Linear Probe): [_][_][_][A][B]"]
+    S3["A GC 수거 후: [_][_][_][null키/값 stale][B]"]
+    S1 --> S2 --> S3
 ```
 
 ---
@@ -232,22 +191,10 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph "외부 강참조 존재 시"
-        VAR1["변수 tl (강참조)"] --> TL1["ThreadLocal 객체"]
-        ENTRY1["Entry.key (WeakRef)"] -.->|"약참조"| TL1
-        ENTRY1 --> VAL1["Entry.value (강참조) → 실제 값"]
-    end
-
-    subgraph "외부 강참조 제거 후 (tl = null)"
-        VAR2["변수 tl = null"]
-        TL2["ThreadLocal 객체 ← GC 수거 대상"]
-        ENTRY2["Entry.key (WeakRef) → null됨"]
-        ENTRY2 --> VAL2["Entry.value (강참조) → 실제 값 ← 누수!"]
-    end
-
-    subgraph "remove() 호출 시"
-        REMOVED["Entry 자체 제거 → key, value 모두 정리됨"]
-    end
+    TL["ThreadLocal(강참조)"] -.->|"WeakRef key"| ENTRY["Entry"]
+    ENTRY --> VAL["value(강참조)"]
+    NULL["tl=null → GC 수거"] --> LEAK["key=null, value 잔존 → 누수!"]
+    REMOVE["remove() 호출"] --> CLEAN["Entry 완전 제거"]
 ```
 
 ### 메모리 누수 시나리오 (스레드 풀 + ThreadLocal)
@@ -758,43 +705,12 @@ public CompletableFuture<Result> processAsync() {
 ```mermaid
 graph TD
     TL["ThreadLocal 핵심 정리"]
-
-    STORAGE["저장 위치
-    Thread 인스턴스 내부 threadLocals 필드
-    ThreadLocalMap (배열 기반 해시맵)"]
-
-    COLLISION["충돌 해결
-    Linear Probing (선형 탐색)
-    별도 LinkedList 없이 배열 내 탐색"]
-
-    WEAKREF["WeakReference 키
-    ThreadLocal 키가 WeakRef로 저장
-    외부 강참조 제거 시 키 GC 수거 가능
-    value는 여전히 강참조 → 누수 가능"]
-
-    LEAK["메모리 누수 원인
-    WeakRef 키 수거 후 value 강참조 잔류
-    스레드 풀에서 스레드 재사용 시 위험"]
-
-    FIX["해결책
-    반드시 remove() 호출 (finally 블록)
-    try-finally 패턴 준수"]
-
-    INHERIT["자식 스레드 전파
-    InheritableThreadLocal 사용
-    스레드 풀에서는 TransmittableThreadLocal 권장"]
-
-    VTHREAD["Virtual Thread 대안
-    ScopedValue (Java 21+)
-    불변 바인딩, 자동 해제, 누수 없음"]
-
-    TL --> STORAGE
-    TL --> COLLISION
-    TL --> WEAKREF
-    WEAKREF --> LEAK
-    LEAK --> FIX
-    TL --> INHERIT
-    TL --> VTHREAD
+    TL --> STORAGE["저장: Thread.threadLocals (ThreadLocalMap, 배열 해시맵)"]
+    TL --> WEAKREF["키=WeakRef, value=강참조 → 키 GC 수거 후 value 잔류"]
+    WEAKREF --> LEAK["메모리 누수: 스레드 풀 재사용 시 stale entry 누적"]
+    LEAK --> FIX["해결: finally { remove() } 필수"]
+    TL --> INHERIT["자식 전파: InheritableThreadLocal / 풀=TransmittableThreadLocal"]
+    TL --> VTHREAD["Virtual Thread: ScopedValue (Java 21+, 불변 자동 해제)"]
 ```
 
 ThreadLocal은 올바르게 사용하면 동기화 없이 스레드 안전성을 확보하는 강력한 도구입니다. 핵심은 **사용 후 반드시 `remove()` 호출**하는 것입니다. 특히 스레드 풀 환경에서는 이를 소홀히 하면 값 오염과 메모리 누수라는 두 가지 위험이 동시에 발생합니다.

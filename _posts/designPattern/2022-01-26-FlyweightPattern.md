@@ -43,23 +43,10 @@ toc_label: 목차
 
 ```mermaid
 classDiagram
-    class Flyweight {
-        <<interface>>
-        +operation(extrinsicState: Context): void
-    }
-    class ConcreteFlyweight {
-        -intrinsicState: String
-        +operation(extrinsicState: Context): void
-    }
-    class FlyweightFactory {
-        -cache: Map
-        +getFlyweight(key: String): Flyweight
-    }
-    class Client {
-        -extrinsicState: Context
-        +operation(): void
-    }
-
+    class Flyweight { <<interface>> }
+    class ConcreteFlyweight { -intrinsicState: String }
+    class FlyweightFactory { -cache: Map }
+    class Client { -extrinsicState: Context }
     Flyweight <|.. ConcreteFlyweight
     FlyweightFactory --> Flyweight : "캐시 관리"
     Client --> FlyweightFactory : "요청"
@@ -221,26 +208,17 @@ public class GlyphFactory {
 
 ```mermaid
 sequenceDiagram
-    participant C as "Forest (클라이언트)"
-    participant F as "TreeTypeFactory"
-    participant T1 as "TreeType(소나무)"
-    participant T2 as "TreeType(참나무)"
-
-    C->>F: "1. getTreeType('소나무') 요청"
-    F->>F: "2. 캐시 확인 → 없음"
-    F->>T1: "3. new TreeType('소나무') 생성"
-    T1-->>F: "4. 인스턴스 반환"
-    F-->>C: "5. 소나무 TreeType 반환"
-
-    C->>F: "6. getTreeType('소나무') 재요청 (500번째)"
-    F->>F: "7. 캐시 확인 → 있음"
-    F-->>C: "8. 기존 TreeType 재사용 (생성 없음)"
-
-    C->>F: "9. getTreeType('참나무') 요청"
-    F->>F: "10. 캐시 확인 → 없음"
-    F->>T2: "11. new TreeType('참나무') 생성"
-    T2-->>F: "12. 인스턴스 반환"
-    F-->>C: "13. 참나무 TreeType 반환"
+    participant C as Forest
+    participant F as Factory
+    participant T as TreeType
+    C->>F: getTreeType(소나무)
+    F->>T: 캐시 없음 → new 소나무
+    T-->>C: 소나무 반환
+    C->>F: getTreeType(소나무) 재요청
+    F-->>C: 캐시 히트 → 재사용
+    C->>F: getTreeType(참나무)
+    F->>T: 캐시 없음 → new 참나무
+    T-->>C: 참나무 반환
 ```
 
 ---

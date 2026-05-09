@@ -25,30 +25,10 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph "var"
-        V1["함수 스코프"]
-        V2["호이스팅 + undefined 초기화"]
-        V3["중복 선언 가능"]
-        V4["재할당 가능"]
-    end
-
-    subgraph "let"
-        L1["블록 스코프"]
-        L2["호이스팅 + TDZ"]
-        L3["중복 선언 불가"]
-        L4["재할당 가능"]
-    end
-
-    subgraph "const"
-        C1["블록 스코프"]
-        C2["호이스팅 + TDZ"]
-        C3["중복 선언 불가"]
-        C4["재할당 불가"]
-    end
-
-    style V1 fill:#e74c3c,color:#fff
-    style L1 fill:#3498db,color:#fff
-    style C1 fill:#2ecc71,color:#fff
+    VAR["var: 함수 스코프, 호이스팅+undefined, 중복 선언 가능, 재할당 가능"]
+    LET["let: 블록 스코프, 호이스팅+TDZ, 중복 선언 불가, 재할당 가능"]
+    CONST["const: 블록 스코프, 호이스팅+TDZ, 중복 선언 불가, 재할당 불가"]
+    VAR --- LET --- CONST
 ```
 
 표로도 한 번 정리합니다.
@@ -104,25 +84,10 @@ function testLet() {
 
 ```mermaid
 graph TD
-    subgraph "함수 스코프 - var"
-        F["함수 경계"]
-        F --> IF1["if 블록"]
-        F --> IF2["else 블록"]
-        F --> FOR["for 블록"]
-        IF1 --> VARX["var x — 함수 전체에서 접근 가능"]
-    end
-
-    subgraph "블록 스코프 - let/const"
-        F2["함수 경계"]
-        F2 --> IF3["if 블록 { let y }"]
-        F2 --> FOR2["for 블록 { let i }"]
-        IF3 --> LETY["y는 이 블록 안에서만"]
-        FOR2 --> LETI["i는 이 블록 안에서만"]
-    end
-
-    style VARX fill:#e74c3c,color:#fff
-    style LETY fill:#3498db,color:#fff
-    style LETI fill:#3498db,color:#fff
+    F["함수 경계(var)"] --> IF1["if블록"] --> VARX["var x: 함수 전체 접근"]
+    F --> FOR["for블록"]
+    F2["함수 경계(let/const)"] --> IF3["if블록 - let y: 블록 안에서만"]
+    F2 --> FOR2["for블록 - let i: 블록 안에서만"]
 ```
 
 ---
@@ -157,7 +122,6 @@ sequenceDiagram
     participant CODE as 작성된 코드
     participant ENGINE as JS 엔진
     participant EXEC as 실행
-
     CODE->>ENGINE: console.log(name)이 먼저 등장
     ENGINE->>ENGINE: var name 선언을 스캔
     ENGINE->>EXEC: var name = undefined (호이스팅)
@@ -184,12 +148,10 @@ flowchart LR
     B --> C["let/const 선언문 도달"]
     C --> D["초기화 완료"]
     D --> E["사용 가능"]
-
     subgraph "TDZ 구간"
         B
         C
     end
-
     style B fill:#e74c3c,color:#fff
     style C fill:#f39c12,color:#fff
     style D fill:#2ecc71,color:#fff
@@ -277,11 +239,9 @@ graph LR
         OBJ_VAL["메모리 주소<br>0x1234"]
         OBJ_DATA["{ name: '홍길동' }"]
     end
-
     OBJ_VAR -->|"고정! 변경 불가"| OBJ_VAL
     OBJ_VAL -->|"가리킴"| OBJ_DATA
     OBJ_DATA -->|"변경 가능"| OBJ_DATA
-
     style OBJ_VAR fill:#e74c3c,color:#fff
     style OBJ_DATA fill:#2ecc71,color:#fff
 ```
@@ -334,10 +294,8 @@ sequenceDiagram
     participant VAR_I as var i (하나의 변수)
     participant LET_J as let j (각 반복마다 새 변수)
     participant FN as 클로저 함수들
-
     FOR->>VAR_I: i = 0, 1, 2, 3 (하나의 i)
     FN->>VAR_I: 실행 시 i 참조 → 최종값 3
-
     FOR->>LET_J: j_0 = 0 생성
     FOR->>LET_J: j_1 = 1 생성
     FOR->>LET_J: j_2 = 2 생성
@@ -413,7 +371,6 @@ flowchart TD
         B["var foo = function() {}"] --> B1["var foo만 호이스팅 (undefined)<br>할당 전 호출 시 TypeError"]
         C["let/const foo = () => {}"] --> C1["TDZ 적용<br>선언 전 접근 시 ReferenceError"]
     end
-
     style A1 fill:#2ecc71,color:#fff
     style B1 fill:#f39c12,color:#fff
     style C1 fill:#e74c3c,color:#fff
@@ -432,7 +389,6 @@ flowchart TD
     C -->|"내용만 변경"| F["const 사용<br>(객체/배열)"]
     A --> G{"레거시 코드가 아닌가?"}
     G -->|"맞음"| H["var 절대 사용 금지"]
-
     style D fill:#2ecc71,color:#fff
     style E fill:#3498db,color:#fff
     style F fill:#2ecc71,color:#fff
@@ -534,21 +490,13 @@ const config = {
 mindmap
   root((var/let/const))
     var
-      함수 스코프
-      호이스팅 + undefined
-      중복 선언 OK
-      레거시 코드에만 존재
+      함수스코프/호이스팅+undefined
+      중복선언OK/레거시
     let
-      블록 스코프
-      호이스팅 + TDZ
-      중복 선언 불가
-      재할당 필요 시 사용
+      블록스코프/TDZ/재할당가능
     const
-      블록 스코프
-      호이스팅 + TDZ
-      중복 선언 불가
-      기본 선택
-      객체 내용은 변경 가능
+      블록스코프/TDZ/기본선택
+      객체내용변경가능
 ```
 
 현대 자바스크립트에서는 `var`를 사용할 이유가 없습니다. `const`를 기본으로 사용하고, 재할당이 필요한 경우에만 `let`을 사용하세요. 이 원칙을 따르면 코드가 의도를 명확하게 전달하고, 예측하기 어려운 버그도 사전에 방지할 수 있습니다.

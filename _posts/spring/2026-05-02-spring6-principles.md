@@ -82,7 +82,6 @@ graph LR
     A[UserDao] -->|"의존"| B["ConnectionMaker 인터페이스"]
     C[DConnectionMaker] -->|"구현"| B
     D[NConnectionMaker] -->|"구현"| B
-
     E[UserDaoTest] -->|DI| A
     E -->|"선택"| C
 ```
@@ -93,7 +92,6 @@ graph LR
 graph TD
     A["OCP: 확장에 열려있고, 변경에 닫혀있음"] --> B[UserDao]
     A --> C["ConnectionMaker 인터페이스"]
-
     B -->|"변경 없이"| D["새 DB로 전환 가능"]
     C -->|"새 구현체 추가"| E[NConnectionMaker]
     C -->|"새 구현체 추가"| F[TestConnectionMaker]
@@ -249,7 +247,6 @@ graph TD
     D[JpaTransactionManager] -->|"구현"| B
     E[HibernateTransactionManager] -->|"구현"| B
     F[JtaTransactionManager] -->|"구현"| B
-
     A -->|"코드 변경 없이"| G["DB 기술 교체 가능"]
 ```
 
@@ -298,21 +295,10 @@ public interface UserDao {
 
 ```mermaid
 graph TD
-    A["DataAccessException\nRuntimeException"] --> B[NonTransientDataAccessException]
-    A --> C[TransientDataAccessException]
-
-    B --> D[DataIntegrityViolationException]
-    B --> E[InvalidDataAccessApiUsageException]
-    B --> F[BadSqlGrammarException]
-
-    C --> G[QueryTimeoutException]
-    C --> H[ConcurrencyFailureException]
-
-    D --> I[DuplicateKeyException]
-
-    J["MySQL SQLException\n에러코드 1062"] -->|"변환"| I
-    K["Oracle SQLException\n에러코드 1"] -->|"변환"| I
-    L["H2 SQLException\n에러코드 23505"] -->|"변환"| I
+    A["DataAccessException"] --> B["NonTransient\nDataIntegrityViolation·BadSqlGrammar"]
+    A --> C["Transient\nQueryTimeout·ConcurrencyFailure"]
+    B --> D["DuplicateKeyException"]
+    E["MySQL 1062\nOracle 1\nH2 23505"] -->|"변환"| D
 ```
 
 ---
@@ -362,7 +348,6 @@ graph LR
     C --> D["빠른 시작 시간"]
     C --> E["낮은 메모리 사용"]
     C --> F["JVM 불필요"]
-
     G["기존 JVM 방식"] --> H["JIT 컴파일"]
     H --> I["런타임 최적화"]
     I --> J["긴 시작 시간\n높은 메모리"]
@@ -457,17 +442,11 @@ public class OrderService {
 
 ```mermaid
 graph TD
-    A[SOLID] --> B["SRP 단일 책임 원칙"]
-    A --> C["OCP 개방-폐쇄 원칙"]
-    A --> D["LSP 리스코프 치환 원칙"]
-    A --> E["ISP 인터페이스 분리 원칙"]
-    A --> F["DIP 의존관계 역전 원칙"]
-
-    B -->|"Spring 적용"| G["레이어 분리: Controller, Service, Repository"]
-    C -->|"Spring 적용"| H["인터페이스 + DI로 확장에 열려있음"]
-    D -->|"Spring 적용"| I["구현체는 인터페이스 계약 준수"]
-    E -->|"Spring 적용"| J["UserDao, UserReadDao, UserWriteDao 분리"]
-    F -->|"Spring 적용"| K["추상화에 의존, 구현체에 의존 X"]
+    A[SOLID] --> B["SRP: 레이어 분리\nController·Service·Repository"]
+    A --> C["OCP: 인터페이스+DI\n확장에 열려있음"]
+    A --> D["LSP: 구현체 계약 준수"]
+    A --> E["ISP: DAO 인터페이스 분리"]
+    A --> F["DIP: 추상화 의존"]
 ```
 
 ### 7.2 템플릿 콜백 패턴 — Spring 전반에서 사용
@@ -480,7 +459,6 @@ graph TD
     A --> E[RedisTemplate]
     A --> F[RabbitTemplate]
     A --> G[KafkaTemplate]
-
     B -->|"콜백"| H[RowMapper, PreparedStatementCreator]
     C -->|"콜백"| I[RequestCallback, ResponseExtractor]
     D -->|"콜백"| J[TransactionCallback]

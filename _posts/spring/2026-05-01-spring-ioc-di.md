@@ -59,7 +59,6 @@ graph TD
     D --> E["5️⃣ 초기화 콜백<br>@PostConstruct, InitializingBean"]
     E --> F["6️⃣ Bean 사용"]
     F --> G["7️⃣ 소멸 콜백<br>@PreDestroy, DisposableBean"]
-
     style A fill:#e8f4f8
     style F fill:#e8f8e8
     style G fill:#f8e8e8
@@ -122,7 +121,6 @@ graph TD
     AC --> ACSWSAC["AnnotationConfigServletWebServerApplicationContext<br>Spring Boot 웹 환경"]
     AC --> GXAC["GenericXmlApplicationContext<br>XML 설정"]
     AC --> CPXAC["ClassPathXmlApplicationContext<br>XML 설정, 클래스패스"]
-
     style AC fill:#e8f4f8
 ```
 
@@ -202,7 +200,6 @@ graph LR
     A["getBean('userService')"] --> I["동일한 인스턴스"]
     B["getBean('userService')"] --> I
     C["getBean('userService')"] --> I
-
     style I fill:#e8f8e8
 ```
 
@@ -224,7 +221,6 @@ graph LR
     A["getBean('shoppingCart')"] --> I1["새 인스턴스 A"]
     B["getBean('shoppingCart')"] --> I2["새 인스턴스 B"]
     C["getBean('shoppingCart')"] --> I3["새 인스턴스 C"]
-
     style I1 fill:#fff8e0
     style I2 fill:#fff8e0
     style I3 fill:#fff8e0
@@ -471,7 +467,6 @@ graph LR
     A["ServiceA<br>@Autowired B b"] --> B["ServiceB<br>@Autowired C c"]
     B --> C["ServiceC<br>@Autowired A a"]
     C --> A
-
     style A fill:#ffe0e0
     style B fill:#ffe0e0
     style C fill:#ffe0e0

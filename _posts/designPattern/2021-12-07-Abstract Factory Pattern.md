@@ -35,56 +35,17 @@ toc_label: 목차
 
 ```mermaid
 classDiagram
-    class UIFactory {
-        <<interface>>
-        +createButton(): Button
-        +createCheckbox(): Checkbox
-    }
-    class WindowsFactory {
-        +createButton(): Button
-        +createCheckbox(): Checkbox
-    }
-    class MacFactory {
-        +createButton(): Button
-        +createCheckbox(): Checkbox
-    }
-    class Button {
-        <<interface>>
-        +render(): void
-    }
-    class Checkbox {
-        <<interface>>
-        +render(): void
-    }
-    class WindowsButton {
-        +render(): void
-    }
-    class MacButton {
-        +render(): void
-    }
-    class WindowsCheckbox {
-        +render(): void
-    }
-    class MacCheckbox {
-        +render(): void
-    }
-    class Application {
-        -factory: UIFactory
-        +Application(factory: UIFactory)
-        +buildUI(): void
-    }
-
+    class UIFactory { <<interface>> +createButton() +createCheckbox() }
+    class Button { <<interface>> }
+    class Checkbox { <<interface>> }
+    class Application { -factory: UIFactory }
     UIFactory <|.. WindowsFactory
     UIFactory <|.. MacFactory
-    Button <|.. WindowsButton
-    Button <|.. MacButton
-    Checkbox <|.. WindowsCheckbox
-    Checkbox <|.. MacCheckbox
-    WindowsFactory ..> WindowsButton : "생성"
-    WindowsFactory ..> WindowsCheckbox : "생성"
-    MacFactory ..> MacButton : "생성"
-    MacFactory ..> MacCheckbox : "생성"
-    Application --> UIFactory : "사용"
+    Button <|.. WindowsFactory
+    Button <|.. MacFactory
+    Checkbox <|.. WindowsFactory
+    Checkbox <|.. MacFactory
+    Application --> UIFactory : 사용
 ```
 
 ---
@@ -261,23 +222,16 @@ public class Main {
 
 ```mermaid
 sequenceDiagram
-    participant M as "Main"
-    participant F as "WindowsFactory"
-    participant A as "Application"
-    participant B as "WindowsButton"
-    participant C as "WindowsCheckbox"
-
-    M->>F: "1. new WindowsFactory() 생성"
-    M->>A: "2. new Application(factory) 생성"
-    A->>F: "3. factory.createButton() 호출"
-    F->>B: "4. new WindowsButton() 생성"
-    B-->>A: "5. WindowsButton 반환"
-    A->>F: "6. factory.createCheckbox() 호출"
-    F->>C: "7. new WindowsCheckbox() 생성"
-    C-->>A: "8. WindowsCheckbox 반환"
-    M->>A: "9. app.buildUI() 호출"
-    A->>B: "10. button.render()"
-    A->>C: "11. checkbox.render()"
+    participant M as Main
+    participant F as WindowsFactory
+    participant A as Application
+    M->>F: new WindowsFactory()
+    M->>A: new Application(factory)
+    A->>F: createButton()
+    F-->>A: WindowsButton
+    A->>F: createCheckbox()
+    F-->>A: WindowsCheckbox
+    A->>A: render()
 ```
 
 ---

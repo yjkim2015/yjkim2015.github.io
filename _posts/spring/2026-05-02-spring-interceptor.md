@@ -126,41 +126,13 @@ public class AuthInterceptor implements HandlerInterceptor {
 
 ```mermaid
 graph TB
-    subgraph "서블릿 컨테이너 영역"
-        A["HTTP 요청"] --> B[Filter 1]
-        B --> C[Filter 2]
-        C --> D[Filter N]
-    end
-
-    subgraph "Spring MVC 영역"
-        D --> E[DispatcherServlet]
-        E --> F[HandlerMapping]
-        F --> G[Interceptor 1 preHandle]
-        G --> H[Interceptor 2 preHandle]
-        H --> I[Controller]
-        I --> J[Interceptor 2 postHandle]
-        J --> K[Interceptor 1 postHandle]
-        K --> L[View Resolver]
-        L --> M[Interceptor 2 afterCompletion]
-        M --> N[Interceptor 1 afterCompletion]
-    end
-
-    subgraph "비즈니스 로직 영역"
-        I --> O[AOP Before]
-        O --> P[Service Method]
-        P --> Q[AOP After]
-        Q --> I
-    end
-
-    classDef filter fill:#ff9999,stroke:#cc0000,color:#000
-    classDef interceptor fill:#99ccff,stroke:#0066cc,color:#000
-    classDef aop fill:#99ff99,stroke:#006600,color:#000
-    classDef servlet fill:#ffcc99,stroke:#cc6600,color:#000
-
-    class B,C,D filter
-    class G,H,J,K,M,N interceptor
-    class O,Q aop
-    class E,F,L servlet
+    A[HTTP 요청] --> B["Filter Chain"]
+    B --> C[DispatcherServlet]
+    C --> D["Interceptor preHandle (순서)"]
+    D --> E[Controller]
+    E --> F["AOP Before/After"]
+    E --> G["Interceptor postHandle·afterCompletion (역순)"]
+    G --> H[HTTP 응답]
 ```
 
 ### 언제 무엇을 사용해야 하는가
@@ -170,23 +142,12 @@ flowchart TD
     A["횡단 관심사 구현 필요"] --> B{"Spring Bean 접근 필요?"}
     B -->|"아니오"| C{"모든 요청에 적용?"}
     B -->|"예"| D{"URL 기반 제어 필요?"}
-
     C -->|"예"| E["Filter 사용\n인코딩, CORS, 보안 헤더"]
     C -->|"아니오"| F["Filter 사용\n특정 경로만 매핑"]
-
     D -->|"예"| G["Interceptor 사용\n인증, 로깅, 성능 측정"]
     D -->|"아니오"| H{"메서드 레벨 제어?"}
-
     H -->|"예"| I["AOP 사용\n트랜잭션, 캐싱, 메서드 로깅"]
     H -->|"아니오"| G
-
-    classDef filter fill:#ff9999,stroke:#cc0000,color:#000
-    classDef interceptor fill:#99ccff,stroke:#0066cc,color:#000
-    classDef aop fill:#99ff99,stroke:#006600,color:#000
-
-    class E,F filter
-    class G interceptor
-    class I aop
 ```
 
 ---
@@ -364,34 +325,17 @@ public void afterCompletion(HttpServletRequest request,
 
 ```mermaid
 sequenceDiagram
-    participant C as 클라이언트
-    participant F as 1️⃣ Filter
-    participant DS as 2️⃣ DispatcherServlet
-    participant I1 as 3️⃣ Interceptor1.preHandle
-    participant I2 as Interceptor2.preHandle
-    participant CT as 4️⃣ Controller
-    participant I2P as Interceptor2.postHandle
-    participant I1P as 5️⃣ Interceptor1.postHandle
-    participant V as View
-    participant I2A as Interceptor2.afterCompletion
-    participant I1A as 6️⃣ Interceptor1.afterCompletion
-
+    participant C as Client
+    participant F as Filter
+    participant DS as DispatcherServlet
+    participant CT as Controller
     C->>F: HTTP 요청
-    F->>DS: doFilter() 통과
-    DS->>I1: preHandle() 호출
-    I1-->>DS: true 반환
-    DS->>I2: preHandle() 호출
-    I2-->>DS: true 반환
-    DS->>CT: 핸들러 메서드 실행
-    CT-->>DS: ModelAndView 반환
-    DS->>I2P: postHandle() 호출 (역순)
-    DS->>I1P: postHandle() 호출 (역순)
-    DS->>V: View 렌더링
-    V-->>DS: 렌더링 완료
-    DS->>I2A: afterCompletion() 호출 (역순)
-    DS->>I1A: afterCompletion() 호출 (역순)
-    DS-->>F: 응답 반환
-    F-->>C: 최종 HTTP 응답
+    F->>DS: doFilter()
+    DS->>DS: I1→I2 preHandle()
+    DS->>CT: 핸들러 실행
+    CT-->>DS: ModelAndView
+    DS->>DS: I2→I1 postHandle()/afterCompletion()
+    F-->>C: HTTP 응답
 ```
 
 ### preHandle에서 false 반환 시 흐름
@@ -400,41 +344,32 @@ sequenceDiagram
 sequenceDiagram
     participant C as 클라이언트
     participant DS as DispatcherServlet
-    participant I1 as Interceptor1.preHandle
-    participant I2 as Interceptor2.preHandle
-    participant CT as Controller
-
+    participant I1 as Interceptor1
+    participant I2 as Interceptor2
     C->>DS: HTTP 요청
-    DS->>I1: preHandle() 호출
-    I1-->>DS: true 반환
-    DS->>I2: preHandle() 호출
-    I2-->>DS: false 반환 (인증 실패!)
-    Note over DS: I2가 false 반환하면<br>Controller 미호출<br>I2.postHandle 미호출<br>I1.afterCompletion 호출됨
-    DS->>I1: afterCompletion() 호출
-    DS-->>C: I2가 직접 작성한 401 응답
+    DS->>I1: preHandle() → true
+    DS->>I2: preHandle() → false(인증실패)
+    Note over DS: Controller 미호출, I1.afterCompletion 호출
+    DS->>I1: afterCompletion()
+    DS-->>C: 401 응답
 ```
 
 ### 예외 발생 시 흐름
 
 ```mermaid
 sequenceDiagram
-    participant C as 클라이언트
+    participant C as Client
     participant DS as DispatcherServlet
     participant I1 as Interceptor1
     participant CT as Controller
     participant EH as ExceptionHandler
-
     C->>DS: HTTP 요청
-    DS->>I1: preHandle() 호출
-    I1-->>DS: true
-    DS->>CT: 핸들러 메서드 실행
-    CT--xDS: RuntimeException 발생!
-    Note over DS: postHandle은 호출되지 않음
+    DS->>I1: preHandle() → true
+    DS->>CT: 핸들러 실행
+    CT--xDS: RuntimeException (postHandle 생략)
     DS->>EH: @ExceptionHandler 처리
-    EH-->>DS: 에러 응답
-    DS->>I1: afterCompletion(ex) 호출
-    Note over I1: ex 파라미터로<br>예외 정보 전달됨
-    DS-->>C: 에러 HTTP 응답
+    DS->>I1: afterCompletion(ex)
+    DS-->>C: 에러 응답
 ```
 
 ### 다중 Interceptor 실행 순서 요약
@@ -966,16 +901,12 @@ graph LR
         B --> C[Controller]
         C --> D["응답"]
     end
-
     subgraph "특징"
         E["단순 구현 OK"]
         F["HashMap 사용 가능"]
         G["동기 처리 문제 없음"]
         H["메모리 여유 충분"]
     end
-
-    classDef ok fill:#99ff99,stroke:#006600,color:#000
-    class E,F,G,H ok
 ```
 
 100 TPS 수준에서는 대부분의 구현이 문제없이 동작한다.
@@ -1146,29 +1077,11 @@ public class UltraOptimizedInterceptor implements HandlerInterceptor {
 
 ```mermaid
 graph TD
-    subgraph "최적화 전: 모든 요청이 모든 인터셉터 통과"
-        A1["요청"] --> B1["로깅 Interceptor"]
-        B1 --> C1["인증 Interceptor"]
-        C1 --> D1[Rate Limit Interceptor]
-        D1 --> E1["성능 Interceptor"]
-        E1 --> F1[Controller]
-    end
-
-    subgraph "최적화 후: 경로별 인터셉터 분리"
-        A2["요청"] --> G{"경로 분기"}
-        G -->|"/public/**"| H["성능 Interceptor만"]
-        G -->|"/api/**"| I["로깅 + 인증 + Rate Limit + 성능"]
-        G -->|"/internal/**"| J["인증 Interceptor만"]
-        H --> K1[Controller]
-        I --> K2[Controller]
-        J --> K3[Controller]
-    end
-
-    classDef bad fill:#ff9999,stroke:#cc0000,color:#000
-    classDef good fill:#99ff99,stroke:#006600,color:#000
-
-    class B1,C1,D1,E1 bad
-    class H,I,J good
+    A["요청 (최적화 전)"] --> B["로깅"] --> C["인증"] --> D["RateLimit"] --> E["성능"] --> F["Controller"]
+    A2["요청 (최적화 후)"] --> G{"경로 분기"}
+    G -->|"/public"| H["성능만 → Controller"]
+    G -->|"/api"| I["로깅+인증+RL+성능 → Controller"]
+    G -->|"/internal"| J["인증만 → Controller"]
 ```
 
 **100,000 TPS 최적화 기법 목록:**
@@ -1433,38 +1346,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
 ```mermaid
 mindmap
   root((Spring Interceptor))
-    위치
-      DispatcherServlet 이후
-      Controller 이전
-      Spring Bean 접근 가능
+    위치: DispatcherServlet 이후, Bean 접근 가능
     메서드
-      preHandle
-        컨트롤러 전
-        false 반환 시 중단
-      postHandle
-        컨트롤러 후
-        예외 발생 시 미호출
-      afterCompletion
-        렌더링 후
-        항상 호출됨
-    주요 용도
-      인증 및 인가
-      로깅
-      성능 측정
-      Rate Limiting
-    주의사항
-      싱글톤 인스턴스
-      인스턴스 변수 금지
-      ThreadLocal 정리 필수
-      false 반환 시 응답 작성
-    vs Filter
-      서블릿 vs Spring MVC 레벨
-      ExceptionHandler 적용 여부
-      Spring Bean 접근성
-    트래픽 고려
-      100 TPS 단순 구현 가능
-      10K TPS ThreadLocal 주의
-      100K TPS 체인 최적화 필요
+      preHandle - false 시 중단
+      postHandle - 예외 시 미호출
+      afterCompletion - 항상 호출
+    용도: 인증/인가, 로깅, Rate Limiting
+    주의: 싱글톤, 인스턴스 변수 금지
+    vs Filter: 서블릿 vs Spring MVC 레벨
 ```
 
 ### 한눈에 보는 핵심 체크리스트

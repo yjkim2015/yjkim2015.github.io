@@ -164,7 +164,6 @@ flowchart TD
     A["상속 방식"] --> B["InstrumentedHashSet extends HashSet"]
     B --> C["HashSet 내부 구현에 의존"]
     C --> D["addAll이 add를 호출하면 중복 카운트!"]
-
     E["컴포지션 방식"] --> F["InstrumentedSet has-a Set"]
     F --> G["ForwardingSet이 위임"]
     G --> H["내부 구현에 독립적"]

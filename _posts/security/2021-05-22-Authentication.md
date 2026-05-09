@@ -108,21 +108,15 @@ String sessionId = details.getSessionId();          // 세션 ID
 
 ```mermaid
 sequenceDiagram
-    participant "폼 입력" as Form
-    participant "UsernamePasswordAuthenticationFilter" as UPAF
-    participant "AuthenticationManager" as AM
-    participant "AuthenticationProvider" as AP
-    participant "SecurityContext" as SC
-
-    Form->>UPAF: 1. username=user, password=1234
-    UPAF->>UPAF: 2. UsernamePasswordAuthenticationToken 생성\n(principal=user, credentials=1234, authenticated=false)
-    UPAF->>AM: 3. authenticate(token) 호출
-    AM->>AP: 4. 적절한 Provider에 위임
-    AP->>AP: 5. UserDetailsService로 사용자 조회\n비밀번호 검증
-    AP-->>AM: 6. 새 Token 생성\n(principal=UserDetails, credentials=null, authenticated=true)
-    AM-->>UPAF: 7. 인증된 Authentication 반환
-    UPAF->>SC: 8. SecurityContextHolder.getContext().setAuthentication(token)
-    Note over SC: 이후 어디서든 Authentication 조회 가능
+    participant F as Form
+    participant AF as AuthFilter
+    participant AP as AuthProvider
+    participant SC as SecurityContext
+    F->>AF: username/password
+    AF->>AP: authenticate(token)
+    AP->>AP: UserDetails 조회+검증
+    AP-->>AF: 인증 Token
+    AF->>SC: setAuthentication()
 ```
 
 ## Authentication 구현체 종류

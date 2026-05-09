@@ -53,43 +53,23 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant P as Producer
-    participant B1 as Broker 1 (Leader)
-    participant B2 as Broker 2
-    participant B3 as Broker 3
-    P->>B1: 전송 (acks=all, min.insync.replicas=2)
+    participant B1 as Broker1(Leader)
+    participant B2 as Broker2
+    P->>B1: 전송(acks=all, min.insync=2)
     B1->>B2: 복제
-    B1->>B3: 복제
     B2-->>B1: 완료
-    B3-->>B1: 완료
     B1-->>P: ACK
-    Note over B1: 장애 발생!
-    Note over B2,B3: 두 팔로워 모두 최신 데이터 보유\n새 Leader 선출 → 데이터 유실 없음!
-    Note over P: ISR이 Broker1만 남은 상태 + min.insync.replicas=2\n→ NotEnoughReplicasException\n→ 쓰기 거부 (데이터 유실보다 가용성 포기)
+    Note over B1: 장애! B2가 새 리더→유실 없음
+    Note over P: ISR=1 < min.insync.replicas=2 → 쓰기 거부
 ```
 
 ### Unclean Leader Election 위험
 
 ```mermaid
 graph TD
-    subgraph scenario["극단적 시나리오"]
-        B1["Broker 1 (ISR, Leader, offset: 100) → 장애"]
-        B2["Broker 2 (ISR, offset: 100) → 장애"]
-        B3["Broker 3 (ISR 제외됨, offset: 80) → 살아있음"]
-    end
-    subgraph unclean["unclean.leader.election.enable=true (기본값: false)"]
-        UC1["Broker 3를 Leader로 선출 (ISR 아님)"]
-        UC2["offset 81~100 영구 유실!"]
-        UC3["하지만 가용성은 유지됨"]
-        UC1 --> UC2
-        UC1 --> UC3
-    end
-    subgraph clean["unclean.leader.election.enable=false (권장)"]
-        CC1["ISR 멤버가 복구될 때까지 해당 파티션 불가용"]
-        CC2["데이터 무결성 우선"]
-        CC1 --> CC2
-    end
-    scenario --> unclean
-    scenario --> clean
+    S["B1(ISR Leader,offset:100)장애, B2(ISR,offset:100)장애, B3(offset:80)생존"]
+    S --> U["unclean=true: B3를 Leader 선출, offset 81~100 유실, 가용성 유지"]
+    S --> C["unclean=false(권장): ISR 복구까지 파티션 불가용, 무결성 우선"]
 ```
 
 ### 방어 전략
@@ -239,41 +219,19 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 
 ```mermaid
 graph TD
-    subgraph before["변경 전: 파티션 4개"]
-        K1["키 user-123 → hash % 4 = 1 → Partition 1"]
-    end
-    subgraph after["파티션 6개로 증가"]
-        K2["키 user-123 → hash % 6 = 3 → Partition 3!"]
-    end
-    subgraph result["결과: 순서 보장 파괴!"]
-        P1DATA["Partition 1: user-123의 과거 메시지들"]
-        P3DATA["Partition 3: user-123의 새 메시지들"]
-        NOTE["동일 키인데 서로 다른 파티션 = 병렬 처리 가능 = 순서 보장 불가"]
-    end
-    before --> after --> result
+    K1["변경 전: user-123 → hash%4=1 → P1"] --> K2["변경 후: user-123 → hash%6=3 → P3!"]
+    K2 --> NOTE["동일 키가 다른 파티션 → 순서 보장 파괴"]
 ```
 
 ### 실제 영향
 
 ```mermaid
 graph TD
-    subgraph before["파티션 증가 전 (4개)"]
-        B1["order-123 생성 → P1 offset 100"]
-        B2["order-123 수정 → P1 offset 101"]
-        B3["order-123 취소 → P1 offset 102"]
-        B4["Consumer가 P1만 처리 → 순서 보장"]
-        B1 --> B2 --> B3 --> B4
-    end
-    subgraph after["파티션 증가 후 (4→6)"]
-        A1["order-123 생성 → P1 (이전에 저장됨)"]
-        A2["order-123 수정 → P3 (라우팅 변경!)"]
-        A3["order-123 취소 → P3"]
-        A4["Consumer-1이 P1: 생성만 보임"]
-        A5["Consumer-2가 P3: 수정→취소 (생성 없이 취소!) → 처리 불가"]
-        A1 --> A4
-        A2 --> A5
-        A3 --> A5
-    end
+    B1["생성 P1-100"] --> B2["수정 P1-101"] --> B3["취소 P1-102"]
+    B3 --> B4["Consumer: P1만 처리 → 순서 보장"]
+    A1["생성 P1(기존)"] --> A4["Consumer1: 생성만 봄"]
+    A2["수정 P3(변경!)"] --> A5["Consumer2: 수정/취소만 봄 → 오류"]
+    A3["취소 P3"] --> A5
 ```
 
 ### 방어 전략
@@ -399,16 +357,11 @@ public void adjustRetentionPolicy() {
 
 ```mermaid
 graph TD
-    S0["초기: ISR = B1(Leader), B2, B3"]
-    S1["Step 1: B3 네트워크 불안정\nreplica.lag.time.max.ms=30s 경과\n→ ISR = B1, B2"]
-    S2["Step 2: B2 Full GC 60초\n→ ISR = B1 (리더만)"]
-    S3["Step 3: min.insync.replicas=2 설정 시\n→ 쓰기 거부! (가용성 ↓, 안전성 ↑)"]
-    S4["Step 4: B1 (리더) 장애!\nISR가 비어있음"]
-    UNCLEAN["unclean.leader.election.enable=true:\n→ B3 (ISR 아님, 100개 뒤처짐) 리더 선출\n→ 100개 메시지 영구 유실!"]
-    CLEAN["unclean.leader.election.enable=false:\n→ 해당 파티션 완전 불가용\n→ B1 또는 B2 복구 시까지 대기"]
-    S0 --> S1 --> S2 --> S3 --> S4
-    S4 --> UNCLEAN
-    S4 --> CLEAN
+    S0["ISR=B1(Leader),B2,B3"] -->|"B3 lag 초과"| S1["ISR=B1,B2"]
+    S1 -->|"B2 Full GC"| S2["ISR=B1만\nmin.insync=2 → 쓰기 거부"]
+    S2 -->|"B1 장애"| S4["ISR 비어있음"]
+    S4 -->|"unclean=true"| UNCLEAN["B3 리더 선출\n→ 100개 유실"]
+    S4 -->|"unclean=false"| CLEAN["파티션 불가용\n→ 복구 대기"]
 ```
 
 ### ISR 모니터링
@@ -485,21 +438,9 @@ graph LR
 ```mermaid
 graph TD
     subgraph cause1["원인 1: Consumer 처리 속도 저하"]
-        C1A["외부 DB 응답 지연"]
-        C1B["GC 멈춤"]
-        C1C["처리 로직 CPU 집약적"]
-        C1D["다운스트림 서비스 장애"]
-    end
-    subgraph cause2["원인 2: Producer 급격한 유입량 증가"]
-        C2A["트래픽 급증 (이벤트, 세일 등)"]
-        C2B["업스트림 서비스 배치 처리"]
-        C2C["DDoS 또는 비정상 트래픽"]
-    end
-    subgraph cause3["원인 3: Consumer 인스턴스 감소"]
-        C3A["배포 중 인스턴스 순차 종료"]
-        C3B["OOM으로 인한 프로세스 종료"]
-        C3C["리밸런싱 중 처리 중단"]
-    end
+    LAG["Lag 폭증 원인"] --> C1["Consumer 속도 저하: DB지연/GC/CPU집약/다운스트림장애"]
+    LAG --> C2["Producer 유입 급증: 트래픽급증/배치처리/DDoS"]
+    LAG --> C3["Consumer 감소: 배포/OOM/리밸런싱"]
 ```
 
 ### Lag 모니터링 및 자동 스케일링
@@ -637,15 +578,6 @@ graph TD
         SA1 --> SA2
         SA1 --> SA3
     end
-    subgraph scenB["시나리오 B: Producer와 Leader가 다른 Zone"]
-        SB1["Producer → X → Leader(Zone A)"]
-        SB2["새 Leader(Zone B) 메타데이터 갱신 후 재연결"]
-        SB1 --> SB2
-    end
-    subgraph scenC["시나리오 C: 소수 Zone에 리더 (min.insync.replicas=2, acks=all)"]
-        SC1["Zone B 분리 시: Zone A에서 계속 쓰기 가능"]
-        SC2["Zone A 분리 시: Zone B 쓰기 불가\n(가용성 포기, 안전성 유지)"]
-    end
 ```
 
 ### 방어 전략
@@ -708,20 +640,12 @@ props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
 sequenceDiagram
     participant P as Producer
     participant B as Broker
-    Note over P,B: MAX_IN_FLIGHT=5, 멱등성 없음
-    P->>B: msg1 전송 (flight 중)
-    P->>B: msg2 전송 (flight 중)
-    Note over B: msg1 전송 실패 → 재시도 대기
-    B-->>P: msg2 전송 성공
-    P->>B: msg1 재시도 성공
-    Note over B: Partition: [msg2, msg1] ← 순서 역전!
-
-    Note over P,B: MAX_IN_FLIGHT=1
-    P->>B: msg1 전송
-    B-->>P: 완료
-    P->>B: msg2 전송
-    B-->>P: 완료
-    Note over B: Partition: [msg1, msg2] ← 순서 보장, 단 처리량 저하
+    Note over P,B: IN_FLIGHT=5, 멱등성 없음
+    P->>B: msg1(실패)→msg2(성공)→msg1 재시도
+    Note over B: [msg2,msg1] 순서역전!
+    Note over P,B: IN_FLIGHT=1
+    P->>B: msg1→msg2 순서대로
+    Note over B: [msg1,msg2] 순서보장
 ```
 
 ### 완전한 해결: Idempotent Producer

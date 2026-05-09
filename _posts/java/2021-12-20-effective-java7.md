@@ -203,7 +203,6 @@ sequenceDiagram
     participant Client as 클라이언트
     participant Map as WeakHashMap
     participant GC as GC
-
     Client->>Map: put(key, value) — key를 약한 참조로 저장
     Client->>Client: key 사용 완료, 로컬 참조 제거
     Note over Client: key에 대한 강한 참조 없음

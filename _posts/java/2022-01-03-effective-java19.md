@@ -52,7 +52,6 @@ sequenceDiagram
     participant Client as 클라이언트
     participant AC as AbstractCollection
     participant Sub as 하위 클래스
-
     Client->>AC: remove(o) 호출
     AC->>Sub: iterator() 호출 (재정의된 버전!)
     Sub-->>AC: 커스텀 Iterator 반환
@@ -148,7 +147,6 @@ sequenceDiagram
     participant Sub as Sub 생성자
     participant Super as Super 생성자
     participant OV as overrideMe()
-
     Client->>Sub: new Sub() 호출
     Sub->>Super: super() 자동 호출 (Java 규칙)
     Super->>OV: overrideMe() 호출
@@ -239,9 +237,7 @@ graph TD
     A --> C["필요한 hook은 protected로 공개\n(직접 하위 클래스 만들어 검증)"]
     A --> D["생성자에서 재정의 가능 메서드\n절대 호출 금지"]
     A --> E["clone/readObject에서도\n재정의 가능 메서드 호출 금지"]
-
     F["상속할 이유가 없다면"] --> G["final 클래스 또는\nprivate 생성자로 상속 금지"]
-
     style D fill:#ff6b6b,color:#fff
     style E fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff

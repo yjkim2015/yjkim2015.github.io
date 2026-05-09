@@ -35,23 +35,13 @@ toc_label: 목차
 
 ```mermaid
 classDiagram
-    class Subject {
-        <<interface>>
-        +request(): void
-    }
-    class RealSubject {
-        +request(): void
-    }
+    class Subject { <<interface>> }
+    class RealSubject
     class Proxy {
         -realSubject: RealSubject
-        +request(): void
         -checkAccess(): boolean
-        -logAccess(): void
     }
-    class Client {
-        +operation(subject: Subject): void
-    }
-
+    class Client
     Subject <|.. RealSubject
     Subject <|.. Proxy
     Proxy --> RealSubject : "위임"
@@ -266,21 +256,16 @@ public class Main {
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant P as "CommandExecutorProxy"
-    participant R as "CommandExecutorImpl"
-
-    C->>P: "1. runCommand('ls -al') 호출"
-    P->>P: "2. 로깅 처리"
-    P->>P: "3. 접근 권한 확인 (rm 명령 아님 → 통과)"
-    P->>R: "4. executor.runCommand('ls -al') 위임"
-    R-->>P: "5. 실행 완료"
-    P-->>C: "6. 반환"
-
-    C->>P: "7. runCommand('rm -rf /') 호출"
-    P->>P: "8. 로깅 처리"
-    P->>P: "9. 접근 권한 확인 (rm + 비관리자 → 거부)"
-    P-->>C: "10. SecurityException 발생"
+    participant C as 클라이언트
+    participant P as Proxy
+    participant R as Impl
+    C->>P: runCommand(ls -al)
+    P->>P: 로깅 + 권한 확인(통과)
+    P->>R: runCommand 위임
+    R-->>C: 실행 완료
+    C->>P: runCommand(rm -rf /)
+    P->>P: 권한 확인(거부)
+    P-->>C: SecurityException
 ```
 
 ---

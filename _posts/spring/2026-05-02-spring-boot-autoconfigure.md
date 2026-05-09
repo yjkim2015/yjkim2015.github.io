@@ -73,23 +73,11 @@ public class MyApplication {
 
 ```mermaid
 graph TD
-    A[@SpringBootApplication] --> B[@SpringBootConfiguration]
-    A --> C[@EnableAutoConfiguration]
-    A --> D[@ComponentScan]
-
-    B --> E["@Configuration: 설정 클래스로 등록\n@Bean 메서드 사용 가능"]
-    C --> F["AutoConfigurationImportSelector 실행"]
-    D --> G["현재 패키지 하위의 @Component,\n@Service, @Repository 등 자동 스캔"]
-
-    F --> H["AutoConfiguration.imports 파일 읽기"]
-    H --> I["142개 이상의 자동 구성 클래스 후보"]
-    I --> J["@Conditional 조건 평가"]
-    J --> K["조건 충족한 것만 빈 등록"]
-
-    classDef key fill:#cce5ff,stroke:#007bff
-    classDef result fill:#d4edda,stroke:#28a745
-    class C key
-    class K result
+    A[@SpringBootApplication] --> B[@SpringBootConfiguration\n@Bean 등록]
+    A --> C[@EnableAutoConfiguration\nAutoConfigurationImportSelector]
+    A --> D[@ComponentScan\n패키지 자동 스캔]
+    C --> E["imports 파일 → 142개 후보"]
+    E --> F["@Conditional 평가\n→ 조건 충족만 빈 등록"]
 ```
 
 **`@ComponentScan`의 basePackages가 지정되지 않은 이유:** 지정하지 않으면 `@SpringBootApplication`이 붙은 클래스의 패키지를 기준으로 하위 패키지를 스캔합니다. 그래서 메인 클래스는 항상 최상위 패키지에 위치해야 합니다. 예를 들어 `com.example.MyApplication`이면 `com.example` 하위의 모든 컴포넌트가 스캔됩니다.
@@ -149,7 +137,6 @@ sequenceDiagram
     participant AIS as AutoConfigurationImportSelector
     participant SF as AutoConfiguration.imports
     participant C as @Conditional 평가기
-
     SA->>AIS: selectImports() 호출
     AIS->>SF: 자동 구성 후보 읽기
     SF-->>AIS: 142개+ 클래스 목록 반환
@@ -233,11 +220,6 @@ flowchart TD
     F -->|"No"| H{"HikariCP 있음?"}
     H -->|"Yes"| I["HikariDataSource 생성\napplication.yml에서 설정 읽음"]
     H -->|"No"| J["다른 커넥션 풀 시도"]
-
-    classDef ok fill:#d4edda,stroke:#28a745
-    classDef skip fill:#fff3cd,stroke:#ffc107
-    class G,I ok
-    class C,E skip
 ```
 
 **이 흐름이 실무에서 왜 중요한가?** `application.yml`에 DB URL을 설정하지 않아도 H2가 클래스패스에 있으면 자동으로 인메모리 DB를 쓰게 됩니다. 운영 환경에서 실수로 H2 의존성을 포함했다면 연결이 끊겨도 앱이 시작되는 것처럼 보일 수 있습니다. 운영용 DB URL 설정을 빠뜨리면 H2를 쓰게 되는 사고가 발생합니다. `@ConditionalOnMissingBean`을 이해하면 이런 상황을 미리 예방할 수 있습니다.
@@ -465,20 +447,17 @@ com.example.HttpClientAutoConfiguration
 
 ```mermaid
 sequenceDiagram
-    participant SA as SpringApplication.run()
-    participant SF as TomcatServletWebServerFactory
-    participant TC as TomcatWebServer (내장 Tomcat)
+    participant SA as SpringApplication
+    participant SF as TomcatFactory
+    participant TC as Tomcat
     participant DS as DispatcherServlet
-
-    SA->>SF: 1️⃣ getWebServer() 호출
-    SF->>TC: 2️⃣ Tomcat 인스턴스 생성
-    TC->>TC: 3️⃣ 커넥터, 호스트 설정
-    SA->>DS: 4️⃣ DispatcherServlet 빈 등록
-    DS->>TC: 5️⃣ 서블릿으로 등록
-    TC->>TC: 6️⃣ start() — 포트 바인딩
-    TC-->>SA: 7️⃣ TomcatWebServer 반환
-    SA->>SA: 8️⃣ 애플리케이션 구동 완료
-    Note over TC: "Started MyApplication in 2.345 seconds"
+    SA->>SF: getWebServer()
+    SF->>TC: Tomcat 생성 + 커넥터 설정
+    SA->>DS: DS 빈 등록
+    DS->>TC: 서블릿 등록
+    TC->>TC: start() 포트 바인딩
+    TC-->>SA: TomcatWebServer 반환
+    Note over SA: 구동 완료
 ```
 
 내장 Tomcat의 장점은 단순히 편리함이 아닙니다. WAR 배포는 WAS 서버 설정에 의존합니다. 서버 버전이 다르면 동작이 달라질 수 있습니다. 내장 서버는 테스트 환경과 운영 환경이 완전히 동일한 Tomcat 버전을 사용한다는 것을 보장합니다. "내 로컬에서는 됐는데 서버에선 안 돼요" 문제를 줄여줍니다.
@@ -534,18 +513,11 @@ management:
 
 ```mermaid
 graph TD
-    A["Actuator 엔드포인트"] --> B["/actuator/health"]
-    A --> C["/actuator/metrics"]
-    A --> D["/actuator/loggers"]
-    A --> E["/actuator/env"]
-    A --> F["/actuator/beans"]
-    A --> G["/actuator/mappings"]
-
-    B -->|"DB, 디스크, 캐시 연결 확인"| H["UP/DOWN 상태"]
-    C -->|"JVM, HTTP 요청 수, 커스텀 메트릭"| I["Prometheus 연동 가능"]
-    D -->|"런타임 로그 레벨 변경"| J["재시작 없이 DEBUG 전환"]
-    E -->|"현재 설정값 확인"| K["어떤 프로파일이 활성화됐는지"]
-    F -->|"등록된 모든 빈 목록"| L["자동 구성 디버깅"]
+    A["Actuator"] --> B["/health\nDB·디스크·캐시 UP/DOWN"]
+    A --> C["/metrics\nJVM·HTTP·Prometheus"]
+    A --> D["/loggers\n재시작없이 DEBUG 전환"]
+    A --> E["/env\n활성 프로파일·설정값"]
+    A --> F["/beans & /mappings\n자동구성 디버깅"]
 ```
 
 **`/actuator/loggers`가 특히 유용한 이유:** 운영 중에 특정 클래스의 로그가 갑자기 많이 필요해졌습니다. 재배포 없이 `curl -X POST /actuator/loggers/com.example.OrderService -d '{"configuredLevel":"DEBUG"}'`로 즉시 DEBUG 레벨로 전환할 수 있습니다. 문제 해결 후 다시 INFO로 복구합니다.
@@ -716,23 +688,12 @@ class OrderRepositoryTest {
 
 ```mermaid
 flowchart TD
-    A["SpringApplication.run()"] --> B["Environment 준비\n시스템 변수, 환경변수 수집"]
-    B --> C["application.yml 로드\n프로파일 활성화"]
-    C --> D["ApplicationContext 생성"]
-    D --> E["@ComponentScan 실행\n개발자가 만든 빈 등록"]
-    E --> F["@EnableAutoConfiguration 실행"]
-    F --> G["AutoConfiguration.imports 읽기\n142개 후보"]
-    G --> H["@Conditional 조건 평가\n각 후보에 대해 클래스패스, 빈 등록 여부 확인"]
-    H --> I["조건 충족 AutoConfiguration 클래스 빈 등록\n(보통 20~50개)"]
-    I --> J["의존관계 주입 및 초기화\n@PostConstruct 실행"]
-    J --> K["내장 서버 시작\nTomcat 포트 바인딩"]
-    K --> L["ApplicationReadyEvent 발행\n@EventListener 실행"]
-    L --> M["서비스 준비 완료\n'Started in X seconds'"]
-
-    classDef key fill:#cce5ff,stroke:#007bff
-    classDef result fill:#d4edda,stroke:#28a745
-    class H key
-    class M result
+    A["SpringApplication.run()"] --> B["Environment + yml 로드\n프로파일 활성화"]
+    B --> C["ApplicationContext 생성\n@ComponentScan 빈 등록"]
+    C --> D["AutoConfiguration.imports\n142개 후보 → @Conditional 평가"]
+    D --> E["조건 충족 20~50개 빈 등록\n@PostConstruct 초기화"]
+    E --> F["내장 Tomcat 시작"]
+    F --> G["ApplicationReadyEvent\n→ 서비스 준비 완료"]
 ```
 
 ---

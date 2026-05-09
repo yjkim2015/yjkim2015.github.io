@@ -59,44 +59,11 @@ Adapter(구현체)가 기술을 다룬다.
 
 ```mermaid
 graph LR
-    subgraph DRIVING["외부 세계 (Driving Side)"]
-        HTTP["HTTP Client\nREST 요청"]
-        CLI["CLI\n배치 작업"]
-        TEST["Test\n단위/통합"]
-    end
-
-    subgraph CORE["Application Core (비즈니스 로직)"]
-        direction TB
-        IP["Inbound Port\nUseCase Interface\n(what을 정의)"]
-        AS["Application Service\n(UseCase 구현)"]
-        DOM["Domain Model\nEntity, VO, Aggregate"]
-        OP["Outbound Port\nRepository Interface\n(what을 정의)"]
-        IP --> AS
-        AS --> DOM
-        AS --> OP
-    end
-
-    subgraph DRIVEN["외부 세계 (Driven Side)"]
-        DB[("Database\nMySQL/MongoDB")]
-        MQ["Message Queue\nKafka/RabbitMQ"]
-        EXT["External API\nPG사, 배송사"]
-    end
-
-    HTTP -->|"Inbound Adapter\n(Controller)"| IP
-    CLI -->|"Inbound Adapter\n(BatchRunner)"| IP
-    TEST -->|"Inbound Adapter\n(Test)"| IP
-    OP -->|"Outbound Adapter\n(JpaRepository)"| DB
-    OP -->|"Outbound Adapter\n(KafkaPublisher)"| MQ
-    OP -->|"Outbound Adapter\n(StripeClient)"| EXT
-
-    classDef core fill:#E8D5E8,stroke:#9B59B6,stroke-width:3px
-    classDef port fill:#D5E8D4,stroke:#82B366,stroke-width:2px
-    classDef adapter fill:#DAE8FC,stroke:#6C8EBF
-    classDef external fill:#FFF2CC,stroke:#D6B656
-
-    class AS,DOM core
-    class IP,OP port
-    class HTTP,CLI,TEST,DB,MQ,EXT external
+    HTTP["HTTP/CLI/Test\n(Driving Side)"]
+    AS["Application Service\n+ Domain Model"]
+    DB["DB/MQ/API\n(Driven Side)"]
+    HTTP -->|"Inbound Port/Adapter"| AS
+    AS -->|"Outbound Port/Adapter"| DB
 ```
 
 ---
@@ -136,19 +103,10 @@ graph LR
     AS["Application Service"]
     OP["Outbound Port\n(Repository Interface)"]
     DA["DB Adapter\n(JpaRepository)"]
-
     WA -->|"1️⃣ depends on"| IP
     IP -->|"2️⃣ implemented by"| AS
     AS -->|"3️⃣ depends on"| OP
     DA -->|"4️⃣ implements"| OP
-
-    classDef core fill:#E8D5E8,stroke:#9B59B6,stroke-width:2px
-    classDef port fill:#D5E8D4,stroke:#82B366
-    classDef adapter fill:#DAE8FC,stroke:#6C8EBF
-
-    class AS core
-    class IP,OP port
-    class WA,DA adapter
 ```
 
 `Application Service`는 `JpaRepository`를 직접 알지 않습니다. `OrderRepository` 인터페이스(Outbound Port)만 압니다. JPA는 언제든 교체 가능합니다.
@@ -318,16 +276,8 @@ graph TD
         IT["통합 테스트\nAdapter 레벨\nDB/Kafka 실제 사용\n중간 속도"]
         E2E["E2E 테스트\nHTTP 요청 → DB 확인\n전체 플로우 검증\n느림"]
     end
-
     UT -->|"70%"| IT
     IT -->|"20%"| E2E
-
-    classDef ut fill:#D5E8D4,stroke:#82B366
-    classDef it fill:#FFF2CC,stroke:#D6B656
-    classDef e2e fill:#F8CECC,stroke:#B85450
-
-    class UT ut
-    class IT it
     class E2E e2e
 ```
 
@@ -393,41 +343,12 @@ class OrderServiceTest {
 
 ```mermaid
 graph TD
-    subgraph "DDD + 헥사고날 통합"
-        subgraph "Domain Layer (헥사고날 Core 내부)"
-            E["Entity\nOrder, OrderItem"]
-            VO["Value Object\nMoney, Address"]
-            AGG["Aggregate\nOrder Root"]
-            DE["Domain Event\nOrderPlacedEvent"]
-        end
-
-        subgraph "Application Layer = Application Core"
-            UC["UseCase\nApplication Service"]
-            IP["Inbound Port\nPlaceOrderUseCase"]
-            OP["Outbound Port\nOrderRepository"]
-        end
-
-        subgraph "Infrastructure (Adapter)"
-            WA["Web Adapter\n@RestController"]
-            PA["Persistence Adapter\nJpaRepository"]
-            MA["Messaging Adapter\nKafkaPublisher"]
-        end
-    end
-
-    WA -->|"HTTP 요청 전달"| IP
-    IP -->|"구현"| UC
-    UC -->|"도메인 로직 실행"| E
-    UC -->|"인터페이스 호출"| OP
-    PA -->|"구현"| OP
-    MA -->|"구현"| OP
-
-    classDef domain fill:#E8D5E8,stroke:#9B59B6
-    classDef app fill:#D5E8D4,stroke:#82B366
-    classDef infra fill:#DAE8FC,stroke:#6C8EBF
-
-    class E,VO,AGG,DE domain
-    class UC,IP,OP app
-    class WA,PA,MA infra
+    WA["Web Adapter\n@RestController"] -->|HTTP 요청| IP["Inbound Port\nPlaceOrderUseCase"]
+    IP --> UC["Application Service\n(UseCase 구현)"]
+    UC --> E["Domain\nEntity/VO/Aggregate/Event"]
+    UC --> OP["Outbound Port\nOrderRepository"]
+    PA["Persistence Adapter\nJpaRepository"] -->|구현| OP
+    MA["Messaging Adapter\nKafkaPublisher"] -->|구현| OP
 ```
 
 - DDD의 **Domain Layer**가 헥사고날의 **Application Core** 내부에 위치

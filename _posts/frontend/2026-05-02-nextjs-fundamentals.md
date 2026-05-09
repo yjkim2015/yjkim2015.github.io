@@ -24,37 +24,12 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    subgraph "CSR"
-        CSR1["서버: 빈 HTML + JS 전달"]
-        CSR2["브라우저: JS로 DOM 생성"]
-        CSR3["초기 로딩 느림 (흰 화면)"]
-        CSR4["이후 인터랙션 빠름"]
-    end
-
-    subgraph "SSR"
-        SSR1["요청마다 서버에서 HTML 생성"]
-        SSR2["완성된 HTML 전달"]
-        SSR3["항상 최신 데이터"]
-        SSR4["서버 부하 높음"]
-    end
-
-    subgraph "SSG"
-        SSG1["빌드 시 HTML 생성"]
-        SSG2["CDN에서 즉시 전달"]
-        SSG3["매우 빠름"]
-        SSG4["데이터 빌드 시점에 고정"]
-    end
-
-    subgraph "ISR"
-        ISR1["SSG + 주기적 재생성"]
-        ISR2["빠른 초기 로드"]
-        ISR3["일정 시간마다 최신화"]
-        ISR4["속도와 신선도 균형"]
-    end
-
-    style CSR3 fill:#e74c3c,color:#fff
-    style SSG3 fill:#2ecc71,color:#fff
-    style ISR4 fill:#2ecc71,color:#fff
+    CSR["CSR: 빈 HTML + JS 번들 → 브라우저에서 DOM 생성 (초기 느림)"]
+    SSR["SSR: 요청마다 서버 HTML 생성 → 최신 데이터, 서버 부하"]
+    SSG["SSG: 빌드 시 HTML 생성 → CDN 배포, 매우 빠름"]
+    ISR["ISR: SSG + 주기적 재생성 → 속도와 신선도 균형"]
+    CSR --- SSR
+    SSG --- ISR
 ```
 
 | 전략 | 렌더링 시점 | 속도 | 신선도 | 적합한 경우 |
@@ -72,24 +47,12 @@ Next.js 13에서 App Router가 도입되었습니다. Pages Router는 기존 방
 
 ```mermaid
 graph LR
-    subgraph "Pages Router 13 이전"
-        PR["pages/"]
-        PR --> PI["index.js → /"]
-        PR --> PB["blog/[id].js → /blog/:id"]
-        PR --> PA["api/users.js → /api/users"]
-    end
-
-    subgraph "App Router 13+ 권장"
-        AR["app/"]
-        AR --> AI["page.tsx → /"]
-        AR --> AB["blog/[id]/page.tsx → /blog/:id"]
-        AR --> ARO["layout.tsx → 공유 레이아웃"]
-        AR --> ARL["loading.tsx → 로딩 UI"]
-        AR --> ARE["error.tsx → 에러 UI"]
-    end
-
-    style AR fill:#2ecc71,color:#fff
-    style PR fill:#f39c12,color:#fff
+    PR["pages/"] --> PI["index.js → /"]
+    PR --> PB["blog/[id].js → /blog/:id"]
+    PR --> PA["api/users.js → /api/users"]
+    AR["app/ (권장)"] --> AI["page.tsx → /"]
+    AR --> AB["blog/[id]/page.tsx → /blog/:id"]
+    AR --> ARO["layout / loading / error.tsx"]
 ```
 
 App Router의 가장 큰 변화는 **서버 컴포넌트**입니다. 모든 컴포넌트가 기본적으로 서버에서만 실행됩니다. 클라이언트에서 실행이 필요한 컴포넌트만 `'use client'`를 선언합니다.
@@ -142,24 +105,13 @@ function LikeButton({ postId, initialCount }) {
 ```
 
 ```mermaid
-graph TD
-    subgraph "서버 컴포넌트 기본값"
-        SC1["DB 직접 접근 가능"]
-        SC2["API 키 안전 (브라우저 노출 없음)"]
-        SC3["번들 크기 0 — 클라이언트에 전송 안 됨"]
-        SC4["useState useEffect 사용 불가"]
-        SC5["이벤트 핸들러 사용 불가"]
-    end
-
-    subgraph "클라이언트 컴포넌트 use client"
-        CC1["useState useEffect 사용 가능"]
-        CC2["이벤트 핸들러 사용 가능"]
-        CC3["브라우저 API 사용 가능"]
-        CC4["번들에 포함됨"]
-    end
-
-    style SC3 fill:#2ecc71,color:#fff
-    style CC4 fill:#f39c12,color:#fff
+graph LR
+    SC["서버 컴포넌트 (기본값)"]
+    CC["클라이언트 컴포넌트 (use client)"]
+    SC --> SC1["DB접근 / API키안전 / 번들0"]
+    SC --> SC2["useState·useEffect·이벤트 불가"]
+    CC --> CC1["useState·useEffect·브라우저API 가능"]
+    CC --> CC2["번들에 포함됨"]
 ```
 
 ---
@@ -213,21 +165,10 @@ export async function generateStaticParams() {
 
 ```mermaid
 graph TD
-    ROOT["app/layout.tsx<br>항상 렌더링 루트 레이아웃"]
-    ROOT --> HOME["app/page.tsx /"]
-    ROOT --> BLOG["app/blog/layout.tsx"]
-    BLOG --> BLOG_PAGE["app/blog/page.tsx /blog"]
-    BLOG --> BLOG_DETAIL["app/blog/slug/page.tsx /blog/:slug"]
-
-    subgraph "특수 파일"
-        LOADING["loading.tsx Suspense fallback"]
-        ERROR["error.tsx Error Boundary"]
-        NOT_FOUND["not-found.tsx 404"]
-    end
-
-    style ROOT fill:#e74c3c,color:#fff
-    style LOADING fill:#f39c12,color:#fff
-    style ERROR fill:#e74c3c,color:#fff
+    ROOT["app/layout.tsx (루트)"] --> HOME["page.tsx /"]
+    ROOT --> BLOG["blog/layout.tsx"]
+    BLOG --> BP["blog/page.tsx /blog"] & BD["blog/slug/page.tsx /blog/:slug"]
+    ROOT --> SP["loading.tsx / error.tsx / not-found.tsx"]
 ```
 
 ```
@@ -320,7 +261,6 @@ sequenceDiagram
     participant CLIENT as 브라우저
     participant SERVER as Next.js 서버
     participant REACT as React 클라이언트
-
     CLIENT->>SERVER: 페이지 요청
     SERVER->>SERVER: 서버 컴포넌트 실행
     SERVER->>SERVER: HTML 생성
@@ -403,23 +343,16 @@ function CreatePostForm() {
 ```mermaid
 mindmap
   root((Next.js))
-    렌더링 전략
-      SSG 정적 사이트
-      SSR 동적 페이지
-      ISR 균형
-      CSR 인터랙션
+    렌더링
+      SSG/SSR/ISR/CSR
     App Router
-      서버 컴포넌트 기본
-      클라이언트 컴포넌트 use client
+      서버 컴포넌트
+      use client
       레이아웃 중첩
     최적화
-      Image 자동 최적화
-      Font 최적화
-      번들 분석
+      Image/Font/번들
     API
-      API Routes
-      Server Actions
-      미들웨어
+      Routes/Actions/미들웨어
 ```
 
 Next.js는 단순한 React 프레임워크가 아니라 **풀스택 프레임워크**입니다. 렌더링 전략을 페이지별로 다르게 설정할 수 있다는 점이 가장 강력한 기능입니다. "이 페이지가 얼마나 자주 바뀌는가? 사용자별로 다른 데이터가 필요한가?"라는 질문으로 전략을 결정하세요. 대부분의 경우 SSG + ISR 조합이 성능과 신선도의 최선의 균형입니다.

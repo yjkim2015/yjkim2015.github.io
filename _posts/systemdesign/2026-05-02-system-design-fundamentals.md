@@ -65,13 +65,6 @@ graph TD
     F --> G["서버 1"]
     F --> H["서버 2"]
     F --> I["서버 N\n무한 확장 가능"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class A,B client
-    class C,D,F server
-    class E,G,H,I db
 ```
 
 ### 확장성 측정 지표
@@ -122,23 +115,9 @@ MTBF = 100시간, MTTR = 1시간이면 가용성 99.01%입니다. MTTR을 0.1시
 
 ```mermaid
 graph TD
-    A["1️⃣ 고가용성 목표 설정"] --> B["2️⃣ 이중화 Redundancy"]
-    A --> C["2️⃣ 장애 감지 Monitoring"]
-    A --> D["2️⃣ 자동 복구 Auto Recovery"]
-    B --> E["서버 이중화\n최소 2대 운영"]
-    B --> F["DB 이중화\nMaster-Replica"]
-    B --> G["네트워크 이중화\n이중 경로"]
-    C --> H["3️⃣ 헬스체크\n30초 간격"]
-    C --> I["알람 시스템\nPagerDuty/OpsGenie"]
-    D --> J["Auto Scaling\n부하 따라 자동 증감"]
-    D --> K["4️⃣ 자동 Failover\n장애 시 자동 전환"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class A client
-    class B,C,D,E,F,G server
-    class H,I,J,K db
+    A["고가용성 목표"] --> B["이중화\n서버·DB·네트워크"]
+    A --> C["장애 감지\n헬스체크·알람"]
+    A --> D["자동 복구\nAuto Scaling·Failover"]
 ```
 
 ### 면접 포인트
@@ -160,14 +139,8 @@ graph LR
     A["강한 일관성\nStrong"] --> B["순차적 일관성\nSequential"]
     B --> C["인과적 일관성\nCausal"]
     C --> D["최종 일관성\nEventual"]
-
     A -.->|"성능 낮음\n지연 높음"| E["저성능"]
     D -.->|"성능 높음\n지연 낮음"| F["고성능"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    class A,B client
-    class C,D server
 ```
 
 | 일관성 수준 | 설명 | 실무 사용 예 |
@@ -193,28 +166,16 @@ graph LR
 
 ```mermaid
 graph TD
-    CAP(("CAP 정리\n3개 중 2개만 가능"))
-    C["일관성\nConsistency\n모든 노드 동일 데이터"]
-    A["가용성\nAvailability\n모든 요청 응답"]
-    P["분할 내성\nPartition Tolerance\n네트워크 장애 허용"]
-
-    CAP --> C
-    CAP --> A
-    CAP --> P
-
-    C --- CA["CA 시스템\nRDB 단일노드\n분산 아님"]
-    C --- CP["CP 시스템\nHBase, Zookeeper\nMongoDB"]
-    A --- CA
-    A --- AP["AP 시스템\nCassandra, DynamoDB\nCouchDB"]
+    CAP(("CAP: 2개만 가능"))
+    CAP --> C["Consistency"]
+    CAP --> AV["Availability"]
+    CAP --> P["Partition Tolerance"]
+    C --- CA["CA: RDB 단일노드"]
+    C --- CP["CP: HBase/Zookeeper"]
+    AV --- CA
+    AV --- AP["AP: Cassandra/DynamoDB"]
     P --- CP
     P --- AP
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class C client
-    class A server
-    class P,CA,CP,AP db
 ```
 
 ### 왜 P를 항상 선택해야 하는가
@@ -249,7 +210,7 @@ AP 선택 (예: Cassandra):
 | Cassandra | AP | 파티션 시 오래된 데이터로 응답 |
 | HBase | CP | HDFS 의존, 일관성 우선 |
 | DynamoDB | AP (기본) | 최종 일관성이 기본값 |
-| Redis Cluster | AP | 마스터 장애 시 가용성 우선 |
+| Redis Cluster | CP (기본) / 설정에 따라 AP 가능 | cluster-require-full-coverage 설정에 따라 CP/AP가 달라짐. 기본값(yes)은 슬롯 누락 시 전체 거부(CP) |
 | Zookeeper | CP | 리더 선출로 일관성 보장 |
 | etcd | CP | Raft 합의 알고리즘 |
 
@@ -272,27 +233,12 @@ CAP만 알면 장애 시 선택만 이해하지만, 실무에서는 **정상 운
 
 ```mermaid
 graph TD
-    A["1️⃣ 네트워크 분할 발생?"]
-    A -->|"Yes — Partition"| B["2️⃣ P 상황"]
-    A -->|"No — Else"| C["2️⃣ E 상황\n정상 운영"]
-
-    B --> D["가용성 Availability 선택"]
-    B --> E["일관성 Consistency 선택"]
-
-    C --> F["지연시간 Latency 선택"]
-    C --> G["일관성 Consistency 선택"]
-
-    D --> H["PA/EL: Cassandra, DynamoDB\n가용성+속도 우선"]
-    E --> I["PC/EC: Zookeeper, HBase\n일관성 우선"]
-    F --> H
-    G --> J["PC/EC: PostgreSQL\n정확성 우선"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class A,B,C client
-    class D,E,F,G server
-    class H,I,J db
+    A["네트워크 분할?"] -->|"Partition"| B{"가용성 vs 일관성"}
+    A -->|"정상 운영"| C{"지연 vs 일관성"}
+    B -->|"가용성"| D["PA/EL: Cassandra·DynamoDB"]
+    B -->|"일관성"| E["PC/EC: Zookeeper·HBase"]
+    C -->|"지연"| D
+    C -->|"일관성"| F["PC/EC: PostgreSQL"]
 ```
 
 | 시스템 | PACELC | 특징 |
@@ -300,7 +246,7 @@ graph TD
 | DynamoDB | PA/EL | 가용성+낮은 지연 기본값, 강한 일관성 옵션 추가 가능 |
 | Cassandra | PA/EL | 조정 가능한 일관성(QUORUM 등) |
 | MySQL | PC/EC | ACID 트랜잭션, 강한 일관성 |
-| MongoDB | PC/EC | 기본값 강한 일관성 (writeConcern majority) |
+| MongoDB | PC/EC | MongoDB 5.0+ 기본값 writeConcern majority (4.x 이하는 w:1이 기본) |
 
 ---
 
@@ -312,39 +258,11 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph "클라이언트 계층"
-        U1["사용자 1"]
-        U2["사용자 2"]
-        U3["사용자 N"]
-    end
-    subgraph "로드밸런서 계층"
-        LB["1️⃣ 로드밸런서\nNginx / AWS ALB"]
-    end
-    subgraph "서버 계층"
-        S1["2️⃣ 서버 1\nCPU 30%"]
-        S2["2️⃣ 서버 2\nCPU 80%"]
-        S3["2️⃣ 서버 3\nCPU 15%"]
-    end
-    subgraph "데이터 계층"
-        DB[("3️⃣ 데이터베이스")]
-    end
-
-    U1 --> LB
-    U2 --> LB
-    U3 --> LB
-    LB --> S1
-    LB --> S2
-    LB --> S3
-    S1 --> DB
-    S2 --> DB
-    S3 --> DB
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class U1,U2,U3 client
-    class LB,S1,S2,S3 server
-    class DB db
+    U["사용자 1~N"] --> LB["LB (Nginx/ALB)"]
+    LB --> S1["서버1 CPU30%"]
+    LB --> S2["서버2 CPU80%"]
+    LB --> S3["서버3 CPU15%"]
+    S1 & S2 & S3 --> DB[("데이터베이스")]
 ```
 
 ### 로드밸런싱 알고리즘 상세 비교
@@ -401,18 +319,10 @@ graph LR
     A --> C["Weighted RR\n가중치 순환"]
     A --> D["Least Connections\n최소 연결"]
     A --> E["IP Hash\nIP 기반 고정"]
-
     B --> F["균등 서버 환경"]
     C --> G["이기종 서버 환경"]
     D --> H["WebSocket/긴 처리"]
     E --> I["세션 유지 필요"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class A client
-    class B,C,D,E server
-    class F,G,H,I db
 ```
 
 ---
@@ -429,20 +339,12 @@ graph TD
     M -->|"3️⃣ 비동기 복제"| R1[("레플리카 1")]
     M -->|"3️⃣ 비동기 복제"| R2[("레플리카 2")]
     M -->|"3️⃣ 비동기 복제"| R3[("레플리카 3")]
-
     R1 --> Q["4️⃣ 읽기 요청\nSELECT"]
     R2 --> Q
     R3 --> Q
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class W,Q client
-    class M server
-    class R1,R2,R3 db
 ```
 
-**복제 지연(Replication Lag)을 반드시 고려해야 합니다.** 비동기 복제 시 마스터에 쓴 데이터가 레플리카에 반영되는 데 수백 ms ~ 수 초가 걸릴 수 있습니다. 회원가입 직후 프로필을 조회하면 레플리카에 아직 없을 수 있습니다. 이 경우 마스터에서 읽어야 합니다. 이 패턴을 "Write-after-Read Consistency"라고 합니다. 코드에서 이를 명시적으로 처리하지 않으면, 회원가입 직후 "존재하지 않는 사용자"라는 에러가 납니다.
+**복제 지연(Replication Lag)을 반드시 고려해야 합니다.** 비동기 복제 시 마스터에 쓴 데이터가 레플리카에 반영되는 데 수백 ms ~ 수 초가 걸릴 수 있습니다. 회원가입 직후 프로필을 조회하면 레플리카에 아직 없을 수 있습니다. 이 경우 마스터에서 읽어야 합니다. 이 패턴을 "Read-your-writes Consistency"라고 합니다. 코드에서 이를 명시적으로 처리하지 않으면, 회원가입 직후 "존재하지 않는 사용자"라는 에러가 납니다.
 
 ### 샤딩 (Sharding) — DB를 수평으로 나누기
 
@@ -454,13 +356,6 @@ graph TD
     SR --> S1[("3️⃣ 샤드 1\nUser ID 1~1000만")]
     SR --> S2[("3️⃣ 샤드 2\nUser ID 1001만~2000만")]
     SR --> S3[("3️⃣ 샤드 3\nUser ID 2001만~3000만")]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class App client
-    class SR server
-    class S1,S2,S3 db
 ```
 
 **샤딩 전략 비교:**
@@ -489,13 +384,6 @@ graph LR
     B -->|"Cache Miss\n캐시 미스"| D["3️⃣ DB 조회\n수십 ms"]
     D --> E["4️⃣ 캐시에 저장\nTTL 설정"]
     E --> F["5️⃣ 사용자에게 반환"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class A client
-    class B,C,E,F server
-    class D db
 ```
 
 ### 캐시 계층 구조
@@ -516,18 +404,10 @@ graph TD
     A --> C["Write-Through"]
     A --> D["Write-Behind\nWrite-Back"]
     A --> E["Read-Through"]
-
     B --> F["앱이 직접 캐시 관리\n미스 시 DB 조회 후 저장\n가장 많이 사용"]
     C --> G["쓰기 시 캐시+DB 동시 업데이트\n일관성 높음\n쓰기 느림"]
     D --> H["캐시 먼저 쓰고 나중에 DB\n쓰기 매우 빠름\n장애 시 데이터 손실 위험"]
     E --> I["캐시가 DB 조회 대행\n코드 단순화\nCache-Aside와 유사"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class A client
-    class B,C,D,E server
-    class F,G,H,I db
 ```
 
 Write-Behind가 왜 위험할까요? 캐시에 먼저 쓰고 DB는 나중에 씁니다. 캐시 서버(Redis)가 죽으면, DB에 아직 반영 안 된 데이터가 사라집니다. 결제 금액이 캐시에만 있다가 사라지는 것입니다. 쓰기 속도가 중요하고 약간의 데이터 손실을 허용할 수 있는 경우에만 사용합니다.
@@ -566,28 +446,13 @@ public void updateUser(Long userId, UserRequest req) {
 
 ```mermaid
 graph TD
-    Origin["원본 서버\n서울 Origin"]
-    subgraph "CDN 엣지 네트워크"
-        CDN_NY["CDN 엣지\n뉴욕 10ms"]
-        CDN_LA["CDN 엣지\nLA 8ms"]
-        CDN_London["CDN 엣지\n런던 12ms"]
-        CDN_Tokyo["CDN 엣지\n도쿄 15ms"]
-    end
-
-    U_US["미국 사용자"] -->|"1️⃣ 요청"| CDN_NY
-    U_UK["영국 사용자"] -->|"1️⃣ 요청"| CDN_London
-    U_JP["일본 사용자"] -->|"1️⃣ 요청"| CDN_Tokyo
-
-    CDN_NY -->|"2️⃣ 캐시 미스 시만"| Origin
-    CDN_London -->|"2️⃣ 캐시 미스 시만"| Origin
-    CDN_Tokyo -->|"2️⃣ 캐시 미스 시만"| Origin
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class U_US,U_UK,U_JP client
-    class CDN_NY,CDN_LA,CDN_London,CDN_Tokyo server
-    class Origin db
+    Origin["Origin 서울"]
+    U_US["미국 사용자"] -->|요청| NY["CDN 뉴욕 10ms"]
+    U_UK["영국 사용자"] -->|요청| LON["CDN 런던 12ms"]
+    U_JP["일본 사용자"] -->|요청| TOK["CDN 도쿄 15ms"]
+    NY -->|캐시 미스시| Origin
+    LON -->|캐시 미스시| Origin
+    TOK -->|캐시 미스시| Origin
 ```
 
 **CDN에 적합한 콘텐츠**: 정적 파일(이미지, CSS, JS, 폰트), 동영상 스트리밍, 다운로드 파일. 이런 파일들은 사용자마다 다르지 않습니다. 10만 명이 같은 이미지를 요청해도 파일은 하나입니다.
@@ -604,33 +469,12 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "생산자 계층"
-        P1["1️⃣ 주문 서비스"]
-        P2["1️⃣ 결제 서비스"]
-        P3["1️⃣ 배송 서비스"]
-    end
-    subgraph "메시지 큐"
-        MQ["2️⃣ Kafka / RabbitMQ\n메시지 버퍼"]
-    end
-    subgraph "소비자 계층"
-        C1["3️⃣ 이메일 발송"]
-        C2["3️⃣ 재고 업데이트"]
-        C3["3️⃣ 통계 집계"]
-    end
-
-    P1 --> MQ
-    P2 --> MQ
-    P3 --> MQ
-    MQ --> C1
-    MQ --> C2
-    MQ --> C3
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class P1,P2,P3 client
-    class MQ server
-    class C1,C2,C3 db
+    P1["주문 서비스"] --> MQ["Kafka/RabbitMQ\n메시지 버퍼"]
+    P2["결제 서비스"] --> MQ
+    P3["배송 서비스"] --> MQ
+    MQ --> C1["이메일 발송"]
+    MQ --> C2["재고 업데이트"]
+    MQ --> C3["통계 집계"]
 ```
 
 **메시지 큐를 쓰지 않으면 어떤 장애가 날까요?**
@@ -652,24 +496,15 @@ graph TD
     subgraph "모놀리스 아키텍처"
         M["하나의 큰 JAR/WAR\n사용자 + 주문 + 결제 + 배송\n모두 한 프로세스"]
     end
-
     subgraph "마이크로서비스 아키텍처"
         US["사용자 서비스\nPort: 8081"]
         OS["주문 서비스\nPort: 8082"]
         PS["결제 서비스\nPort: 8083"]
         DS["배송 서비스\nPort: 8084"]
     end
-
     US -->|"HTTP/gRPC"| OS
     OS -->|"HTTP/gRPC"| PS
     PS -->|"이벤트 발행"| DS
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class M client
-    class US,OS server
-    class PS,DS db
 ```
 
 | 특성 | 모놀리스 | 마이크로서비스 |
@@ -689,38 +524,12 @@ graph TD
 
 ```mermaid
 graph TD
-    User["1️⃣ 사용자"] --> DNS["DNS"]
-    DNS --> CDN["CDN\n정적 파일 95% 처리"]
-    DNS --> LB["2️⃣ 로드밸런서\nAWS ALB"]
-
-    LB --> WS1["3️⃣ 웹 서버 1"]
-    LB --> WS2["3️⃣ 웹 서버 2"]
-    LB --> WS3["3️⃣ 웹 서버 N"]
-
-    WS1 --> Cache["4️⃣ Redis 클러스터\n캐시 계층"]
-    WS2 --> Cache
-    WS3 --> Cache
-
-    WS1 --> MQ["5️⃣ Kafka\n비동기 처리"]
-    WS2 --> MQ
-    WS3 --> MQ
-
-    WS1 --> MasterDB[("6️⃣ 마스터 DB\n쓰기 전용")]
-    MasterDB --> R1[("레플리카 1")]
-    MasterDB --> R2[("레플리카 2")]
-    WS1 --> R1
-
-    MQ --> Worker1["7️⃣ 워커 서버 1"]
-    MQ --> Worker2["7️⃣ 워커 서버 2"]
-    Worker1 --> Storage["S3 오브젝트\n스토리지"]
-    Worker2 --> Search["Elasticsearch\n검색 서버"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class User,DNS client
-    class LB,WS1,WS2,WS3,Cache,MQ,Worker1,Worker2,CDN server
-    class MasterDB,R1,R2,Storage,Search db
+    User["사용자"] --> DNS["DNS"]
+    DNS --> CDN["CDN (정적 95%)"]
+    DNS --> LB["LB → 웹 서버 1~N"]
+    LB --> Cache["Redis 캐시"]
+    LB --> DB["Master DB → Replica"]
+    LB --> MQ["Kafka → Worker\n→ S3·Elasticsearch"]
 ```
 
 ---
@@ -732,18 +541,10 @@ graph TD
     Step1["1️⃣ 요구사항 명확화\n5분"] --> Step2["2️⃣ 규모 추정\n5분"]
     Step2 --> Step3["3️⃣ 고수준 설계\n20-25분"]
     Step3 --> Step4["4️⃣ 상세 설계 + 개선\n15분"]
-
     Step1 --> Q1["기능 요구사항: 무엇을 만드나?\n비기능: 얼마나 빠르게? 얼마나 크게?\n제약: 기술 스택 제한?"]
     Step2 --> Q2["DAU/MAU 추정\nQPS 계산\n저장소 용량 계산"]
     Step3 --> Q3["고수준 아키텍처 다이어그램\n핵심 컴포넌트\n데이터 흐름"]
     Step4 --> Q4["병목 구간 해결\n확장성 방안\n장애 처리 전략"]
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class Step1,Step2 client
-    class Step3,Step4 server
-    class Q1,Q2,Q3,Q4 db
 ```
 
 면접에서 가장 많이 하는 실수는 요구사항 확인 없이 바로 설계로 뛰어드는 것입니다. "채팅 시스템 설계해보세요"라는 말에 바로 WebSocket을 그리기 시작하면 안 됩니다. 먼저 "사용자 수는요? 1:1만인가요 그룹도인가요? 메시지 보관은 필요한가요?"를 물어보세요.
@@ -782,38 +583,12 @@ DAU: 1억명
 
 ```mermaid
 graph TD
-    User["1억 5천만 구독자\n동시 2000만 스트리밍"] --> OCA["1️⃣ 오픈 커넥트 OCA\nISP에 직접 설치\n15,000+ 서버"]
-
-    OCA -->|"캐시 없는 콘텐츠"| AWS["2️⃣ AWS 백엔드\n멀티 리전"]
-
-    subgraph "AWS 서비스들"
-        Auth["인증 서비스\n수억건 세션"]
-        Recommend["추천 엔진\nML 모델 1000개+"]
-        Transcode["트랜스코딩\n4K/1080p/720p/480p"]
-        Billing["결제 서비스"]
-    end
-
-    AWS --> Auth
-    AWS --> Recommend
-    AWS --> Transcode
-
-    subgraph "데이터 계층"
-        Cassandra[("Cassandra\n시청 기록\n수백 TB")]
-        MySQL[("MySQL\n결제 정보")]
-        ES[("Elasticsearch\n콘텐츠 검색")]
-        S3[("S3\n원본 영상\nExabyte 단위")]
-    end
-
-    Auth --> MySQL
-    Recommend --> Cassandra
-    Transcode --> S3
-
-    classDef client fill:#e3f2fd,stroke:#1976d2
-    classDef server fill:#e8f5e9,stroke:#388e3c
-    classDef db fill:#fff3e0,stroke:#f57c00
-    class User client
-    class OCA,AWS,Auth,Recommend,Transcode,Billing server
-    class Cassandra,MySQL,ES,S3 db
+    User["1.5억 구독자\n동시 2000만 스트리밍"] --> OCA["OCA (ISP 직접 설치)\n15,000+ 서버"]
+    OCA -->|캐시 미스| AWS["AWS 백엔드\n멀티 리전"]
+    AWS --> Auth["인증 (MySQL)"]
+    AWS --> Recommend["추천 엔진 (Cassandra)"]
+    AWS --> Transcode["트랜스코딩 (S3)"]
+    AWS --> Search["검색 (Elasticsearch)"]
 ```
 
 ### 넷플릭스의 5가지 핵심 설계 결정 — 왜 이 선택을 했나
@@ -827,6 +602,26 @@ graph TD
 4. **멀티 AZ/리전**: AWS 3개 이상 가용 영역 동시 운영합니다. 한 리전 전체 장애 시 자동으로 다른 리전으로 페일오버합니다. 2022년 AWS us-east-1 장애 때도 넷플릭스가 정상이었던 이유입니다.
 
 5. **Circuit Breaker**: 추천 서비스가 느려져도 재생은 계속됩니다. 추천 대신 인기 콘텐츠를 보여주는 폴백(Fallback)이 동작합니다. "추천이 안 되면 재생도 안 된다"는 강한 결합을 없앤 것입니다.
+
+---
+
+## 보안 고려사항
+
+> **비유**: 분산 시스템은 문이 수십 개인 건물과 같다. 한 문만 잠그면 의미가 없다. 데이터가 흐르는 모든 경로에 보안 계층을 적용해야 한다.
+
+**데이터 암호화**
+
+- **At Rest(저장 데이터)**: DB 볼륨 암호화(AES-256), 민감 컬럼 애플리케이션 레벨 암호화. 스토리지 탈취 시 데이터 노출을 차단한다
+- **In Transit(전송 데이터)**: TLS 1.2+ 강제. 내부 서비스 간 통신(mTLS)도 평문 전송하지 않는다
+
+**보안 계층 — 심층 방어(Defense in Depth)**
+
+- **WAF(Web Application Firewall)**: SQL Injection, XSS 등 L7 공격을 애플리케이션 앞단에서 차단한다. AWS WAF, Cloudflare 등이 대표적이다
+- **VPN/Private Subnet**: DB와 내부 서비스는 퍼블릭 인터넷에 노출하지 않고 프라이빗 서브넷에 격리한다
+
+**Zero Trust 모델**
+
+"내부 네트워크는 안전하다"는 가정을 버린다. 내부 서비스 간 요청도 인증·인가를 요구하고, 최소 권한 원칙(Least Privilege)을 적용한다. 직원 계정 탈취나 내부자 위협 시 피해 범위를 최소화한다.
 
 ---
 ## 핵심 포인트 정리

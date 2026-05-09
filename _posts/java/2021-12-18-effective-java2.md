@@ -97,7 +97,6 @@ sequenceDiagram
     participant T1 as 스레드 1
     participant T2 as 스레드 2
     participant C as Car 객체
-
     T1->>C: new Car() — 빈 객체 생성
     T1->>C: setColor("Red")
     T2->>C: car 사용! (아직 name, type 없음)
@@ -121,7 +120,6 @@ sequenceDiagram
     participant Client as 클라이언트
     participant Builder as Car.Builder
     participant Car as Car (불변 객체)
-
     Client->>Builder: 1️⃣ new Car.Builder("Red","K7","KIA")
     Client->>Builder: 2️⃣ .price(1000)
     Client->>Builder: 3️⃣ .speed(200)

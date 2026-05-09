@@ -28,24 +28,15 @@ URL을 입력하고 엔터를 누르는 순간, 브라우저는 믿기 어려울
 
 ```mermaid
 flowchart LR
-    HTML["HTML 파싱"] --> DOM["DOM 생성"]
-    CSS["CSS 파싱"] --> CSSOM["CSSOM 생성"]
-    DOM --> RT["렌더 트리<br>Render Tree"]
+    HTML["HTML 파싱"] --> DOM["DOM"]
+    CSS["CSS 파싱"] --> CSSOM["CSSOM"]
+    DOM --> RT["렌더 트리"]
     CSSOM --> RT
-    RT --> L["레이아웃<br>Layout/Reflow"]
-    L --> P["페인트<br>Paint"]
-    P --> C["컴포지팅<br>Compositing"]
+    RT --> L["Layout"]
+    L --> P["Paint"]
+    P --> C["Compositing"]
     C --> SCREEN["화면 출력"]
-
-    JS["JavaScript 실행"] -->|"DOM/CSSOM 수정"| DOM
-    JS -->|"DOM/CSSOM 수정"| CSSOM
-
-    style DOM fill:#e74c3c,color:#fff
-    style CSSOM fill:#3498db,color:#fff
-    style RT fill:#9b59b6,color:#fff
-    style L fill:#f39c12,color:#fff
-    style P fill:#2ecc71,color:#fff
-    style C fill:#1abc9c,color:#fff
+    JS["JS 실행"] -->|"DOM/CSSOM 수정"| DOM
 ```
 
 DOM과 CSSOM은 따로 만들어지다가 렌더 트리에서 합쳐집니다. 자바스크립트는 이 두 트리를 모두 수정할 수 있습니다. 그래서 자바스크립트 실행 타이밍이 잘못되면 파싱이 중단되는 문제가 생깁니다.
@@ -62,7 +53,6 @@ flowchart LR
     B --> C["토큰<br>StartTag: html<br>StartTag: body"]
     C --> D["노드<br>HTMLElement<br>BodyElement"]
     D --> E["DOM 트리"]
-
     style A fill:#95a5a6,color:#fff
     style E fill:#e74c3c,color:#fff
 ```
@@ -92,7 +82,6 @@ graph TD
     HEAD --> LINK["link: style.css"]
     BODY --> H1["h1: 제목"]
     BODY --> P["p: 단락"]
-
     style DOC fill:#e74c3c,color:#fff
     style HTML fill:#e74c3c,color:#fff
 ```
@@ -106,7 +95,6 @@ sequenceDiagram
     participant PARSER as HTML 파서
     participant SCRIPT as script 태그
     participant NETWORK as 네트워크
-
     PARSER->>PARSER: HTML 파싱 진행
     PARSER->>SCRIPT: script 태그 발견!
     PARSER->>NETWORK: JS 파일 요청
@@ -154,7 +142,6 @@ graph TD
     CSSOM[CSSOM Root] --> BODY_CSS["body<br>font-size: 16px"]
     CSSOM --> P_CSS["p<br>color: blue<br>font-size: 16px 상속"]
     CSSOM --> SPAN_CSS["span<br>display: none<br>color: blue, font-size: 16px 상속"]
-
     style CSSOM fill:#3498db,color:#fff
 ```
 
@@ -167,37 +154,14 @@ graph TD
 DOM과 CSSOM을 합쳐서 **실제로 화면에 그려질 요소들의 트리**를 만듭니다. 보이지 않는 요소는 여기서 제외됩니다.
 
 ```mermaid
-flowchart TD
-    subgraph "DOM"
-        D_HTML[html]
-        D_BODY[body]
-        D_H1["h1: 안녕"]
-        D_P["p: 단락"]
-        D_SPAN["span: 숨김<br>display: none"]
-    end
-
-    subgraph "CSSOM"
-        C_BODY["body: font-size 16px"]
-        C_H1["h1: color red"]
-        C_SPAN["span: display none"]
-    end
-
-    subgraph "렌더 트리"
-        R_ROOT[Render Root]
-        R_BODY[body]
-        R_H1["h1: 안녕<br>color: red"]
-        R_P["p: 단락"]
-        NOTE["span은 제외!<br>display: none"]
-    end
-
-    D_HTML -->|"결합"| R_ROOT
-    D_BODY -->|"결합"| R_BODY
-    D_H1 -->|"결합"| R_H1
-    D_P -->|"결합"| R_P
-    D_SPAN -->|"display:none"| NOTE
-
-    style NOTE fill:#e74c3c,color:#fff
-    style R_ROOT fill:#9b59b6,color:#fff
+flowchart LR
+    DOM["DOM: html, body, h1, p, span(none)"]
+    CSSOM["CSSOM: font-size, color, display:none"]
+    RT["렌더 트리: body, h1, p (span 제외)"]
+    DOM -->|"결합"| RT
+    CSSOM -->|"결합"| RT
+    EXCL["span — display:none 제외"]
+    DOM -->|"제외"| EXCL
 ```
 
 렌더 트리에서 제외되는 요소들:
@@ -281,13 +245,11 @@ for (const el of elements) {
 sequenceDiagram
     participant JS as JavaScript
     participant LAYOUT as 레이아웃 엔진
-
     loop 각 요소마다
         JS->>LAYOUT: offsetWidth 읽기 (리플로우 강제)
         LAYOUT-->>JS: 값 반환
         JS->>LAYOUT: style.width 쓰기 (레이아웃 무효화)
     end
-
     Note over LAYOUT: 100개 요소 = 100번 리플로우!
 ```
 
@@ -355,24 +317,14 @@ gantt
     title 브라우저 렌더링 타임라인
     dateFormat X
     axisFormat %Lms
-
     section 네트워크
-    DNS 조회 :0, 50
-    TCP 연결 :50, 100
-    TTFB 첫 바이트 :100, 200
-
-    section HTML 파싱
-    HTML 수신 및 파싱 :200, 400
-    CSS 다운로드 :250, 350
-    JS 다운로드 실행 :300, 450
-
+    DNS+TCP :0, 100
+    TTFB :100, 200
+    section HTML파싱
+    HTML파싱+CSS+JS :200, 450
     section 렌더링
-    DOM 생성 :200, 420
-    CSSOM 생성 :350, 420
-    렌더 트리 :420, 450
-    레이아웃 :450, 480
-    페인트 :480, 520
-    컴포지팅 :520, 540
+    DOM+CSSOM+렌더트리 :200, 450
+    레이아웃+페인트+컴포지팅 :450, 540
 ```
 
 ---
@@ -384,7 +336,6 @@ graph TD
     CWV["Core Web Vitals"] --> LCP["LCP<br>Largest Contentful Paint<br>주요 콘텐츠 로드 시간<br>목표: 2.5초 이하"]
     CWV --> INP["INP<br>Interaction to Next Paint<br>인터랙션 응답 속도<br>목표: 200ms 이하"]
     CWV --> CLS["CLS<br>Cumulative Layout Shift<br>레이아웃 안정성<br>목표: 0.1 이하"]
-
     style LCP fill:#2ecc71,color:#fff
     style INP fill:#3498db,color:#fff
     style CLS fill:#e74c3c,color:#fff
@@ -441,26 +392,11 @@ const safeObserver = new ResizeObserver((entries) => {
 ```mermaid
 mindmap
   root((렌더링 최적화))
-    CSS 최적화
-      중요 CSS 인라인
-      미디어 쿼리 분리 로드
-      CSS 선택자 단순화
-    JavaScript 최적화
-      defer/async 속성
-      코드 스플리팅
-      Tree Shaking
-    이미지 최적화
-      WebP/AVIF 형식
-      lazy loading
-      적절한 사이즈
-    레이아웃 최적화
-      읽기 쓰기 일괄처리
-      transform 사용
-      will-change 힌트
-    측정 도구
-      Chrome DevTools
-      Lighthouse
-      WebPageTest
+    CSS: 중요 CSS 인라인, 선택자 단순화
+    JS: defer/async, 코드 스플리팅, Tree Shaking
+    이미지: WebP/AVIF, lazy loading
+    레이아웃: transform 사용, will-change
+    측정: DevTools, Lighthouse
 ```
 
 ```javascript

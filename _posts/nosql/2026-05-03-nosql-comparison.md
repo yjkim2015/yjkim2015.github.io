@@ -21,22 +21,10 @@ NoSQL 데이터베이스는 데이터를 **어떤 형태로 저장하느냐**에
 
 ```mermaid
 graph LR
-    subgraph "Key-Value"
-        KV["key → value"]
-    end
-    subgraph "Document"
-        DOC["key → JSON/BSON"]
-    end
-    subgraph "Column-Family"
-        CF["row key → columns..."]
-    end
-    subgraph "Graph"
-        GR["node --edge--> node"]
-    end
-    KV --> |"대표"| R["Redis"]
-    DOC --> |"대표"| M["MongoDB"]
-    CF --> |"대표"| C["Cassandra"]
-    GR --> |"대표"| N["Neo4j"]
+    KV["Key-Value: key→value"] -->|대표| R["Redis"]
+    DOC["Document: key→JSON"] -->|대표| M["MongoDB"]
+    CF["Column-Family: rowkey→cols"] -->|대표| C["Cassandra"]
+    GR["Graph: node→edge→node"] -->|대표| N["Neo4j"]
 ```
 
 ---
@@ -190,15 +178,12 @@ RETURN path, length(path)
 graph TD
     CAP["CAP 정리"] --> CP["CP: 일관성 + 분할내성"]
     CAP --> AP["AP: 가용성 + 분할내성"]
-
     CP --> MongoDB_cp["MongoDB (기본 설정)"]
     CP --> Redis_cp["Redis Cluster"]
     CP --> Neo4j_cp["Neo4j"]
-
     AP --> Cassandra_ap["Cassandra"]
     AP --> DynamoDB_ap["DynamoDB"]
     AP --> CouchDB_ap["CouchDB"]
-
     style CP fill:#4A90D9,color:#fff
     style AP fill:#D94A4A,color:#fff
 ```
@@ -233,24 +218,15 @@ ALL                | 모든 복제본 응답             | 최고 (비추천)
 
 ```mermaid
 flowchart TD
-    START["🔍 데이터 특성 분석"] --> Q1{"트랜잭션 ACID가\n핵심인가?"}
-    Q1 -- "예" --> RDBMS["✅ RDBMS\nMySQL, PostgreSQL"]
-    Q1 -- "아니오" --> Q2{"스키마가\n자주 변하는가?"}
-    Q2 -- "예" --> Q3{"관계 탐색이\n핵심인가?"}
-    Q2 -- "아니오" --> Q4{"초당 쓰기가\n10만 건 이상?"}
-    Q3 -- "예" --> GRAPH["✅ Graph DB\nNeo4j"]
-    Q3 -- "아니오" --> DOC["✅ Document DB\nMongoDB"]
-    Q4 -- "예" --> COLUMN["✅ Column-Family\nCassandra"]
-    Q4 -- "아니오" --> Q5{"밀리초 미만\n응답이 필수?"}
-    Q5 -- "예" --> KV["✅ Key-Value\nRedis"]
-    Q5 -- "아니오" --> RDBMS2["✅ RDBMS로 충분"]
-
-    style RDBMS fill:#27AE60,color:#fff
-    style DOC fill:#E67E22,color:#fff
-    style KV fill:#E74C3C,color:#fff
-    style COLUMN fill:#8E44AD,color:#fff
-    style GRAPH fill:#2980B9,color:#fff
-    style RDBMS2 fill:#27AE60,color:#fff
+    START["데이터 특성 분석"] --> Q1{"ACID 필수?"}
+    Q1 -- 예 --> RDBMS["RDBMS (MySQL/PG)"]
+    Q1 -- 아니오 --> Q2{"관계 탐색 핵심?"}
+    Q2 -- 예 --> GRAPH["Graph DB (Neo4j)"]
+    Q2 -- 아니오 --> Q3{"쓰기 10만/s 이상?"}
+    Q3 -- 예 --> COLUMN["Column-Family (Cassandra)"]
+    Q3 -- 아니오 --> Q4{"밀리초 미만 응답?"}
+    Q4 -- 예 --> KV["Key-Value (Redis)"]
+    Q4 -- 아니오 --> DOC["Document DB (MongoDB)"]
 ```
 
 ### 핵심 판단 기준 비교표

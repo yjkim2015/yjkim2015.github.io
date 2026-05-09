@@ -35,7 +35,6 @@ sequenceDiagram
     participant Try as try 블록
     participant Finally as finally 블록
     participant Caller as 호출자
-
     Try->>Try: readLine() 실행
     Try-->>Finally: 예외 A 발생 (디스크 오류)
     Finally->>Finally: br.close() 실행
@@ -132,7 +131,6 @@ sequenceDiagram
     participant Try as try 블록
     participant Close as close() (자동 호출)
     participant Caller as 호출자
-
     Try->>Try: readLine() 실행
     Try-->>Close: 예외 A 발생 (디스크 오류)
     Close->>Close: close() 자동 실행
@@ -212,16 +210,8 @@ try (DatabaseConnection db = new DatabaseConnection(url)) {
 
 ```mermaid
 graph TD
-    A["자원 닫기 방식 비교"] --> B["try-finally"]
-    A --> C["try-with-resources"]
-    B --> B1["자원 1개: 그럭저럭 OK"]
-    B --> B2["자원 2개 이상: 중첩 지옥"]
-    B --> B3["예외 2개 동시 발생: 예외 A 소실"]
-    B --> B4["close() 누락 위험 있음"]
-    C --> C1["자원 수 무관: 항상 깔끔"]
-    C --> C2["예외 2개: A 전파, B는 suppressed"]
-    C --> C3["close() 자동 보장"]
-    C --> C4["가독성 높음"]
+    A["자원 닫기"] --> B["try-finally\n중첩 지옥·예외 소실·누락 위험"]
+    A --> C["try-with-resources\n자동 close·suppressed 보존·깔끔"]
     style B fill:#ff6b6b,color:#fff
     style C fill:#51cf66,color:#fff
 ```

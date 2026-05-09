@@ -67,30 +67,12 @@ GoF(Gang of Four)의 저서 *Design Patterns: Elements of Reusable Object-Orient
 
 ```mermaid
 graph TD
-    A["GoF 디자인 패턴 23가지"] --> B["생성 패턴<br>Creational"]
-    A --> C["구조 패턴<br>Structural"]
-    A --> D["행동 패턴<br>Behavioral"]
-
-    B --> B1[Singleton]
-    B --> B2[Factory Method]
-    B --> B3[Abstract Factory]
-    B --> B4[Builder]
-    B --> B5[Prototype]
-
-    C --> C1[Adapter]
-    C --> C2[Composite]
-    C --> C3[Decorator]
-    C --> C4[Facade]
-    C --> C5[Flyweight]
-    C --> C6[Proxy]
-    C --> C7[Bridge]
-
-    D --> D1[Observer]
-    D --> D2[Strategy]
-    D --> D3[Template Method]
-    D --> D4[Command]
-    D --> D5[Iterator]
-    D --> D6["+ 8가지 더"]
+    A["GoF 23 패턴"] --> B["생성 Creational"]
+    A --> C["구조 Structural"]
+    A --> D["행동 Behavioral"]
+    B --> B1["Singleton/Factory/Abstract Factory/Builder/Prototype"]
+    C --> C1["Adapter/Composite/Decorator/Facade/Flyweight/Proxy/Bridge"]
+    D --> D1["Observer/Strategy/Template/Command/Iterator/+8"]
 ```
 
 ---
@@ -151,7 +133,6 @@ flowchart TD
     Q1{"어떤 문제인가?"} --> C["객체 생성 방식 제어"]
     Q1 --> S["클래스/객체 조합 구조"]
     Q1 --> B["객체 간 통신/알고리즘"]
-
     C --> C1["생성 패턴\n("Singleton, Factory,\nBuilder, Prototype")"]
     S --> S1["구조 패턴\n("Adapter, Composite,\nProxy, Decorator")"]
     B --> B1["행동 패턴\n("Observer, Strategy,\nCommand, Template")"]

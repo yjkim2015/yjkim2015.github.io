@@ -264,7 +264,6 @@ sequenceDiagram
     participant C as "클라이언트"
     participant P as "Proxy Object (Spring 자동 생성)"
     participant R as "Real OrderService (실제 Bean)"
-
     C->>P: orderService.createOrder(dto) 호출
     P->>P: Before Advice 실행
     P->>R: joinPoint.proceed() - 실제 메서드 위임
@@ -355,18 +354,16 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant P as "TransactionInterceptor (Proxy)"
-    participant S as "실제 OrderService"
-
-    C->>P: orderService.createOrder(dto)
-    P->>P: 1️⃣ TransactionManager.getTransaction() - 트랜잭션 시작
-    P->>S: 2️⃣ joinPoint.proceed()
-    S-->>P: 반환
-    alt "정상 반환"
-        P->>P: 3️⃣ TransactionManager.commit()
-    else "예외 발생"
-        P->>P: 3️⃣ TransactionManager.rollback()
+    participant C as Client
+    participant P as Proxy
+    participant S as OrderService
+    C->>P: createOrder()
+    P->>P: getTransaction()
+    P->>S: proceed()
+    alt 정상
+        P->>P: commit()
+    else 예외
+        P->>P: rollback()
     end
     P-->>C: 응답
 ```
@@ -418,7 +415,6 @@ graph LR
     C["클라이언트"] --> P["Proxy"]
     P --> R["실제 OrderService.createOrder()"]
     R -->|"this.sendNotification() - 프록시 우회!"| N["실제 OrderService.sendNotification()<br>AOP 적용 안 됨"]
-
     style N fill:#ffe0e0
     style R fill:#fff8e0
 ```
@@ -508,20 +504,16 @@ public class LoggingAspect { ... }
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant SA as "SecurityAspect (Order 1)"
-    participant TA as "TransactionAspect (Order 2)"
-    participant LA as "LoggingAspect (Order 3)"
-    participant M as "실제 메서드"
-
+    participant C as Client
+    participant SA as Security
+    participant TA as Transaction
+    participant M as Method
     C->>SA: 호출
     SA->>TA: before()
-    TA->>LA: before()
-    LA->>M: 1️⃣ 실행
-    M-->>LA: 반환
-    LA-->>TA: 2️⃣ after()
-    TA-->>SA: 3️⃣ after()
-    SA-->>C: 최종 반환
+    TA->>M: 실행
+    M-->>TA: 반환
+    TA-->>SA: after()
+    SA-->>C: 반환
 ```
 
 ---

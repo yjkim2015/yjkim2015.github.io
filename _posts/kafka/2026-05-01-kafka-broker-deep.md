@@ -25,31 +25,17 @@ Kafka 클러스터를 구성하는 개별 서버 노드다. 각 브로커는 파
 
 ```mermaid
 graph TD
-    subgraph "Kafka Cluster"
-        subgraph "Broker 1 (id:1) - Controller"
-            B1P0["orders-P0 (Leader)"]
-            B1P1["orders-P1 (Follower)"]
-            B1P2["orders-P2 (Follower)"]
-        end
-        subgraph "Broker 2 (id:2)"
-            B2P1["orders-P1 (Leader)"]
-            B2P2["orders-P2 (Follower)"]
-            B2P0["orders-P0 (Follower)"]
-        end
-        subgraph "Broker 3 (id:3)"
-            B3P2["orders-P2 (Leader)"]
-            B3P0["orders-P0 (Follower)"]
-            B3P1["orders-P1 (Follower)"]
-        end
-    end
-    ZK["ZooKeeper / KRaft 클러스터"]
-    B1P0 -.->|"복제"| B2P0
-    B1P0 -.->|"복제"| B3P0
-    B2P1 -.->|"복제"| B1P1
-    B2P1 -.->|"복제"| B3P1
-    B3P2 -.->|"복제"| B1P2
-    B3P2 -.->|"복제"| B2P2
-    ZK --- B1P0
+    ZK["ZooKeeper/KRaft"]
+    B1["Broker1(Controller): P0-Leader, P1-Follower, P2-Follower"]
+    B2["Broker2: P1-Leader, P0-Follower, P2-Follower"]
+    B3["Broker3: P2-Leader, P0-Follower, P1-Follower"]
+    ZK --- B1
+    B1 -.->|"P0 복제"| B2
+    B1 -.->|"P0 복제"| B3
+    B2 -.->|"P1 복제"| B1
+    B2 -.->|"P1 복제"| B3
+    B3 -.->|"P2 복제"| B1
+    B3 -.->|"P2 복제"| B2
 ```
 
 각 파티션은 단 하나의 Leader와 나머지 Follower로 구성된다. Leader가 읽기/쓰기를 전담하고, Follower는 Leader로부터 데이터를 복제한다.
@@ -60,22 +46,11 @@ graph TD
 
 ```mermaid
 flowchart TD
-    CLIENT["클라이언트 요청 (Producer / Consumer)"]
-    NET["Network Layer\n(Acceptor + Processor 스레드)"]
-    API["API Layer\n(KafkaApis — 요청 타입 분기)"]
-    POOL["Request Handler Pool\n(num.io.threads 스레드 풀)"]
-    RM["ReplicaManager\n(복제 관리)"]
-    GC["GroupCoordinator\n(Consumer 그룹 관리)"]
-    LM["LogManager\n(파티션 로그 파일 관리)"]
-
-    CLIENT --> NET --> API --> POOL
-    POOL --> RM
-    POOL --> GC
-    POOL --> LM
-
-    style CLIENT fill:#3498db,color:#fff
-    style POOL fill:#e67e22,color:#fff
-    style LM fill:#2ecc71,color:#fff
+    CLIENT["Client(Producer/Consumer)"] --> NET["Network Layer"]
+    NET --> API["KafkaApis"] --> POOL["Request Handler Pool"]
+    POOL --> RM["ReplicaManager"]
+    POOL --> GC["GroupCoordinator"]
+    POOL --> LM["LogManager"]
 ```
 
 각 레이어의 역할을 이해하면 튜닝 포인트가 명확해진다. `num.network.threads`는 Network Layer, `num.io.threads`는 Request Handler Pool의 스레드 수를 조정한다.
@@ -119,9 +94,7 @@ flowchart LR
     S1["1단계: 세그먼트 파일 특정\n파일명 이진 탐색\n→ 00000000000000150000.log"]
     S2["2단계: .index 파일 조회\noffset 150000 → byte 위치 8192\n(희소 인덱스, O(log n))"]
     S3["3단계: .log 파일 읽기\nbyte 위치 8192부터 순차 I/O"]
-
     REQ --> S1 --> S2 --> S3
-
     style REQ fill:#3498db,color:#fff
     style S3 fill:#2ecc71,color:#fff
 ```
@@ -180,20 +153,15 @@ log.retention.minutes=1440       # 최소 1일 보존 후 compaction
 
 ```mermaid
 sequenceDiagram
-    participant B2 as "Broker2 (장애 리더)"
-    participant C as "Controller (Broker1)"
-    participant B3 as "Broker3 (새 리더 후보)"
-    participant ZK as "ZooKeeper / KRaft"
-    participant PC as "Producer/Consumer"
-
-    B2 ->> B2: "장애 발생 (세션 만료 또는 heartbeat 중단)"
-    C ->> C: "Broker2 장애 감지"
-    C ->> C: "ISR=[2,3,1] → Broker2 제외 → Broker3 선정"
-    C ->> ZK: "새 리더 정보 업데이트"
-    C ->> B3: "LeaderAndIsr 요청 전송"
-    B3 ->> B3: "리더 역할 시작"
-    C ->> PC: "Metadata 갱신 알림"
-    PC ->> B3: "새 리더로 재연결"
+    participant B2 as Broker2(장애)
+    participant C as Controller
+    participant B3 as Broker3(새리더)
+    participant PC as Producer/Consumer
+    C->>C: Broker2 장애 감지, Broker3 선정
+    C->>B3: LeaderAndIsr 요청
+    B3->>B3: 리더 역할 시작
+    C->>PC: Metadata 갱신
+    PC->>B3: 새 리더로 재연결
 ```
 
 **KRaft 기반 (Kafka 3.x+)** 은 ZooKeeper 없이 Raft 합의로 처리하므로 ZooKeeper 세션 만료 대기 없이 수십 ms 안에 선출이 완료된다.
@@ -242,22 +210,10 @@ mindmap
 
 ```mermaid
 flowchart TD
-    subgraph "ZooKeeper 기반"
-        Z1["모든 브로커가 /controller 경로에 임시 노드 생성 경쟁"]
-        Z2["먼저 생성한 브로커 → Controller"]
-        Z3["Controller 장애 시: ZooKeeper가 노드 삭제\n→ 다른 브로커들이 재경쟁"]
-        Z1 --> Z2 --> Z3
-    end
-
-    subgraph "KRaft 기반 (Kafka 3.x+)"
-        K1["별도 KRaft Controller 노드 또는 통합 모드"]
-        K2["Raft 합의 알고리즘으로 Controller 선출"]
-        K3["Metadata를 Kafka 내부 Raft 로그로 관리\nZooKeeper 의존성 완전 제거"]
-        K1 --> K2 --> K3
-    end
-
-    style Z3 fill:#e74c3c,color:#fff
-    style K3 fill:#2ecc71,color:#fff
+    Z1["ZK: /controller 노드 경쟁"] --> Z2["먼저 생성한 브로커=Controller"]
+    Z2 --> Z3["장애시 ZK가 노드 삭제→재경쟁"]
+    K1["KRaft: 별도 Controller 노드"] --> K2["Raft 합의로 선출"]
+    K2 --> K3["ZooKeeper 의존성 제거"]
 ```
 
 ---
@@ -325,9 +281,7 @@ flowchart TD
     E["5️⃣ ZooKeeper/KRaft에 새 Metadata 기록"]
     F["6️⃣ Producer/Consumer가 Metadata 갱신 후\n새 Leader로 연결"]
     G["7️⃣ 장애 브로커 복구 후 ISR 재참여\n(복제 따라잡기)"]
-
     A --> B --> C --> D --> E --> F --> G
-
     style A fill:#e74c3c,color:#fff
     style G fill:#2ecc71,color:#fff
 ```
@@ -381,22 +335,11 @@ kafka-topics.sh --bootstrap-server kafka:9092 \
 
 ```mermaid
 flowchart TD
-    A["파티션 증가 필요"]
-    B{"처리 로직이 순서에 의존하는가?"}
-    C["기존 데이터 소비 완료 후 파티션 증가"]
-    D["즉시 파티션 증가 가능"]
-    E{"기존 데이터 마이그레이션 필요?"}
-    F["별도 마이그레이션 작업 수행"]
-    G["완료"]
-
-    A --> B
-    B -->|"예"| C
-    B -->|"아니오"| D
-    C --> E
-    E -->|"예"| F
-    E -->|"아니오"| G
-    D --> G
-    F --> G
+    A["파티션 증가 필요"] --> B{"순서 의존?"}
+    B -->|예| C["소비 완료 후 증가"] --> E{"마이그레이션?"}
+    B -->|아니오| G["완료"]
+    E -->|예| F["마이그레이션"] --> G
+    E -->|아니오| G
 ```
 
 ### 파티션 재할당 (Partition Reassignment)

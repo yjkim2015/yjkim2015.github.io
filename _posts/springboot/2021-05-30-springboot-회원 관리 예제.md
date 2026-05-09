@@ -18,22 +18,12 @@ Spring Boot로 실제 동작하는 회원 관리 프로그램을 만들어보면
 
 ```mermaid
 graph TD
-    CLI["클라이언트\n브라우저 / 모바일"]
-    CTRL["Controller 계층\n웹 요청/응답 처리"]
-    SVC["Service 계층\n비즈니스 로직\n트랜잭션 관리"]
-    REPO["Repository 계층\n데이터 접근\nDB CRUD"]
-    DOMAIN["Domain 계층\n엔티티 / VO\n핵심 비즈니스 모델"]
-    DB["데이터 저장소\nDB / 인메모리"]
-
-    CLI --> CTRL
-    CTRL --> SVC
-    SVC --> REPO
-    REPO --> DB
-    DOMAIN -.->|"사용"| SVC
-    DOMAIN -.->|"사용"| REPO
-
-    style DOMAIN fill:#e8f5e9,stroke:#388e3c
-    style DB fill:#fff3e0,stroke:#f57c00
+    CLI["클라이언트"] --> CTRL["Controller"]
+    CTRL --> SVC["Service (비즈니스/트랜잭션)"]
+    SVC --> REPO["Repository (DB CRUD)"]
+    REPO --> DB["DB / 인메모리"]
+    DOMAIN["Domain (Entity/VO)"] -.->|사용| SVC
+    DOMAIN -.->|사용| REPO
 ```
 
 이번 예제에서는 DB 없이 메모리(HashMap)에 데이터를 저장하는 방식으로 시작한다. 나중에 JPA로 교체할 수 있도록 Repository를 인터페이스로 분리하는 것이 핵심이다.
@@ -166,7 +156,6 @@ sequenceDiagram
     participant T as "JUnit 테스트"
     participant R as "MemoryMemberRepository"
     participant S as "Map (저장소)"
-
     T->>R: 1️⃣ save(member) 호출
     R->>S: 2️⃣ store.put(id, member)
     S-->>R: 3️⃣ 저장 완료
@@ -323,7 +312,6 @@ graph LR
     GIVEN["given\n테스트 준비\n입력 데이터 설정"]
     WHEN["when\n실행\n테스트 대상 메서드 호출"]
     THEN["then\n검증\nassertThat으로 결과 확인"]
-
     GIVEN --> WHEN --> THEN
 ```
 
@@ -409,11 +397,9 @@ graph TD
     IFACE["MemberRepository\n인터페이스"]
     MEM["MemoryMemberRepository\n(개발/테스트용)"]
     JPA["JpaMemberRepository\n(운영용 — 나중에 교체)"]
-
     SVC --> IFACE
     IFACE --> MEM
     IFACE --> JPA
-
     style IFACE fill:#e3f2fd,stroke:#1565c0
     style MEM fill:#f3e5f5,stroke:#7b1fa2
     style JPA fill:#e8f5e9,stroke:#388e3c

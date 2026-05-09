@@ -59,7 +59,6 @@ Swimmable swimmer = new Duck(); // Duck을 Swimmable 타입으로
 sequenceDiagram
     participant Dev as 개발자
     participant PM as 기획자
-
     PM->>Dev: 1️⃣ "파일에서 데이터 읽어 암호화 해주세요"
     Dev->>Dev: FileDataReader 사용해서 구현
     PM->>Dev: 2️⃣ "HTTP로도 읽어야 해요"

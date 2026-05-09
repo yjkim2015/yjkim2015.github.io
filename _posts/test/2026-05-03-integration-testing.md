@@ -24,9 +24,7 @@ graph TD
         INT["통합 테스트\n중간 속도 · 실제 DB/MQ\n컴포넌트 간 협력 검증"]
         UNIT["단위 테스트\n빠름 · 격리 · Mock\n개별 로직 검증"]
     end
-
     E2E --> INT --> UNIT
-
     style E2E fill:#f88,stroke:#c00,color:#000
     style INT fill:#ff8,stroke:#880,color:#000
     style UNIT fill:#8f8,stroke:#080,color:#000
@@ -46,27 +44,10 @@ Spring Boot는 테스트 범위에 따라 다른 어노테이션을 제공한다
 
 ```mermaid
 graph LR
-    subgraph "@SpringBootTest"
-        A1["전체 컨텍스트"]
-        A2["Controller + Service + Repository"]
-        A3["실제 Bean 전부 로딩"]
-    end
-
-    subgraph "@WebMvcTest"
-        B1["Controller 레이어만"]
-        B2["MockMvc 자동 구성"]
-        B3["Service는 @MockBean"]
-    end
-
-    subgraph "@DataJpaTest"
-        C1["JPA 레이어만"]
-        C2["내장 DB 자동 구성"]
-        C3["@Transactional 자동 적용"]
-    end
-
-    style A1 fill:#f88,stroke:#c00,color:#000
-    style B1 fill:#8bf,stroke:#08c,color:#000
-    style C1 fill:#8f8,stroke:#080,color:#000
+    A["@SpringBootTest\n전체 컨텍스트\n실제 Bean 전부 로딩"]
+    B["@WebMvcTest\nController+MockMvc\nService=@MockBean"]
+    C["@DataJpaTest\nJPA+내장DB\n@Transactional 자동"]
+    A --- B --- C
 ```
 
 ### 1️⃣ `@DataJpaTest` — Repository 계층 검증
@@ -219,21 +200,11 @@ class OrderIntegrationTest {
 
 ```mermaid
 flowchart TD
-    Q1{"무엇을\n테스트하는가?"}
-    Q1 -->|"JPA 쿼리"| A["@DataJpaTest"]
-    Q1 -->|"HTTP 요청/응답"| B["@WebMvcTest"]
-    Q1 -->|"여러 계층 협력"| C["@SpringBootTest"]
-    Q1 -->|"단일 클래스 로직"| D["@ExtendWith\nMockitoExtension"]
-
-    A --> A1["빠름 · JPA Bean만\n커스텀 쿼리 검증"]
-    B --> B1["빠름 · 웹 Bean만\n입력 검증 · 응답 포맷"]
-    C --> C1["느림 · 전체 Bean\n전체 시나리오 · 트랜잭션"]
-    D --> D1["가장 빠름\n비즈니스 로직만"]
-
-    style A fill:#8f8,stroke:#080,color:#000
-    style B fill:#8bf,stroke:#08c,color:#000
-    style C fill:#f88,stroke:#c00,color:#000
-    style D fill:#ff8,stroke:#880,color:#000
+    Q1{"무엇을 테스트?"}
+    Q1 -->|JPA 쿼리| A["@DataJpaTest (빠름)"]
+    Q1 -->|HTTP 요청/응답| B["@WebMvcTest (빠름)"]
+    Q1 -->|여러 계층 협력| C["@SpringBootTest (느림)"]
+    Q1 -->|단일 클래스| D["@ExtendWith Mockito (가장 빠름)"]
 ```
 
 ---
@@ -503,11 +474,9 @@ flowchart TD
     B["테스트 클래스 B\n@SpringBootTest\n@MockBean UserService"] --> CTX1
     C["테스트 클래스 C\n@SpringBootTest\n@MockBean OrderService"] --> CTX2["Context 2"]
     D["테스트 클래스 D\n@WebMvcTest"] --> CTX3["Context 3"]
-
     CTX1 -->|"같은 설정 = 캐시 히트"| FAST["빠름"]
     CTX2 -->|"다른 MockBean = 새 컨텍스트"| SLOW["느림"]
     CTX3 -->|"다른 어노테이션 = 새 컨텍스트"| SLOW
-
     style FAST fill:#8f8,stroke:#080,color:#000
     style SLOW fill:#f88,stroke:#c00,color:#000
 ```

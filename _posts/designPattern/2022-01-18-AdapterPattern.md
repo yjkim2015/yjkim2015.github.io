@@ -41,25 +41,14 @@ toc_label: 목차
 
 ```mermaid
 classDiagram
-    class Target {
-        <<interface>>
-        +request(): void
-    }
-    class Adaptee {
-        +specificRequest(): void
-    }
-    class Adapter {
-        -adaptee: Adaptee
-        +Adapter(adaptee: Adaptee)
-        +request(): void
-    }
-    class Client {
-        +operation(target: Target): void
-    }
-
+    class Target { <<interface>>
+        +request(): void }
+    class Adaptee { +specificRequest(): void }
+    class Adapter { -adaptee: Adaptee
+        +request(): void }
     Target <|.. Adapter
-    Adapter --> Adaptee : "위임"
-    Client --> Target : "사용"
+    Adapter --> Adaptee : 위임
+    Client --> Target : 사용
 ```
 
 ---
@@ -278,7 +267,6 @@ sequenceDiagram
     participant C as "클라이언트"
     participant A as "SocketAdapter (어댑터)"
     participant S as "Socket (Adaptee)"
-
     C->>A: "1. get12Volt() 호출"
     A->>S: "2. socket.getVolt() 호출"
     S-->>A: "3. Volt(120) 반환"

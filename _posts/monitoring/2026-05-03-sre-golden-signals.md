@@ -36,7 +36,6 @@ graph TD
     GS --> TRA["2️⃣ Traffic\n요청량"]
     GS --> ERR["3️⃣ Errors\n오류율"]
     GS --> SAT["4️⃣ Saturation\n자원 포화도"]
-
     LAT --> LAT_D["P50, P95, P99\n성공/실패 분리 측정"]
     TRA --> TRA_D["TPS, QPS\n엔드포인트별 분류"]
     ERR --> ERR_D["명시적 에러 (5xx)\n암묵적 에러 (타임아웃, 잘못된 응답)"]
@@ -173,12 +172,10 @@ graph TD
     SLA["SLA\n(Service Level Agreement)\n고객과의 계약\n위반 시 보상/패널티"]
     SLO["SLO\n(Service Level Objective)\n내부 목표\nSLA보다 엄격하게 설정"]
     SLI["SLI\n(Service Level Indicator)\n실제 측정값\n실시간 모니터링"]
-
     SLI -->|"측정"| SLO
     SLO -->|"근거"| SLA
     SLA -->|"기준"| SLO
     SLO -->|"목표"| SLI
-
     style SLA fill:#ff6b6b,color:#fff
     style SLO fill:#ffd93d,color:#333
     style SLI fill:#6bcb77,color:#fff
@@ -362,22 +359,14 @@ CPU가 90%여도 응답 시간이 정상이면 사용자는 아무 문제를 느
 
 ```mermaid
 graph TD
-    subgraph "증상 기반 (권장)"
-        SYM["사용자 영향 감지"]
-        SYM --> ALERT_SYM["알림: P95 응답시간 3초"]
-        ALERT_SYM --> DASH["대시보드에서 원인 탐색"]
-        DASH --> ROOT["원인: DB 슬로우 쿼리"]
-    end
-
-    subgraph "원인 기반 (비권장)"
-        CAUSE["내부 지표 감지"]
-        CAUSE --> ALERT_C1["알림: CPU 90%"]
-        CAUSE --> ALERT_C2["알림: 디스크 80%"]
-        CAUSE --> ALERT_C3["알림: GC 2초"]
-        ALERT_C1 --> Q1["사용자 영향?\n모를 수 있음"]
-        ALERT_C2 --> Q2["사용자 영향?\n없을 수 있음"]
-        ALERT_C3 --> Q3["사용자 영향?\n일시적일 수 있음"]
-    end
+    SYM["증상 기반(권장): P95 응답 3초"] --> DASH["대시보드 원인 탐색"]
+    DASH --> ROOT["원인: DB 슬로우 쿼리"]
+    CAUSE["원인 기반(비권장)"] --> C1["CPU 90% 알림"]
+    CAUSE --> C2["디스크 80% 알림"]
+    CAUSE --> C3["GC 2초 알림"]
+    C1 --> Q["사용자 영향? 불명확"]
+    C2 --> Q
+    C3 --> Q
 ```
 
 ### 알림 설계 원칙

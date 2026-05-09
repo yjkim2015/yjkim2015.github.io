@@ -41,24 +41,18 @@ OS 스레드는 생성 비용과 유지 비용이 매우 큽니다.
 
 ```mermaid
 gantt
-  title 요청 처리 타임라인 (Platform Thread - I/O 대기 중 블로킹)
+  title Platform Thread I/O 블로킹
   dateFormat X
   axisFormat %s
-
   section Thread-1
-  처리        : 0, 3
-  DB 대기(100ms) : crit, 3, 7
-  마무리      : 7, 9
-
+  처리 : 0, 3
+  DB 대기 : crit, 3, 7
   section Thread-2
-  처리        : 0, 2
-  HTTP 대기(200ms) : crit, 2, 8
-  마무리      : 8, 10
-
+  처리 : 0, 2
+  HTTP 대기 : crit, 2, 8
   section Thread-3
-  처리        : 0, 2
-  파일 I/O(50ms) : crit, 2, 5
-  마무리      : 5, 7
+  처리 : 0, 2
+  파일I/O : crit, 2, 5
 ```
 
 ### 비동기 프로그래밍의 복잡성
@@ -126,22 +120,15 @@ Virtual Thread 스위칭:
 
 ```mermaid
 graph LR
-  subgraph M1["Platform Thread 모델 (1:1)"]
     JT1[Java Thread 1] --> OST1[OS Thread 1]
     JT2[Java Thread 2] --> OST2[OS Thread 2]
     JT3[Java Thread 3] --> OST3[OS Thread 3]
-  end
-  subgraph M2["Virtual Thread 모델 (M:N)"]
-    VT1[VThread 1] --> CT1[Carrier Thread 1]
+    VT1[VThread 1] --> CT1[Carrier 1]
     VT2[VThread 2] --> CT1
     VT3[VThread 3] --> CT1
-    VT4[VThread 4] --> CT1
-    VT5[VThread 5] --> CT1
-    VT6[VThread 6] --> CT2[Carrier Thread 2]
-    VT7[VThread 7] --> CT2
+    VT4[VThread 4] --> CT2[Carrier 2]
     CT1 --> OS1[OS Thread 1]
     CT2 --> OS2[OS Thread 2]
-  end
 ```
 
 ---
@@ -164,19 +151,10 @@ Virtual Thread 스케줄러는 Work-Stealing 알고리즘을 사용하는 `ForkJ
 
 ```mermaid
 graph LR
-  subgraph FJP["ForkJoinPool - Virtual Thread Scheduler"]
-    subgraph C1["Carrier Thread 1"]
-      VTa[VT-a]
-      VTb[VT-b]
-    end
-    subgraph C2["Carrier Thread 2"]
-      VTc[VT-c]
-    end
-    subgraph CN["Carrier Thread N"]
-      EMPTY["(빈 큐)"]
-    end
-    CN -->|Work-Stealing| VTb
-  end
+  C1["Carrier1: VT-a, VT-b"]
+  C2["Carrier2: VT-c"]
+  CN["CarrierN: 빈 큐"]
+  CN -->|Work-Stealing| C1
 ```
 
 ### Mount / Unmount 동작
@@ -188,7 +166,6 @@ sequenceDiagram
   participant VA as VThread-A
   participant C1 as Carrier-1
   participant VB as VThread-B
-
   C1->>VA: Mount & 실행
   VA->>C1: 블로킹 I/O 호출 → Unmount (상태 Heap 저장)
   C1->>VB: VThread-B Mount & 실행
@@ -1102,20 +1079,11 @@ public class RateLimitedService {
 
 ```mermaid
 graph TD
-    subgraph "100K TPS Virtual Thread 아키텍처"
-        VT["Virtual Thread\n(수십만 개 동시 존재)"]
-        CT["캐리어 스레드\n(CPU 코어 수만큼)"]
-        SEM["Semaphore\n(하위 서비스 보호)"]
-        DB["DB 커넥션 풀\n(200개)"]
-        API["외부 API\n(500 동시)"]
-        CACHE["Redis 캐시\n(커넥션 풀 100개)"]
-    end
-
-    VT -->|"I/O 대기 시 반납"| CT
-    VT --> SEM
-    SEM --> DB
-    SEM --> API
-    VT --> CACHE
+    VT["Virtual Thread(수십만)"] -->|"I/O 대기시 반납"| CT["캐리어 스레드(코어수)"]
+    VT --> SEM["Semaphore"]
+    SEM --> DB["DB 풀(200)"]
+    SEM --> API["외부 API(500)"]
+    VT --> CACHE["Redis(100)"]
 ```
 
 Virtual Thread 자체는 무제한에 가깝게 생성할 수 있지만, 실제 처리량은 가장 느린 하위 서비스의 처리 능력에 의해 결정됩니다. 세마포어로 역압력(back-pressure)을 구현하면 하위 서비스를 보호하면서 최대 처리량을 유지할 수 있습니다.

@@ -61,7 +61,6 @@ sequenceDiagram
     participant A as "게시자"
     participant Worker as "팬아웃 워커"
     participant Cache as "Redis 피드 캐시"
-
     A->>Worker: 게시글 작성
     Worker->>Cache: LPUSH feed:follower1 post_id
     Worker->>Cache: LPUSH feed:follower2 post_id
@@ -94,7 +93,6 @@ graph TD
     Post["게시글 작성"] --> Check{"팔로워 수 확인"}
     Check -->|"< 1만 (일반 사용자)"| Push["쓰기 시 팬아웃\n팔로워 피드 캐시에 즉시 반영"]
     Check -->|"> 1만 (셀럽)"| Pull["팬아웃 건너뜀\n셀럽 게시글 캐시만 업데이트"]
-
     ReadReq["피드 읽기"] --> NormalFeed["캐시에서 일반 팔로잉 피드"]
     ReadReq --> CelebFeed["팔로우한 셀럽 게시글 동적 조합"]
     NormalFeed --> Merge["병합 + 랭킹"]
@@ -111,20 +109,12 @@ graph TD
 ```mermaid
 graph TD
     Client["모바일/웹"] --> LB["로드밸런서"]
-    LB --> PostSvc["게시글 서비스"]
+    LB --> PostSvc["게시글 서비스\n→ MySQL·S3"]
     LB --> FeedSvc["피드 서비스"]
-    LB --> UserSvc["사용자/팔로우 서비스"]
-
-    PostSvc --> PostDB["게시글 DB (MySQL)"]
-    PostSvc --> S3["S3 (미디어)"]
-    PostSvc --> Kafka["Kafka\npost-created 이벤트"]
-
-    Kafka --> FanoutWorker["팬아웃 워커 × N"]
-    FanoutWorker --> FeedCache["Redis 피드 캐시\n(사용자별 List)"]
-
+    LB --> UserSvc["사용자/팔로우 DB"]
+    PostSvc --> Kafka["Kafka → 팬아웃 워커×N"]
+    Kafka --> FeedCache["Redis 피드 캐시"]
     FeedSvc --> FeedCache
-    FeedSvc --> PostDB
-    UserSvc --> FollowDB["팔로우 그래프 DB"]
 ```
 
 ---
@@ -133,25 +123,18 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant App as "앱"
-    participant PostSvc as "게시글 서비스"
-    participant DB as "MySQL"
-    participant Kafka as "Kafka"
-    participant Worker as "팬아웃 워커"
-    participant Cache as "Redis"
-
-    App->>PostSvc: POST /posts { content, image }
-    PostSvc->>DB: INSERT posts (게시글 저장)
-    PostSvc-->>App: 201 Created (즉시 반환)
-
-    Note over PostSvc,Worker: 비동기 팬아웃 — 사용자 응답 차단 없음
-    PostSvc->>Kafka: post-created 이벤트 발행
-    Kafka->>Worker: 이벤트 소비
-    Worker->>Worker: 팔로워 목록 조회
-    loop 각 팔로워
-        Worker->>Cache: LPUSH feed:{follower_id} {post_id}
-        Worker->>Cache: LTRIM feed:{follower_id} 0 999 (최근 1000개만 유지)
-    end
+    participant App
+    participant Svc as 게시글서비스
+    participant DB as MySQL
+    participant K as Kafka
+    participant W as 팬아웃워커
+    participant C as Redis
+    App->>Svc: POST /posts
+    Svc->>DB: INSERT
+    Svc-->>App: 201
+    Svc->>K: post-created
+    K->>W: 소비
+    W->>C: LPUSH feed:{id} (팔로워별)
 ```
 
 왜 비동기로 처리하는가? 팔로워가 1000명이면 1000번의 Redis LPUSH다. 동기로 처리하면 게시글 저장 API가 수초가 걸린다. Kafka에 발행하고 즉시 반환한다.
@@ -162,21 +145,16 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant App as "앱"
-    participant FeedSvc as "피드 서비스"
-    participant Cache as "Redis"
-    participant DB as "MySQL"
-
-    App->>FeedSvc: GET /feed?cursor=null&size=20
-    FeedSvc->>Cache: LRANGE feed:{user_id} 0 19
-    alt 캐시에 데이터 있음 (90% 케이스)
-        Cache-->>FeedSvc: [post_id_1, ..., post_id_20]
-        FeedSvc->>DB: SELECT * FROM posts WHERE id IN (...)
-        FeedSvc-->>App: 피드 20개 반환
-    else 캐시 미스 (신규 사용자 / TTL 만료)
-        FeedSvc->>DB: 팔로잉한 사람들의 최신 게시글 조회
-        FeedSvc->>Cache: 피드 캐시 재구성
-        FeedSvc-->>App: 피드 반환
+    participant App
+    participant C as Redis
+    participant DB as MySQL
+    App->>C: LRANGE feed:{uid}
+    alt 캐시 히트
+        C-->>App: [post_id...]
+        App->>DB: SELECT IN(ids)
+    else 캐시 미스
+        App->>DB: 팔로잉 최신글
+        App->>C: 재구성
     end
 ```
 
@@ -231,6 +209,23 @@ def calculate_score(post: dict, user_interactions: dict) -> float:
 
     return time_decay * (1 + engagement) * (1 + affinity)
 ```
+
+실제 대규모 서비스에서는 이 규칙 기반 점수를 피처로 사용하고, 사용자 참여 예측 ML 모델(Wide & Deep, DCN)이 최종 랭킹을 결정합니다. Wide 컴포넌트는 기억(memorization, 인기 콘텐츠 편향)을, Deep 컴포넌트는 일반화(generalization, 새로운 조합 발견)를 담당해 두 가지를 균형 있게 반영합니다.
+
+### 게시글 삭제 — 팬아웃 롤백 패턴
+
+게시글이 삭제되면 이미 수천 명의 피드 캐시에 해당 post_id가 들어가 있다. 동기로 일일이 지우면 삭제 API가 수초가 걸린다. Kafka를 통한 비동기 롤백:
+
+```
+1. 게시글 삭제 이벤트를 Kafka post-deleted 토픽에 발행
+2. 팬아웃 워커가 이벤트를 소비
+3. 해당 팔로워 목록을 조회
+4. 각 팔로워 피드에서 LREM feed:{follower_id} 0 {post_id} 실행
+   (LREM: 리스트에서 일치하는 값 전부 제거)
+5. DB의 posts 테이블에서도 soft-delete 처리
+```
+
+피드 조회 시 DB에서 게시글 내용을 가져올 때 `deleted_at IS NULL` 조건을 추가해, 캐시 롤백이 완료되기 전에도 삭제된 게시글이 노출되지 않도록 이중 방어한다.
 
 ---
 
@@ -308,11 +303,64 @@ def get_feed_cursor(user_id: int, cursor_post_id: int = None, size: int = 20):
 
 ## 극한 시나리오
 
-BTS가 게시글을 올릴 때 7000만 팔로워 피드를 즉시 업데이트하려면 70초가 걸린다(초당 100만 건 처리 시). 하이브리드 전략으로:
-- 팬아웃 생략 → 게시글 저장이 즉시 완료
-- 팔로워가 피드를 열 때 셀럽 게시글을 동적으로 합산
+### 시나리오 1: BTS 7000만 팔로워 동시 팬아웃 — 쓰기 폭주
 
-실제로 인스타그램/트위터도 이 방식이다.
+BTS가 게시글을 올릴 때 7000만 팔로워 피드를 즉시 업데이트하려면 초당 100만 건 처리 기준으로 **70초**가 걸린다. 동기 팬아웃은 불가능하다.
+
+```
+대응 전략:
+- 하이브리드 팬아웃: 팔로워 1만 이상 셀럽은 팬아웃 생략
+- 팔로워가 피드를 열 때 셀럽 게시글을 동적으로 합산
+- Kafka 파티션을 팔로워 ID 범위별로 분할해 워커가 병렬 처리
+- 결과: 게시글 저장 < 100ms, 팬아웃은 백그라운드에서 수십 초에 걸쳐 완료
+```
+
+### 시나리오 2: 대선 개표 방송 — 전 국민 동시 피드 읽기 폭주
+
+개표 방송 중 전 국민이 1억 명 동시에 피드 새로고침. 읽기 QPS가 평상시 35,000에서 순간 **350,000+** 으로 10배 급증한다.
+
+```
+대응 전략:
+- Redis 피드 캐시 히트율 99% 유지 (대부분 캐시에서 즉시 반환)
+- HPA(Horizontal Pod Autoscaler): CPU 70% 초과 시 피드 서비스 Pod 자동 증설
+- DB 읽기 레플리카 확장: 평상시 2대 → 피크 대비 10대 사전 준비
+- 핫 게시글(개표 관련) 캐시 TTL을 30초→5분으로 연장해 캐시 스탬피드 방지
+- 수치: Redis 처리량 초당 100만 ops, 응답시간 P99 < 50ms 유지
+```
+
+### 시나리오 3: 인플루언서 100명 동시 게시 — 쓰기 폭주 + 팬아웃 큐 폭발
+
+팔로워 10만 명짜리 인플루언서 100명이 동시에 게시글을 올리면:
+`100명 × 10만 팔로워 × LPUSH = 1,000만 건의 Redis 쓰기 작업`이 수 초 안에 발생한다.
+
+```
+대응 전략:
+- Kafka 팬아웃 워커 Auto Scaling: 큐 적체(lag) 감지 시 워커 수 자동 증가
+- 팬아웃 배치 처리: 같은 사용자 피드에 대한 LPUSH를 pipeline()으로 묶어 Redis 왕복 횟수 최소화
+- 백프레셔(Backpressure): Kafka lag > 100만 건 시 신규 팬아웃 요청 속도 제한
+  → 게시글 저장은 즉시 완료, 피드 반영은 최대 5분 지연 허용 (최종 일관성)
+- Redis 클러스터 샤딩: feed:{user_id} 키를 user_id 해시로 분산해 특정 노드 집중 방지
+- 수치: 워커 50대 → 200대로 자동 확장, 팬아웃 완료 < 3분
+```
+
+---
+
+## 보안 고려사항
+
+> **비유**: SNS는 광장이다. 누구나 말할 수 있지만, 혐오 발언과 스팸을 방치하면 광장이 황폐해진다. 콘텐츠 모더레이션은 서비스 생존의 문제다.
+
+**콘텐츠 모더레이션 — ML + 인적 심사 2단계**
+
+- **1단계 (자동)**: 게시글 업로드 시 ML 분류 모델이 혐오 표현·폭력·성인 콘텐츠·스팸을 실시간 판별한다. 신뢰도 높은 위반은 자동 숨김 처리
+- **2단계 (인적 심사)**: ML이 "애매함"으로 분류한 콘텐츠와 사용자 신고 건을 전담 팀이 검토한다. 자동화만으로는 맥락과 풍자를 구분할 수 없다
+
+**스팸 방지**
+
+동일 콘텐츠 반복 게시, 대량 팔로우·언팔로우, 단시간 다수 계정 생성 패턴을 감지해 계정을 임시 제한한다. 신규 계정에는 첫 24시간 팬아웃 규모를 제한해 스팸 계정의 피해 확산을 차단한다.
+
+**개인정보 — GDPR 삭제권**
+
+사용자가 계정 삭제를 요청하면 게시글·댓글·좋아요뿐 아니라 팔로워 피드 캐시에서도 해당 post_id를 제거해야 한다. 위의 팬아웃 롤백 패턴을 그대로 활용하고, 30일 이내 완전 삭제를 보장한다.
 
 ---
 ## 핵심 설계 결정 요약

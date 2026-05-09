@@ -153,6 +153,69 @@ def bm25(term: str, doc_id: int, k1: float = 1.5, b: float = 0.75) -> float:
 
 ---
 
+## 시맨틱 검색 — 의미를 이해하는 검색
+
+BM25는 키워드 매칭이므로 "강아지"를 검색하면 "퍼피"가 나오지 않습니다. 벡터 임베딩 검색은 의미적 유사도로 이 한계를 극복합니다.
+
+> **비유**: BM25는 도서관에서 책 제목에 "요리"라는 글자가 있는 것만 찾는다. 벡터 검색은 "음식 만들기", "레시피", "쿠킹"이라고 써있어도 "요리"와 같은 뜻임을 이해하고 찾아준다.
+
+```python
+# 문서 임베딩 생성 (색인 시)
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer("jhgan/ko-sroberta-multitask")  # 한국어 특화 모델
+
+def index_document(doc_id: int, text: str):
+    vector = model.encode(text).tolist()  # 768차원 벡터
+    es.index(index="docs", id=doc_id, body={
+        "content": text,
+        "content_vector": vector  # dense_vector 필드
+    })
+```
+
+**Elasticsearch 8.x kNN Search 예시**:
+
+```json
+{
+  "knn": {
+    "field": "content_vector",
+    "query_vector": [0.12, -0.34, 0.56],
+    "k": 10,
+    "num_candidates": 100
+  }
+}
+```
+
+`num_candidates`는 각 샤드에서 후보를 몇 개 뽑을지 결정한다. 클수록 정확하지만 느려진다.
+
+### 하이브리드 검색 — BM25 + 벡터의 조합
+
+키워드 정확도(BM25)와 의미 유사도(벡터)를 Reciprocal Rank Fusion(RRF)으로 합산한다:
+
+```json
+{
+  "retriever": {
+    "rrf": {
+      "retrievers": [
+        { "standard": { "query": { "match": { "content": "강아지" } } } },
+        { "knn": { "field": "content_vector", "query_vector": [...], "k": 10 } }
+      ],
+      "rank_constant": 60
+    }
+  }
+}
+```
+
+두 랭킹 결과를 단순 합산이 아닌 역순위 합(RRF)으로 결합하면 점수 스케일 차이로 인한 편향 없이 균형 있는 최종 순위가 나온다.
+
+| 방식 | 강점 | 약점 |
+|------|------|------|
+| BM25만 | 정확한 키워드, 빠름 | 동의어·유사어 미인식 |
+| 벡터만 | 의미 이해, 오타 강건 | 정확한 용어 검색에 불리 |
+| 하이브리드(RRF) | 두 장점 결합 | 벡터 인덱스 용량 증가 |
+
+---
+
 ## Elasticsearch 설계
 
 ```mermaid
@@ -174,7 +237,7 @@ graph TD
 {
   "mappings": {
     "properties": {
-      "title":      { "type": "text", "analyzer": "korean", "boost": 2.0 },
+      "title":      { "type": "text", "analyzer": "korean" },
       "content":    { "type": "text", "analyzer": "korean" },
       "category":   { "type": "keyword" },
       "created_at": { "type": "date" },
@@ -236,36 +299,49 @@ graph TD
 
 ---
 
-## 자동완성 — Redis Sorted Set으로 구현
+## 자동완성 — Redis ZRANGEBYLEX로 구현
 
-Trie 자료구조가 교과서 답이지만, 실무에서는 **Redis Sorted Set**이 더 간단하고 분산 환경에 유리하다:
+Trie 자료구조가 교과서 답이지만, 실무에서는 **Redis Sorted Set + ZRANGEBYLEX**가 더 간단하고 분산 환경에 유리하다.
+
+**기존 방식의 문제점**: "python"을 등록할 때 모든 접두사("p", "py", "pyt", "pyth", "pytho")를 키로 따로 등록하면 메모리가 폭발적으로 증가한다. 검색어 1억 개, 평균 길이 8자면 8억 개의 키가 필요하다.
+
+**ZRANGEBYLEX 방식**: 검색어 자체만 score=0으로 저장하고, 접두사 범위 조회 한 번으로 후보를 가져온다.
 
 ```python
 class RedisAutoComplete:
-    def add_phrase(self, phrase: str, score: float):
-        # 완성된 단어에는 높은 score, 중간 접두사에는 0
-        self.redis.zadd("autocomplete", {phrase: score})
-        # 모든 접두사도 등록 (위치 추적용)
-        for i in range(1, len(phrase)):
-            self.redis.zadd("autocomplete", {phrase[:i]: 0})
+    def add_phrase(self, phrase: str, weight: int):
+        # 검색어 자체만 저장 — 접두사 폭발 없음
+        self.redis.zadd("autocomplete", {phrase: 0})
+        # 인기도는 별도 Sorted Set으로 관리
+        self.redis.zadd("autocomplete:weight", {phrase: weight})
 
     def suggest(self, prefix: str, limit: int = 5) -> list:
-        # Sorted Set에서 prefix의 위치를 찾아 이후 항목 스캔
-        start = self.redis.zrank("autocomplete", prefix)
-        if start is None:
+        # \xff = 해당 접두사로 시작하는 마지막 문자열 경계
+        candidates = self.redis.zrangebylex(
+            "autocomplete",
+            f"[{prefix}",
+            f"[{prefix}\xff",
+            start=0, num=limit * 10
+        )
+        if not candidates:
             return []
-
-        results = []
-        for entry in self.redis.zrange("autocomplete", start, start + 200):
-            if not entry.startswith(prefix):
-                break
-            score = self.redis.zscore("autocomplete", entry)
-            if score and score > 0:  # score > 0 = 완성된 단어
-                results.append((entry, score))
-
-        results.sort(key=lambda x: x[1], reverse=True)
-        return [w for w, _ in results[:limit]]
+        scored = [
+            (c, self.redis.zscore("autocomplete:weight", c) or 0)
+            for c in candidates
+        ]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [w for w, _ in scored[:limit]]
 ```
+
+```
+예시: "py" 입력 시
+ZRANGEBYLEX autocomplete "[py" "[py\xff" LIMIT 0 5
+→ 사전순 후보: ["pycon", "python", "pytorch"]
+→ 인기도 재정렬 → ["python", "pytorch", "pycon"]
+```
+
+#### 면접 포인트
+"자동완성을 어떻게 설계할 것인가?" — Trie는 단일 서버에서 빠르지만 분산 환경에서 복제가 어렵다. Redis ZRANGEBYLEX는 메모리 효율이 좋고 수평 확장이 가능하다. 검색어가 수억 개를 넘어가면 접두사 첫 글자 기준으로 샤딩을 추가 고려한다.
 
 ---
 
@@ -336,25 +412,32 @@ def get_trending(self, limit: int = 10) -> list:
 
 ```mermaid
 graph TD
-    User["사용자"] --> LB["로드밸런서"]
-    LB --> SearchAPI["검색 API 서버"]
-
-    SearchAPI --> AC["자동완성\nRedis Sorted Set"]
-    SearchAPI --> Cache["인기 검색어 캐시\nRedis TTL 5분"]
-    SearchAPI --> QP["쿼리 파서\n토크나이저 + 오타교정"]
-    QP --> ES["Elasticsearch 클러스터\n5 샤드 + 레플리카"]
-
-    subgraph "색인 파이프라인"
-        DocSrc["문서 소스"] --> Kafka["Kafka"]
-        Kafka --> Worker["색인 워커"]
-        Worker --> ES
-    end
-
-    subgraph "트렌딩"
-        Kafka2["검색 이벤트 Kafka"] --> Flink["Flink 스트림"]
-        Flink --> TrendRedis["트렌딩 Redis"]
-    end
+    User["사용자"] --> LB["LB"] --> API["검색 API"]
+    API --> AC["자동완성 Redis"]
+    API --> Cache["인기검색어 Redis"]
+    API --> QP["쿼리 파서+오타교정"]
+    QP --> ES["Elasticsearch(5샤드)"]
+    DocSrc["문서 소스"] --> Kafka["Kafka"] --> Worker["색인 워커"] --> ES
+    Kafka2["검색이벤트"] --> Flink["Flink"] --> TrendRedis["트렌딩 Redis"]
 ```
+
+---
+
+## 보안 고려사항
+
+> **비유**: 도서관 사서가 어떤 책을 누가 빌렸는지 기록한다면, 그 기록 자체가 개인 정보다. 검색 시스템도 "무엇을 검색했는가"를 저장하는 순간 프라이버시 리스크가 생긴다.
+
+**검색 인젝션 방지**
+
+Elasticsearch 쿼리를 사용자 입력으로 직접 구성하면 쿼리 인젝션 공격에 노출된다. 반드시 파라미터화된 쿼리를 사용하고, 입력값에서 특수문자(`{`, `}`, `"`, `:` 등)를 이스케이프 처리한다.
+
+**PII 필터링**
+
+문서 색인 파이프라인에서 주민등록번호, 전화번호, 이메일 주소 같은 PII(개인 식별 정보) 패턴을 정규식으로 감지해 색인 전에 마스킹하거나 제외한다. 검색 결과에 PII가 그대로 노출되는 사고를 사전에 차단한다.
+
+**검색 로그 익명화**
+
+검색 로그는 트렌딩 분석과 추천 개선에 필수지만, 그대로 저장하면 사용자의 관심사·건강 상태·정치 성향까지 추적 가능해진다. 로그 저장 시 사용자 ID를 해시화(SHA-256 + Salt)하고, 30~90일 후 자동 삭제 정책을 적용한다.
 
 ---
 

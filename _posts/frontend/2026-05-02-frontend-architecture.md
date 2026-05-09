@@ -25,22 +25,12 @@ toc_label: 목차
 
 ```mermaid
 graph TD
-    ATOMS["원자 Atoms<br>Button, Input, Label, Icon"]
-    MOLECULES["분자 Molecules<br>SearchBar = Input + Button<br>FormField = Label + Input + Error"]
-    ORGANISMS["유기체 Organisms<br>Header = Logo + Nav + SearchBar<br>ProductCard = Image + Title + Price + Button"]
-    TEMPLATES["템플릿 Templates<br>PageLayout = Header + Sidebar + Main"]
-    PAGES["페이지 Pages<br>ProductListPage = Template + Data"]
-
-    ATOMS --> MOLECULES
-    MOLECULES --> ORGANISMS
-    ORGANISMS --> TEMPLATES
-    TEMPLATES --> PAGES
-
-    style ATOMS fill:#e74c3c,color:#fff
-    style MOLECULES fill:#f39c12,color:#fff
-    style ORGANISMS fill:#2ecc71,color:#fff
-    style TEMPLATES fill:#3498db,color:#fff
-    style PAGES fill:#9b59b6,color:#fff
+    ATOMS["Atoms: Button, Input, Icon"]
+    MOLECULES["Molecules: SearchBar, FormField"]
+    ORGANISMS["Organisms: Header, ProductCard"]
+    TEMPLATES["Templates: PageLayout"]
+    PAGES["Pages: ProductListPage"]
+    ATOMS --> MOLECULES --> ORGANISMS --> TEMPLATES --> PAGES
 ```
 
 ### 컴포넌트 분리 판단 기준
@@ -56,7 +46,6 @@ flowchart TD
     D -->|"아니오"| F{"여러 책임을 갖는가?"}
     F -->|"예"| G["SRP에 따라 분리"]
     F -->|"아니오"| H["현재 크기 유지"]
-
     style C fill:#2ecc71,color:#fff
     style E fill:#2ecc71,color:#fff
     style G fill:#2ecc71,color:#fff
@@ -126,7 +115,6 @@ graph TD
     REACT_QUERY -->|"API 호출"| API_LAYER["API Layer"]
     API_LAYER -->|"HTTP 요청"| HTTP_CLIENT["HTTP 클라이언트 axios/fetch"]
     HTTP_CLIENT -->|"네트워크"| SERVER["백엔드 서버"]
-
     style API_LAYER fill:#3498db,color:#fff
     style HTTP_CLIENT fill:#f39c12,color:#fff
 ```
@@ -194,12 +182,10 @@ graph TD
     STATE --> SHARED["공유 상태<br>여러 컴포넌트가 사용"]
     STATE --> SERVER["서버 상태<br>API 데이터"]
     STATE --> URL["URL 상태<br>라우터 파라미터"]
-
     LOCAL --> USESTATE["useState, useReducer"]
     SHARED --> CONTEXT["Context / Zustand"]
     SERVER --> RQ["React Query / SWR"]
     URL --> ROUTER["React Router / Next.js Router"]
-
     style LOCAL fill:#2ecc71,color:#fff
     style SERVER fill:#e74c3c,color:#fff
 ```
@@ -265,23 +251,9 @@ function App() {
 
 ```mermaid
 graph TD
-    subgraph "모노레포 구조"
-        ROOT["root/"]
-        ROOT --> APPS["apps/"]
-        ROOT --> PACKAGES["packages/"]
-
-        APPS --> WEB["apps/web Next.js"]
-        APPS --> MOBILE["apps/mobile React Native"]
-        APPS --> ADMIN["apps/admin React"]
-
-        PACKAGES --> UI["packages/ui 공통 컴포넌트"]
-        PACKAGES --> TYPES["packages/types 공통 타입"]
-        PACKAGES --> UTILS["packages/utils 유틸리티"]
-        PACKAGES --> CONFIG["packages/config ESLint TS 설정"]
-    end
-
-    style UI fill:#3498db,color:#fff
-    style TYPES fill:#2ecc71,color:#fff
+    ROOT["root/"] --> APPS["apps/"] & PACKAGES["packages/"]
+    APPS --> WEB["web Next.js"] & MOBILE["mobile RN"] & ADMIN["admin React"]
+    PACKAGES --> UI["ui"] & TYPES["types"] & UTILS["utils"] & CONFIG["config"]
 ```
 
 > 비유: 한 회사의 여러 부서가 같은 복지 제도, 같은 업무 시스템을 공유하는 것과 같습니다. 각 팀은 독립적으로 일하지만, 공통 인프라는 함께 씁니다.
@@ -299,11 +271,9 @@ graph TD
     SHELL --> PRODUCTS["Products MFE<br>팀 B"]
     SHELL --> CART["Cart MFE<br>팀 C"]
     SHELL --> CHECKOUT["Checkout MFE<br>팀 D"]
-
     AUTH -.->|"독립 배포"| AUTH
     PRODUCTS -.->|"독립 배포"| PRODUCTS
     CART -.->|"독립 배포"| CART
-
     style SHELL fill:#e74c3c,color:#fff
     style AUTH fill:#3498db,color:#fff
     style PRODUCTS fill:#2ecc71,color:#fff
@@ -366,22 +336,16 @@ async function fetchProduct(id: string): Promise<Product> {
 ```mermaid
 mindmap
   root((좋은 아키텍처))
-    관심사 분리
-      UI vs 비즈니스 로직
-      기능별 모듈화
-      API 레이어 분리
-    단방향 의존성
-      상위에서 하위로
-      순환 참조 금지
-    테스트 용이성
-      컴포넌트 순수성
-      의존성 주입
-    확장 가능성
-      Feature Flag
-      플러그인 구조
-    타입 안전성
-      TypeScript
-      런타임 검증
+    관심사분리
+      UI/비즈니스/API레이어
+    단방향의존성
+      순환참조금지
+    테스트용이성
+      순수컴포넌트/DI
+    확장가능성
+      FeatureFlag/플러그인
+    타입안전성
+      TypeScript/런타임검증
 ```
 
 ### 레거시 마이그레이션 — Strangler Fig 패턴

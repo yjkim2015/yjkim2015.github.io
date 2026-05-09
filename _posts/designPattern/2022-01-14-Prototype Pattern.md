@@ -43,24 +43,12 @@ toc_label: 목차
 
 ```mermaid
 classDiagram
-    class Prototype {
-        <<interface>>
-        +clone(): Prototype
-    }
-    class ConcretePrototype {
-        -field: String
-        -items: List
-        +clone(): Prototype
-        +getField(): String
-    }
-    class Client {
-        -prototype: Prototype
-        +operation(): Prototype
-    }
-
+    class Prototype { <<interface>> +clone() }
+    class ConcretePrototype { -field +clone() }
+    class Client { +operation() }
     Prototype <|.. ConcretePrototype
-    Client --> Prototype : "사용"
-    ConcretePrototype ..> ConcretePrototype : "자기 복제"
+    Client --> Prototype : 사용
+    ConcretePrototype ..> ConcretePrototype : 자기복제
 ```
 
 ---
@@ -270,7 +258,6 @@ sequenceDiagram
     participant R as "ShapeRegistry"
     participant P as "원본 Circle (프로토타입)"
     participant CP as "복사된 Circle"
-
     C->>R: "1. getShape('smallCircle') 요청"
     R->>P: "2. shape.clone() 호출"
     P->>CP: "3. 새 Circle 생성 (복사)"

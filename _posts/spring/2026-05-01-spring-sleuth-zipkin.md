@@ -31,7 +31,6 @@ graph TD
         D["Inventory Service\nSpanId: span4\nParent: span2"]
         E["Notification Service\nSpanId: span5\nParent: span2"]
     end
-
     A --> B
     B --> C
     B --> D
@@ -212,22 +211,13 @@ Zipkin의 Gantt 차트로 각 서비스의 처리 시간과 순서를 한눈에 
 
 ```mermaid
 gantt
-    title "TraceId abc123 타임라인 (Zipkin Gantt 차트)"
+    title TraceId abc123 타임라인
     dateFormat x
     axisFormat %Lms
-
-    section API Gateway
-    "span1 - 라우팅"         :0, 10
-
-    section Order Service
-    "span2 - 주문 처리"      :10, 400
-
-    section Payment Service
-    "span3 - 결제 처리"      :15, 200
-
-    section Inventory Service
-    "span4 - 재고 차감"      :220, 60
-
-    section Notification Service
-    "span5 - 알림 발송"      :285, 300
+    section Gateway
+    라우팅       :0, 10
+    section Order
+    주문처리     :10, 400
+    section Payment
+    결제처리     :15, 200
 ```

@@ -59,32 +59,17 @@ User user2 = new User("김철수", 25, "부산", "010-9876-5432", null, true, fa
 
 ```mermaid
 classDiagram
-    class User {
-        -name: String
+    class User { -name: String
         -age: int
         -address: String
-        -phone: String
-        -email: String
-        -User(builder: Builder)
-        +getName(): String
-        +getAge(): int
-    }
-    class Builder {
-        -name: String
-        -age: int
-        -address: String
-        -phone: String
-        -email: String
-        +Builder(name: String, age: int)
-        +address(address: String): Builder
-        +phone(phone: String): Builder
-        +email(email: String): Builder
-        +build(): User
-    }
-
-    User +-- Builder : "내부 클래스"
-    Builder ..> User : "생성"
+        -email: String }
+    class Builder { +address(v): Builder
+        +email(v): Builder
+        +build(): User }
+    User +-- Builder
+    Builder ..> User
 ```
+
 
 ---
 
@@ -239,7 +224,6 @@ sequenceDiagram
     participant C as "클라이언트"
     participant B as "User.Builder"
     participant U as "User"
-
     C->>B: "1. new Builder(name, age) — 필수값 설정"
     C->>B: "2. .address(...) — 선택값 설정"
     C->>B: "3. .email(...) — 선택값 설정"

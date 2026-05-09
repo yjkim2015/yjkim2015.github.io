@@ -707,19 +707,16 @@ OkHttp는 Retrofit과 함께 사용할 때 가장 자연스럽다. Retrofit이 O
 
 ```mermaid
 quadrantChart
-    title HTTP 클라이언트 라이브러리 포지셔닝
-    x-axis "코드 양 많음" --> "코드 양 적음"
-    y-axis "동기/블로킹" --> "비동기/논블로킹"
-    quadrant-1 "선언적 + 비동기"
-    quadrant-2 "수동 + 비동기"
-    quadrant-3 "수동 + 동기"
-    quadrant-4 "선언적 + 동기"
+    title HTTP 클라이언트 포지셔닝
+    x-axis "코드많음" --> "코드적음"
+    y-axis "동기" --> "비동기"
+    quadrant-1 선언적+비동기
+    quadrant-2 수동+비동기
+    quadrant-3 수동+동기
+    quadrant-4 선언적+동기
     RestTemplate: [0.15, 0.2]
     WebClient: [0.55, 0.85]
-    RestClient: [0.6, 0.25]
     OpenFeign: [0.85, 0.3]
-    Retrofit: [0.8, 0.6]
-    Java HttpClient: [0.25, 0.55]
     OkHttp: [0.4, 0.55]
 ```
 
@@ -755,17 +752,16 @@ quadrantChart
 
 ```mermaid
 graph TD
-    START["Spring Boot 3.x 프로젝트?"]
-    START -->|"Yes"| Q1{"비동기/리액티브 필요?"}
-    Q1 -->|"Yes"| R1["WebClient (Reactor 기반 논블로킹)"]
-    Q1 -->|"No"| Q2{"MSA, Spring Cloud 사용 중?"}
-    Q2 -->|"Yes"| R2["OpenFeign (선언적 + Circuit Breaker)"]
-    Q2 -->|"No"| R3["RestClient (Spring 6.1+, 간결한 Fluent API)"]
-    START -->|"No (레거시)"| Q3{"비동기 필요?"}
-    Q3 -->|"Yes"| R4["WebClient (.block() 사용 가능)"]
-    Q3 -->|"No"| R5["RestTemplate 유지 (마이그레이션 비용 검토)"]
-    START -->|"Android/멀티플랫폼"| R6["Retrofit + OkHttp"]
-    START -->|"순수 Java, 의존성 최소화"| R7["Java HttpClient (JDK 11+)"]
+    A{"Boot 3.x?"} -->|Yes| B{"비동기?"}
+    B -->|Yes| C["WebClient"]
+    B -->|No| D{"MSA/Cloud?"}
+    D -->|Yes| E["OpenFeign"]
+    D -->|No| F["RestClient"]
+    A -->|"레거시"| G{"비동기?"}
+    G -->|Yes| C
+    G -->|No| H["RestTemplate 유지"]
+    A -->|"Android"| I["Retrofit"]
+    A -->|"순수Java"| J["Java HttpClient"]
 ```
 
 ### 시나리오별 추천 코드
