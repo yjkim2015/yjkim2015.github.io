@@ -70,6 +70,31 @@ Rate Limiter 없으면 어떤 일이 생기는가:
 
 **우리의 선택: API Gateway + 애플리케이션 계층 병용** — 이유: Gateway에서 IP 레벨, 앱에서 사용자/엔드포인트 레벨 이중 적용.
 
+### 꼭 API 서버에서 만들어야 하는가? — 계층별 방어 전략
+
+Rate Limiter를 API 코드로 직접 구현하는 것은 **마지막 방어선**이다. 앞단에서 이미 대부분의 악성 트래픽을 걸러낼 수 있고, 그래야 한다. 각 계층이 담당하는 역할이 다르다.
+
+| 계층 | 도구 | 막을 수 있는 것 | 못 막는 것 | 비용 |
+|------|------|---------------|-----------|------|
+| **1. CDN/DNS** | Cloudflare, AWS Shield | DDoS (L3/L4), 국가 차단, 봇 스코어링 | 로그인한 사용자 구분 불가 | $20~200/월 |
+| **2. WAF** | AWS WAF, Cloudflare WAF | SQL Injection, XSS, IP 블랙리스트, 요청 패턴 | 비즈니스 로직 기반 제한 불가 | $5~100/월 |
+| **3. API Gateway** | Kong, Nginx, AWS API GW | IP당/API키당 rate limit, 인증 전 차단 | 사용자별 세분화 제한 어려움 | 인프라 포함 |
+| **4. 앱 서버** | Redis + Lua, 자체 구현 | 사용자별/엔드포인트별/티어별 세밀한 제한 | 이미 앱까지 도달한 트래픽만 | 개발 비용 |
+| **5. DB** | Connection Pool, 쿼리 타임아웃 | slow query 폭주, 커넥션 고갈 | 앞단 트래픽 제어 불가 | 설정만 |
+
+**핵심**: 트래픽이 뒤로 갈수록 처리 비용이 비싸다. CDN에서 1건 차단하는 비용은 거의 0이지만, DB까지 도달한 요청을 차단하면 이미 CPU/메모리/커넥션을 소모한 뒤다.
+
+**실무 추천 조합**:
+
+```
+Phase 1 (MAU 1만): Nginx limit_req만으로 충분
+Phase 2 (MAU 100만): Cloudflare 무료 + API Gateway rate limit
+Phase 3 (MAU 1000만): Cloudflare Pro + AWS WAF + Redis Lua (앱 레벨)
+Phase 4 (MAU 1억): Cloudflare Enterprise + 다층 WAF + ML 이상탐지
+```
+
+> **면접 포인트**: "Rate Limiter를 어디에 배치하겠습니까?"라는 질문에 "API 서버에서 Redis로"만 답하면 미드 레벨이다. "CDN→WAF→Gateway→App 다층 방어를 구성하고, 각 계층이 담당하는 트래픽 유형이 다르다"고 답해야 시니어다. 앞단에서 90%를 걸러야 뒷단이 살아남는다.
+
 ---
 
 ### 결정 4: 초과 응답 — 429 즉시 거부 vs 큐잉
