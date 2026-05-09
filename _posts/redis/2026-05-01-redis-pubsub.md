@@ -331,3 +331,53 @@ XACK mystream mygroup <message-id>
 | 주요 용도 | 멀티 서버 채팅, 캐시 무효화, 실시간 알림 |
 | 한계 | 메시지 저장 없음, ACK 없음, 구독 전 메시지 조회 불가 |
 | 유실이 치명적이면 | Redis Stream 또는 Kafka로 전환 |
+
+---
+
+## 왜 Redis Pub/Sub인가? (vs Redis Stream vs Kafka)
+
+| 방식 | 메시지 보존 | 소비자 그룹 | 오프셋 재처리 | 적합한 용도 |
+|------|-------------|-------------|---------------|-------------|
+| **Redis Pub/Sub** | 없음(휘발) | 없음(브로드캐스트) | 불가 | 실시간 알림, 캐시 무효화, 채팅 |
+| **Redis Stream** | 있음(설정 가능) | 있음(Consumer Group) | 가능 | 경량 이벤트 큐, at-least-once 처리 |
+| **Kafka** | 있음(장기) | 있음 | 가능(임의 오프셋) | 대용량, 이벤트 소싱, 감사 로그 |
+
+**실무 판단**: 메시지 유실이 허용되고 실시간성이 중요하면 Pub/Sub. 유실 불가 + Redis만 쓰고 싶으면 Stream. 대용량·장기 보존·복잡한 소비자 관리가 필요하면 Kafka.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 유실되면 안 되는 이벤트에 Pub/Sub 사용**
+결제 완료 이벤트, 재고 차감 이벤트를 Pub/Sub으로 발행한다. 구독자가 없거나 네트워크 순단이 발생하면 메시지가 영구 유실된다. 유실 불가 이벤트는 Redis Stream 또는 Kafka를 사용해야 한다.
+
+**실수 2: 구독자가 느려서 버퍼 오버플로우**
+Redis 서버는 각 구독자에게 보낼 메시지를 버퍼링한다. 구독자가 처리 속도보다 메시지가 빠르게 들어오면 `client-output-buffer-limit pubsub`을 초과해 Redis가 강제로 구독 연결을 끊는다. 소비자 처리 속도를 높이거나 Stream으로 전환해야 한다.
+
+**실수 3: 패턴 구독(PSUBSCRIBE) 과다 사용**
+`PSUBSCRIBE event.*`처럼 와일드카드 구독을 남발하면 모든 메시지에 대해 패턴 매칭 연산이 발생한다. 구독자 수와 패턴 수에 비례해 CPU를 소비한다. 정확한 채널명을 사용하는 `SUBSCRIBE`가 성능상 유리하다.
+
+**실수 4: Pub/Sub 채널을 상태 저장소로 오해**
+채널에 발행된 메시지는 저장되지 않는다. 구독 시점 이전에 발행된 메시지는 조회 불가다. 이벤트 히스토리가 필요하면 별도 List나 Stream에 저장해야 한다.
+
+**실수 5: 다중 Redis 노드 환경에서 Pub/Sub 동작 오해**
+Redis Cluster에서 Pub/Sub 메시지는 전체 클러스터가 아닌 단일 노드에서만 전파된다. 여러 앱 서버가 서로 다른 클러스터 노드에 연결되어 있으면 일부 구독자가 메시지를 못 받는다. Cluster에서는 모든 노드에 PUBLISH하거나 Keyspace notification + Stream 조합을 사용해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Redis Pub/Sub과 Redis Stream의 가장 큰 차이는?**
+Pub/Sub은 Fire-and-forget 방식으로 메시지를 저장하지 않는다. 구독자가 없거나 오프라인이면 메시지가 유실된다. Stream은 메시지를 로그로 저장하고 Consumer Group이 ACK 기반으로 처리 확인을 한다. 재처리와 장애 복구가 가능하다.
+
+**Q2. 캐시 무효화에 Pub/Sub을 어떻게 활용하는가?**
+DB 변경 시 `PUBLISH cache:invalidate "user:123"` 발행 → 모든 앱 서버의 로컬 캐시 구독자가 메시지를 받아 해당 키를 로컬 캐시에서 제거한다. 메시지 유실 시 오래된 캐시가 TTL까지 살아있을 수 있지만, 캐시 무효화는 유실 허용이 가능한 유스케이스다.
+
+**Q3. SUBSCRIBE 상태에서 다른 명령을 실행할 수 있는가?**
+`SUBSCRIBE` 상태의 연결은 `SUBSCRIBE`, `UNSUBSCRIBE`, `PSUBSCRIBE`, `PUNSUBSCRIBE`, `PING`, `RESET`, `QUIT` 명령만 허용된다. 일반 GET/SET은 불가하다. 따라서 Pub/Sub 전용 연결을 별도로 관리해야 한다.
+
+**Q4. Keyspace Notification이란?**
+Redis 내부 이벤트(SET, DEL, EXPIRE 등)를 자동으로 특정 채널에 발행하는 기능이다. `notify-keyspace-events`로 활성화한다. TTL 만료 이벤트(`__keyevent@0__:expired`)를 구독해 만료된 키에 후속 처리를 하는 패턴에서 활용한다.
+
+**Q5. 실시간 채팅 구현 시 Redis Pub/Sub의 한계는?**
+① 메시지 저장 없음 — 접속 전 메시지 조회 불가 → 별도 히스토리 DB 필요 ② 대화 상대 오프라인 시 메시지 유실 → 푸시 알림 + 저장 필요 ③ 대규모 채널(수십만 구독자)에서 메모리/CPU 부담. 실무에서는 Pub/Sub을 실시간 전달에만 쓰고, 히스토리는 RDBMS나 MongoDB에 따로 저장한다.

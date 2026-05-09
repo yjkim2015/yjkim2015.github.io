@@ -565,6 +565,85 @@ URL 단축기에서 이 다섯 숫자가 동시에 정상이면 서비스는 건
 
 ---
 
+## 실무에서 놓치기 쉬운 케이스
+
+### 1. 악성 URL 은닉 — 단축 URL 뒤에 피싱 사이트가 숨는다
+
+`bit.ly/abc123`을 클릭하기 전에는 목적지 URL을 알 수 없다. 이 특성을 이용해 피싱 사이트·악성코드 배포 사이트로 향하는 단축 URL이 SNS와 이메일로 퍼진다. 사용자 신뢰를 잃으면 서비스 전체가 블랙리스트에 오른다.
+
+**방어 계층 설계:**
+
+```
+URL 등록 시 (동기 검사)
+  → Google Safe Browsing API 호출
+  → 응답 시간 150ms 이내, 악성 판정 시 등록 거부
+
+URL 등록 후 (비동기 재검사)
+  → 등록 24시간 뒤 Kafka Consumer가 재검사 (나중에 악성으로 등록되는 경우 대응)
+  → 악성 판정 시 Redis에 차단 플래그 설정, 리다이렉트 시 경고 페이지로 전환
+
+리다이렉트 시 (실시간 캐시 조회)
+  → Redis: GET blocked:{short_code}
+  → 차단 플래그 있으면 → 경고 중간 페이지 → 사용자가 직접 "계속 진행" 클릭
+```
+
+Google Safe Browsing API 외에 VirusTotal API를 병행하면 탐지율이 높아진다. 단, 응답 지연이 있으므로 비동기 재검사 파이프라인에서 활용하는 것이 적합하다.
+
+---
+
+### 2. 만료 URL 리소스 낭비 — 죽은 링크가 DB와 캐시를 잠식한다
+
+1년 후 만료되는 단축 URL이 수억 개 쌓이면 DB와 Redis 모두 만료된 레코드로 채워진다. 리다이렉트 요청마다 "만료됨" 조회가 발생해 DB 읽기 부하가 쓸데없이 늘어난다.
+
+```sql
+-- 만료 URL 정리 배치 (매일 새벽 3시 실행)
+DELETE FROM urls
+WHERE expires_at < NOW() - INTERVAL 30 DAY  -- 만료 후 30일 유예 (분쟁 대응)
+LIMIT 10000;  -- 한 번에 최대 1만 건, 대량 락 방지
+```
+
+Redis에서는 `EXPIRE`를 처음 캐싱할 때 TTL과 동기화해 자동 만료되도록 설정한다.
+
+```python
+def cache_url(short_code, long_url, expires_at):
+    ttl = max(0, int(expires_at - time.time()))
+    if ttl > 0:
+        redis.setex(f"url:{short_code}", ttl, long_url)
+    # ttl=0이면 이미 만료 — 캐싱 자체를 건너뜀
+```
+
+만료 URL에 대한 리다이렉트 요청에는 HTTP 410 Gone을 반환한다. 404가 아닌 410은 "의도적으로 제거됐음"을 의미하므로 검색 엔진이 해당 URL을 색인에서 제거한다.
+
+---
+
+### 3. 커스텀 슬러그 선점 — 누군가 "apple"을 먼저 등록한다
+
+커스텀 슬러그 기능(`bit.ly/mycompany`)을 허용하면 브랜드명·욕설·경쟁사 이름을 선점하는 스쿼팅이 발생한다. `apple`, `google`, `samsung` 같은 슬러그를 악의적인 사용자가 먼저 등록하면 브랜드 신뢰 문제가 생긴다.
+
+```python
+RESERVED_SLUGS = set([
+    "apple", "google", "amazon", "admin", "api",
+    "login", "signup", "help", "support", "about",
+    # ... 브랜드명·예약어 목록 (정기 업데이트)
+])
+
+PROFANITY_LIST = load_profanity_list()  # 욕설 필터
+
+def validate_custom_slug(slug):
+    if slug in RESERVED_SLUGS:
+        raise ValueError("이미 예약된 슬러그입니다")
+    if slug in PROFANITY_LIST:
+        raise ValueError("사용할 수 없는 단어입니다")
+    if len(slug) < 4 or len(slug) > 30:
+        raise ValueError("슬러그는 4~30자여야 합니다")
+    if not re.match(r'^[a-zA-Z0-9_-]+$', slug):
+        raise ValueError("영문, 숫자, _, -만 사용 가능합니다")
+```
+
+인증된 브랜드 계정에는 자신의 브랜드명 슬러그를 사용할 수 있는 **브랜드 인증** 절차를 별도로 운영한다. 이미 등록된 슬러그라도 상표권 침해 신고를 받으면 강제 이전할 수 있는 관리자 도구가 필요하다.
+
+---
+
 ## 설계 결정 요약
 
 | 결정 | 선택 | 이유 |

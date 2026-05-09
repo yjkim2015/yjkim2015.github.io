@@ -277,3 +277,50 @@ spring:
 - Git 토큰은 read-only 최소 권한
 - 암호화되지 않은 민감 정보는 절대 Git에 커밋 금지
 - 감사 로그: Git history로 누가 언제 무엇을 변경했는지 추적
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 중앙화 | 동적 갱신 | 암호화 | 적합한 상황 |
+|---|---|---|---|---|
+| application.yml (로컬) | X | X | X | 단일 서비스, 개발 환경 |
+| Spring Cloud Config | O | O (@RefreshScope) | O (JCE) | 다수 서비스, 설정 통합 관리 |
+| Kubernetes ConfigMap | O | 제한적 | X | K8s 전용 환경 |
+| HashiCorp Vault | O | O | O (전용) | 시크릿 전문 관리 |
+| AWS Parameter Store | O | O | O (KMS) | AWS 환경 |
+
+**결론:** Spring 기반 마이크로서비스에서는 Spring Cloud Config가 가장 자연스러운 통합을 제공한다. Git을 백엔드로 사용하면 변경 이력 추적과 PR 리뷰가 가능해 감사(audit) 요건을 충족한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **`@RefreshScope` 없이 동적 갱신 기대** — `/actuator/refresh`를 호출해도 `@Value`를 주입받은 빈은 갱신되지 않는다. 동적 갱신이 필요한 빈에는 반드시 `@RefreshScope`를 붙여야 한다. 단, `@RefreshScope` 빈은 첫 호출 시 재생성되어 초기화 비용이 발생한다.
+
+2. **민감 정보를 암호화 없이 Git에 저장** — DB 비밀번호, API Key를 평문으로 Git에 커밋하면 이력에 영구 기록된다. `{cipher}` 접두사와 대칭/비대칭 키 암호화를 반드시 적용해야 한다.
+
+3. **Config Server 단일 인스턴스 운영** — Config Server가 단일 장애점이 된다. 모든 서비스 시작 시 Config Server에 의존하므로, Config Server 다운 시 전체 서비스 재시작이 불가능해진다. HA 구성(2개 이상 + Eureka 등록)이 필수다.
+
+4. **Spring Cloud Bus 없이 다수 인스턴스 갱신 시도** — 인스턴스가 10개라면 10번 `/actuator/refresh`를 호출해야 한다. Spring Cloud Bus + Kafka/RabbitMQ로 단 한 번의 호출로 모든 인스턴스를 갱신해야 한다.
+
+5. **`bootstrap.yml` vs `application.yml` 우선순위 혼동** — Spring Cloud에서 `bootstrap.yml`은 `application.yml`보다 먼저 로드된다. Config Server URL 설정을 `application.yml`에 두면 Config 로드 전에 이미 `application.yml`이 처리되어 Config Server를 찾지 못한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Spring Cloud Config의 설정 파일 우선순위는?**
+> 높음 → 낮음: `application-{profile}.yml` (Config Server) > `application.yml` (Config Server) > `application-{profile}.yml` (로컬) > `application.yml` (로컬). Config Server의 설정이 로컬을 오버라이드한다.
+
+**Q2. `@RefreshScope`의 동작 원리는?**
+> `@RefreshScope` 빈은 Spring의 커스텀 스코프로 등록된다. `/actuator/refresh` 호출 시 해당 스코프의 캐시가 무효화되고, 다음 빈 접근 시 새 프로퍼티 값으로 재생성된다. `@ConfigurationProperties`는 `@RefreshScope` 없이도 갱신되지만 바인딩 빈 자체는 재생성된다.
+
+**Q3. Config Server의 Git 백엔드에서 설정 파일 이름 규칙은?**
+> `{application}-{profile}.yml` 형식이다. 예: `order-service-prod.yml`. `application.yml`은 모든 서비스의 공통 설정이고, `{application}.yml`은 특정 서비스 전용이다. Config Server는 공통 + 서비스별 설정을 병합해 반환한다.
+
+**Q4. Config Server에서 민감 정보를 어떻게 암호화하는가?**
+> `encrypt.key`(대칭) 또는 키 페어(비대칭)를 Config Server에 설정하고, `POST /encrypt` 엔드포인트로 값을 암호화한다. Git에는 `password: '{cipher}암호화된값'`으로 저장한다. 클라이언트 수신 시 자동 복호화된다.
+
+**Q5. Config Server 없이 서비스가 시작될 수 있게 하려면?**
+> `spring.cloud.config.fail-fast=false`로 설정하면 Config Server 연결 실패 시 로컬 설정으로 폴백한다. 운영 환경에서는 `fail-fast=true`로 설정해 잘못된 설정으로 서비스가 시작되는 것을 방지하는 것이 권장된다.

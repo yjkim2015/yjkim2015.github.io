@@ -24,7 +24,7 @@ toc_label: 목차
 ## 1. 전체 아키텍처 레이어
 
 ```mermaid
-flowchart TD
+flowchart LR
     UI["UI 레이어: Atoms → Mo"]
     STATE["상태 레이어: useState /"]
     API["API 레이어: 커스텀 훅 → A"]
@@ -61,7 +61,7 @@ flowchart LR
 ### 컨테이너-프레젠테이션 패턴
 
 ```mermaid
-flowchart TD
+flowchart LR
     PC["컨테이너: ProductCard"]
     PV["프레젠테이션: ProductCar"]
     HK["Hooks: useProduct,"]
@@ -359,7 +359,7 @@ export default function ProductsPage({
 ### 테스트 피라미드
 
 ```mermaid
-flowchart TD
+flowchart LR
     UNIT["단위 테스트"] -->|"통과하면"| INT["통합 테스트"]
     INT -->|"통과하면"| E2E["E2E 테스트"]
     style E2E fill:#e74c3c,color:#fff

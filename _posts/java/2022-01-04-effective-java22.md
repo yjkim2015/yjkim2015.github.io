@@ -149,7 +149,7 @@ static final long CREDIT_CARD_NUMBER = 1234_5678_9012_3456L;
 ## 5. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["인터페이스의 올바른 용도"] --> B["타입을 정의하는 것"]
     C["인터페이스의 잘못된 용도"] --> D["상수 인터페이스"]
     D --> E["내부 구현이 API로 노출됨"]

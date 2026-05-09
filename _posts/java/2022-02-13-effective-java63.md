@@ -50,7 +50,7 @@ public String statement() {
 예상 크기로 초기화하면 내부 배열 재할당 횟수도 최소화됩니다.
 
 ```mermaid
-graph TD
+graph LR
     A["문자열 연결 방법 비교"] --> B["String + 연산"]
     A --> C["StringBuilder.appe"]
     A --> D["String.join() / Co"]

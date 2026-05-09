@@ -113,7 +113,7 @@ public class Test {
 ## 4. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["톱레벨 클래스 관리"] --> B["소스 파일 하나에"]
     B --> C["컴파일 순서 무관"]
     D["한 파일에 여러 클래스"] --> E["정적 멤버 클래스로"]

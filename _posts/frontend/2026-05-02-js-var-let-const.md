@@ -24,7 +24,7 @@ toc_label: 목차
 세 키워드를 나란히 놓으면 이렇습니다.
 
 ```mermaid
-graph TD
+graph LR
     VAR["var: 함수 스코프, 호이스팅+"]
     LET["let: 블록 스코프, 호이스팅+"]
     CONST["const: 블록 스코프, 호이스"]
@@ -356,7 +356,7 @@ const sayHi = function() {
 이 차이를 모르면 "함수 선언식은 어디서 호출해도 되는데, 왜 화살표 함수는 순서가 중요하지?"라는 혼란이 생깁니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["function foo(){}"] --> A1["전체 함수 호이스팅"]
     B["var foo = function"] --> B1["var만 호이스팅 undefined"]
     C["let/const foo=()=>"] --> C1["TDZ 적용"]

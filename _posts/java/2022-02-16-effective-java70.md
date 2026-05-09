@@ -16,7 +16,7 @@ toc_label: 목차
 비유하자면 **알람의 종류**입니다. 수동으로 해제해야 하는 알람(검사 예외), 자동으로 꺼지는 알람(런타임 예외), 전기가 나가는 것(에러)입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["Throwable"] --> B["검사 예외 (Checked)"]
     A --> C["런타임 예외 (Unchecked)"]
     A --> D["에러 (Error)"]

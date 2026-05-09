@@ -32,7 +32,7 @@ public class Car {
 **문제점:**
 
 ```mermaid
-graph TD
+graph LR
     A["Car (싱글톤)"] -->|"new Engine() 고착"| B["Engine (특정 구현)"]
     C["테스트"] -->|"Engine을 Mock으로 교체"| A
     D["V8 엔진 사용하고 싶다면?"] -->|"Car 소스 코드 수정 필요!"| A

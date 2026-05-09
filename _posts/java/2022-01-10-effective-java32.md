@@ -159,7 +159,7 @@ List<String> attrs = pickTwo("좋은", "빠른", "저렴한");  // 정상 동작
 ## 6. @SafeVarargs 사용 규칙
 
 ```mermaid
-graph TD
+graph LR
     A["제네릭 varargs 메서드"] --> B{"타입 안전한가?"}
     B -->|"varargs 배열에 저장 안 함"| C["@SafeVarargs 추가"]
     B -->|"위 조건 위반"| D["수정하거나"]

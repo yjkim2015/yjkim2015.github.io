@@ -21,7 +21,7 @@ date: 2026-05-01
 > **비유:** L4 로드밸런서는 택배 봉투의 주소지만 보고 배달하는 단순 분류기다. 내용물이 뭔지 모른다. L7 로드밸런서는 내용물을 열어보는 스마트 분류기다. "이 소포는 냉동식품이니까 냉장 창고로", "이 서류는 법무팀으로"처럼 내용에 따라 지능적으로 분류한다.
 
 ```mermaid
-graph TD
+graph LR
     L7["L7 Application Lay"]
     L4["L4 Transport Layer"]
     L3["L3 Network Layer"]
@@ -503,7 +503,7 @@ public class SessionConfig {
 AWS는 L7용 ALB(Application Load Balancer)와 L4용 NLB(Network Load Balancer)를 제공한다.
 
 ```mermaid
-graph TD
+graph LR
     AWS["AWS LB"] --> ALB["ALB(L7): HTTP/HTTP"]
     AWS --> NLB["NLB(L4): TCP/UDP,"]
     AWS --> CLB["CLB(Legacy)"]
@@ -635,7 +635,7 @@ proxy_next_upstream_timeout 5s;
 로드밸런서가 하나면 그 자체가 단일 실패 지점(SPOF)이 된다. VRRP/Keepalived로 Active-Passive 이중화한다.
 
 ```mermaid
-graph TD
+graph LR
     VIP["가상 IP (VIP: 10.0.0"]
     LB1["LB-1 (Active)"]
     LB2["LB-2 (Standby)"]

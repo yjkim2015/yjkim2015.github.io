@@ -508,3 +508,121 @@ class ColorPoint extends Point { Color color; }
 | 23 | 태그 클래스 대신 **클래스 계층** |
 | 24 | 멤버 클래스는 **static** 우선 |
 | 25 | 톱레벨 클래스는 **파일당 하나** |
+
+---
+
+## 실무에서 자주 하는 실수 (보강)
+
+#### 실수 1: 접근 제어자를 최대로 열어두는 습관
+
+```java
+// 나쁜 예 — 불필요하게 public
+public class OrderService {
+    public OrderRepository orderRepository;  // public 필드 → 외부에서 직접 수정 가능
+    public void validateOrder(Order order) { ... }  // 내부 구현인데 public
+}
+
+// 좋은 예 — 최소 필요 접근 수준
+public class OrderService {
+    private final OrderRepository orderRepository;  // 외부 접근 차단
+    private void validateOrder(Order order) { ... }  // 내부 구현
+    public OrderResult placeOrder(OrderRequest request) { ... }  // 실제 API만 public
+}
+
+// 원칙: 클래스, 멤버의 접근성을 가능한 한 좁혀라
+// public < protected < package-private < private
+```
+
+#### 실수 2: 인터페이스에 구현을 추가하면서 하위 호환성 깨기
+
+```java
+// Java 8 이전 — 인터페이스에 새 메서드 추가 = 모든 구현 클래스 수정 필요
+public interface Collection<E> {
+    // 새 메서드 추가 시 기존 구현 클래스 모두 컴파일 오류
+}
+
+// Java 8 이후 — default 메서드로 하위 호환성 유지
+public interface Collection<E> {
+    default Stream<E> stream() {  // 기존 구현 클래스 수정 없이 추가 가능
+        return StreamSupport.stream(spliterator(), false);
+    }
+}
+
+// 주의: default 메서드도 런타임 오류 가능
+// → 기존 구현 클래스에 같은 이름의 메서드가 있을 때 충돌
+// → 인터페이스 변경은 여전히 신중하게
+```
+
+#### 실수 3: 상속 대신 컴포지션을 쓰지 않아 발생하는 문제
+
+```java
+// 나쁜 예 — HashSet 상속으로 addCount 추적
+public class InstrumentedHashSet<E> extends HashSet<E> {
+    private int addCount = 0;
+
+    @Override public boolean add(E e) { addCount++; return super.add(e); }
+    @Override public boolean addAll(Collection<? extends E> c) {
+        addCount += c.size(); return super.addAll(c);  // 내부에서 add() 재호출!
+    }
+}
+
+InstrumentedHashSet<String> s = new InstrumentedHashSet<>();
+s.addAll(List.of("틱", "탁", "펑"));  // addCount = 6 (3이 아님!)
+// → HashSet.addAll()이 내부에서 add()를 호출 → 이중 카운팅
+
+// 좋은 예 — 컴포지션으로 해결
+public class InstrumentedSet<E> {
+    private final Set<E> set;  // 컴포지션
+    private int addCount = 0;
+
+    public boolean add(E e) { addCount++; return set.add(e); }
+    public boolean addAll(Collection<? extends E> c) {
+        addCount += c.size(); return set.addAll(c);  // set의 addAll 호출
+    }
+}
+```
+
+---
+
+## 면접 포인트 (보강)
+
+#### Q. 인터페이스와 추상 클래스의 선택 기준은?
+
+```
+인터페이스:
+  - 다중 구현 가능 (Java는 단일 상속)
+  - "~할 수 있다(can-do)" 관계 (Comparable, Serializable)
+  - Java 8+: default 메서드로 공통 구현 제공 가능
+  - 믹스인(mixin) 정의에 적합
+
+추상 클래스:
+  - 단일 상속만 가능
+  - "~이다(is-a)" 관계 (AbstractList extends List)
+  - 상태(필드) + 구현을 함께 제공할 때
+  - Template Method 패턴에 적합
+
+실무 권장:
+  인터페이스로 타입 정의 → 추상 골격 구현(Abstract*) 클래스로 구현 도움
+  예: List(인터페이스) + AbstractList(골격 구현) + ArrayList(구체 구현)
+```
+
+#### Q. 중첩 클래스의 종류와 각각 언제 사용하나요?
+
+```
+정적 멤버 클래스: 바깥 인스턴스 참조 불필요
+  → Map.Entry처럼 독립적으로 사용 가능한 도우미 클래스
+  → Builder 패턴의 Builder 클래스
+
+비정적 멤버 클래스: 바깥 인스턴스 참조 필요
+  → 어댑터 구현 (바깥 클래스를 다른 타입으로 제공)
+  → 바깥 인스턴스 없이 생성 불가 → 메모리 누수 주의
+
+익명 클래스: 선언과 동시에 인스턴스 생성
+  → 람다 등장 이전에 많이 사용 (현재는 람다 권장)
+
+지역 클래스: 메서드 안에서 선언
+  → 거의 사용하지 않음
+
+핵심: 멤버 클래스가 바깥 인스턴스에 접근할 필요가 없으면 반드시 static
+     → 비정적 멤버 클래스는 바깥 인스턴스 참조를 숨겨서 가지고 있어 메모리 누수 위험
+```

@@ -16,7 +16,7 @@ toc_label: 목차
 비유하자면 **다른 회사의 부품을 분해해서 재조립하는 것**과 같습니다. 부품 제조사가 내부 설계를 바꾸면, 그 부품을 재조립한 제품도 오동작합니다. 반면 부품을 그대로 사용(컴포지션)한다면 제조사가 내부를 바꿔도 외부 인터페이스가 유지되는 한 안전합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["상속 문제"] --> B["상위 클래스 내부 구현에 종속"]
     B --> C["상위 클래스 릴리즈 변경 시"]
     C --> D["코드 한 줄 안 건드렸는데 버그!"]
@@ -87,7 +87,7 @@ sequenceDiagram
 비유하자면 **부품을 직접 뜯는 게 아니라 기능을 위임(delegation)**하는 것입니다. `HashSet`을 상속하지 않고, `private` 필드로 갖고 있으면서 필요한 메서드를 그냥 전달(forwarding)합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["InstrumentedSet (래"] -->|"private 필드로 보유"| B["ForwardingSet"]
     B -->|"전달(forwarding)"| C["Set 구현체"]
     A -->|"구현"| D["Set 인터페이스"]

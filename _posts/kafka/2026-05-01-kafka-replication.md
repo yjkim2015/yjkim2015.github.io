@@ -183,7 +183,7 @@ kafka-configs.sh --bootstrap-server kafka:9092 \
 Producer의 `acks` 설정은 얼마나 많은 브로커의 확인을 기다릴지 결정한다. 이 설정이 내구성과 지연의 균형을 결정하는 핵심이다.
 
 ```mermaid
-graph TD
+graph LR
     Z["acks=0: 확인 없음"]
     O["acks=1: Leader만 확인"]
     A["acks=all: ISR 전체 확인"]
@@ -216,7 +216,7 @@ ISR = {Leader}:         min.insync=2 미충족 → 쓰기 거부
 ISR에 포함되지 않은 Follower(Out-of-Sync)를 Leader로 선출하는 것이다. ISR이 모두 죽고 Out-of-Sync Follower만 살아있을 때 가용성과 내구성 중 하나를 선택해야 한다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     CRISIS["ISR = Leader만 남음"]
     F1["false: 리더 없이 대기"]
     F2["true: Out-of-Sync 선출"]

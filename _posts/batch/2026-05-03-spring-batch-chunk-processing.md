@@ -439,7 +439,7 @@ LIMIT 100;
 1억 건을 단일 스레드로 처리하면 수 시간이 걸릴 수 있습니다. 이때 세 가지 병렬화 전략이 있습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["Multi-threaded Ste"]
     B["Parallel Steps: St"]
     C["Partitioning: Mast"]

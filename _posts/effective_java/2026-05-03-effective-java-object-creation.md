@@ -450,3 +450,176 @@ public NutritionFacts build() {
 | 7 | 다 쓴 참조는 **null 처리** |
 | 8 | finalizer/cleaner **쓰지 마라** |
 | 9 | 자원 닫기는 **try-with-resources** |
+
+---
+
+## 왜 Effective Java인가? (이 장의 핵심 가치)
+
+```
+아이템 1~9는 "객체를 어떻게 만들고 파괴할 것인가"를 다룬다.
+잘못된 객체 생성 패턴이 야기하는 실제 문제:
+
+1. new 생성자 남용
+   → 목적을 알 수 없는 파라미터 순서
+   → 매번 새 객체 생성 (불필요한 GC 압박)
+   → 테스트 코드에서 Mock 대체 불가
+
+2. finalize() 의존
+   → GC 시점 불확정 → 리소스 해제 타이밍 보장 불가
+   → Java 9에서 Deprecated, Java 18에서 제거됨
+
+Effective Java가 제시하는 핵심 원칙:
+  "객체 생성은 명확하게, 파괴는 자동으로, 유효성은 최대한 일찍"
+```
+
+---
+
+## 실무에서 자주 하는 실수
+
+#### 실수 1: 정적 팩터리 메서드 대신 생성자만 제공
+
+```java
+// 나쁜 예 — 생성자 파라미터만으로 의도 파악 어려움
+new User(1L, "김철수", true, false, "ADMIN");
+// → true가 뭔지, false가 뭔지 전혀 모름
+
+// 좋은 예 — 정적 팩터리 메서드로 의도 표현
+User.createAdmin("김철수");
+User.createGuest("이영희");
+User.from(userDto);
+
+// 추가 이점: 캐싱 가능
+// Boolean.valueOf(true)는 매번 new Boolean(true)를 만들지 않음
+private static final Boolean TRUE = new Boolean(true);
+public static Boolean valueOf(boolean b) {
+    return b ? TRUE : FALSE;  // 캐시된 인스턴스 반환
+}
+```
+
+#### 실수 2: Builder 없이 파라미터 많은 생성자 사용
+
+```java
+// 나쁜 예 — 텔레스코핑 생성자 (파라미터 폭발)
+new NutritionFacts(240, 8, 100, 0, 35, 27);
+// → 어떤 숫자가 뭘 의미하는지 모름, 순서 바꾸면 버그
+
+// 좋은 예 — Builder 패턴
+NutritionFacts cocaCola = new NutritionFacts.Builder(240, 8)
+    .calories(100)
+    .sodium(35)
+    .carbohydrate(27)
+    .build();
+// → 각 필드의 의미가 명확, 선택적 파라미터 유연하게 처리
+```
+
+#### 실수 3: 불필요한 객체 반복 생성
+
+```java
+// 나쁜 예 — 루프마다 Pattern 컴파일
+public boolean isRomanNumeral(String s) {
+    return s.matches("^(?=.)M*(C[MD]|D?C{0,3})...$");
+    // String.matches()는 내부에서 매번 Pattern.compile() 호출
+    // 호출 10만 번 = Pattern 컴파일 10만 번 → 심각한 성능 저하
+}
+
+// 좋은 예 — 클래스 초기화 시 한 번만 컴파일
+private static final Pattern ROMAN = Pattern.compile(
+    "^(?=.)M*(C[MD]|D?C{0,3})...$");
+
+public boolean isRomanNumeral(String s) {
+    return ROMAN.matcher(s).matches();
+}
+```
+
+#### 실수 4: try-finally 대신 try-with-resources 미사용
+
+```java
+// 나쁜 예 — finally에서 close() 중 예외 발생 시 원래 예외가 묻힘
+InputStream in = new FileInputStream(src);
+try {
+    OutputStream out = new FileOutputStream(dst);
+    try {
+        // 복사 로직
+    } finally {
+        out.close();  // 여기서 예외 발생 시
+    }
+} finally {
+    in.close();  // 원래 예외가 억제됨
+}
+
+// 좋은 예 — try-with-resources: 예외 보존 + 코드 간결
+try (InputStream in = new FileInputStream(src);
+     OutputStream out = new FileOutputStream(dst)) {
+    // 복사 로직
+}
+// → 자동으로 close() 호출, 원래 예외가 보존됨 (suppressed exception)
+```
+
+#### 실수 5: 싱글턴을 enum이 아닌 방법으로 구현
+
+```java
+// 나쁜 예 — 직렬화/역직렬화로 싱글턴 깨짐
+public class Elvis {
+    private static final Elvis INSTANCE = new Elvis();
+    private Elvis() {}
+    public static Elvis getInstance() { return INSTANCE; }
+    // 역직렬화 시 새 인스턴스 생성 → 싱글턴 파괴
+}
+
+// 좋은 예 — enum 싱글턴 (직렬화, 리플렉션 공격 모두 방어)
+public enum Elvis {
+    INSTANCE;
+    public void leaveTheBuilding() { ... }
+}
+// → 직렬화: JVM이 보장
+// → 리플렉션: enum은 newInstance() 불가
+```
+
+---
+
+## 면접 포인트
+
+#### Q. 정적 팩터리 메서드의 장점과 단점은?
+
+```
+장점:
+1. 이름을 가질 수 있다 → 반환 객체의 특성을 명확히 표현
+   BigInteger.probablePrime() vs new BigInteger(int, Random)
+
+2. 호출마다 새 객체를 생성하지 않아도 된다
+   Boolean.valueOf(false) → 캐시된 인스턴스 반환
+
+3. 반환 타입의 하위 타입 객체를 반환할 수 있다
+   Collections.unmodifiableList() → 구현 클래스 숨김
+
+4. 입력 파라미터에 따라 다른 클래스의 객체를 반환할 수 있다
+   EnumSet.of() → RegularEnumSet or JumboEnumSet (원소 수에 따라)
+
+단점:
+1. 정적 팩터리 메서드만 있으면 하위 클래스를 만들 수 없다
+   (생성자가 private이면 상속 불가)
+
+2. 프로그래머가 찾기 어렵다
+   (JavaDoc에 생성자처럼 명확히 표시되지 않음)
+   → 관례적인 네이밍: from, of, valueOf, getInstance, newInstance, create
+```
+
+#### Q. 빌더 패턴은 언제 사용해야 하나요?
+
+```
+사용 시점:
+- 파라미터가 4개 이상이고 선택적 파라미터가 많을 때
+- 파라미터 타입이 같아서 순서를 헷갈리기 쉬울 때
+- 불변 객체를 만들고 싶을 때
+
+빌더의 핵심 이점:
+1. 가독성: 어떤 값을 설정하는지 명확
+2. 유연성: 필수 파라미터와 선택 파라미터 구분
+3. 불변성: build() 호출 시점에 유효성 검증 후 불변 객체 생성
+4. 계층적 클래스에 적합: 추상 빌더 + 구체 빌더 상속
+
+Lombok @Builder 주의점:
+- @Builder는 모든 필드를 선택적으로 만들어 버림
+- 필수 필드 검증이 없음 → 별도 검증 로직 필요
+- JPA Entity에 @Builder 사용 시 기본 생성자 문제
+```

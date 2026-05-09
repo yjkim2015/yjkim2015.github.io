@@ -52,7 +52,7 @@ public class Order implements Serializable {
 비유하자면 **집을 임대할 때 서명하는 장기 계약서**입니다. 서명은 1분이지만 그 의무는 몇 년간 지속됩니다.
 
 ```mermaid
-graph TD
+graph LR
     A["Serializable 구현의 비"] --> B["유지보수 어려움"]
     A --> C["보안 취약성"]
     A --> D["테스트 부담 증가"]

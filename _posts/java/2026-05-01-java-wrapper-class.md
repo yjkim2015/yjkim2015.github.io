@@ -199,7 +199,7 @@ JVM은 자주 사용되는 `-128`부터 `127` 범위의 Integer 객체를 **JVM 
 이 때문에 `-128~127` 범위에서는 `==` 비교가 우연히 true가 되지만, `128` 이상에서는 false가 됩니다. 동일한 코드가 값에 따라 다르게 동작하는 것은 매우 위험한 버그의 원인입니다.
 
 ```mermaid
-graph TD
+graph LR
     VALUEOF["Integer.valueOf(n)"]
     CHECK["n이 -128~127?"]
     CACHE["캐시에서 반환"]

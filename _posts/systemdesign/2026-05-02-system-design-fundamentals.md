@@ -114,7 +114,7 @@ MTTR (Mean Time To Recovery): 평균 복구 시간
 MTBF = 100시간, MTTR = 1시간이면 가용성 99.01%입니다. MTTR을 0.1시간으로 줄이면 가용성 99.9%가 됩니다. **가용성을 높이는 방법은 두 가지입니다. 장애 자체를 덜 나게(MTBF 증가), 장애가 나도 빨리 복구되게(MTTR 감소).** 자동화된 롤백, 헬스체크, Auto Scaling이 모두 MTTR 감소를 위한 것입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["고가용성 목표"] --> B["이중화"]
     A --> C["장애 감지"]
     A --> D["자동 복구"]
@@ -165,7 +165,7 @@ graph LR
 - **P (Partition Tolerance)**: 네트워크 분리가 발생해도 동작
 
 ```mermaid
-graph TD
+graph LR
     CAP(("CAP: 2개만 가능"))
     CAP --> C["Consistency"]
     CAP --> AV["Availability"]
@@ -512,7 +512,7 @@ graph LR
 ### 모놀리스 vs 마이크로서비스
 
 ```mermaid
-graph TD
+graph LR
     M["모놀리스 JAR/WAR"]
     US["사용자 서비스"] -->|"HTTP/gRPC"| OS["주문 서비스"]
     OS -->|"HTTP/gRPC"| PS["결제 서비스"]

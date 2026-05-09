@@ -217,7 +217,7 @@ console.log(TodoModule.getPending());
 ```
 
 ```mermaid
-graph TD
+graph LR
     PRIV["private: todos, ne"]
     PUB["public API: add(),"]
     PUB -->|"클로저로 접근"| PRIV
@@ -439,7 +439,7 @@ buttons[1](); // 5
 왜 이럴까요? `var i`는 함수 스코프이기 때문에 루프 전체에서 **단 하나의 i**만 존재합니다. 루프가 끝나면 `i = 5`가 됩니다. 모든 함수가 같은 `i`를 참조하기 때문에 모두 5를 출력합니다.
 
 ```mermaid
-graph TD
+graph LR
     I["var i = 5 (하나의 변수)"]
     B0["buttons[0]"] -->|"참조"| I
     B1["buttons[1]"] -->|"참조"| I

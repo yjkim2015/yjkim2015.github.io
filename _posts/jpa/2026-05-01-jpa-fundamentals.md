@@ -481,7 +481,7 @@ public class Movie extends Item {
 ### 전략 1: JOINED (조인 전략) — 기본 추천
 
 ```mermaid
-graph TD
+graph LR
     ITEM["ITEM 테이블"]
     ALBUM["ALBUM 테이블"]
     MOVIE["MOVIE 테이블"]
@@ -495,7 +495,7 @@ graph TD
 ### 전략 2: SINGLE_TABLE (단일 테이블 전략) — 단순 구조 시
 
 ```mermaid
-graph TD
+graph LR
     ITEM["ITEM 테이블 (단일)"]
     NOTE["null 허용 컬럼 多"]
     ITEM --> NOTE
@@ -704,4 +704,223 @@ public List<Member> getMembers() {
 
 ```
 참조 - 자바 ORM 표준 JPA 프로그래밍 By 김영한
+```
+
+---
+
+## 왜 JPA인가? (vs MyBatis vs JDBC)
+
+| 방식 | 생산성 | 유연성 | 학습 곡선 | 선택 기준 |
+|------|--------|--------|---------|---------|
+| **JPA/Hibernate** | 높음 | 낮음 (복잡 쿼리) | 높음 | 도메인 모델 중심, 객체지향 설계 |
+| **MyBatis** | 중간 | 높음 | 낮음 | SQL 완전 제어 필요, 복잡 쿼리 |
+| **JDBC Template** | 낮음 | 매우 높음 | 낮음 | 레거시, 성능 극한 튜닝 |
+| **JOOQ** | 중간 | 높음 | 중간 | 타입 안전 SQL, 복잡 쿼리 + 객체 매핑 |
+
+```
+JPA를 선택하는 이유:
+1. 생산성: 단순 CRUD를 자동 생성 (findById, save, delete)
+2. 객체지향: 테이블이 아닌 객체 중심으로 코딩
+3. DB 종류 추상화: MySQL → PostgreSQL 전환 시 코드 최소 변경
+4. 1차 캐시: 같은 트랜잭션 내 동일 조회 시 DB 재조회 없음
+
+MyBatis를 선택하는 경우:
+- 복잡한 JOIN, 동적 SQL이 많은 경우 (통계, 리포트)
+- DBA가 SQL을 직접 작성/최적화해야 하는 경우
+- 레거시 DB 스키마와 객체 모델이 크게 다른 경우
+
+실무 조합: JPA (단순 CRUD) + QueryDSL (복잡 조회) + Native SQL (극한 튜닝)
+```
+
+---
+
+## 실무에서 자주 하는 실수
+
+#### 실수 1: 영속성 컨텍스트 외부에서 Lazy 로딩
+
+```java
+// 나쁜 예 — 트랜잭션 종료 후 Lazy 접근
+@Service
+public class OrderService {
+    public Order getOrder(Long id) {
+        return orderRepository.findById(id).orElseThrow();
+        // 트랜잭션 없이 반환 → 영속성 컨텍스트 종료
+    }
+}
+
+@RestController
+public class OrderController {
+    public OrderResponse getOrder(Long id) {
+        Order order = orderService.getOrder(id);
+        order.getCustomer().getName(); // LazyInitializationException!
+    }
+}
+
+// 해결 1: 트랜잭션 범위 내에서 접근
+@Transactional(readOnly = true)
+public OrderDto getOrder(Long id) {
+    Order order = orderRepository.findById(id).orElseThrow();
+    return OrderDto.from(order);  // 트랜잭션 내에서 변환 완료
+}
+
+// 해결 2: fetch join으로 즉시 로딩
+@Query("SELECT o FROM Order o JOIN FETCH o.customer WHERE o.id = :id")
+Optional<Order> findByIdWithCustomer(@Param("id") Long id);
+```
+
+#### 실수 2: 양방향 연관관계 주인 설정 오류
+
+```java
+// 나쁜 예 — 주인이 아닌 쪽에서 값 설정
+@Entity
+public class Order {
+    @OneToMany(mappedBy = "order")  // 주인이 아님 (mappedBy 있음)
+    private List<OrderItem> items;
+}
+
+@Entity
+public class OrderItem {
+    @ManyToOne
+    @JoinColumn(name = "order_id")  // 진짜 주인 (FK 보유)
+    private Order order;
+}
+
+// 나쁜 예 — 주인이 아닌 쪽에서만 설정
+order.getItems().add(item);  // DB에 반영 안 됨! mappedBy 쪽은 읽기 전용
+
+// 좋은 예 — 주인(item)에서 설정 + 편의 메서드
+item.setOrder(order);  // 주인에서 설정 → DB에 반영
+
+// 편의 메서드로 양방향 동기화
+public void addItem(OrderItem item) {
+    items.add(item);
+    item.setOrder(this);  // 주인 쪽도 같이 설정
+}
+```
+
+#### 실수 3: @Transactional readOnly 미사용
+
+```java
+// 나쁜 예 — 조회 메서드에 readOnly 없음
+@Transactional  // 쓰기 트랜잭션으로 동작 → 스냅샷 저장, dirty checking
+public List<Order> getOrders(Long userId) {
+    return orderRepository.findByUserId(userId);
+}
+
+// 좋은 예 — 조회는 readOnly=true
+@Transactional(readOnly = true)
+public List<Order> getOrders(Long userId) {
+    return orderRepository.findByUserId(userId);
+    // readOnly: dirty checking 비활성화 → 약 15~20% 성능 향상
+    // 읽기 전용 DB 복제본으로 라우팅 가능 (DataSource 분리 시)
+}
+```
+
+#### 실수 4: 대량 데이터를 findAll()로 한 번에 로딩
+
+```java
+// 나쁜 예 — 전체 데이터를 메모리에 로드
+List<Order> allOrders = orderRepository.findAll();  // 100만 건 → OOM
+
+// 좋은 예 1 — 페이지네이션
+Page<Order> orders = orderRepository.findAll(PageRequest.of(0, 100));
+
+// 좋은 예 2 — Stream 사용 (커서 기반)
+@Query("SELECT o FROM Order o WHERE o.status = 'PENDING'")
+Stream<Order> findPendingOrders();
+
+@Transactional(readOnly = true)
+public void processPendingOrders() {
+    try (Stream<Order> stream = orderRepository.findPendingOrders()) {
+        stream.forEach(this::processOrder);
+    }
+}
+```
+
+#### 실수 5: 엔티티를 API 응답에 직접 노출
+
+```java
+// 나쁜 예 — Entity를 그대로 반환
+@GetMapping("/orders/{id}")
+public Order getOrder(@PathVariable Long id) {
+    return orderRepository.findById(id).orElseThrow();
+    // 문제 1: Lazy 필드 직렬화 시 LazyInitializationException
+    // 문제 2: 비밀번호, 내부 데이터 등 민감정보 노출
+    // 문제 3: 양방향 관계 Jackson 무한 순환 참조
+}
+
+// 좋은 예 — DTO로 변환
+@GetMapping("/orders/{id}")
+public OrderResponse getOrder(@PathVariable Long id) {
+    return orderService.getOrder(id);  // Service에서 DTO 변환
+}
+```
+
+---
+
+## 면접 포인트
+
+#### Q. JPA 영속성 컨텍스트란 무엇이며 어떤 이점이 있나요?
+
+```
+영속성 컨텍스트: 엔티티를 관리하는 1차 캐시 (메모리 내)
+
+이점:
+1. 1차 캐시: 같은 트랜잭션에서 동일 ID 조회 시 DB 재조회 없음
+   em.find(Order.class, 1L);  // DB 조회
+   em.find(Order.class, 1L);  // 1차 캐시에서 반환 (DB 조회 없음)
+
+2. 동일성 보장: 같은 트랜잭션, 같은 ID → 항상 같은 인스턴스
+   order1 == order2  // true (Java == 비교)
+
+3. 쓰기 지연: 트랜잭션 커밋 직전에 모아서 INSERT/UPDATE 실행
+   → 네트워크 라운드트립 최소화
+
+4. 변경 감지(Dirty Checking): 엔티티 수정 시 update() 없어도 자동 반영
+   order.setStatus(CANCELLED);
+   // 트랜잭션 커밋 시 UPDATE 자동 실행
+
+5. 지연 로딩: 실제 접근 시점에 DB 조회 → 불필요한 조회 방지
+```
+
+#### Q. JPQL과 Native Query의 차이점은?
+
+```
+JPQL (Java Persistence Query Language):
+  - 엔티티 클래스와 필드명 기준으로 쿼리
+  - "SELECT o FROM Order o WHERE o.status = 'PENDING'"
+  - DB 종류에 독립적 (MySQL → PostgreSQL 이식 가능)
+  - JPA가 DB에 맞는 SQL로 변환
+
+Native Query:
+  - 실제 SQL 사용 (테이블명, 컬럼명)
+  - "SELECT * FROM orders WHERE status = 'PENDING'"
+  - DB 종류에 종속 (DB 변경 시 수정 필요)
+  - 복잡한 쿼리, DB 특화 함수 사용 시 필요
+
+실무:
+  단순 조회 → JPQL 또는 Spring Data 메서드
+  복잡 조회 → QueryDSL (타입 안전 + 동적 쿼리)
+  극한 최적화 → Native Query
+```
+
+#### Q. 즉시 로딩(EAGER)과 지연 로딩(LAZY)의 차이와 선택 기준은?
+
+```
+EAGER (즉시 로딩):
+  연관 엔티티를 주 엔티티 조회 시 즉시 함께 조회
+  @ManyToOne(fetch = FetchType.EAGER)  // 기본값
+  → 항상 조인 쿼리 → 불필요한 데이터도 매번 로딩
+  → N+1 문제 발생 위험 높음
+
+LAZY (지연 로딩):
+  연관 엔티티를 실제 접근 시점에 조회
+  @OneToMany(fetch = FetchType.LAZY)  // 기본값
+  → 필요할 때만 조회 → 성능 유리
+  → 트랜잭션 외부 접근 시 LazyInitializationException
+
+실무 권장:
+  모든 연관관계를 LAZY로 기본 설정
+  필요한 경우에만 fetch join으로 즉시 로딩
+  @ManyToOne도 LAZY로 변경 권장
 ```

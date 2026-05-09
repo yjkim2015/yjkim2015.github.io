@@ -84,7 +84,7 @@ copy.push("C");  // 원본 Stack의 elements도 변경됨!
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["original (Stack)"] -->|"참조"| C["elements 배열"]
     B["copy (Stack) — 얕은"] -->|"같은 배열 참조"| C
     B -->|"push(C)"| D["copy가 C를 씀"]

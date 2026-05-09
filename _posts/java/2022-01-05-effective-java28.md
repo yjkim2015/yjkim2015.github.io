@@ -25,7 +25,7 @@ List<Object> objectList = new ArrayList<Long>();  // 컴파일 오류!
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["Long[] → Object[]"] --> B["컴파일 성공"]
     C["List<Long> → List<"] --> D["컴파일 오류"]
     style B fill:#ff6b6b,color:#fff

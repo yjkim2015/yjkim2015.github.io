@@ -170,7 +170,7 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 초기 상태(배열 크기 8)에서 ThreadLocal-A와 ThreadLocal-B가 모두 인덱스 3에 해시되면, B는 4번 슬롯으로 밀립니다. 이후 A가 GC로 수거되면 인덱스 3의 키(WeakRef)는 null이 되지만 value는 남아 만료 엔트리(stale entry)가 됩니다.
 
 ```mermaid
-graph TD
+graph LR
     S1["A 삽입(hash→3): [_]["]
     S2["B 삽입(hash→3, 충돌→Li"]
     S3["A GC 수거 후: [_][_]["]
@@ -190,7 +190,7 @@ graph TD
 단, **키가 수거되어도 value는 여전히 강참조로 남습니다.** 이것이 메모리 누수의 원인입니다.
 
 ```mermaid
-graph TD
+graph LR
     TL["ThreadLocal(강참조)"] -.->|"WeakRef key"| ENTRY["Entry"]
     ENTRY --> VAL["value(강참조)"]
     NULL["tl=null → GC 수거"] --> LEAK["key=null, value 잔존"]

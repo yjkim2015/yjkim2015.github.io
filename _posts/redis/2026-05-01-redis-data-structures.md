@@ -456,3 +456,41 @@ graph LR
     Q2 -->|Yes| SET["Set"]
     Q2 -->|No| STRING
 ```
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: TTL 없이 키 적재**
+캐시 목적으로 저장한 키에 `EXPIRE`를 빠뜨린다. 시간이 지나면서 메모리가 조금씩 차오르다 결국 `maxmemory` 한계에 도달해 `OOM` 에러가 발생한다. 모든 캐시 키에는 반드시 TTL을 설정하고, `maxmemory-policy allkeys-lru`를 보조 방어선으로 설정한다.
+
+**실수 2: String으로 구조화된 데이터를 JSON 직렬화해 저장**
+`SET user:1 '{"name":"kim","age":30,"score":100}'` 형태로 저장한 뒤 score 하나만 업데이트하려고 전체를 꺼내 파싱 후 다시 저장한다. Hash 자료구조를 쓰면 `HSET user:1 score 100`으로 필드 단위 업데이트가 가능하다.
+
+**실수 3: List를 큐로 쓸 때 LRANGE로 전체 조회**
+`LRANGE queue 0 -1`로 전체 요소를 꺼내 애플리케이션에서 처리한다. 요소가 수만 개면 메모리와 네트워크를 한꺼번에 소비한다. `BLPOP`/`BRPOP`으로 하나씩 꺼내거나, 본격 메시지 큐가 필요하면 Redis Stream 또는 Kafka로 전환한다.
+
+**실수 4: KEYS 명령을 운영에서 사용**
+`KEYS pattern*`은 단일 스레드 Redis를 블로킹한다. 키가 수백만 개면 수 초간 모든 명령이 블로킹된다. 운영에서는 반드시 `SCAN`(커서 기반 논블로킹)을 사용한다.
+
+**실수 5: Sorted Set 점수 정밀도 오해**
+ZSet의 score는 IEEE 754 double(64비트 부동소수점)이다. 정수 범위를 벗어나거나 소수점 계산 시 정밀도 손실이 발생할 수 있다. 금융 점수처럼 정확도가 중요한 경우 정수로 변환(예: 원 단위 → 센트 단위)해 저장한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Redis String의 내부 인코딩은?**
+값에 따라 자동으로 최적화된다. 정수면 `int`(8바이트 이하 정수를 포인터로 직접 저장), 44바이트 이하 짧은 문자열은 `embstr`(연속 메모리 할당), 그 이상은 `raw`. `OBJECT ENCODING key`로 확인 가능하다.
+
+**Q2. Hash vs String+JSON 선택 기준은?**
+필드 단위 업데이트가 필요하거나 필드 수가 적고(수십 개 이하) 구조가 고정적이면 Hash. 전체를 항상 함께 읽고 구조가 복잡하거나 중첩이 깊으면 String+JSON(또는 RedisJSON 모듈). Hash는 필드 수가 `hash-max-listpack-entries`(기본 128) 이하면 listpack으로 메모리를 효율적으로 사용한다.
+
+**Q3. Sorted Set의 시간 복잡도는?**
+`ZADD` O(log N), `ZRANGE` O(log N + M)(M=반환 요소 수), `ZSCORE` O(1), `ZRANK` O(log N). 내부적으로 skiplist + hash table을 조합해 순위 조회와 점수 조회를 모두 빠르게 지원한다.
+
+**Q4. HyperLogLog를 언제 사용하는가?**
+정확한 값이 아닌 근사 카운트(오차 0.81%)로 충분한 대규모 유니크 카운팅에 사용한다. 일별 유니크 방문자 수를 Set으로 저장하면 사용자 수만큼 메모리가 필요하지만, HyperLogLog는 최대 12KB로 수억 개의 유니크 값을 추적할 수 있다.
+
+**Q5. Redis Stream과 List의 차이는?**
+List는 FIFO 큐지만 소비 후 데이터가 사라지고, 여러 소비자가 같은 메시지를 받을 수 없다. Stream은 영속적 로그 구조로 Consumer Group을 통해 여러 소비자가 메시지를 분배받고 ACK 기반으로 처리 확인이 가능하다. Kafka 없이 Redis만으로 메시지 큐가 필요할 때 Stream이 적합하다.

@@ -209,7 +209,7 @@ try (DatabaseConnection db = new DatabaseConnection(url)) {
 ## 6. try-finally vs try-with-resources 비교
 
 ```mermaid
-graph TD
+graph LR
     A["자원 닫기"] --> B["try-finally"]
     A --> C["try-with-resources"]
     style B fill:#ff6b6b,color:#fff

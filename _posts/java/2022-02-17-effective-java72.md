@@ -56,7 +56,7 @@ void startEngine() {
 비유하자면 **카드 덱에서 인수만큼 카드를 뽑는 메서드**입니다. 덱에 카드가 5장인데 10장을 뽑으라는 상황은 어떤 예외일까요?
 
 ```mermaid
-graph TD
+graph LR
     A["예외 선택 기준"] --> B{"인수 값에 상관없이"}
     B -- 예 --> C["IllegalStateExcept"]
     B -- 아니오 --> D["IllegalArgumentExc"]

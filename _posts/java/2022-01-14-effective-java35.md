@@ -28,7 +28,7 @@ public enum Ensemble {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["ordinal() 사용의 문제"] --> B["상수 선언 순서 변경 시"]
     A --> C["8명짜리 DOUBLE_QUARTE"]
     A --> D["중간 값 비워둘 수 없음"]

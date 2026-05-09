@@ -534,6 +534,113 @@ CompletableFuture.supplyAsync(() -> callExternalApi(), asyncExecutor);
 
 ---
 
+## 왜 이 기술인가?
+
+Java에서 비동기 처리를 구현하는 방법은 여러 가지가 있다. CompletableFuture를 선택하는 이유를 다른 대안과 비교한다.
+
+| 대안 | 장점 | 단점 | 선택 기준 |
+|------|------|------|-----------|
+| `Future` (Java 5) | 표준, 단순 | get() 블로킹, 체이닝 불가, 예외 처리 불편 | 레거시 코드 유지보수만 |
+| `CompletableFuture` (Java 8) | 체이닝, 조합, 예외 처리 통합 | 콜백 중첩 시 가독성 저하 | **일반 비동기 병렬 처리 표준** |
+| Project Reactor (WebFlux) | 배압(backpressure), 스트림 처리 | 러닝커브 높음, 디버깅 어려움 | 대용량 스트림·마이크로서비스 |
+| Virtual Thread (Java 21) | 블로킹 코드 그대로 사용, 간단 | JDK 21+ 필요, 핀닝 주의 | 신규 프로젝트, I/O 집약 서버 |
+| Kotlin Coroutines | 구조적 동시성, 취소 내장 | Kotlin 언어 필요 | Kotlin 프로젝트 |
+
+**선택 가이드**
+- 단순 병렬 API 호출 집계 → `CompletableFuture.allOf()`
+- 순차 비동기 파이프라인 → `thenCompose()` 체이닝
+- 대용량 이벤트 스트림 → Reactor/RxJava
+- JDK 21+ 신규 서버 → Virtual Thread + 동기 코드
+
+---
+
+## 실무에서 자주 하는 실수
+
+### 실수 1: ForkJoinPool에 I/O 바운드 작업 넣기
+
+```java
+// 나쁜 예: 기본 ForkJoinPool은 CPU 코어 수만큼만 스레드 → I/O 대기 시 모든 스레드 블록
+CompletableFuture.supplyAsync(() -> callExternalApi());  // commonPool 사용
+
+// 좋은 예: I/O 전용 Executor 분리
+Executor ioExecutor = Executors.newFixedThreadPool(100);
+CompletableFuture.supplyAsync(() -> callExternalApi(), ioExecutor);
+```
+
+### 실수 2: 예외 처리 누락으로 조용한 실패
+
+```java
+// 나쁜 예: 예외 발생 시 체인 전체가 중단되나 알아채기 어려움
+CompletableFuture.supplyAsync(() -> riskyCall())
+    .thenApply(result -> process(result));  // 예외 삼켜짐
+
+// 좋은 예: exceptionally 또는 handle로 명시적 처리
+CompletableFuture.supplyAsync(() -> riskyCall())
+    .exceptionally(ex -> {
+        log.error("비동기 작업 실패", ex);
+        return fallbackValue();
+    })
+    .thenApply(result -> process(result));
+```
+
+### 실수 3: join()을 메인 스레드에서 과도하게 사용
+
+```java
+// 나쁜 예: 비동기로 시작했지만 즉시 블로킹 — 비동기 의미 없음
+String result = CompletableFuture.supplyAsync(() -> fetch()).join();
+
+// 좋은 예: 최대한 늦게 결합하거나 thenAccept로 비블로킹 처리
+CompletableFuture.supplyAsync(() -> fetch())
+    .thenAccept(result -> render(result));
+```
+
+### 실수 4: allOf() 후 결과 수집 방법 오해
+
+```java
+// 나쁜 예: allOf()는 CompletableFuture<Void> 반환 — 결과 직접 접근 불가
+CompletableFuture<Void> all = CompletableFuture.allOf(f1, f2, f3);
+// all.get() 만으로는 f1, f2, f3 결과 얻을 수 없음
+
+// 좋은 예: 각 Future를 별도 참조로 유지하고 allOf 완료 후 join()
+List<CompletableFuture<String>> futures = List.of(f1, f2, f3);
+CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+    .thenApply(v -> futures.stream().map(CompletableFuture::join).toList());
+```
+
+### 실수 5: 타임아웃 미설정으로 무한 대기
+
+```java
+// 나쁜 예: 외부 API 호출 시 타임아웃 없음
+CompletableFuture<String> result = CompletableFuture.supplyAsync(() -> slowApi());
+
+// 좋은 예: Java 9+ orTimeout 또는 completeOnTimeout 사용
+CompletableFuture<String> result = CompletableFuture
+    .supplyAsync(() -> slowApi())
+    .orTimeout(3, TimeUnit.SECONDS)
+    .exceptionally(ex -> "timeout-fallback");
+```
+
+---
+
+## 면접 포인트
+
+**Q1. CompletableFuture와 Future의 차이점은 무엇인가요?**
+> `Future`는 `get()` 블로킹만 지원하며, 결과가 나올 때까지 스레드가 대기한다. `CompletableFuture`는 비블로킹 체이닝(`thenApply`, `thenCompose`), 예외 처리(`exceptionally`, `handle`), 복수 Future 조합(`allOf`, `anyOf`), 타임아웃(`orTimeout`) 등을 지원한다. 또한 `complete()`로 외부에서 값을 주입하는 Promise 패턴도 가능하다.
+
+**Q2. thenApply, thenCompose, thenCombine의 차이를 설명하세요.**
+> `thenApply(fn)`: 완료된 값을 동기 변환 (T → U). `thenCompose(fn)`: 완료된 값으로 새 CompletableFuture 생성 후 평탄화 — 비동기 체이닝에 사용 (T → CompletableFuture\<U\>). `thenCombine(other, fn)`: 두 Future가 모두 완료된 후 결과 결합 (T, U → V). `thenCompose`는 flatMap, `thenApply`는 map에 해당한다.
+
+**Q3. exceptionally와 handle의 차이는?**
+> `exceptionally(fn)`: 예외 발생 시에만 호출, 복구값 반환. 정상 완료 시 통과. `handle(fn)`: 성공·실패 모두 호출 — (result, exception) 두 인자 수신. 예외 유무에 관계없이 항상 변환 로직 실행 시 사용. `whenComplete`는 handle과 유사하나 값을 변환하지 않고 부수효과만 실행.
+
+**Q4. CompletableFuture에서 스레드 풀을 어떻게 관리해야 하나요?**
+> 기본은 `ForkJoinPool.commonPool()` (CPU 코어 수 - 1 스레드). CPU 바운드 작업은 commonPool 적합. I/O 바운드(DB, HTTP)는 전용 스레드 풀을 `supplyAsync(task, executor)` 두 번째 인자로 전달해야 한다. 프로덕션에서는 `ThreadPoolExecutor`로 코어/최대 스레드 수, 큐 용량, 거절 정책을 명시적으로 설정한다.
+
+**Q5. CompletableFuture의 cancel()은 실제로 작업을 중단하나요?**
+> 아니다. `cancel(true)`를 호출해도 이미 실행 중인 작업은 중단되지 않는다. Future를 cancelled 상태로 만들어 이후 `get()`/`join()`이 `CancellationException`을 던지게 할 뿐이다. 실제 작업 중단이 필요하면 `Thread.interrupt()` 또는 별도 AtomicBoolean 취소 플래그를 작업 내부에서 확인하는 방식을 사용해야 한다.
+
+---
+
 ## 마치며
 
 `CompletableFuture`는 Java에서 비동기 처리를 구성하는 표준 방법이다. `thenCompose`로 순차 비동기 작업을, `thenCombine`/`allOf`로 병렬 집계를 표현할 수 있다. 실무에서 가장 흔한 실수는 ForkJoinPool을 I/O 바운드 작업에 사용하는 것이다. 항상 커스텀 Executor를 지정하고, 타임아웃을 설정하며, 예외를 반드시 처리해야 한다.

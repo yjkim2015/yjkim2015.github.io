@@ -356,7 +356,7 @@ OT 변환 결과:
 Google Drive는 파일 단위로는 **LWW + 버전 이력 보존**을 사용합니다. 즉, 충돌 시 두 버전 모두 저장하고 사용자에게 선택권을 줍니다. Google Docs (실시간 편집)은 OT를 사용합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     CONFLICT["충돌 감지"]
     LWW["단순 파일 충돌 → LWW + 버"]
     OT["실시간 텍스트 편집 → OT"]
@@ -696,7 +696,7 @@ download_count = 0
 ### 권한 모델 (Owner / Editor / Viewer)
 
 ```mermaid
-graph TD
+graph LR
     OWNER["Owner"]
     EDITOR["Editor"]
     VIEWER["Viewer"]
@@ -969,6 +969,88 @@ MySQL binlog CDC로 파일 변경 이벤트를 Kafka에 발행, 알림 서비스
 **해결**: 두 MySQL 상태를 비교해 분기 시점 이후의 쓰기를 수동으로 식별. 약 96초분의 커밋 데이터를 백업에서 복원. GitHub은 이후 Raft 기반 합의 알고리즘을 도입해 네트워크 순단이 자동 페일오버를 트리거하지 않도록 임계값을 높이고, 사람의 승인 없이는 Primary 전환이 일어나지 않도록 변경했다.
 
 **교훈**: 자동 페일오버 임계값은 "정말 죽었을 때만 전환"되도록 충분히 길게 설정해야 한다. 11초 네트워크 순단은 실제로는 흔한 일이다. Split-brain 감지와 자동 차단 로직이 없으면 자동 페일오버가 오히려 장애를 악화시킨다. 데이터베이스 분기는 단순 재시작으로 복구되지 않으므로 정기적인 split-brain 시나리오 훈련이 필요하다.
+
+---
+
+## 실무에서 놓치기 쉬운 케이스
+
+### 1. 대용량 파일 재개 가능 업로드 — 10GB 파일이 9.9GB에서 끊기면?
+
+단일 HTTP PUT으로 10GB 파일을 올리면 네트워크 순단 한 번에 처음부터 다시 시작해야 한다. 모바일 환경이나 불안정한 인터넷에서는 업로드 자체가 불가능해진다.
+
+S3 Multipart Upload 방식이 표준이다.
+
+```
+1단계: InitiateMultipartUpload
+  → S3: POST /bucket/key?uploads
+  → 응답: uploadId = "abc123"
+
+2단계: 파트 업로드 (병렬 가능, 각 파트 최소 5MB)
+  → PUT /bucket/key?partNumber=1&uploadId=abc123  (파트 1: 0~5GB)
+  → PUT /bucket/key?partNumber=2&uploadId=abc123  (파트 2: 5~10GB)
+  → 각 파트 업로드 성공 시 ETag 저장
+
+3단계: CompleteMultipartUpload
+  → POST /bucket/key?uploadId=abc123  (ETag 목록 포함)
+  → S3가 파트를 합쳐 최종 파일 생성
+
+재개 시: ListParts로 완료된 파트 조회 → 미완성 파트부터 재시작
+```
+
+클라이언트는 완료된 파트 번호와 ETag를 로컬(IndexedDB 또는 서버 DB)에 저장한다. 재접속 시 `ListParts`로 S3에 완료된 파트를 확인하고 남은 파트만 업로드한다. 7일 이상 완료되지 않은 Multipart Upload는 S3 Lifecycle Policy로 자동 삭제해 스토리지 비용을 막는다.
+
+---
+
+### 2. 공유 링크 유출 — "링크가 있으면 누구나"의 함정
+
+Dropbox나 Google Drive의 "링크 있는 사람 모두 접근 가능" 옵션은 편리하지만, 링크가 SNS·이메일·Slack에 노출되면 의도치 않은 사람이 접근한다. 특히 기업 내부 문서가 공개 공유 링크로 유출되는 사고가 빈번하다.
+
+```python
+def generate_share_link(file_id, user_id, expires_hours=72):
+    token = secrets.token_urlsafe(32)  # 암호학적으로 안전한 난수
+    db.execute("""
+        INSERT INTO share_links
+          (token, file_id, created_by, expires_at, max_views)
+        VALUES (%s, %s, %s, NOW() + INTERVAL %s HOUR, %s)
+    """, (token, file_id, user_id, expires_hours, 100))
+
+    return f"https://storage.example.com/share/{token}"
+
+def access_share_link(token, requester_ip):
+    link = db.fetchone("SELECT * FROM share_links WHERE token=%s", (token,))
+    if not link or link["expires_at"] < now():
+        raise Forbidden("링크가 만료됐거나 존재하지 않습니다")
+    if link["view_count"] >= link["max_views"]:
+        raise Forbidden("최대 조회 횟수를 초과했습니다")
+
+    db.execute("UPDATE share_links SET view_count=view_count+1 WHERE token=%s", (token,))
+    audit_log(token, requester_ip)  # 접근 기록 필수
+    return get_file(link["file_id"])
+```
+
+공유 링크는 만료 시각, 최대 조회 횟수, 특정 도메인(회사 이메일) 제한 중 하나 이상을 적용해야 한다. 기업용 서비스에서는 공유 링크 생성 자체를 관리자가 비활성화할 수 있는 정책 설정이 필수다.
+
+---
+
+### 3. 바이러스 파일 스캐닝 — 악성코드가 업로드되면 다른 사용자에게 전파된다
+
+파일 저장소는 악성코드 유포 경로로 자주 악용된다. 업로드된 ZIP 파일 안에 랜섬웨어 실행 파일이 들어 있거나, PDF에 자바스크립트 익스플로잇이 숨겨져 있을 수 있다.
+
+```
+업로드 파이프라인:
+  클라이언트 → API Gateway → S3 임시 버킷(quarantine/)
+                                    ↓
+                          ClamAV / VirusTotal API 스캔 (비동기)
+                                    ↓
+                    ┌───────────────┴───────────────┐
+                  정상                            악성 탐지
+                    ↓                                ↓
+            S3 정식 버킷으로 이동           quarantine/ 유지 + 알림
+            메타데이터 DB 업데이트          파일 소유자에게 경고 이메일
+            사용자에게 업로드 완료 알림      보안팀 Slack 알림
+```
+
+스캔 완료 전까지 파일은 `quarantine/` 버킷에 격리된다. 사용자에게는 "업로드 중" 상태로 표시하고, 스캔 완료(보통 5~30초) 후 접근 가능 상태로 전환한다. 대용량 파일은 스캔 시간이 수 분 이상 걸릴 수 있으므로 Kafka를 통한 비동기 처리가 필수다. SHA-256 해시 기반 캐시를 두면 동일 파일은 재스캔 없이 이전 결과를 재사용할 수 있다.
 
 ---
 

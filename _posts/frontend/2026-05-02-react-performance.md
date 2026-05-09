@@ -234,7 +234,7 @@ function VirtualizedList({ items }) {
 ```
 
 ```mermaid
-graph TD
+graph LR
     DOM1["일반: DOM 10000개 노드"]
     MEM1["메모리 수백 MB, 느림"]
     DOM2["가상화: DOM 20~30개"]

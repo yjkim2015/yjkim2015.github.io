@@ -24,7 +24,7 @@ toc_label: 목차
 ## 1번 다이어그램 - 테스트 피라미드
 
 ```mermaid
-graph TD
+graph LR
     E2E["E2E 테스트<br>느림, 비용 높"]
     INT["통합 테스트<br>중간 속도"]
     UNIT["단위 테스트<br>빠름, 저비용"]
@@ -358,7 +358,7 @@ describe('쇼핑 플로우', () => {
 ## 6. 테스트 작성 원칙 — 좋은 테스트 vs 나쁜 테스트
 
 ```mermaid
-graph TD
+graph LR
     ROOT["테스트 원칙"]
     ROOT --> FIRST["FIRST: Fast/Isolat"]
     ROOT --> RTL["RTL: 구현세부사항X, 사용자행"]

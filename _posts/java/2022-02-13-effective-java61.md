@@ -91,7 +91,7 @@ long sum = 0L;
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["박싱된 기본 타입 사용 시 위험"] --> B["== 비교"]
     A --> C["null 언박싱"]
     A --> D["반복 박싱/언박싱"]

@@ -136,7 +136,7 @@ span { display: none; }
 ```
 
 ```mermaid
-graph TD
+graph LR
     CSSOM[CSSOM Root] --> BODY_CSS["body<br>font-size:"]
     CSSOM --> P_CSS["p<br>color: blue<b"]
     CSSOM --> SPAN_CSS["span<br>display: n"]
@@ -330,7 +330,7 @@ gantt
 ## 8. Core Web Vitals — 구글이 보는 성능 지표
 
 ```mermaid
-graph TD
+graph LR
     CWV["Core Web Vitals"] --> LCP["LCP<br>Largest Con"]
     CWV --> INP["INP<br>Interaction"]
     CWV --> CLS["CLS<br>Cumulative"]

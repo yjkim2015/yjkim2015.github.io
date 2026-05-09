@@ -28,7 +28,7 @@ graph LR
 프로듀서는 메시지를 하나씩 보내지 않는다. 성능을 위해 **RecordAccumulator**에 배치로 모아서 전송한다.
 
 ```mermaid
-graph TD
+graph LR
     B1["ProducerBatch1(꽉참)"] --> B2["ProducerBatch2(현재)"]
 ```
 
@@ -46,7 +46,7 @@ props.put(ProducerConfig.LINGER_MS_CONFIG, 20);         // 20ms 대기
 **linger.ms 효과:**
 
 ```mermaid
-graph TD
+graph LR
     A["linger=0: 즉시전송"]
     B["linger=20: msg1~N"]
     B --> C["t=20: 배치 전송"]
@@ -103,7 +103,7 @@ public class RegionPartitioner implements Partitioner {
 **Sticky Partitioner (Kafka 2.4+, 현재 기본값):**
 
 ```mermaid
-graph TD
+graph LR
     RR["라운드로빈: msg1→P0,msg2→P1"]
     ST1["Sticky: msg1,2,3 P0 누적"] --> ST2["전송 후 파티션 전환"]
 ```
@@ -257,7 +257,7 @@ graph LR
 ### Cooperative/Incremental Rebalancing (Kafka 2.4+)
 
 ```mermaid
-graph TD
+graph LR
     A["초기: C1=P0+P1, C2=P"] --> B["Round1: C1=P0+P1 유"]
     B --> C["Round2: C3=P3 신규 할"]
 ```
@@ -522,7 +522,7 @@ sequenceDiagram
 ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러**로 선출된다.
 
 ```mermaid
-graph TD
+graph LR
     ZKA["ZK: /controller 선점"] --> ZKB["먼저 생성 = 컨트롤러"]
     KRA["KRaft: Raft 합의"] --> KRB["quorum 투표 → Active"]
     ZKB & KRB --> DUTIES["역할: 리더선출·ISR·토픽"]

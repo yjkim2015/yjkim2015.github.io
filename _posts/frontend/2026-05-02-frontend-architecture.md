@@ -250,7 +250,7 @@ function App() {
 팀이 커지면 웹 앱, 모바일 앱, 관리자 페이지가 공통 컴포넌트와 타입을 공유해야 합니다. 모노레포는 이것을 하나의 저장소에서 관리하는 방식입니다.
 
 ```mermaid
-graph TD
+graph LR
     ROOT["root/"] --> APPS["apps/"] & PACKAGES["packages/"]
     APPS --> WEB["web Next.js"] & MOBILE["mobile RN"]
     PACKAGES --> UI["ui"] & TYPES["types"] & UTILS["utils"]
@@ -265,7 +265,7 @@ graph TD
 대규모 조직에서는 여러 팀이 하나의 프론트엔드를 동시에 개발합니다. 마이크로 프론트엔드는 각 팀이 독립적으로 개발하고 배포할 수 있게 합니다.
 
 ```mermaid
-graph TD
+graph LR
     SHELL["Shell App"]
     SHELL --> AUTH["Auth MFE 팀A"]
     SHELL --> PRODUCTS["Products MFE 팀B"]

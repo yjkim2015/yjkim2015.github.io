@@ -214,3 +214,50 @@ gantt
     section Payment
     결제처리     :15, 200
 ```
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 자동화 | 벤더 중립 | Spring 통합 | 적합한 상황 |
+|---|---|---|---|---|
+| MDC (수동) | X | O | O | 단일 서비스 내 추적 |
+| Micrometer Tracing (Sleuth 후속) | O | O | 완벽 | Spring Boot 3.x 표준 |
+| OpenTelemetry (OTEL) | O | O (CNCF 표준) | 좋음 | 벤더 중립, 멀티 언어 |
+| Datadog APM | O | X | 좋음 | 상용 모니터링 |
+| Jaeger | O | O | 보통 | 오픈소스 분산 추적 백엔드 |
+
+**결론:** Spring Boot 3.x에서는 Micrometer Tracing이 Sleuth를 대체한다. 백엔드는 Zipkin, Jaeger, Tempo 중 인프라에 맞게 선택한다. 벤더 중립성이 중요하면 OpenTelemetry Agent로 전환한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **Sleuth 대신 Micrometer Tracing 미전환 (Spring Boot 3.x)** — Spring Boot 3.x에서 `spring-cloud-starter-sleuth`를 그대로 사용하면 의존성 충돌이 발생한다. `micrometer-tracing-bridge-brave` + `zipkin-reporter-brave`로 마이그레이션해야 한다.
+
+2. **Sampling Rate를 운영에서 1.0으로 설정** — 모든 요청(100%)을 추적하면 Zipkin/Jaeger에 막대한 데이터가 쌓이고 성능에 영향을 준다. 운영에서는 0.1(10%) 수준으로 설정하고, 특정 오류 요청은 100% 샘플링하는 Rate Limiting 샘플러를 사용한다.
+
+3. **비동기 코드에서 TraceId 전파 누락** — `@Async`, `CompletableFuture`, Kafka 컨슈머에서 새 스레드가 생성되면 기본적으로 TraceId가 전파되지 않는다. Micrometer Tracing의 `Context Propagation` 라이브러리를 설정해야 자동 전파된다.
+
+4. **Span 이름을 기본값으로만 사용** — 기본 HTTP Span 이름(`GET /api/orders`)만으로는 비즈니스 의미를 파악하기 어렵다. `Tracer.nextSpan().name("order-payment-processing")`으로 의미 있는 이름을 부여해야 추적이 유용해진다.
+
+5. **TraceId를 HTTP 응답 헤더에 미포함** — 오류 발생 시 사용자에게 `traceId`를 반환하지 않으면 고객 지원 시 추적이 불가능하다. `ResponseEntity` 헤더 또는 에러 응답 바디에 `traceId`를 포함해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. TraceId와 SpanId의 차이는?**
+> TraceId: 전체 요청 흐름(여러 서비스)을 관통하는 고유 식별자. 서비스 A→B→C로 전파되어도 동일하다. SpanId: 단일 작업 단위의 식별자. 서비스마다, 메서드마다 새 SpanId가 생성된다. ParentSpanId로 트리 구조를 형성해 전체 호출 그래프를 만든다.
+
+**Q2. B3 Propagation이란?**
+> Zipkin이 정의한 HTTP 헤더 기반 컨텍스트 전파 형식이다. `X-B3-TraceId`, `X-B3-SpanId`, `X-B3-ParentSpanId`, `X-B3-Sampled` 헤더로 서비스 간에 추적 컨텍스트를 전달한다. W3C `traceparent` 헤더가 최신 표준이며 OpenTelemetry가 채택하고 있다.
+
+**Q3. Zipkin과 Jaeger의 차이는?**
+> Zipkin은 Twitter가 만든 분산 추적 시스템으로 Brave 라이브러리와 통합이 좋다. Jaeger는 Uber가 만들어 CNCF에 기증한 시스템으로 OpenTelemetry와 통합이 좋고 UI가 더 풍부하다. 둘 다 Prometheus+Grafana Tempo로 대체되는 추세다.
+
+**Q4. Micrometer Tracing의 Sampling 전략은?**
+> `AlwaysSampler`: 모든 요청 추적(개발용). `NeverSampler`: 추적 비활성화. `RateLimitingSampler`: 초당 N개 추적(운영 권장). `ProbabilityBasedSampler`: N% 확률 샘플링. `application.properties`에서 `management.tracing.sampling.probability=0.1`로 간단히 설정한다.
+
+**Q5. Spring Boot 3.x에서 분산 추적을 설정하는 최소 구성은?**
+> `micrometer-tracing-bridge-brave` + `zipkin-reporter-brave` 의존성 추가, `management.zipkin.tracing.endpoint=http://zipkin:9411/api/v2/spans`, `management.tracing.sampling.probability=0.1` 설정. Actuator의 `tracing` 엔드포인트로 현재 추적 상태를 확인할 수 있다.

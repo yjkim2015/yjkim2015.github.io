@@ -109,7 +109,7 @@ service.doSomething(); // @Transactional이 적용되지 않습니다!
 > **비유:** BeanFactory는 냉장고다. 음식(빈)을 저장하고 꺼낼 수 있다. ApplicationContext는 주방 전체다. 냉장고뿐만 아니라 조리 도구, 레시피북, 알람 시스템까지 갖추고 있다. 실제 요리를 하려면 당연히 주방 전체가 필요하다.
 
 ```mermaid
-graph TD
+graph LR
     A["BeanFactory (inter"]
     B["ApplicationContext"]
     C["ConfigurableApplic"]

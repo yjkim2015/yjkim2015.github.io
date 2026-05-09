@@ -759,3 +759,28 @@ SELECT /*+ LEADING(small large) */ * FROM small JOIN large ON small.id = large.f
 옵티마이저를 완전히 이해하면 단순히 인덱스를 추가하는 것을 넘어, 데이터 분포와 실행 계획의 상관관계를 파악하고 쿼리와 스키마를 함께 설계할 수 있게 된다.
 
 핵심 습관 세 가지를 권장한다. 첫째, `EXPLAIN ANALYZE`를 생활화하여 추정값과 실제값 차이를 항상 확인한다. 둘째, 슬로우 쿼리 로그를 정기적으로 검토하여 `pt-query-digest`로 총 실행 시간 TOP 쿼리를 파악한다. 셋째, 대량 데이터 변경 후에는 `ANALYZE TABLE`로 통계를 최신 상태로 유지한다. 이 세 가지만 철저히 지켜도 MySQL 성능 문제의 대부분을 사전에 예방할 수 있다.
+
+---
+
+## 왜 옵티마이저를 알아야 하는가?
+
+"인덱스를 걸었는데 왜 느리지?"라는 질문의 답은 항상 옵티마이저에 있다. 옵티마이저는 인덱스 존재 여부가 아니라 통계 기반 비용 계산으로 실행 계획을 결정한다. 통계가 오래됐거나 선택도 계산이 틀리면 인덱스가 있어도 풀스캔을 선택한다. `EXPLAIN ANALYZE`를 읽을 줄 알아야 진짜 원인을 찾을 수 있다.
+
+---
+
+## 면접 포인트
+
+**Q1. 옵티마이저가 인덱스를 무시하는 이유는?**
+① 선택도가 낮아 풀스캔이 더 저렴하다고 판단(전체 행의 20~30% 이상 반환 예상) ② 함수나 형변환이 인덱스 컬럼에 적용됨(`WHERE YEAR(dt) = 2024`) ③ 통계가 오래돼 행 수 추정 오류 ④ `OR` 조건으로 여러 인덱스를 합치기 어려운 경우. `EXPLAIN`의 `rows` 추정값과 `EXPLAIN ANALYZE`의 실제 행 수를 비교해 진단한다.
+
+**Q2. 실행 계획에서 가장 먼저 확인하는 것은?**
+MySQL 기준: `type` 컬럼이 `ALL`(풀스캔)이면 즉시 원인 파악. `key` 컬럼에 인덱스 이름이 없으면 인덱스 미사용. `rows` × `filtered`로 실제 처리 행 수 추정. `Extra`의 `Using filesort`(정렬 비용), `Using temporary`(임시 테이블)도 성능 신호다.
+
+**Q3. 통계 정보는 어떻게 관리하는가?**
+MySQL: `ANALYZE TABLE` 실행, `innodb_stats_auto_recalc=ON`(기본)이지만 대량 변경 후 수동 실행 권장. PostgreSQL: `ANALYZE` 또는 `VACUUM ANALYZE`, autovacuum이 자동 실행하지만 대량 로드 후 수동 실행. 통계 샘플 크기는 MySQL `innodb_stats_persistent_sample_pages`, PostgreSQL `default_statistics_target`으로 조정한다.
+
+**Q4. 힌트(Hint)는 언제 사용하는가?**
+옵티마이저가 일관되게 잘못된 계획을 선택하고, 통계 갱신이나 인덱스 추가로도 해결되지 않을 때 최후 수단으로 사용한다. MySQL `USE INDEX`, `FORCE INDEX`, PostgreSQL `SET enable_seqscan = off`. 힌트는 데이터 분포가 바뀌면 다시 잘못될 수 있어 주기적 재검토가 필요하다.
+
+**Q5. 슬로우 쿼리 로그를 어떻게 활용하는가?**
+MySQL `slow_query_log=ON`, `long_query_time=1`(1초 이상). `pt-query-digest`로 총 실행 시간 TOP 쿼리를 추출한다. 단순히 가장 느린 쿼리가 아니라 **총 실행 시간(실행 횟수 × 평균 시간)**이 가장 큰 쿼리가 실질적인 DB 부하의 원인이다.

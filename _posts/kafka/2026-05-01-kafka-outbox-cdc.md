@@ -49,7 +49,7 @@ graph LR
 비즈니스 데이터와 발행할 이벤트를 **같은 DB 트랜잭션**으로 저장한다. 별도 프로세스가 Outbox 테이블을 읽어 Kafka로 발행한다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     APP["@Transactional: or"]
     APP -->|"DB 커밋"| RELAY["Relay: outbox 폴링/C"]
     RELAY --> KAFKA["Kafka Topic"]
@@ -205,7 +205,7 @@ SELECT pg_create_logical_replication_slot('debezium_slot', 'pgoutput');
 Debezium은 Kafka Connect 위에서 동작하는 CDC 커넥터다. DB의 binlog/WAL을 읽어 Kafka 토픽으로 변환한다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     READER["binlog/WAL Reader"] --> SMT["Event Transform"]
     DB["MySQL/PostgreSQL"] -->|"binlog/WAL"| READER
     SMT -->|"이벤트 발행"| KAFKA["Kafka Topic"]

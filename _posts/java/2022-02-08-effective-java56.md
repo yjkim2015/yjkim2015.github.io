@@ -176,7 +176,7 @@ public @interface ExceptionTest {
 비유하자면 **식품 알레르기 성분 표시**입니다. 법적 의무는 아니더라도, 모르면 사고가 납니다.
 
 ```mermaid
-graph TD
+graph LR
     A["자주 누락되는 API 문서"] --> B["스레드 안전성"]
     A --> C["직렬화 가능성"]
     style B fill:#ff6b6b,color:#fff

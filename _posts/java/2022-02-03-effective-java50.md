@@ -80,7 +80,7 @@ public Date end()   { return new Date(end.getTime()); }
 접근자에서는 `Period`가 보유한 `Date`가 확실히 `java.util.Date`이므로 `clone`을 써도 안전합니다. 그러나 생성자나 정적 팩터리를 쓰는 것이 일반적으로 더 좋습니다.
 
 ```mermaid
-graph TD
+graph LR
     A["Period 불변 보호"] --> B["생성자"]
     A --> C["접근자"]
     B --> D["TOCTOU 공격 방지"]

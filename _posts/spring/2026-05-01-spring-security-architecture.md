@@ -341,3 +341,50 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 | AuthorizationFilter | 인가 처리 |
 | CSRF | 동일 출처 위조 방어 (세션 기반에서 필요) |
 | CORS | 교차 출처 요청 허용 정책 |
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | Spring 통합 | 커스터마이징 | 학습 곡선 | 적합한 상황 |
+|---|---|---|---|---|
+| Spring Security | 완벽 | 높음 | 높음 | Spring 기반 서비스 표준 |
+| Apache Shiro | 보통 | 중간 | 낮음 | 단순 인증·인가 |
+| Keycloak (외부 IdP) | 좋음 | 중간 | 중간 | SSO, OAuth2 전용 |
+| 직접 구현 | 없음 | 완전 | 매우 높음 | 매우 특수한 요건 |
+| AWS Cognito | 보통 | 낮음 | 낮음 | AWS 환경, 관리형 |
+
+**결론:** Spring 기반 서비스에서 Spring Security는 사실상 표준이다. 필터 체인 기반으로 모든 보안 요소를 조합할 수 있고, Spring Boot Auto-configuration으로 초기 설정이 간단하다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **`authorizeHttpRequests` 규칙 순서 오류** — 더 좁은 경로(`/api/admin/**`)를 넓은 경로(`/api/**`) 뒤에 두면 관리자 경로가 일반 규칙에 먼저 매칭된다. 구체적인 경로를 항상 위에 배치해야 한다.
+
+2. **REST API에서 CSRF 토큰 미비활성화** — JWT를 Authorization 헤더로 전송하는 Stateless API에서 CSRF를 활성화하면 POST 요청마다 CSRF 토큰이 필요해진다. Stateless + JWT 방식에서는 `csrf.disable()`이 올바르다.
+
+3. **`SecurityFilterChain` 대신 `WebSecurityConfigurerAdapter` 사용** — Spring Security 5.7 이후 `WebSecurityConfigurerAdapter`가 deprecated됐다. `SecurityFilterChain` 빈 방식으로 마이그레이션해야 한다.
+
+4. **JWT 검증 필터에서 예외를 `throw`로 처리** — JWT 필터에서 예외를 던지면 Spring Security 예외 처리 메커니즘이 작동하지 않아 500이 반환된다. `sendError(401)`나 `SecurityContextHolder`를 비우고 체인을 계속 진행해 `AuthenticationEntryPoint`가 처리하게 해야 한다.
+
+5. **`@PreAuthorize` 없이 역할 기반 접근 제어 누락** — `authorizeHttpRequests`에만 의존하면 URL 패턴 변경 시 보안 구멍이 생긴다. 서비스 메서드에 `@PreAuthorize("hasRole('ADMIN')")`을 추가해 URL과 메서드 두 레이어에서 인가를 적용해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Spring Security 필터 체인의 처리 흐름은?**
+> HTTP 요청 → DelegatingFilterProxy → FilterChainProxy → SecurityFilterChain (여러 필터 순서대로) → Controller. 주요 필터: `SecurityContextPersistenceFilter`(SecurityContext 로드), `UsernamePasswordAuthenticationFilter`(폼 로그인), `JwtAuthenticationFilter`(JWT 검증), `ExceptionTranslationFilter`(예외→401/403 변환), `FilterSecurityInterceptor`(인가 결정).
+
+**Q2. Authentication과 Authorization의 차이는?**
+> Authentication(인증): "당신이 누구인가" 확인. 자격증명(ID/PW, JWT)으로 신원을 확인한다. Authorization(인가): "당신이 무엇을 할 수 있는가" 확인. 인증된 사용자의 권한으로 리소스 접근을 허용/거부한다. Spring Security는 인증 후 `SecurityContextHolder`에 `Authentication` 객체를 저장하고, 인가 시 이를 참조한다.
+
+**Q3. `UserDetailsService`의 역할은?**
+> `loadUserByUsername(String username)`을 구현해 DB에서 사용자를 조회하고 `UserDetails` 객체를 반환한다. Spring Security는 이를 `AuthenticationManager`에서 자격증명 검증에 사용한다. 반환된 `UserDetails`의 `getAuthorities()`가 인가에서 사용된다.
+
+**Q4. CSRF 공격이란 무엇이고 Spring Security는 어떻게 방어하는가?**
+> CSRF: 인증된 사용자의 브라우저가 공격자 사이트에서 의도치 않게 서버에 요청을 보내는 공격. 브라우저가 쿠키를 자동으로 포함하는 점을 악용한다. Spring Security 방어: 서버가 발급한 CSRF 토큰을 요청에 포함시켜야만 처리. JWT + Authorization 헤더 방식은 브라우저가 자동으로 보내지 않으므로 CSRF 방어가 불필요하다.
+
+**Q5. `SecurityContextHolder`의 저장 전략과 멀티스레드 주의사항은?**
+> 기본 전략은 `ThreadLocal`이다. 현재 스레드에만 SecurityContext가 유지된다. `@Async` 스레드에서는 SecurityContext가 비어 있다. 비동기 처리에서 인증 정보가 필요하면 `MODE_INHERITABLETHREADLOCAL`로 변경하거나, `DelegatingSecurityContextRunnable`로 명시적으로 전파해야 한다.

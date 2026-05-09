@@ -708,3 +708,50 @@ flowchart LR
 | @StepScope | Step 실행 시 빈 생성 | JobParameters 주입 가능 |
 | 파티셔닝 | 데이터를 나눠 병렬 처리 | 대용량 필수 기법 |
 | JobRepository | 배치 메타데이터 관리 | 재시작 핵심 |
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 재시작/재개 | 병렬 처리 | 모니터링 | 적합한 상황 |
+|---|---|---|---|---|
+| 순수 Java 스케줄러 | X | 수동 | 없음 | 단순 1회성 작업 |
+| Spring Batch | O | O (Partitioning) | JobRepository | 대용량 데이터, 실패 재처리 |
+| Quartz Scheduler | O (트리거) | X | 제한적 | 스케줄링 전용 |
+| Apache Spark | O | O (분산) | Spark UI | 빅데이터 (수억 건) |
+| Kafka Streams | O | O | Kafka UI | 스트리밍 데이터 처리 |
+
+**결론:** 수백만 건 이하의 정기 배치 처리(정산, 통계, 마이그레이션)에는 Spring Batch가 표준이다. 재시작 가능성, 실패 Skip/Retry, 병렬 처리(Partitioning)를 선언적으로 제공하며 Spring 생태계와 완벽히 통합된다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **Chunk 크기를 너무 작게 또는 너무 크게 설정** — Chunk가 작으면 트랜잭션 오버헤드가 커지고, 너무 크면 하나의 실패로 많은 데이터가 재처리된다. 보통 100~1000 사이에서 시작해 성능 테스트로 최적값을 찾아야 한다. OOM이 발생하면 Chunk를 줄이는 것이 우선이다.
+
+2. **Tasklet과 Chunk를 혼동** — 단순한 한 번의 작업(파일 삭제, 테이블 초기화)은 Tasklet, 반복적인 읽기-처리-쓰기는 Chunk를 사용해야 한다. Chunk 구조에 억지로 단순 작업을 끼워넣으면 불필요한 복잡도가 생긴다.
+
+3. **JobParameter 없이 같은 Job을 여러 번 실행 시도** — Spring Batch는 같은 `JobParameters`로 실행된 Job이 이미 완료(COMPLETED)됐으면 재실행을 거부한다. 타임스탬프나 UUID를 JobParameter에 추가해 매번 다른 인스턴스로 실행해야 한다.
+
+4. **ItemWriter에서 개별 건마다 트랜잭션 커밋** — `ItemWriter`에서 건마다 직접 `save()`를 호출하면 Chunk의 트랜잭션 관리를 우회한다. Spring Batch의 Chunk는 write 단계 전체를 하나의 트랜잭션으로 처리하므로, `saveAll()`로 배치 삽입을 활용해야 한다.
+
+5. **Partitioning 설정 후 SlaveStep에 트랜잭션 설정 누락** — 멀티스레드 Partitioning에서 각 파티션 Step의 `ItemReader`가 스레드 안전하지 않으면 데이터 중복 처리가 발생한다. `JpaPagingItemReader`는 스레드 안전하지 않으므로 `synchronized`하거나 스레드 당 독립 인스턴스를 사용해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Spring Batch의 Job, Step, Chunk의 관계는?**
+> Job은 전체 배치 작업의 최상위 단위. Step은 Job을 구성하는 독립적인 처리 단계로, 순차/조건부 실행이 가능하다. Chunk는 Step의 처리 방식 중 하나로 `ItemReader → ItemProcessor → ItemWriter`를 N건 단위로 반복한다. 각 Chunk는 하나의 트랜잭션으로 처리된다.
+
+**Q2. Skip과 Retry의 차이와 설정 방법은?**
+> Retry: 실패 시 최대 N번 재시도한다. 일시적 오류(네트워크 타임아웃)에 적합. Skip: 특정 예외 발생 시 해당 건을 건너뛰고 계속 진행한다. 데이터 불량으로 처리 불가한 건에 적합. `faultTolerant().retry(Exception.class).retryLimit(3).skip(DataFormatException.class).skipLimit(100)`으로 선언적 설정.
+
+**Q3. Partitioning과 Multi-threaded Step의 차이는?**
+> Multi-threaded Step: 하나의 Step을 여러 스레드가 동시에 처리. ItemReader를 공유하므로 스레드 안전성 주의. Partitioning: MasterStep이 데이터를 N개 파티션으로 분할하고, SlaveStep 인스턴스가 각 파티션을 독립적으로 처리. 스레드 안전 문제가 없고 더 안정적이다.
+
+**Q4. JobRepository의 역할은?**
+> Job 실행 메타데이터(JobInstance, JobExecution, StepExecution)를 DB에 저장한다. 이를 통해 실패 재시작 시 어느 Chunk까지 처리됐는지 추적하고, 같은 Job의 중복 실행을 방지한다. 운영에서는 반드시 영속성 DB(H2 아닌 실제 DB)를 사용해야 한다.
+
+**Q5. Spring Batch에서 대용량 처리 시 성능 최적화 방법은?**
+> ① `JdbcBatchItemWriter`로 bulk insert 사용. ② Chunk 크기 최적화(100~1000). ③ `JpaPagingItemReader` 대신 `JdbcPagingItemReader` 사용(JPA 1차 캐시 오버헤드 제거). ④ Partitioning으로 병렬 처리. ⑤ `entityManager.clear()`로 JPA 1차 캐시 주기적 정리.

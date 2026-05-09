@@ -865,3 +865,182 @@ W-TinyLFU 사용 시:
 해결: FIFO → LRU 또는 W-TinyLFU로 교체
      LRU, LFU, W-TinyLFU는 Belady's Anomaly가 발생하지 않음
 ```
+
+---
+
+## 왜 캐시 교체 알고리즘이 중요한가? (vs 단순 TTL만 사용)
+
+```
+TTL만 사용:
+  "10분 후 자동 삭제"
+  → 캐시가 꽉 찼을 때 어떤 항목을 버릴지 정책이 없음
+  → OOM 또는 무작위 삭제
+
+교체 알고리즘 필요 이유:
+  캐시 용량은 한정 → 새 항목 추가 시 기존 항목 중 하나를 제거해야 함
+  어떤 항목을 버릴지가 캐시 히트율을 결정
+  히트율 차이 → 응답시간, DB 부하에 직접 영향
+```
+
+| 알고리즘 | 제거 기준 | 구현 복잡도 | 히트율 | 적합한 상황 |
+|---------|---------|-----------|--------|-----------|
+| **LRU** | 가장 오래 사용 안 한 항목 | 낮음 | 보통 | 최근 접근 데이터가 중요 |
+| **LFU** | 사용 빈도 가장 낮은 항목 | 중간 | 높음 | 인기 데이터 유지 중요 |
+| **W-TinyLFU** | 최근성 + 빈도 복합 | 높음 | 매우 높음 | Caffeine 기본값, 범용 |
+| **FIFO** | 가장 먼저 들어온 항목 | 매우 낮음 | 낮음 | 단순 구현, 성능 중요 |
+| **Random** | 무작위 | 매우 낮음 | 낮음 | 접근 패턴 예측 불가 |
+| **ARC** | 최근 + 빈도 적응형 | 높음 | 높음 | IBM DB2 |
+
+---
+
+## 실무에서 자주 하는 실수
+
+#### 실수 1: Redis maxmemory-policy를 noeviction으로 운영
+
+```bash
+# 나쁜 예 — noeviction: 메모리 꽉 차면 쓰기 에러 반환
+maxmemory-policy noeviction
+# → 캐시 목적으로 쓰는 Redis에 이 설정은 서비스 장애 원인
+
+# 좋은 예 — 캐시 목적이면 allkeys-lru
+maxmemory 4gb
+maxmemory-policy allkeys-lru
+# 모든 키 중 LRU 기준 제거 → 메모리가 꽉 차도 서비스 지속
+
+# TTL 있는 키만 대상으로 하려면
+maxmemory-policy volatile-lru
+```
+
+#### 실수 2: LRU 캐시에 대용량 일회성 스캔 데이터 적재
+
+```
+시나리오: 배치 작업이 1억 건 상품을 전체 스캔
+→ 1억 건이 LRU 캐시로 밀려들어 기존 Hot 데이터를 모두 제거
+→ 배치 이후 캐시 히트율 0% → DB 폭주 (Cache Pollution)
+
+해결:
+1. 배치 전용 캐시 분리 (별도 Redis DB 또는 별도 Caffeine 인스턴스)
+2. W-TinyLFU 사용: Window 영역에서 일회성 데이터 필터링
+3. 배치 실행 시간대 캐시 TTL 단축 + 배치 후 캐시 웜업
+```
+
+#### 실수 3: 캐시 크기를 너무 작게 설정해 히트율 저하
+
+```java
+// 캐시 크기 적정값 계산
+// 활성 데이터 수 추정 → 캐시 크기 결정
+
+// 예: 상품 10만 개, 상위 10% (1만 개)가 요청의 80% 차지
+// → maximumSize(10_000)이면 히트율 ~80% 달성 가능
+
+Cache<Long, Product> cache = Caffeine.newBuilder()
+    .maximumSize(10_000)
+    .recordStats()
+    .build();
+
+// 히트율 모니터링 후 조정
+// 히트율 < 70% → 크기 증가 고려
+// 히트율 > 95% + 크기 여유 → 크기 줄여도 됨
+```
+
+#### 실수 4: LFU 캐시에서 오래된 인기 데이터가 신규 인기 데이터를 막음
+
+```
+LFU의 단점 (Cache Aging 문제):
+  과거에 1000번 접근된 데이터가 캐시에 고착
+  → 최근에 인기 있는 새 데이터가 들어올 자리가 없음
+
+해결:
+  1. W-TinyLFU: 최근성도 함께 고려 → 오래된 빈도는 감쇠
+  2. LFRU (LFU + LRU 복합): LFU로 기본, 특정 기간 미접근 시 LRU로 제거
+  3. 주기적 빈도 초기화: 일정 시간마다 모든 항목의 접근 빈도를 절반으로 감소
+```
+
+#### 실수 5: 캐시 웜업(Warm-up) 없이 서버 재시작
+
+```java
+// 서버 재시작 → 로컬 캐시 소멸 → 모든 요청 Cache Miss → DB 폭주
+
+@Component
+public class CacheWarmup implements ApplicationRunner {
+    private final ProductService productService;
+    private final ProductRepository productRepository;
+
+    @Override
+    public void run(ApplicationArguments args) {
+        // 인기 상품 상위 1000개 미리 캐시에 로드
+        List<Long> hotProductIds = productRepository.findTop1000ByOrderByViewCountDesc();
+        hotProductIds.parallelStream().forEach(id -> {
+            try { productService.getProduct(id); }
+            catch (Exception e) { log.warn("웜업 실패: {}", id); }
+        });
+        log.info("캐시 웜업 완료: {}개", hotProductIds.size());
+    }
+}
+```
+
+---
+
+## 면접 포인트
+
+#### Q. LRU와 LFU의 차이점과 각각 적합한 상황은?
+
+```
+LRU (Least Recently Used):
+  제거 기준: 가장 오래 전에 접근한 항목
+  구현: 이중 연결 리스트 + HashMap (O(1) 접근)
+  장점: 최근 접근 패턴 반영, 구현 단순
+  단점: 빈도 무시 → 한 번 접근한 데이터가 자주 접근하는 데이터를 밀어낼 수 있음
+  적합: 접근 패턴이 최근 데이터 중심 (웹 세션, 최근 조회 상품)
+
+LFU (Least Frequently Used):
+  제거 기준: 접근 빈도가 가장 낮은 항목
+  구현: MinHeap + HashMap (O(log n))
+  장점: 인기 데이터를 오래 유지
+  단점: 과거 인기 데이터가 고착 (Cache Aging), 새 데이터 불리
+  적합: 접근 패턴이 안정적이고 인기 데이터가 장기간 유지 (상품 카탈로그)
+
+W-TinyLFU (Caffeine 기본):
+  최근성 + 빈도 모두 고려 → 두 단점을 보완
+  실무에서 대부분의 경우 최선
+```
+
+#### Q. Redis의 maxmemory-policy 종류와 차이는?
+
+```
+noeviction: 메모리 꽉 차면 에러 (캐시 용도 부적합)
+
+allkeys-lru: 모든 키에 LRU 적용 (캐시 일반 권장)
+volatile-lru: TTL 있는 키에만 LRU 적용
+
+allkeys-lfu: 모든 키에 LFU 적용 (Redis 4.0+)
+volatile-lfu: TTL 있는 키에만 LFU 적용
+
+allkeys-random: 무작위 제거
+volatile-random: TTL 있는 키 중 무작위 제거
+
+volatile-ttl: TTL 짧은 키부터 제거
+
+실무 권장:
+  캐시 전용 Redis → allkeys-lru 또는 allkeys-lfu
+  캐시 + 영구 데이터 혼합 → volatile-lru (영구 데이터는 TTL 없이)
+```
+
+#### Q. 캐시 히트율이 낮을 때 진단 방법은?
+
+```
+1. 히트율 측정
+   Caffeine: cache.stats().hitRate()
+   Redis: INFO stats → keyspace_hits / (keyspace_hits + keyspace_misses)
+
+2. 낮은 히트율 원인 분석
+   ① 캐시 크기 부족 → maximumSize 증가
+   ② TTL이 너무 짧음 → TTL 조정
+   ③ 캐시 키 설계 오류 → 동일 데이터가 다른 키로 저장
+   ④ 캐시 Pollution (일회성 데이터 대량 유입) → 알고리즘 변경
+   ⑤ 접근 패턴 변화 → 새로운 Hot 데이터 분석
+
+3. 개선 후 검증
+   30분~1시간 후 히트율 재측정
+   목표: 80% 이상 (서비스 특성에 따라 다름)
+```

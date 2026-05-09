@@ -270,7 +270,7 @@ public class OrderPersistenceAdapter implements OrderRepository {
 헥사고날 아키텍처의 가장 큰 이점 중 하나는 **테스트 용이성**입니다.
 
 ```mermaid
-graph TD
+graph LR
     UT["단위 테스트"] -->|"70%"| IT["통합 테스트"]
     IT -->|"20%"| E2E["E2E 테스트"]
     class E2E e2e

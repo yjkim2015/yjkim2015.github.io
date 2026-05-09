@@ -91,7 +91,7 @@ graph LR
 하나의 스레드가 하나의 EventLoop를 담당하고, 하나의 EventLoop는 여러 Channel을 처리한다.
 
 ```mermaid
-graph TD
+graph LR
     EL["EventLoop"] --> S["select()"] --> P["processKeys()"] --> R["runTasks()"]
     EL --- A["Ch A"] & B["Ch B"] & C["Ch C"]
 ```

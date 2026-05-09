@@ -605,3 +605,28 @@ SERIALIZABLE       → 절대적 정합성 필요 배치 (금융 마감 등)
 ```
 
 격리 수준은 동시성과 정합성의 트레이드오프다. 기본값인 REPEATABLE READ는 대부분의 상황에서 충분하지만, 재고 차감처럼 "읽고 나서 쓰는" 패턴은 MVCC만으로는 안전하지 않다. `SELECT FOR UPDATE`나 원자적 UPDATE로 보완해야 한다. 격리 수준 설정보다 쿼리 설계가 더 중요하다는 점을 기억하자.
+
+---
+
+## 왜 격리 수준이 중요한가? (vs 단순 락)
+
+단순히 모든 것을 SERIALIZABLE로 설정하면 동시성이 0에 가까워진다. 격리 수준은 "얼마나 많은 이상 현상(anomaly)을 허용하고 대신 동시성을 얻을 것인가"의 트레이드오프다. RDBMS 기본값인 REPEATABLE READ(MySQL InnoDB)나 READ COMMITTED(PostgreSQL)는 대부분의 OLTP 워크로드에서 최적의 균형이다. 격리 수준을 높이거나 낮출 때는 그 영향을 정확히 이해하고 결정해야 한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 재고 차감에 MVCC만 믿기**
+`SELECT stock ... WHERE id = 1` → 애플리케이션에서 계산 → `UPDATE stock = ?` 패턴을 REPEATABLE READ에서 사용한다. 두 트랜잭션이 동시에 같은 재고를 읽고 각각 차감하면 한 번의 차감만 반영된다. `SELECT FOR UPDATE`나 원자적 `UPDATE stock = stock - 1 WHERE stock > 0`을 사용해야 한다.
+
+**실수 2: READ UNCOMMITTED를 성능 최적화라고 오해**
+Dirty Read가 발생해 롤백된 트랜잭션의 데이터를 읽을 수 있다. 실시간 통계 대시보드 등 일부 허용 가능한 경우를 제외하고 운영 코드에서는 절대 사용하지 않는다.
+
+**실수 3: 격리 수준을 전역으로 낮춰서 성능 문제를 해결하려 함**
+특정 쿼리의 락 경합 문제를 격리 수준 전체를 낮추는 것으로 해결하려 한다. 의도치 않은 Dirty Read나 Non-repeatable Read 문제가 전체 시스템에 퍼진다. 세션 레벨로 필요한 경우에만 `SET SESSION TRANSACTION ISOLATION LEVEL`을 사용한다.
+
+**실수 4: 장기 트랜잭션으로 MVCC 언두 로그 폭증**
+보고서 생성, 대량 배치를 단일 트랜잭션으로 감싸 수십 분간 유지한다. 그 사이 모든 변경 버전을 언두 로그에 보존해야 해서 스토리지가 폭증하고 퍼지 스레드가 지연된다. 배치는 청크 단위로 커밋하거나 읽기 전용 레플리카에서 실행한다.
+
+**실수 5: PostgreSQL의 기본값이 READ COMMITTED임을 간과**
+MySQL InnoDB 기본값은 REPEATABLE READ다. PostgreSQL 기본값은 READ COMMITTED다. 같은 코드를 두 DB에서 실행할 때 Non-repeatable Read 동작이 달라진다. DB 마이그레이션 시 반드시 격리 수준 동작 차이를 검증해야 한다.

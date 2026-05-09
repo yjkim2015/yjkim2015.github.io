@@ -50,7 +50,7 @@ public static String classify(Collection<?> c) {
 ## 2. 재정의 vs 다중정의
 
 ```mermaid
-graph TD
+graph LR
     A["메서드 선택 시점"] --> B["재정의 (override)"]
     A --> C["다중정의 (overloading)"]
     style B fill:#51cf66,color:#fff

@@ -53,7 +53,7 @@ light.setBrightness(80);
 객체가 제공하는 각 기능은 **오퍼레이션(Operation)** 이라고 하며, 오퍼레이션을 식별하는 세 가지 정보를 묶어 **시그니처**라고 합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["시그니처(Signature)"] --> B["1️⃣ 기능 이름"]
     A --> C["2️⃣ 파라미터 및 타입"]
     A --> D["3️⃣ 반환 타입"]
@@ -118,7 +118,7 @@ public class DataFlowController {
 비유하자면, 요리사 한 명이 주문 받기·요리·계산·청소까지 다 하면 한 사람이 바빠지면 전체가 마비됩니다. 역할을 나누면 각자 독립적으로 일할 수 있습니다.
 
 ```mermaid
-graph TD
+graph LR
     A1["FileReader"] & A2["Encryptor"] & A3["FileWriter"]
     B1["DataManager (모든 책임)"]
     style B1 fill:#ff6b6b,color:#fff
@@ -232,7 +232,7 @@ String city = customer.getCityName();  // customer만 알면 됨
 **신문 배달부와 지갑 비유:** 신문 배달부가 요금을 받을 때, 고객의 지갑을 직접 열어 돈을 꺼내서는 안 됩니다. 고객에게 "요금 주세요"라고 말하면 됩니다. 배달부는 고객만 알고, 지갑의 구조는 몰라야 합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["신문 배달부"] -->|"나쁜 예: 직접 지갑 열어 꺼냄"| C["지갑"]
     A -->|"좋은 예: 요금 주세요"| B["고객"]
     B -->|"지갑에서 꺼내 전달"| A

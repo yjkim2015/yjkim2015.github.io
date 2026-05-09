@@ -96,7 +96,7 @@ public interface SingerSongwriter extends Singer, Songwriter {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["Singer"] --> C["SingerSongwriter"]
     B["Songwriter"] --> C
     C --> D["실제 구현 클래스"]
@@ -151,7 +151,7 @@ public interface Collection<E> {
 비유하자면 **IKEA 가구**입니다. 인터페이스는 완성품의 명세(조립 방법), 골격 구현 클래스는 반조립 상태의 부품입니다. 골격 구현을 상속하면 남은 작업이 최소화됩니다.
 
 ```mermaid
-graph TD
+graph LR
     A["인터페이스"] --> C["골격 구현 클래스"]
     C --> D["구체 구현 클래스"]
     style A fill:#4a9eff,color:#fff
@@ -200,7 +200,7 @@ static List<Integer> intArrayAsList(int[] a) {
 ## 5. 골격 구현 클래스 작성법
 
 ```mermaid
-graph TD
+graph LR
     A["1단계: 기반 메서드 선정"] --> B["2단계: 기반 메서드로 구현 가능"]
     B --> C["3단계: 남은 메서드는"]
     style A fill:#4a9eff,color:#fff

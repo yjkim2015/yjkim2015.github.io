@@ -83,7 +83,7 @@ case TRIANGLE: return 0.5 * base * height;
 ## 3. 클래스 계층구조로 변환하는 방법
 
 ```mermaid
-graph TD
+graph LR
     A["1단계: 루트 추상 클래스 정의\"] --> B["2단계: 공통 동작/필드는"]
     B --> C["3단계: 각 의미(타입)마다"]
     C --> D["4단계: 각 구체 클래스에서"]

@@ -511,3 +511,79 @@ class VirtualList {
 - `will-change: transform`은 레이어를 미리 생성하지만 남용하면 VRAM 낭비입니다.
 - 읽기(`offsetWidth`)와 쓰기(`style.width`) 를 교차하면 Layout Thrashing이 발생합니다.
 - `DocumentFragment`로 DOM 조작을 일괄 처리하면 Reflow 횟수를 줄일 수 있습니다.
+
+---
+
+## 왜 이 개념인가? (vs 프레임워크가 다 해주는데)
+
+React·Vue 같은 프레임워크가 Virtual DOM으로 실제 DOM 조작을 최소화해 준다. 그러나 프레임워크 위에서도 Reflow/Repaint는 여전히 발생한다. `offsetWidth` 읽기, `style.width` 쓰기를 교차하거나, 대규모 목록을 가상화 없이 렌더링하면 프레임워크와 무관하게 성능이 무너진다. 브라우저 렌더링 원리를 이해해야 **프레임워크 안에서도 올바른 선택**을 할 수 있다.
+
+| 상황 | 원인 | 해결 |
+|------|------|------|
+| 스크롤 시 버벅임 | Reflow 반복 | transform 사용, 가상 스크롤 |
+| 애니메이션 끊김 | left/top 변경 → Reflow | transform으로 교체 |
+| 빈 화면 오래 지속 | JS가 파싱 블로킹 | defer/async, body 끝 배치 |
+| 레이아웃 이동(CLS) | 이미지 크기 미지정 | width/height 명시 |
+
+---
+
+## 추가 실무 실수
+
+**실수 1: 루프 안에서 offsetWidth 읽기-쓰기 교차 (Layout Thrashing)**
+
+```javascript
+// ❌ 매 반복마다 Reflow — 100개 항목이면 200번 Reflow
+items.forEach(el => {
+    const w = el.offsetWidth;       // 읽기 → Reflow 강제
+    el.style.width = w * 2 + 'px'; // 쓰기 → 레이아웃 무효화
+});
+
+// ✅ 읽기 일괄 → 쓰기 일괄 → Reflow 1번
+const widths = [...items].map(el => el.offsetWidth);
+items.forEach((el, i) => { el.style.width = widths[i] * 2 + 'px'; });
+```
+
+**실수 2: CSS 애니메이션에 left/top 대신 transform 미사용**
+
+```css
+/* ❌ Reflow 발생 → 버벅임 */
+.moving { transition: left 0.3s; left: 100px; }
+
+/* ✅ GPU Composite만 — 60fps 달성 가능 */
+.moving { transition: transform 0.3s; transform: translateX(100px); }
+```
+
+**실수 3: will-change 남용으로 VRAM 낭비**
+
+```css
+/* ❌ 모든 요소에 will-change 적용 → GPU 레이어 과다 생성, 메모리 폭증 */
+* { will-change: transform; }
+
+/* ✅ 실제로 애니메이션이 임박한 요소에만 JS로 동적 적용 */
+el.addEventListener('mouseenter', () => { el.style.willChange = 'transform'; });
+el.addEventListener('animationend', () => { el.style.willChange = 'auto'; });
+```
+
+---
+
+## 면접 포인트
+
+**Q1. Reflow와 Repaint의 차이, 어떤 상황에 각각 발생하는가?**
+
+Reflow(Layout)는 요소의 위치·크기가 바뀌어 레이아웃 전체를 재계산하는 단계다. `width`, `height`, `margin`, `padding`, `font-size` 변경과 `offsetWidth` 같은 레이아웃 값 읽기가 트리거한다. Repaint는 레이아웃 변경 없이 색상·배경·그림자만 바뀔 때 픽셀만 다시 칠한다. Reflow가 일어나면 항상 Repaint도 따라오지만, Repaint만 단독으로 발생하는 경우는 Reflow보다 비용이 낮다.
+
+**Q2. async와 defer의 차이를 설명하라.**
+
+`async`는 스크립트 다운로드를 병렬로 진행하고 완료되는 즉시 파싱을 중단하고 실행한다. 순서가 보장되지 않아 독립적인 분석 스크립트에 적합하다. `defer`는 다운로드를 병렬로 진행하되 HTML 파싱이 완전히 끝난 후 선언 순서대로 실행한다. 일반 앱 스크립트에 권장된다.
+
+**Q3. transform이 left/top보다 빠른 이유는?**
+
+`left`/`top` 변경은 Reflow → Repaint → Composite 전 단계를 유발한다. `transform`은 요소를 별도 GPU 레이어로 승격시켜 Composite 단계만 실행한다. CPU 대신 GPU가 처리하므로 메인 스레드가 블로킹되지 않아 60fps를 유지할 수 있다.
+
+**Q4. 이벤트 버블링과 이벤트 위임을 연결해 설명하라.**
+
+이벤트는 타깃에서 발생한 뒤 부모로 버블링(전파)된다. 이벤트 위임은 자식 요소마다 리스너를 등록하는 대신 부모에 하나만 등록하고, `e.target`으로 실제 클릭된 요소를 구별하는 패턴이다. 리스너 수가 줄어 메모리가 절약되고, 동적으로 추가된 자식 요소에도 자동 적용된다.
+
+**Q5. Critical Rendering Path 최적화 핵심 전략 3가지는?**
+
+첫째, render-blocking JS에 `defer`를 적용해 HTML 파싱 중단을 방지한다. 둘째, 첫 화면에 필요한 Critical CSS를 `<style>` 태그로 인라인화하고 나머지는 비동기 로드한다. 셋째, 읽기(`offsetWidth`)를 쓰기(`style.width`) 앞에 일괄 배치해 Layout Thrashing을 방지한다.

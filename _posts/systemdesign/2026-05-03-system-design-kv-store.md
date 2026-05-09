@@ -771,7 +771,7 @@ graph LR
 **상황**: 데이터센터 랙(Rack) 하나에 화재가 발생해 노드 3대가 동시에 다운됐다. 복제 계수 N=3이고 3개 노드가 같은 랙에 배치된 경우.
 
 ```mermaid
-graph TD
+graph LR
     Rack1["랙1: 노드1,2,3"] -->|"전부 다운"| Q{"Quorum W=2 R=2"}
     Q --> FAIL["쓰기/읽기"]
     Rack2["랙2: 노드4,5,6"] --> Q
@@ -984,6 +984,111 @@ Redis 한계(RAM 비용)를 넘어서면 RocksDB 기반 자체 KV 또는 DynamoD
 **해결**: 즉각적 조치로 상품 상세 정보를 ElastiCache(Redis)로 캐싱(TTL 5분). 10개 인기 상품에 대한 DynamoDB 읽기가 99% 감소. 근본 해결로는 파티션 키를 `item_id + random_suffix(0~9)`로 변경해 10개 파티션으로 분산. 읽기 시 랜덤 suffix 선택.
 
 **교훈**: DynamoDB 파티션 키 설계는 "가장 트래픽이 몰릴 키"를 기준으로 검증해야 한다. 핫 파티션은 provisioned throughput을 아무리 늘려도 해당 파티션 물리 한도를 초과하면 스로틀링이 발생한다. 인기 데이터는 반드시 DAX(DynamoDB Accelerator) 또는 Redis 캐시 계층을 앞에 둬야 한다. Prime Day·블랙프라이데이 같은 예측 가능한 트래픽 폭발은 사전 load test와 캐시 워밍업이 필수다.
+
+---
+
+## 실무에서 놓치기 쉬운 케이스
+
+### 1. 핫 키 문제 — 인기 상품 하나가 노드 하나를 태운다
+
+Consistent Hashing으로 키를 분산해도 특정 키에 트래픽이 폭발적으로 몰리면 해당 키를 담당하는 노드가 병목이 된다. 쇼핑몰 타임딜 상품 재고(`stock:product:12345`)나 월드컵 경기 중 실시간 점수(`score:match:987`)가 대표적이다. 노드 전체 CPU가 이 하나의 키 때문에 100%에 달하는 일이 실제로 벌어진다.
+
+```
+단순 접근 (비추천):
+  GET stock:product:12345 → 노드 A → 초당 500,000 RPS → 노드 A 포화
+
+해결책 1: 키 샤딩 (Local Replication)
+  stock:product:12345#shard0
+  stock:product:12345#shard1
+  ...
+  stock:product:12345#shard9
+  → 10개 샤드에 분산. 읽기 시 random(0~9)으로 선택
+  → 단점: 쓰기 시 10개 모두 업데이트 필요 (Write Fan-out)
+
+해결책 2: 로컬 캐시 (서버 메모리)
+  각 애플리케이션 서버가 핫 키를 100ms 동안 로컬 캐시
+  → KV 스토어 요청 자체를 줄임
+  → TTL이 짧아야 Stale 데이터 위험 최소화
+
+해결책 3: 읽기 레플리카 라우팅
+  핫 키 감지 시 읽기 요청을 해당 키의 레플리카로 자동 분산
+  → Consistent Hashing 링에서 레플리카 노드 목록 유지
+```
+
+핫 키 감지는 클라이언트 라이브러리나 KV 스토어 자체의 키별 접근 카운터로 할 수 있다. 상위 N개 키가 전체 요청의 X% 이상을 차지하면 핫 키로 판정한다.
+
+---
+
+### 2. 큰 값 (>1MB) — LSM Tree에서 GC 지옥이 시작된다
+
+KV 스토어에 1MB가 넘는 값(예: JSON 사용자 설정 전체, 직렬화된 모델 가중치)을 저장하면 LSM Tree의 Compaction 과정에서 I/O가 폭발한다. RocksDB 기준으로 값이 크면 SSTable 파일이 빨리 차고, Compaction 빈도가 늘어나며, 쓰기 증폭(Write Amplification)이 심해져 성능이 급격히 떨어진다.
+
+```python
+MAX_VALUE_SIZE = 512 * 1024  # 512KB 상한
+
+def put(key, value):
+    if len(value) > MAX_VALUE_SIZE:
+        # 큰 값은 오브젝트 스토리지(S3)에 저장
+        s3_key = f"large-values/{key}/{hash(value)}"
+        s3.put_object(Bucket="kv-overflow", Key=s3_key, Body=value)
+        # KV 스토어에는 포인터만 저장
+        kv_store.set(key, json.dumps({
+            "_type": "s3_ref",
+            "_s3_key": s3_key,
+            "_size": len(value)
+        }))
+    else:
+        kv_store.set(key, value)
+
+def get(key):
+    raw = kv_store.get(key)
+    meta = json.loads(raw)
+    if isinstance(meta, dict) and meta.get("_type") == "s3_ref":
+        return s3.get_object(Bucket="kv-overflow", Key=meta["_s3_key"])["Body"].read()
+    return raw
+```
+
+이 패턴을 **Blob Offloading** 이라고 한다. KV 스토어는 포인터만 관리하고, 실제 데이터는 S3처럼 대용량에 최적화된 스토리지에 저장한다. WiscKey(2016) 논문이 이 접근을 체계화했으며, TiKV 등 프로덕션 KV 스토어가 채택하고 있다.
+
+---
+
+### 3. 키 네임스페이스 충돌 — 두 팀이 같은 키 이름을 쓴다
+
+단일 Redis 클러스터를 여러 팀이 공유하면 `user:123`, `session:abc`, `count:daily` 같은 단순한 키 이름이 충돌한다. 팀 A의 `user:123`이 팀 B의 `user:123`을 덮어쓰는 사고는 Redis를 공유하는 조직에서 반복적으로 발생한다.
+
+```
+잘못된 패턴:
+  SET user:123 '{"name": "김철수"}'   ← 팀 A (사용자 서비스)
+  SET user:123 '{"score": 1500}'      ← 팀 B (게임 서비스)  → 팀 A 데이터 덮어씀
+
+올바른 패턴 — 네임스페이스 prefix 강제:
+  SET user-service:user:123 '{"name": "김철수"}'
+  SET game-service:user:123 '{"score": 1500}'
+```
+
+이를 코드 레벨에서 강제하려면 KV 클라이언트 래퍼를 만들어 서비스명을 자동으로 prefix에 포함시킨다.
+
+```python
+class NamespacedRedis:
+    def __init__(self, redis_client, namespace):
+        self.r = redis_client
+        self.ns = namespace  # 예: "user-service"
+
+    def _key(self, key):
+        return f"{self.ns}:{key}"
+
+    def get(self, key):
+        return self.r.get(self._key(key))
+
+    def set(self, key, value, **kwargs):
+        return self.r.set(self._key(key), value, **kwargs)
+
+# 팀 A
+user_redis = NamespacedRedis(redis, "user-service")
+user_redis.set("user:123", '{"name": "김철수"}')  # 실제 키: "user-service:user:123"
+```
+
+Redis Cluster 환경에서는 `{namespace}:key` 형식으로 해시 태그를 활용하면 같은 네임스페이스의 키가 같은 슬롯에 모여 MGET 등 다중 키 연산의 효율을 높일 수 있다.
 
 ---
 

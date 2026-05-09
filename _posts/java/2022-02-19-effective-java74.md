@@ -93,7 +93,7 @@ public class UserService {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["예외 문서화 원칙"] --> B["검사 예외"]
     A --> C["비검사 예외"]
     A --> D["공통 예외"]

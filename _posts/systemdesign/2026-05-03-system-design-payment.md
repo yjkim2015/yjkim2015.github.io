@@ -1105,6 +1105,104 @@ FDS 탐지율 > 5% → Slack 알림 (정상 결제 차단 여부 즉시 확인)
 
 ---
 
+## 실무에서 놓치기 쉬운 케이스
+
+### 1. 포인트 + 카드 복합 결제 — 환불 순서가 틀리면 회계가 맞지 않는다
+
+"포인트 3,000원 + 카드 7,000원"으로 10,000원 결제 후 환불 시 어떤 순서로 돌려주는가? 포인트를 먼저 환불하고 카드를 나중에 환불하면 PG 정산 금액과 회계 장부가 틀어질 수 있다. 법적으로 카드 취소가 먼저여야 하는 국가도 있다.
+
+```python
+def process_refund(order_id, refund_amount):
+    order = get_order(order_id)
+    payments = order["payment_breakdown"]  # [{method: "card", amount: 7000}, {method: "point", amount: 3000}]
+
+    # 카드 결제 먼저 환불 (PG사 정산 정합성 보장)
+    remaining = refund_amount
+    for payment in sorted(payments, key=lambda p: REFUND_PRIORITY[p["method"]]):
+        if remaining <= 0:
+            break
+        refund_this = min(remaining, payment["amount"])
+
+        if payment["method"] == "card":
+            pg_client.cancel(payment["transaction_id"], refund_this)
+        elif payment["method"] == "point":
+            point_service.restore(order["user_id"], refund_this)
+
+        ledger.record_refund(order_id, payment["method"], refund_this)
+        remaining -= refund_this
+
+REFUND_PRIORITY = {"card": 1, "point": 2}  # 카드 먼저
+```
+
+부분 환불 시 금액 배분 로직(카드에서 얼마, 포인트에서 얼마)을 명확히 정의하지 않으면 회계 감사 시 문제가 된다. 환불 이벤트는 복식부기로 기록해 항상 대차를 맞춰야 한다.
+
+---
+
+### 2. 결제 타임아웃과 더블 클릭 — 500ms 차이로 이중 결제가 발생한다
+
+사용자가 "결제하기" 버튼을 두 번 클릭하거나, 네트워크 타임아웃으로 클라이언트가 재시도하면 동일한 결제가 두 번 처리될 수 있다. PG사가 멱등성을 보장해도 애플리케이션 레이어의 경쟁 조건은 별도로 막아야 한다.
+
+```python
+def create_payment(user_id, order_id, amount, idempotency_key):
+    # 1단계: Redis로 중복 요청 즉시 차단 (응답 시간 < 1ms)
+    lock_key = f"payment_lock:{idempotency_key}"
+    acquired = redis.set(lock_key, "1", nx=True, ex=300)  # 5분 TTL
+    if not acquired:
+        # 이미 처리 중인 요청 — 기존 결과 반환
+        existing = db.fetchone(
+            "SELECT * FROM payments WHERE idempotency_key=%s", (idempotency_key,)
+        )
+        return existing or {"status": "processing"}
+
+    try:
+        # 2단계: DB에 PENDING 상태로 먼저 기록
+        payment_id = db.insert(
+            "INSERT INTO payments (order_id, amount, status, idempotency_key) VALUES (%s,%s,'PENDING',%s)",
+            (order_id, amount, idempotency_key)
+        )
+
+        # 3단계: PG API 호출 (느림, 1~3초)
+        result = pg_client.charge(amount, idempotency_key=idempotency_key)
+
+        # 4단계: 결과 업데이트
+        db.execute("UPDATE payments SET status=%s WHERE id=%s",
+                   (result["status"], payment_id))
+        return result
+    finally:
+        redis.delete(lock_key)
+```
+
+클라이언트에서는 버튼 클릭 즉시 비활성화(disabled)하고, 서버 응답 후 다시 활성화한다. `idempotency_key`는 클라이언트가 생성해 헤더로 전달하며, UUID v4를 사용한다.
+
+---
+
+### 3. 환율 타이밍 — 결제 시점과 정산 시점의 환율이 다르다
+
+달러로 결제한 금액을 원화로 정산할 때, 결제 시점(T)과 정산 시점(T+1~T+3)의 환율이 다르면 예상 수익과 실제 수익이 달라진다. 환율이 하루에 1~2% 변동하면 수억 원 규모 정산에서 수천만 원 차이가 생긴다.
+
+```python
+def create_payment_record(order_id, amount_usd, pg_transaction_id):
+    # 결제 시점의 환율을 스냅샷으로 저장
+    rate_snapshot = fx_service.get_rate("USD", "KRW")  # 외부 API (예: 한국은행 API)
+
+    db.insert("""
+        INSERT INTO payments
+          (order_id, amount_usd, fx_rate_snapshot, amount_krw_at_capture,
+           pg_transaction_id, captured_at)
+        VALUES (%s, %s, %s, %s, %s, NOW())
+    """, (
+        order_id,
+        amount_usd,
+        rate_snapshot,
+        amount_usd * rate_snapshot,  # 결제 시점 원화 환산액
+        pg_transaction_id
+    ))
+```
+
+정산 레포트에는 결제 시점 환율과 정산 시점 환율을 모두 기록하고, 차이(환율 손익)를 별도 항목으로 표시한다. 이 데이터가 없으면 회계 감사 시 환차손/환차익 계산이 불가능하다. 글로벌 서비스에서 다중 통화를 처리할 때는 내부 장부를 USD 단일 기준통화로 관리하고 원화 환산은 정산 시에만 적용하는 방식도 사용된다.
+
+---
+
 ## 마무리
 
 결제 시스템은 "실패해도 되는 게 없는" 시스템입니다. 채팅 메시지가 1초 늦게 오는 것은 UX 문제지만, 결제가 1원 틀리는 것은 법적 문제입니다.

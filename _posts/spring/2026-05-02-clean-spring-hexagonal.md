@@ -694,3 +694,50 @@ class PureOrderDomainTest {
 | 아웃바운드 포트 | 외부 자원 접근 인터페이스 | 어떻게 가져오나 |
 | 어댑터 | 포트 구현체 | REST, JPA, Kafka 등 |
 | 도메인 이벤트 | 도메인에서 발생한 사실 | 느슨한 결합 |
+
+---
+
+## 왜 이 기술인가?
+
+| 아키텍처 | 테스트 용이성 | 기술 독립성 | 복잡도 | 적합한 상황 |
+|---|---|---|---|---|
+| Transaction Script | 낮음 | 낮음 | 낮음 | 단순 CRUD, 소규모 |
+| Layered (전통적 계층) | 중간 | 낮음 | 중간 | 일반 Spring 서비스 |
+| Hexagonal (Ports & Adapters) | 높음 | 높음 | 높음 | 복잡한 도메인, 장기 운영 |
+| Clean Architecture | 높음 | 높음 | 매우 높음 | 대규모 팀, 엄격한 경계 |
+| DDD + CQRS | 높음 | 높음 | 매우 높음 | 복잡한 비즈니스, 이벤트 소싱 |
+
+**결론:** 헥사고날 아키텍처는 도메인 로직을 인프라(DB, HTTP, Kafka)로부터 완전히 분리해 순수 Java 단위 테스트가 가능하게 한다. 단순한 CRUD 서비스에는 과도한 구조지만, 비즈니스 규칙이 복잡하고 장기 유지보수가 필요한 서비스에서 진가를 발휘한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **Port를 인터페이스가 아닌 구체 클래스로 정의** — `OrderRepository`를 JPA `JpaRepository` 인터페이스로 직접 의존하면 도메인이 JPA에 종속된다. Domain 레이어에 `OrderRepository` 포트 인터페이스를 정의하고, Infrastructure 레이어에서 JPA 구현체를 제공해야 한다.
+
+2. **도메인 객체에 JPA 어노테이션 사용** — `@Entity`, `@Column` 어노테이션을 도메인 모델에 붙이면 도메인이 JPA에 종속된다. 도메인 모델과 JPA 엔티티를 분리하고 매퍼(Mapper)로 변환하거나, JPA 어노테이션을 도메인에 허용하는 실용적 타협을 팀이 명시적으로 결정해야 한다.
+
+3. **Adapter에서 도메인 로직 구현** — HTTP 어댑터(Controller)나 DB 어댑터(Repository 구현체)에 비즈니스 규칙을 넣으면 헥사고날의 핵심 목적이 무너진다. 비즈니스 로직은 반드시 Domain 또는 Application Service(UseCase)에만 위치해야 한다.
+
+4. **UseCase를 너무 세분화** — `CreateOrderUseCase`, `ValidateOrderUseCase`, `CalculateOrderPriceUseCase`처럼 과도하게 분리하면 파일 수가 폭발하고 전체 흐름 파악이 어려워진다. UseCase는 비즈니스 유스케이스 단위(사용자 시나리오)로 정의해야 한다.
+
+5. **테스트에서 여전히 실제 DB/외부 서비스 사용** — 헥사고날의 핵심 이점은 인메모리 Fake 구현체로 도메인을 순수하게 테스트하는 것이다. 도메인 테스트에서 `@SpringBootTest` + 실제 DB를 사용하면 아키텍처 도입의 이점이 사라진다.
+
+---
+
+## 면접 포인트
+
+**Q1. 헥사고날 아키텍처의 핵심 개념인 Port와 Adapter를 설명하라.**
+> Port는 도메인이 외부 세계와 소통하는 인터페이스다. Inbound Port(Driving): 외부에서 도메인으로 들어오는 계약(UseCase 인터페이스). Outbound Port(Driven): 도메인이 외부에 요구하는 계약(Repository, MessagePublisher 인터페이스). Adapter는 Port의 구현체로 실제 기술을 연결한다(REST Controller, JPA Repository 구현).
+
+**Q2. 헥사고날과 전통적 레이어드 아키텍처의 핵심 차이는?**
+> 레이어드 아키텍처는 Controller → Service → Repository 방향으로 의존성이 흐른다. 서비스가 JPA Repository에 직접 의존해 기술 종속이 발생한다. 헥사고날은 의존성 역전(DIP)을 적용해 모든 외부 기술이 도메인을 향해 의존한다. 도메인은 어떤 기술에도 의존하지 않는다.
+
+**Q3. 도메인 모델과 JPA 엔티티를 분리해야 하는 이유는?**
+> JPA 어노테이션(`@Entity`, `@Id`, `@Column`)은 영속성 기술에 종속된 메타데이터다. 도메인 모델에 이를 포함하면 DB 스키마 변경이 도메인을 수정하게 만든다. 분리하면 도메인 모델은 순수 Java 객체로 유지되고, JPA 엔티티는 별도로 DB 스키마에 맞게 설계할 수 있다.
+
+**Q4. UseCase 인터페이스가 없어도 되는가?**
+> UseCase 인터페이스(Inbound Port)는 테스트 목적보다는 계약 명세 역할이다. 구현체가 하나뿐이라면 인터페이스 없이 구체 클래스를 직접 사용하는 실용적 접근도 가능하다. 단, Controller가 Application Service에 직접 의존하면 Controller 테스트 시 Application Service 전체가 실행된다.
+
+**Q5. Spring에서 헥사고날을 구현할 때 패키지 구조는?**
+> `domain/` (순수 Java: Entity, ValueObject, DomainService, Repository 인터페이스), `application/` (UseCase 인터페이스 + 구현체, Port 인터페이스), `adapter/in/web/` (REST Controller), `adapter/out/persistence/` (JPA Repository 구현체). `domain/`과 `application/`은 Spring 의존성 없이 순수 Java 모듈로 분리할 수 있다.

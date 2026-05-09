@@ -1213,6 +1213,131 @@ GPS 불량률 > 20% → 지역 기지국 장애 확인 후 수동 대응
 
 ---
 
+## 실무에서 놓치기 쉬운 케이스
+
+### 1. 터널·실내 GPS 손실 — 지하철 타는 순간 라이더가 사라진다
+
+GPS는 하늘이 보여야 작동한다. 배달 라이더가 지하 주차장에 들어가거나 지하철을 타면 위치 신호가 끊긴다. 앱은 라이더가 사라졌다고 판단해 다른 라이더에게 배달을 재배정하거나, 고객에게 "라이더 위치 없음" 오류를 보여준다.
+
+**단계별 폴백(fallback) 전략:**
+
+```
+1단계: GPS (야외)
+  정확도 3~10m, 배터리 소모 큼
+  → 신호 있을 때 기본
+
+2단계: Wi-Fi 위치 측위 (실내)
+  주변 AP MAC 주소 → 위치 DB 조회
+  정확도 15~40m, 배터리 소모 적음
+  → GPS 신호 소실 후 5초 이내 자동 전환
+
+3단계: 셀 타워 위치 (지하·시골)
+  기지국 ID → 위치 삼각 측량
+  정확도 100~500m
+  → Wi-Fi도 없을 때
+
+4단계: Dead Reckoning (완전 신호 없음)
+  마지막 알려진 위치 + 속도 + 방향으로 위치 추정
+  예측 위치 = last_pos + velocity × elapsed_time
+  → 터널 통과 시 30~60초 정도 보완 가능
+```
+
+```python
+def get_best_location(device):
+    if device.gps_accuracy_m < 50:
+        return LocationSource.GPS, device.gps_location
+    elif device.wifi_location:
+        return LocationSource.WIFI, device.wifi_location
+    elif device.cell_location:
+        return LocationSource.CELL, device.cell_location
+    else:
+        # Dead reckoning: 마지막 위치 + 속도 기반 추정
+        elapsed = now() - device.last_location_time
+        estimated = extrapolate(device.last_location, device.last_velocity, elapsed)
+        return LocationSource.ESTIMATED, estimated
+```
+
+클라이언트는 위치 소스와 정확도(accuracy_m)를 서버에 함께 전송한다. 서버는 accuracy_m이 200m 이상이면 Geofence 판정에 사용하지 않는다.
+
+---
+
+### 2. Geohash 경계 문제 — 바로 옆 셀인데 검색이 안 된다
+
+Geohash는 지구를 격자로 나눠 각 셀에 문자열 코드를 부여한다. 문제는 Geohash 코드가 비슷하다고 위치가 가깝다는 보장이 없다는 것이다. 정반대로, 물리적으로 바로 옆에 붙어 있어도 셀 경계를 넘으면 Geohash 코드가 완전히 달라진다.
+
+```
+예시: 서울 광화문 광장 근처
+  Wydm6 셀: 광화문 서쪽 절반
+  Wydm4 셀: 광화문 동쪽 절반
+  → 두 사람이 10m 거리인데 서로 다른 셀에 속해
+     "내 주변 라이더 검색(같은 Geohash 셀)"에서 탐지 불가
+```
+
+해결책은 **9셀 검색**이다. 대상 위치의 Geohash 셀과 인접한 8개 셀을 모두 검색해 경계 문제를 완전히 제거한다.
+
+```python
+import geohash2
+
+def find_nearby_riders(lat, lng, precision=6):
+    center_hash = geohash2.encode(lat, lng, precision)
+    # 중심 셀 + 인접 8셀 = 총 9셀
+    neighbors = geohash2.neighbors(center_hash)
+    all_cells = [center_hash] + list(neighbors.values())
+
+    riders = []
+    for cell in all_cells:
+        riders.extend(redis.hgetall(f"riders:{cell}").values())
+
+    # 정확한 거리 계산으로 2차 필터링 (Haversine)
+    return [r for r in riders if haversine(lat, lng, r.lat, r.lng) <= RADIUS_M]
+```
+
+9셀 검색 후 Haversine 거리로 2차 필터링하는 이 패턴이 Geohash 기반 근접 검색의 표준이다.
+
+---
+
+### 3. 라이더 위치 스푸핑 — 앱 없이 GPS 좌표를 조작한다
+
+일부 배달 라이더가 실제로 이동하지 않고 앱의 GPS 좌표를 가짜로 조작해 배달 완료 처리를 하거나, 유리한 위치에 있는 것처럼 위장해 더 많은 배달 요청을 받는다. Android는 "개발자 옵션 > 모의 위치 앱"으로 GPS를 쉽게 속일 수 있다.
+
+다차원 이상 감지를 조합해야 한다.
+
+```python
+def validate_location_update(rider_id, new_lat, new_lng, new_accuracy_m, timestamp):
+    prev = get_last_location(rider_id)
+
+    # 검사 1: 물리적 속도 초과
+    distance_m = haversine(prev.lat, prev.lng, new_lat, new_lng)
+    elapsed_s = timestamp - prev.timestamp
+    speed_kmh = (distance_m / elapsed_s) * 3.6
+    if speed_kmh > 150:  # 오토바이 최고 속도 초과
+        flag_suspicious(rider_id, "speed_exceeded", speed_kmh)
+        return False
+
+    # 검사 2: GPS 정확도 비정상
+    if new_accuracy_m < 1:  # 실제 GPS는 1m 미만 정확도가 없음
+        flag_suspicious(rider_id, "accuracy_too_perfect")
+        return False
+
+    # 검사 3: 도로 위에 없는 좌표 연속 발생
+    if not is_on_road_network(new_lat, new_lng):
+        rider_off_road_count[rider_id] += 1
+        if rider_off_road_count[rider_id] >= 3:
+            flag_suspicious(rider_id, "off_road_consecutive")
+
+    # 검사 4: 모의 위치 앱 감지 (클라이언트 SDK)
+    # Android: Location.isFromMockProvider() == true 시 서버에 플래그 전송
+    if new_location.is_mock:
+        flag_suspicious(rider_id, "mock_provider_detected")
+        return False
+
+    return True
+```
+
+이상 징후가 3회 이상 누적되면 자동으로 운영팀 검토 큐에 올라가고, 반복 적발 시 계정이 정지된다. 완벽한 방어는 불가능하므로 탐지-제재 사이클을 빠르게 돌리는 것이 실용적인 접근이다.
+
+---
+
 ## 핵심 설계 결정 요약
 
 | 설계 항목 | 선택 | 이유 |

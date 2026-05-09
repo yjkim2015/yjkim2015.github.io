@@ -597,3 +597,164 @@ ordinal로 2차원 배열을 만들어 상태 전이 테이블을 구성하면, 
 | 39 | 명명 패턴 대신 **애너테이션** |
 | 40 | **@Override** 일관 사용 |
 | 41 | 타입이 필요하면 **마커 인터페이스** |
+
+---
+
+## 실무에서 자주 하는 실수 (보강)
+
+#### 실수 1: 로 타입(Raw Type) 사용
+
+```java
+// 나쁜 예 — 로 타입 사용
+List list = new ArrayList();
+list.add("문자열");
+list.add(42);  // 컴파일 통과
+
+String s = (String) list.get(1);  // 런타임 ClassCastException!
+
+// 좋은 예 — 제네릭 타입 사용
+List<String> list = new ArrayList<>();
+list.add("문자열");
+// list.add(42);  // 컴파일 에러로 즉시 감지
+
+// 로 타입은 Java 5 이전 코드와의 호환성을 위해서만 존재
+// 새 코드에서는 절대 사용하지 말 것
+```
+
+#### 실수 2: enum에 비즈니스 로직 누락 (데이터 클래스로만 사용)
+
+```java
+// 나쁜 예 — enum을 상수 집합으로만 사용
+public enum OrderStatus {
+    PENDING, PAID, SHIPPED, CANCELLED;
+}
+
+// Service에서 분기 처리
+if (order.getStatus() == OrderStatus.PENDING) {
+    // 결제 로직
+} else if (order.getStatus() == OrderStatus.PAID) {
+    // 배송 로직
+}
+// → 새 상태 추가 시 if-else를 찾아다니며 수정
+
+// 좋은 예 — enum에 행위를 담아 다형성 활용
+public enum OrderStatus {
+    PENDING {
+        @Override
+        public boolean canCancel() { return true; }
+        @Override
+        public OrderStatus nextStatus() { return PAID; }
+    },
+    PAID {
+        @Override
+        public boolean canCancel() { return true; }
+        @Override
+        public OrderStatus nextStatus() { return SHIPPED; }
+    },
+    SHIPPED {
+        @Override
+        public boolean canCancel() { return false; }
+        @Override
+        public OrderStatus nextStatus() { return DELIVERED; }
+    };
+
+    public abstract boolean canCancel();
+    public abstract OrderStatus nextStatus();
+}
+
+// 사용 — 분기 없이 다형성으로 처리
+if (order.getStatus().canCancel()) {
+    order.cancel();
+}
+```
+
+#### 실수 3: 비한정 와일드카드와 한정 와일드카드 혼동
+
+```java
+// ? (비한정 와일드카드): 어떤 타입도 OK, 읽기만 가능
+List<?> list = new ArrayList<String>();
+Object o = list.get(0);  // OK (Object로만 읽기 가능)
+// list.add("문자열");  // 컴파일 에러 (어떤 타입인지 모르므로 추가 불가)
+
+// ? extends T (상한 경계): T 또는 T의 하위 타입 — Producer (읽기)
+// PECS: Producer-Extends, Consumer-Super
+List<? extends Number> numbers = new ArrayList<Integer>();
+Number n = numbers.get(0);  // OK
+// numbers.add(42);  // 컴파일 에러 (Integer인지 Double인지 모름)
+
+// ? super T (하한 경계): T 또는 T의 상위 타입 — Consumer (쓰기)
+List<? super Integer> integers = new ArrayList<Number>();
+integers.add(42);  // OK (Integer는 Number의 하위 타입)
+// Integer i = integers.get(0);  // 컴파일 에러 (Number인지 Object인지 모름)
+
+// PECS 원칙: 생산자(읽기)는 extends, 소비자(쓰기)는 super
+public void pushAll(Iterable<? extends E> src) { ... }  // 읽기 → extends
+public void popAll(Collection<? super E> dst) { ... }   // 쓰기 → super
+```
+
+#### 실수 4: ordinal()을 배열 인덱스로 사용
+
+```java
+// 나쁜 예 — ordinal()로 배열 인덱스 사용
+Set<Plant>[] plantsByLifeCycle = new Set[Plant.LifeCycle.values().length];
+for (Plant p : garden) {
+    plantsByLifeCycle[p.lifeCycle.ordinal()].add(p);
+    // ordinal() 값에 의존 → enum 순서 변경 시 버그
+}
+
+// 좋은 예 — EnumMap 사용
+Map<Plant.LifeCycle, Set<Plant>> plantsByLifeCycle =
+    new EnumMap<>(Plant.LifeCycle.class);
+for (Plant.LifeCycle lc : Plant.LifeCycle.values())
+    plantsByLifeCycle.put(lc, new HashSet<>());
+for (Plant p : garden)
+    plantsByLifeCycle.get(p.lifeCycle).add(p);
+// → 타입 안전, 성능도 배열과 동일 (EnumMap 내부가 배열)
+```
+
+---
+
+## 면접 포인트 (보강)
+
+#### Q. 제네릭 타입 소거(Type Erasure)란 무엇인가요?
+
+```
+Java 제네릭은 컴파일 타임에만 존재, 런타임에는 소거됨
+
+컴파일 전:
+  List<String> stringList = new ArrayList<>();
+  List<Integer> intList = new ArrayList<>();
+
+컴파일 후 (바이트코드):
+  List stringList = new ArrayList();  // 동일!
+  List intList = new ArrayList();
+
+결과:
+  stringList.getClass() == intList.getClass()  // true (둘 다 ArrayList)
+
+이 때문에:
+  instanceof 제네릭 타입 체크 불가: list instanceof List<String> (컴파일 에러)
+  제네릭 배열 생성 불가: new T[] (컴파일 에러)
+  정적 컨텍스트에서 타입 파라미터 사용 불가: static T instance (컴파일 에러)
+
+소거의 이유: Java 5 이전 코드(로 타입)와의 하위 호환성
+```
+
+#### Q. enum이 int 상수보다 나은 이유는?
+
+```
+int 상수의 문제:
+public static final int APPLE_FUJI = 0;
+public static final int ORANGE_NAVEL = 0;  // 값이 같아도 다른 타입
+// → 타입 안전성 없음: 오렌지 파라미터에 사과 전달해도 컴파일 통과
+// → 의미있는 출력 불가: System.out.println(APPLE_FUJI) → "0"
+// → 관련 메서드 추가 어려움
+
+enum의 이점:
+1. 타입 안전: Apple.FUJI를 Orange 파라미터에 전달 → 컴파일 에러
+2. 의미있는 toString(): Apple.FUJI.toString() → "FUJI"
+3. 메서드와 필드 추가 가능: 각 상수마다 다른 동작 정의
+4. values()로 순회 가능
+5. switch 문 활용 가능
+6. 싱글턴 보장: JVM이 인스턴스 하나만 생성
+```

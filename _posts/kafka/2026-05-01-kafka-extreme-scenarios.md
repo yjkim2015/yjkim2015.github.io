@@ -59,7 +59,7 @@ sequenceDiagram
 ### Unclean Leader Election 위험
 
 ```mermaid
-graph TD
+graph LR
     S["B1(ISR Leader,offs"]
     S --> U["unclean=true: B3를"]
     S --> C["unclean=false(권장):"]
@@ -208,7 +208,7 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 ### 문제 원리
 
 ```mermaid
-graph TD
+graph LR
     K1["변경 전: user-123 → h"] --> K2["변경 후: user-123 → h"]
     K2 --> NOTE["동일 키가 다른 파티션 → 순서"]
 ```
@@ -253,7 +253,7 @@ public class StableHashPartitioner implements Partitioner {
 ```
 
 ```mermaid
-graph TD
+graph LR
     RULE1["파티션 수는 처음부터 넉넉하게 설"]
     RULE2["불가피하게 변경 시:"]
     RULE1 --> RULE2
@@ -425,7 +425,7 @@ graph LR
 ### Lag 폭증 원인별 분류
 
 ```mermaid
-graph TD
+graph LR
     LAG["Lag 폭증 원인"] --> C1["Consumer 속도 저하"]
     LAG --> C2["Producer 유입 급증"]
     LAG --> C3["Consumer 감소"]
@@ -549,7 +549,7 @@ sequenceDiagram
 ### 네트워크 파티션 시나리오별 영향
 
 ```mermaid
-graph TD
+graph LR
     SA1["Producer → Leader 단절"]
     SA2["acks=1: 쓰기 가능"]
     SA3["acks=all: ISR 감소로 거부"]

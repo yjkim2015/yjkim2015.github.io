@@ -122,7 +122,7 @@ myDog.toString(); // '[object Object]' — Object.prototype에서 찾음
 > 비유: `prototype`은 설계도 창고("이 공장에서 만들어지는 제품은 이 부품들을 갖게 된다"), `__proto__`는 실제 제품이 갖고 있는 "원본 설계도 링크"입니다.
 
 ```mermaid
-graph TD
+graph LR
     F["Dog 함수"] -->|".prototype"| FP["Dog.prototype"]
     I["myDog 인스턴스"] -->|".__proto__"| FP
     FP -->|".constructor"| F

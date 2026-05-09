@@ -100,7 +100,7 @@ T[] result = (T[]) Arrays.copyOf(elements, size, a.getClass());
 ## 4. 적용 범위 결정 기준
 
 ```mermaid
-graph TD
+graph LR
     A["@SuppressWarnings"] --> B["변수 선언"]
     A --> C["짧은 메서드나 생성자"]
     A --> D["클래스 전체"]

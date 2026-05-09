@@ -141,7 +141,7 @@ String script =
 Fixed Window와 Sliding Window Log의 **절충안**이다. 이전 윈도우의 카운터와 현재 윈도우의 카운터를 가중 평균으로 합산한다.
 
 ```mermaid
-graph TD
+graph LR
     PW["이전 윈도우 (0:59~1:00)"]
     CW["현재 윈도우 (1:00~1:01)"]
     NOW["현재 시각: 1:00:45"]
@@ -189,7 +189,7 @@ graph LR
 **실제 동작 흐름**
 
 ```mermaid
-graph TD
+graph LR
     T0["t=0s: 버킷 10/10 토큰\"]
     T1["t=1s: 토큰 1개 충전 → 버"]
     T2["t=2s: 토큰 1개 충전 → 버"]
@@ -902,7 +902,7 @@ public long getServerTime() {
 인기 API 엔드포인트의 Rate Limit 키가 Redis의 특정 슬롯에 집중되면 해당 노드에 과부하가 발생한다.
 
 ```mermaid
-graph TD
+graph LR
     K["rl:popular-endpoin"] --> NB["Redis 노드 B"]
     X1["기타 키들"] --> NA["Redis 노드 A"]
     X2["기타 키들"] --> NC["Redis 노드 C"]

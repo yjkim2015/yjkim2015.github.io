@@ -708,7 +708,7 @@ public Product getProduct(Long productId) {
 ## 핵심 정리
 
 ```mermaid
-graph TD
+graph LR
     A["캐시 무효화 전략"]
     A --> B["시간 기반"]
     A --> C["이벤트 기반"]

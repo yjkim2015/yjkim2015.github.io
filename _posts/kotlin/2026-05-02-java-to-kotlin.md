@@ -97,7 +97,7 @@ val confirmedOrder = pendingOrder.copy(status = OrderStatus.CONFIRMED)
 ## Null Safety — 컴파일러가 NPE를 막는 원리
 
 ```mermaid
-graph TD
+graph LR
     Java["Java"] --> Problem["NullPointerExcepti"]
     Kotlin["Kotlin"] --> Compile["컴파일 타임 체크"]
     Compile --> Safe["런타임 NPE 발생 불가"]
@@ -444,3 +444,192 @@ val displayName = fetchUserSafely(userId)
 | 싱글톤 | 수동 구현 | `object` | 컴파일러 보장 싱글톤 |
 | sealed class | 없음 | `sealed class` | 컴파일러가 하위 타입 완전성 검사 |
 | Coroutine | `CompletableFuture` | `suspend fun` | 동기 코드처럼 보이는 비동기 |
+
+---
+
+## 왜 Kotlin인가? (vs Java vs Scala)
+
+| 언어 | 타입 안전성 | 간결성 | JVM 호환 | 학습 곡선 | 선택 기준 |
+|------|-----------|--------|---------|---------|---------|
+| **Kotlin** | Null 안전 | 높음 | 100% | 낮음 (Java 개발자) | Spring Boot, Android |
+| **Java** | Null 불안전 | 낮음 | 100% | — | 레거시, 대규모 팀 |
+| **Scala** | 강함 | 매우 높음 | 100% | 매우 높음 | 함수형, 빅데이터(Spark) |
+| **Groovy** | 동적 타입 | 높음 | 100% | 낮음 | Gradle 스크립트 |
+
+```
+Kotlin을 선택하는 이유:
+1. Null Safety: NullPointerException을 컴파일 타임에 방지
+   → Java에서 가장 흔한 런타임 에러를 원천 차단
+2. 간결성: 같은 로직을 Java 대비 40~50% 적은 코드로 표현
+3. 100% Java 호환: 기존 Java 라이브러리 그대로 사용
+4. 코루틴: 비동기 코드를 동기 스타일로 작성 (스레드 대비 경량)
+5. Spring 공식 지원: Spring Boot 3.x에서 Kotlin 1급 시민
+
+Java 유지를 선택하는 경우:
+- 팀 전체가 Java에 익숙하고 전환 비용이 부담될 때
+- 레거시 코드베이스가 방대할 때
+- Kotlin 컴파일 시간이 부담될 때 (대규모 프로젝트)
+```
+
+---
+
+## 실무에서 자주 하는 실수
+
+#### 실수 1: data class를 JPA Entity에 사용
+
+```kotlin
+// 나쁜 예 — data class는 equals/hashCode를 모든 필드로 생성
+@Entity
+data class Order(
+    @Id @GeneratedValue val id: Long = 0,
+    val amount: BigDecimal
+)
+// → JPA Proxy(Lazy Loading)가 data class와 충돌
+// → equals()가 id를 포함해 영속성 컨텍스트 동작 예측 어려움
+
+// 좋은 예 — Entity는 일반 class 사용
+@Entity
+class Order(
+    @Id @GeneratedValue val id: Long = 0,
+    val amount: BigDecimal
+) {
+    override fun equals(other: Any?): Boolean =
+        other is Order && id != 0L && id == other.id
+    override fun hashCode(): Int = id.hashCode()
+}
+```
+
+#### 실수 2: lateinit var를 남용
+
+```kotlin
+// 나쁜 예 — null 검사를 회피하기 위한 lateinit 남용
+lateinit var userName: String
+
+fun process() {
+    println(userName.length)  // 초기화 전 호출 시 UninitializedPropertyAccessException
+}
+
+// 좋은 예 — nullable 또는 생성자 주입 사용
+class UserService(private val userName: String) {
+    fun process() = println(userName.length)
+}
+```
+
+#### 실수 3: Java 컬렉션과 Kotlin 컬렉션 혼용
+
+```kotlin
+// Kotlin List는 불변 (add/remove 불가)
+val list: List<String> = listOf("a", "b")
+// list.add("c")  // 컴파일 에러
+
+// 변경이 필요하면 MutableList 명시
+val mutableList: MutableList<String> = mutableListOf("a", "b")
+mutableList.add("c")  // OK
+
+// Java 메서드에서 반환된 List는 실제로 변경 가능하지만
+// Kotlin 타입은 List (불변으로 추론) → 혼동 주의
+val javaList: List<String> = javaClass.getListFromJava()
+```
+
+#### 실수 4: 확장함수로 기존 클래스 오염
+
+```kotlin
+// 나쁜 예 — 너무 많은 확장함수로 클래스 책임 불명확
+fun String.toOrderId(): Long = this.toLong()
+fun String.toUserId(): Long = this.toLong()
+fun String.isValidEmail(): Boolean = this.contains("@")
+fun Long.toFormattedPrice(): String = "${this}원"
+// → 어디서나 .toOrderId()가 가능 → 타입 안전성 저하
+
+// 좋은 예 — 도메인 변환은 명시적 클래스로
+class OrderId(val value: Long) {
+    companion object {
+        fun from(s: String) = OrderId(s.toLong())
+    }
+}
+```
+
+#### 실수 5: when 표현식에서 else 생략 (sealed class 제외)
+
+```kotlin
+// 나쁜 예 — enum에 새 값 추가 시 런타임 에러
+fun describe(status: OrderStatus): String = when (status) {
+    OrderStatus.PENDING -> "대기 중"
+    OrderStatus.COMPLETED -> "완료"
+    // CANCELLED 추가 시 → else 없으면 컴파일 에러 (enum은 OK)
+}
+
+// sealed class는 else 없이도 컴파일러가 완전성 체크
+sealed class Result
+class Success(val data: String) : Result()
+class Error(val msg: String) : Result()
+
+fun handle(result: Result) = when (result) {
+    is Success -> println(result.data)
+    is Error -> println(result.msg)
+    // else 불필요 — 컴파일러가 모든 케이스 확인
+}
+```
+
+---
+
+## 면접 포인트
+
+#### Q. Kotlin의 Null Safety는 어떻게 동작하나요?
+
+```kotlin
+// 컴파일 타임에 Null 가능성을 타입으로 구분
+val name: String = "Kotlin"    // Non-null: null 대입 시 컴파일 에러
+val name: String? = null       // Nullable: null 가능
+
+// 안전 호출 연산자 (?.)
+val length = name?.length      // name이 null이면 null 반환 (NPE 없음)
+
+// 엘비스 연산자 (?:)
+val length = name?.length ?: 0 // null이면 기본값 0
+
+// 단언 연산자 (!!) — NPE 가능, 신중히 사용
+val length = name!!.length     // null이면 NPE 발생
+
+Java와의 차이: Java는 모든 참조가 null 가능 (런타임에야 NPE)
+             Kotlin은 타입 시스템이 null 가능성을 강제 (컴파일 타임 검증)
+```
+
+#### Q. data class와 일반 class의 차이는?
+
+```kotlin
+data class User(val id: Long, val name: String)
+
+// data class가 자동 생성하는 것:
+// 1. equals() — 모든 프로퍼티 비교
+// 2. hashCode() — 모든 프로퍼티 기반
+// 3. toString() — "User(id=1, name=김철수)"
+// 4. copy() — 일부 프로퍼티만 변경한 새 객체 생성
+// 5. componentN() — 구조 분해 선언 지원
+
+val user1 = User(1L, "김철수")
+val user2 = user1.copy(name = "이영희")  // id는 그대로, name만 변경
+
+// 사용 적합: DTO, Value Object, 불변 데이터 모델
+// 사용 부적합: JPA Entity (equals/hashCode 충돌)
+```
+
+#### Q. Kotlin의 companion object는 Java의 static과 어떻게 다른가?
+
+```kotlin
+class Order private constructor(val id: Long) {
+    companion object {
+        // Java의 static과 유사하지만 인터페이스 구현 가능
+        fun create(id: Long): Order = Order(id)
+
+        // 팩토리 메서드 패턴에 자주 사용
+        @JvmStatic  // Java에서 Order.create()로 호출 가능하게
+        fun of(id: Long) = Order(id)
+    }
+}
+
+// Java static과의 차이:
+// 1. companion object는 실제 객체 (인터페이스 구현 가능)
+// 2. @JvmStatic 없으면 Java에서 Order.Companion.create()로 호출
+// 3. companion object에 이름 부여 가능: companion object Factory { }
+```

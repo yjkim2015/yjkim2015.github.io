@@ -39,7 +39,7 @@ primes().map(p -> TWO.pow(p.intValueExact()).subtract(ONE))
 ## 2. 병렬화 효과가 좋은 소스
 
 ```mermaid
-graph TD
+graph LR
     A["병렬화 효과 좋음"] --> B["ArrayList"]
     A --> C["이유 1: 원하는 크기로"]
     A --> D["이유 2: 참조 지역성 우수"]
@@ -53,7 +53,7 @@ graph TD
 ## 3. 병렬화에 적합한 종단 연산
 
 ```mermaid
-graph TD
+graph LR
     A["종단 연산 병렬화 적합성"] --> B["적합"]
     A --> C["부적합"]
     style B fill:#51cf66,color:#fff

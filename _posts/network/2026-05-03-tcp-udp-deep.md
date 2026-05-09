@@ -362,7 +362,7 @@ QUIC(Quick UDP Internet Connections)은 Google이 개발하고 IETF가 표준화
 ### TCP가 가진 문제들
 
 ```mermaid
-graph TD
+graph LR
     A["TCP 문제점"]
     B["Head-of-Line Block"]
     C["긴 연결 수립"]

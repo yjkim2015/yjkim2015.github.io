@@ -24,7 +24,7 @@ Kafka 브로커 내부 구조를 모르면 장애 발생 시 어디가 문제인
 Kafka 클러스터를 구성하는 개별 서버 노드다. 각 브로커는 파티션 데이터 저장, 클라이언트 요청 처리, 복제 참여를 담당한다. 브로커 여러 대가 모여 하나의 Kafka 클러스터를 이룬다.
 
 ```mermaid
-graph TD
+graph LR
     ZK["ZooKeeper/KRaft"]
     B1["Broker1(Controller"]
     B2["Broker2: P1-Leader"]
@@ -480,3 +480,47 @@ ZooKeeper 클러스터 앙상블을 3대 이상으로 구성
 throttle 적용으로 재할당 속도 제한 (과도한 I/O 방지)
 재할당 완료 후 verify 명령으로 검증
 ```
+
+---
+
+## 왜 Kafka Broker 내부를 알아야 하는가?
+
+브로커 설정값(`log.retention.hours`, `num.io.threads`, `socket.send.buffer.bytes`)의 의미를 모르면 성능 튜닝이 불가능하고 장애 원인을 파악할 수 없다. "왜 특정 브로커에만 부하가 몰리는가?", "왜 Consumer Lag이 특정 파티션에서만 쌓이는가?"는 브로커 내부를 알아야 답할 수 있다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: num.partitions을 너무 많이 설정**
+파티션 수는 병렬 처리량을 결정하지만 브로커당 파티션이 많으면 ① 컨트롤러 메타데이터 증가 ② 파일 핸들 수 증가 ③ 리더 선출 시간 증가. Kafka 공식 권장은 브로커당 4,000개 미만, 클러스터 전체 200,000개 미만이다.
+
+**실수 2: log.retention.bytes 미설정으로 디스크 풀**
+`log.retention.hours`만 설정하고 `log.retention.bytes`를 설정하지 않는다. 트래픽이 급증하면 시간 내에 디스크가 가득 찬다. 두 가지를 모두 설정해 먼저 도달한 조건에서 삭제가 일어나도록 해야 한다.
+
+**실수 3: replication.factor=1로 운영**
+단일 브로커 복제로 해당 브로커 장애 시 해당 파티션의 데이터가 유실되고 서비스가 중단된다. 운영 환경에서는 최소 `replication.factor=3`이 필수다.
+
+**실수 4: Controller 브로커에 부하 집중 모름**
+KRaft 이전에는 ZooKeeper와 통신하는 Controller가 단일 브로커였다. Controller 브로커가 과부하 상태면 리더 선출, 파티션 재할당이 지연된다. Controller 브로커를 모니터링하고 과부하 시 재선출(`kafka-leader-election.sh`)을 고려한다.
+
+**실수 5: 브로커 재시작 시 Unclean Leader Election 발생**
+`unclean.leader.election.enable=true`(기본 false) 상태에서 ISR 외 레플리카가 리더가 되면 데이터가 유실된다. 기본값 false를 변경하지 말고, ISR이 비어 서비스가 중단되더라도 데이터 정합성을 우선해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Kafka 브로커가 메시지를 저장하는 방식은?**
+토픽-파티션별로 세그먼트 파일(`.log`)에 순차 append한다. 각 메시지는 오프셋, 타임스탬프, 키, 값으로 구성된다. 인덱스 파일(`.index`, `.timeindex`)로 오프셋/시간 기반 탐색을 지원한다. 파일 시스템의 페이지 캐시를 최대한 활용해 디스크 I/O를 줄인다.
+
+**Q2. ISR(In-Sync Replicas)이란?**
+리더와 동기화된 레플리카 집합이다. `replica.lag.time.max.ms`(기본 30초) 이내에 리더를 따라가는 레플리카만 ISR에 포함된다. `acks=all`은 ISR의 모든 레플리카가 확인할 때까지 대기한다. ISR이 줄어들면 내구성이 약해진다.
+
+**Q3. Log Compaction은 어떻게 동작하는가?**
+같은 키의 메시지 중 최신 값만 보존하고 나머지를 삭제한다. Cleaner 스레드가 백그라운드에서 세그먼트를 병합하며 중복 키를 제거한다. 이벤트 소싱의 스냅샷, CDC의 최신 상태 유지에 활용된다. `cleanup.policy=compact`로 설정한다.
+
+**Q4. KRaft 모드가 ZooKeeper를 대체하는 이유는?**
+ZooKeeper 의존성 제거로 ① 운영 인프라 단순화 ② 메타데이터 변경 속도 향상(ZooKeeper 왕복 없음) ③ 수백만 파티션 지원(ZooKeeper는 수만 파티션이 한계) ④ 단일 장애점(ZooKeeper 앙상블) 제거. Kafka 3.3부터 프로덕션 권장, Kafka 4.0부터 ZooKeeper 지원 종료.
+
+**Q5. 브로커 리밸런싱이 필요한 상황과 방법은?**
+파티션 리더가 특정 브로커에 집중되면(`kafka-topics.sh --describe`로 확인) 부하 불균형이 발생한다. `kafka-leader-election.sh --election-type PREFERRED`로 각 파티션의 선호 리더(첫 번째 레플리카)로 복원한다. 브로커 추가 후 파티션 재할당은 `kafka-reassign-partitions.sh`를 사용한다.

@@ -318,7 +318,7 @@ Snowflake ID는 **각 서버(Worker)가 독립적으로 생성**하므로 워커
 ### 왜 RDBMS가 아닌 HBase/Cassandra인가?
 
 ```mermaid
-graph TD
+graph LR
     A["채팅 메시지 저장소 선택"] --> B{"DB 선택"}
     B -->|"Write 최적화·수평 확장"| C["HBase/Cassandra"]
     B -->|"복잡 JOIN·강한 일관성"| D["MySQL"]

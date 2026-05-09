@@ -388,7 +388,7 @@ class MemberServiceTest {
 인터페이스 분리의 진가는 구현체 교체 시 드러난다.
 
 ```mermaid
-graph TD
+graph LR
     SVC["MemberService"]
     IFACE["MemberRepository"]
     MEM["MemoryMemberReposi"]

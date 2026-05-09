@@ -75,7 +75,7 @@ Number n = sameNumber.apply(42);
 ## 3. 재귀적 타입 한정 — 자기 자신을 포함한 타입 제약
 
 ```mermaid
-graph TD
+graph LR
     A["재귀적 타입 한정"] --> B["'모든 E는 자신과 비교 가능하다"]
     B --> C["E 원소들끼리 정렬/비교 가능"]
     style A fill:#4a9eff,color:#fff

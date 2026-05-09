@@ -422,3 +422,49 @@ public void transfer() throws InsufficientFundsException {
 | Self-invocation | 프록시 우회 → TX 미적용 |
 | private 메서드 | AOP 미적용 → TX 동작 안 함 |
 | 긴 트랜잭션 | 커넥션 점유 → 풀 고갈 위험 |
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 코드 오염 | AOP 지원 | 유연성 | 적합한 상황 |
+|---|---|---|---|---|
+| JDBC 수동 트랜잭션 | 높음 | X | 낮음 | 트랜잭션 세밀 제어 필요 |
+| `TransactionTemplate` | 중간 | X | 높음 | 프로그래밍 방식 제어 |
+| `@Transactional` | 없음 | O | 중간 | 실무 표준, 선언적 방식 |
+| JTA (분산 트랜잭션) | 낮음 | O | 높음 | 다중 DB, XA 트랜잭션 |
+
+**결론:** `@Transactional`은 비즈니스 로직에서 트랜잭션 관리 코드를 완전히 분리하는 Spring의 표준 방식이다. Propagation과 Isolation을 정확히 이해하고 사용하지 않으면 데이터 불일치나 교착상태가 발생한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **`@Transactional` self-invocation 문제** — 같은 클래스의 메서드를 내부에서 호출하면 AOP 프록시를 우회해 트랜잭션이 적용되지 않는다. `orderService.createOrder()`에서 `this.sendNotification()`을 호출하면 `sendNotification()`의 `@Transactional`이 무시된다. 반드시 별도 빈으로 분리해야 한다.
+
+2. **`checked exception`에서 롤백 미발생** — `@Transactional`의 기본 설정은 `RuntimeException`과 `Error`에만 롤백된다. `SQLException` 같은 checked exception은 기본적으로 롤백되지 않는다. `@Transactional(rollbackFor = Exception.class)`를 명시해야 한다.
+
+3. **`REQUIRES_NEW`로 인한 데드락** — 부모 트랜잭션이 잠금을 보유한 채 `REQUIRES_NEW`로 새 트랜잭션을 열면, 새 트랜잭션이 같은 행에 접근할 때 데드락이 발생한다. `REQUIRES_NEW`는 반드시 다른 테이블이나 독립된 데이터를 다룰 때만 사용해야 한다.
+
+4. **`readOnly = true` 미설정으로 인한 성능 손실** — 조회 전용 메서드에 `readOnly = true`를 설정하지 않으면 JPA는 스냅샷을 생성해 Dirty Checking을 수행한다. `readOnly = true`로 설정하면 스냅샷 생성을 건너뛰어 메모리와 성능이 개선된다.
+
+5. **트랜잭션 밖에서 Lazy Loading 시도** — `@Transactional` 메서드 밖에서 JPA 엔티티의 지연 로딩(Lazy) 프록시에 접근하면 `LazyInitializationException`이 발생한다. 서비스 레이어에서 필요한 데이터를 모두 로드하거나, Fetch Join으로 즉시 로딩해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. `@Transactional` Propagation의 REQUIRED vs REQUIRES_NEW 차이는?**
+> REQUIRED(기본값): 기존 트랜잭션이 있으면 참여하고, 없으면 새로 생성. 부모와 자식이 같은 트랜잭션을 공유해 하나가 롤백되면 모두 롤백. REQUIRES_NEW: 항상 새 트랜잭션 생성, 부모 트랜잭션을 일시 중단. 부모 롤백과 무관하게 자식 커밋 가능. 감사 로그처럼 메인 트랜잭션 실패와 무관하게 저장해야 할 때 사용.
+
+**Q2. 트랜잭션 격리 수준 4가지와 발생 가능한 문제는?**
+> READ_UNCOMMITTED: Dirty Read 가능. READ_COMMITTED(기본, Oracle): Dirty Read 방지, Non-Repeatable Read 가능. REPEATABLE_READ(기본, MySQL): Non-Repeatable Read 방지, Phantom Read 가능. SERIALIZABLE: 모든 문제 방지, 성능 최저. 실무에서는 DB 기본값(MySQL: REPEATABLE_READ)을 사용하고, 특수한 경우에만 조정한다.
+
+**Q3. `@Transactional`이 동작하는 원리는?**
+> Spring AOP 프록시를 통해 동작한다. `@Transactional`이 붙은 빈을 주입받으면 실제 빈이 아닌 프록시가 주입된다. 메서드 호출 시 프록시가 트랜잭션 시작 → 실제 메서드 실행 → 커밋/롤백 순서로 처리한다. `private` 메서드나 self-invocation에서는 프록시를 거치지 않아 동작하지 않는다.
+
+**Q4. NESTED 전파 옵션은 언제 사용하는가?**
+> 중간 저장점(savepoint)을 만들어 내부 트랜잭션만 롤백 가능하다. 부모 트랜잭션이 커밋되면 함께 커밋되고, 부모가 롤백되면 함께 롤백된다. 부분 롤백이 필요한 배치 처리에서 유용하다. JDBC `Savepoint`를 지원하는 DB에서만 사용 가능하다(JPA에서는 제한적).
+
+**Q5. `@Transactional`을 서비스 레이어에 두어야 하는 이유는?**
+> 컨트롤러에 두면 MVC 계층이 DB 트랜잭션에 의존하게 되어 계층 분리가 깨진다. 리포지토리에 두면 여러 리포지토리 메서드를 하나의 트랜잭션으로 묶기 어렵다. 서비스 레이어가 비즈니스 단위의 원자성을 정의하는 적절한 위치다.

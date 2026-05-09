@@ -155,7 +155,7 @@ PK=N [데이터 전체]
 ### 논클러스터드 인덱스 (Non-Clustered Index / Secondary Index)
 
 ```mermaid
-graph TD
+graph LR
     SI["Secondary Index B+"] -->|PK 값으로| CI[Clustered Index 탐색]
     CI --> RD[실제 데이터]
 ```
@@ -269,7 +269,7 @@ INSERT INTO t (user_id, name) VALUES (100, 'Kim');
 **"로그를 먼저 쓰고, 데이터를 나중에 쓴다"**는 원칙. 장애 발생 시 데이터 복구를 보장한다.
 
 ```mermaid
-graph TD
+graph LR
     A[트랜잭션 COMMIT] --> B["1. Redo Log ib_log"]
     B --> C["2. COMMIT 완료 응답 클라"]
     B --> D["3. Buffer Pool의 Di"]

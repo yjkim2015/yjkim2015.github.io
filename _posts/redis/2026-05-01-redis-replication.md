@@ -269,3 +269,47 @@ replica-serve-stale-data yes     # 동기화 중에도 (약간 오래된) 데이
 | 재연결 | Partial Sync (backlog 활용, 실패 시 Full Sync) |
 | 데이터 유실 | 비동기 특성상 발생 가능 → `WAIT`, `min-replicas-to-write`로 완화 |
 | 장애 조치 | Sentinel (자동 failover) 또는 Cluster 내장 |
+
+---
+
+## 왜 Redis 복제를 알아야 하는가? (vs 단순 백업)
+
+복제는 단순 백업이 아니라 HA(고가용성)와 읽기 확장의 기반이다. 비동기 복제의 특성을 모르면 failover 시 데이터 유실량을 예측할 수 없고, 레플리카에서 읽을 때 stale 데이터 가능성을 간과한다. Sentinel과 Cluster 모두 복제 위에서 동작하므로 복제 원리를 이해해야 장애 대응이 가능하다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 레플리카를 읽기 전용으로만 알고 stale 데이터 무시**
+`replica-read-only yes`(기본)로 레플리카에서만 읽기를 처리한다. 비동기 복제 지연(replication lag)으로 마스터에 쓴 데이터가 레플리카에 아직 반영되지 않아 이전 값을 반환할 수 있다. 강한 일관성이 필요한 읽기는 반드시 마스터에서 수행해야 한다.
+
+**실수 2: Full Sync 유발 조건을 모르고 운영**
+레플리카가 오랫동안 마스터와 단절됐다가 재연결되면 Partial Sync(repl-backlog-size 내에 있으면)가 실패하고 Full Sync가 발생한다. 마스터가 RDB 스냅샷을 생성하는 동안 fork()로 CPU/메모리 스파이크가 발생한다. `repl-backlog-size`를 충분히 크게(수백MB) 설정해야 한다.
+
+**실수 3: min-replicas-to-write 미설정**
+기본값에서 마스터는 레플리카 수에 상관없이 쓰기를 허용한다. 레플리카가 모두 다운돼도 마스터만으로 운영되다가 마스터 장애 시 데이터가 유실된다. `min-replicas-to-write 1`, `min-replicas-max-lag 10`으로 최소 보장을 설정한다.
+
+**실수 4: WAIT 명령의 존재를 모르고 동기 복제가 불가능하다고 오해**
+`WAIT numreplicas timeout` 명령으로 지정한 수의 레플리카가 최신 쓰기를 확인할 때까지 블로킹 대기할 수 있다. 완전한 동기 복제는 아니지만 중요한 쓰기 후 복제 확인이 필요한 경우 활용 가능하다.
+
+**실수 5: 레플리카에서 CONFIG REWRITE 후 마스터 정보 유실**
+레플리카의 `replicaof` 설정이 `CONFIG REWRITE`로 덮어써지지 않는 경우가 있다. 재시작 후 마스터를 모르는 독립 노드로 동작한다. 설정 파일을 직접 확인하고 `replicaof <master-ip> <port>`가 올바르게 기록됐는지 검증해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Redis 복제의 동작 순서는?**
+① 레플리카가 마스터에 `PSYNC replicationId offset` 전송 ② 마스터가 backlog에 offset이 있으면 Partial Sync(차분 전송), 없으면 Full Sync ③ Full Sync: 마스터 fork → RDB 생성 → 레플리카에 전송 → 전송 중 발생한 명령을 버퍼에서 추가 전송 ④ 이후 비동기로 명령 스트리밍.
+
+**Q2. Replication ID란?**
+마스터의 복제 히스토리를 식별하는 고유 ID다. failover 후 새 마스터는 새 Replication ID를 갖는다. 레플리카가 reconnect 시 자신이 가진 ID와 마스터의 ID가 다르면 Full Sync가 필요하다. Redis 4.0부터 secondary replication ID를 지원해 failover 후에도 Partial Sync가 가능하다.
+
+**Q3. 복제 지연(Replication Lag)을 어떻게 모니터링하는가?**
+`INFO replication`에서 각 레플리카의 `lag` 값을 확인한다(초 단위). Prometheus + redis_exporter로 `redis_connected_slave_lag_seconds` 메트릭을 수집하고 임계값(예: 10초) 초과 시 알림을 설정한다.
+
+**Q4. 레플리카를 새 마스터로 승격 시 데이터 유실 가능성은?**
+비동기 복제 특성상 마스터 장애 직전 쓰기가 레플리카에 복제되지 않았을 수 있다. 유실량은 `repl-backlog` 미전송 분량이다. `min-replicas-to-write`와 `WAIT`으로 최소화할 수 있지만 완전 제거는 불가하다. Redis를 주 데이터 저장소로 쓰지 않고 캐시로 쓰는 이유 중 하나다.
+
+**Q5. 체인 복제(레플리카의 레플리카)는 가능한가?**
+가능하다(`replicaof replica-ip port`). 마스터 → 레플리카 A → 레플리카 B 구조로 마스터의 복제 부담을 줄일 수 있다. 단, 복제 지연이 누적되고 체인이 길수록 장애 전파 복잡도가 높아진다. 일반적으로 2단계 이상의 체인은 권장하지 않는다.

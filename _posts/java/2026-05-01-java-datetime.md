@@ -74,7 +74,7 @@ graph LR
 `java.time`의 설계 철학은 간단합니다. **"시간대 정보가 필요한가?"** 를 기준으로 클래스를 선택합니다. 시간대가 없으면 `Local*`, 시간대까지 포함하면 `Zoned*`, 절대 시각(UTC 기준 나노초)이 필요하면 `Instant`를 씁니다.
 
 ```mermaid
-graph TD
+graph LR
     A["java.time"] --> B["시간대 불필요"]
     A --> C["시간대 필요"]
     A --> D["기간 측정"]

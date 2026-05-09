@@ -399,3 +399,182 @@ treeSet.size(); // 1 (compareTo로 비교 → 값이 같으므로 같은 객체)
 | 12 | `toString`은 **유익한 정보**를 반환하도록 재정의 |
 | 13 | `clone`보다 **복사 생성자/복사 팩터리**가 낫다 |
 | 14 | 순서가 있는 값 클래스는 **Comparable 구현** 고려 |
+
+---
+
+## 실무에서 자주 하는 실수 (보강)
+
+#### 실수 1: equals() 재정의 없이 컬렉션에서 동등성 비교
+
+```java
+// 나쁜 예 — equals 미재정의
+public class PhoneNumber {
+    private final short areaCode, prefix, lineNum;
+    // equals() 없음 → Object.equals() 사용 → 참조 동일성 비교
+}
+
+PhoneNumber p1 = new PhoneNumber(707, 867, 5309);
+PhoneNumber p2 = new PhoneNumber(707, 867, 5309);
+p1.equals(p2);  // false! (다른 인스턴스)
+
+Map<PhoneNumber, String> m = new HashMap<>();
+m.put(p1, "제니");
+m.get(p2);  // null! (p1과 p2가 다른 키로 인식)
+
+// 좋은 예 — equals + hashCode 함께 재정의
+@Override
+public boolean equals(Object o) {
+    if (!(o instanceof PhoneNumber)) return false;
+    PhoneNumber pn = (PhoneNumber) o;
+    return pn.lineNum == lineNum && pn.prefix == prefix && pn.areaCode == areaCode;
+}
+
+@Override
+public int hashCode() {
+    return Objects.hash(areaCode, prefix, lineNum);
+}
+```
+
+#### 실수 2: hashCode만 재정의하고 equals는 안 하거나 반대의 경우
+
+```java
+// Java 계약: equals()가 true이면 hashCode()도 같아야 한다
+// 위반 시 HashMap, HashSet 동작이 예측 불가
+
+// 나쁜 예 — equals만 재정의 (hashCode 없음)
+@Override
+public boolean equals(Object o) { ... }
+// hashCode 없음 → 서로 다른 해시값 → HashMap에서 같은 키로 인식 안 됨
+
+// 나쁜 예 — hashCode를 항상 같은 값 반환 (동작은 하지만 성능 O(1)→O(n))
+@Override
+public int hashCode() { return 42; }
+// → HashMap이 사실상 LinkedList가 됨 → 성능 폭락
+
+// Lombok 사용 시 주의: @EqualsAndHashCode 자동 생성
+// JPA Entity에서는 ID 기반으로 직접 구현 권장
+```
+
+#### 실수 3: Comparable 구현 시 정수 차감으로 비교
+
+```java
+// 나쁜 예 — 정수 오버플로우 위험
+@Override
+public int compareTo(PhoneNumber pn) {
+    return areaCode - pn.areaCode;  // Integer.MIN_VALUE - 1 = 오버플로우!
+}
+
+// 좋은 예 1 — 정적 compare 메서드 사용
+@Override
+public int compareTo(PhoneNumber pn) {
+    int result = Short.compare(areaCode, pn.areaCode);
+    if (result == 0) {
+        result = Short.compare(prefix, pn.prefix);
+        if (result == 0)
+            result = Short.compare(lineNum, pn.lineNum);
+    }
+    return result;
+}
+
+// 좋은 예 2 — Comparator 구성 방식 (Java 8+)
+private static final Comparator<PhoneNumber> COMPARATOR =
+    Comparator.comparingInt((PhoneNumber pn) -> pn.areaCode)
+              .thenComparingInt(pn -> pn.prefix)
+              .thenComparingInt(pn -> pn.lineNum);
+
+@Override
+public int compareTo(PhoneNumber pn) {
+    return COMPARATOR.compare(this, pn);
+}
+```
+
+#### 실수 4: toString()에서 포맷 지정 없이 디버깅에 의존
+
+```java
+// 나쁜 예 — 기본 toString()
+public class Order {
+    private Long id;
+    private String status;
+}
+new Order().toString();  // "Order@6d06d69c" → 디버깅 불가
+
+// 좋은 예 — 의미있는 toString() 구현
+@Override
+public String toString() {
+    return String.format("Order{id=%d, status=%s}", id, status);
+}
+// 또는 Lombok @ToString
+// 또는 record (자동으로 toString 생성)
+
+// 주의: toString에 민감정보(비밀번호, 카드번호) 포함 금지
+@ToString.Exclude  // Lombok
+private String password;
+```
+
+#### 실수 5: clone() 대신 복사 생성자/팩터리 미사용
+
+```java
+// 나쁜 예 — Cloneable 구현
+@Override
+public Order clone() {
+    try {
+        return (Order) super.clone();  // 얕은 복사 → 내부 컬렉션 공유
+    } catch (CloneNotSupportedException e) {
+        throw new AssertionError();
+    }
+}
+
+// 좋은 예 — 복사 생성자 또는 복사 팩터리
+public Order(Order original) {  // 복사 생성자
+    this.id = original.id;
+    this.status = original.status;
+    this.items = new ArrayList<>(original.items);  // 깊은 복사
+}
+
+public static Order copyOf(Order original) {  // 복사 팩터리
+    return new Order(original);
+}
+```
+
+---
+
+## 면접 포인트 (보강)
+
+#### Q. equals() 재정의 시 반드시 지켜야 할 규약은?
+
+```
+1. 반사성(Reflexivity): x.equals(x) == true
+2. 대칭성(Symmetry): x.equals(y) == y.equals(x)
+3. 추이성(Transitivity): x.equals(y) && y.equals(z) → x.equals(z)
+4. 일관성(Consistency): 변경 없으면 항상 같은 결과
+5. null 비교: x.equals(null) == false (NPE 금지)
+
+가장 자주 위반되는 규약: 대칭성
+  // 나쁜 예 — String과 CaseInsensitiveString 비교
+  CaseInsensitiveString cis = new CaseInsensitiveString("Polish");
+  String s = "polish";
+  cis.equals(s)  // true (대소문자 무시)
+  s.equals(cis)  // false (String은 CaseInsensitiveString 모름)
+  → 대칭성 위반!
+```
+
+#### Q. Comparable과 Comparator의 차이는?
+
+```
+Comparable<T>:
+  구현 클래스 자체에 자연 순서(natural ordering)를 정의
+  compareTo() 메서드 하나
+  Collections.sort(list) 사용 가능
+  예: String, Integer, LocalDate 모두 Comparable 구현
+
+Comparator<T>:
+  외부에서 비교 전략을 주입
+  compare() 메서드
+  여러 비교 방식이 필요할 때 (이름순, 나이순, 점수순)
+  예: list.sort(Comparator.comparing(Person::getName))
+
+실무:
+  도메인 객체의 기본 순서는 Comparable
+  다양한 정렬 기준이 필요하면 Comparator 팩터리 메서드 활용
+  list.sort(Comparator.comparing(Order::getAmount).reversed())
+```

@@ -205,7 +205,7 @@ boundIntroduce('대전');
 `bind`는 즉시 실행하지 않고 **`this`가 영구적으로 고정된 새 함수를 반환**합니다. 이 함수는 나중에 아무리 다른 방식으로 호출해도 `this`가 바뀌지 않습니다.
 
 ```mermaid
-graph TD
+graph LR
     A["명시적 바인딩"] --> B["call(thisArg, a, b"]
     A --> C["apply(thisArg, [a,"]
     A --> D["bind(thisArg, a) -"]

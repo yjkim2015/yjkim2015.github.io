@@ -26,7 +26,7 @@ JavaScript 런타임은 **한 명의 유능한 웨이터가 있는 레스토랑*
 JavaScript 코드가 실행될 때, 엔진은 **실행 컨텍스트**를 생성합니다. 실행 컨텍스트는 코드가 실행되는 환경으로, 변수·함수 선언·this 바인딩 정보를 담습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     GEC["Global Execution C"]
     FEC["Function Execution"]
     CS["Call Stack: printS"]
@@ -354,7 +354,7 @@ cleanup();
 JavaScript는 **프로토타입 기반 상속**을 사용합니다. 모든 객체는 `[[Prototype]]` 내부 슬롯을 통해 다른 객체를 참조하고, 이 체인을 따라 프로퍼티를 검색합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     DOG["dog 인스턴스"]
     ANIMAL_PROTO["Animal.prototype"]
     OBJ_PROTO["Object.prototype"]

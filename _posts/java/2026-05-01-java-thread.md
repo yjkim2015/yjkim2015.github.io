@@ -63,7 +63,7 @@ graph LR
 Java의 전통적인 Platform Thread는 OS 커널 스레드와 **1:1로 매핑**됩니다. `new Thread()`로 Java 스레드를 생성하면 OS 커널 스레드가 하나 만들어집니다.
 
 ```mermaid
-graph TD
+graph LR
   JT1[Java Thread 1] & JT2[Java Thread 2] & JT3[Java Thread 3] -->|JNI| OS
   OS --> CPU1[CPU 코어 1]
   OS --> CPU2[CPU 코어 2]
@@ -400,7 +400,7 @@ public class ProducerConsumer {
 멀티코어 환경에서 각 코어는 **CPU 캐시**를 가집니다. 한 스레드가 변수를 수정해도 다른 코어의 캐시에 즉시 반영되지 않을 수 있습니다.
 
 ```mermaid
-graph TD
+graph LR
   F1["코어1 캐시: flag=true"]
   F2["코어2 캐시: flag=false"]
   MM["메인 메모리: flag=true"]
@@ -1124,7 +1124,7 @@ Java 8의 `ConcurrentHashMap`은 세그먼트 락(Java 7 방식)을 버리고 **
 > **비유로 이해하기**: Java 7 ConcurrentHashMap은 도서관을 16개 구역으로 나눠 각 구역마다 사서 한 명이 관리하는 구조였습니다. Java 8은 책 한 권(버킷 하나)마다 독립적인 잠금장치를 달아, 특정 책을 빌리는 동안 다른 책에는 전혀 영향을 주지 않도록 개선한 것입니다.
 
 ```mermaid
-graph TD
+graph LR
   B0["버킷 0"]
   B1["버킷 1"]
   B2["버킷 2"]
@@ -1708,7 +1708,7 @@ t.setPriority(Thread.MAX_PRIORITY); // 10 (비추천: 이식성 없음)
 각 `Thread` 객체는 내부에 `ThreadLocal.ThreadLocalMap`을 가집니다. `ThreadLocal`은 해당 맵의 키 역할을 합니다.
 
 ```mermaid
-graph TD
+graph LR
   TA["Thread A"] --> MA["Map: tlA→사용자A, tlB"]
   TB["Thread B"] --> MB["Map: tlA→사용자B, tlB"]
   NOTE["동일 ThreadLocal, 스레"]

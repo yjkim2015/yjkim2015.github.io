@@ -268,3 +268,50 @@ public void outOfService() {
 ## Kubernetes 환경에서 Eureka
 
 K8s 내부 통신에는 K8s Service(ClusterIP)가 자체 Service Discovery를 제공한다. 단일 K8s 클러스터에서는 Eureka 없이 K8s Service를 사용하는 것이 권장된다. 하이브리드(온프레미스 + 클라우드) 또는 멀티 클러스터 환경에서는 Eureka가 여전히 유효하다.
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 유형 | Spring 통합 | 적합한 상황 |
+|---|---|---|---|
+| Spring Cloud Eureka | Client-side discovery | 완벽 | Spring 마이크로서비스 |
+| Kubernetes Service | Server-side discovery | 없음 (자체 제공) | K8s 전용 환경 |
+| Consul | Client-side + Health Check | 좋음 | 다언어 서비스, 헬스체크 강화 |
+| AWS Cloud Map | Server-side (관리형) | 없음 | AWS 환경 |
+| Nacos | Client-side + Config | 좋음 | Alibaba 클라우드 생태계 |
+
+**결론:** 순수 Spring 마이크로서비스 환경에서는 Eureka가 가장 간단하다. K8s 환경에서는 K8s Service가 Eureka 역할을 대체하므로 Eureka가 불필요해진다. 하이브리드 환경에서는 여전히 유효하다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **Self-Preservation Mode를 운영에서 비활성화** — `enable-self-preservation: false`로 설정하면 네트워크 파티션 상황에서 Eureka가 정상 인스턴스도 제거해버린다. Self-Preservation은 실제 장애와 네트워크 문제를 구분하기 위한 안전장치이므로 운영에서는 기본값(활성화)을 유지해야 한다.
+
+2. **Eureka Client 캐시 TTL 무시** — Eureka 클라이언트는 레지스트리를 30초마다 갱신한다. 인스턴스가 다운되어도 최대 90초(heartbeat 3번 미수신) 동안 레지스트리에 남아 있다. 이 시간 동안 요청이 다운된 인스턴스로 전달될 수 있으므로 Circuit Breaker와 함께 사용해야 한다.
+
+3. **단일 Eureka Server 운영** — Eureka Server가 단일 장애점이 된다. Eureka는 피어 복제(peer replication)를 지원하므로, 반드시 2개 이상의 서버를 서로 등록해 HA를 구성해야 한다.
+
+4. **인스턴스 IP 대신 hostname 등록** — 컨테이너 환경에서 hostname이 컨테이너 ID로 등록되면 외부에서 접근할 수 없다. `prefer-ip-address: true`와 `instance-id: ${spring.application.name}:${spring.cloud.client.ip-address}:${server.port}`를 설정해야 한다.
+
+5. **헬스체크 없이 Eureka에만 의존** — Eureka의 기본 헬스체크는 heartbeat만 확인한다. DB 연결 실패나 외부 의존성 장애로 서비스가 비정상이어도 Eureka에는 UP으로 표시된다. Spring Boot Actuator의 `/actuator/health`를 Eureka 헬스체크로 연동해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Eureka의 Self-Preservation Mode란?**
+> 일정 시간 동안 예상보다 적은 heartbeat가 수신되면(기본: 15분 내 85% 이하), Eureka는 네트워크 파티션으로 판단하고 인스턴스 제거를 중단한다. 실제 장애 인스턴스도 레지스트리에 남지만, 정상 인스턴스가 잘못 제거되는 것을 방지한다.
+
+**Q2. Client-side Discovery와 Server-side Discovery의 차이는?**
+> Client-side(Eureka): 클라이언트가 레지스트리에서 인스턴스 목록을 가져와 직접 로드밸런싱한다. 레지스트리 캐시 불일치 문제가 있다. Server-side(K8s Service, AWS ALB): 클라이언트는 고정 주소로 요청하고, 인프라가 로드밸런싱한다. 클라이언트가 단순하지만 인프라 의존성이 생긴다.
+
+**Q3. Eureka에 등록된 인스턴스가 다운됐을 때 얼마나 빨리 제거되는가?**
+> 기본 설정: heartbeat 간격 30초 × 3번 미수신 = 최대 90초. `lease-renewal-interval-in-seconds`와 `lease-expiration-duration-in-seconds`를 줄이면 더 빨리 감지할 수 있지만, 일시적 네트워크 지연으로 인한 오탐이 증가한다.
+
+**Q4. Spring Cloud LoadBalancer와 Ribbon의 차이는?**
+> Ribbon은 Netflix OSS 기반으로 유지보수가 종료됐다. Spring Cloud LoadBalancer는 Spring 팀이 관리하는 반응형 로드밸런서로, Reactor 기반이고 WebClient와 자연스럽게 통합된다. Spring Cloud 2020 이후 Ribbon 대신 표준으로 채택됐다.
+
+**Q5. Eureka 없이 서비스가 시작될 수 있게 하려면?**
+> `spring.cloud.discovery.enabled=false` 또는 `eureka.client.register-with-eureka=false`, `eureka.client.fetch-registry=false`로 설정한다. 개발 환경에서 Eureka 없이 직접 URL로 테스트할 때 유용하다.

@@ -387,3 +387,50 @@ public class OrderRequest {
 | Interceptor | Spring MVC 레벨. Bean 주입 가능 |
 | @ExceptionHandler | 컨트롤러 단위 예외 처리 |
 | @ControllerAdvice | 전역 예외 처리 |
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 학습 곡선 | 성능 | Spring 통합 | 적합한 상황 |
+|---|---|---|---|---|
+| 순수 Servlet | 높음 | 높음 | 없음 | 저수준 제어 필요 |
+| Spring MVC | 중간 | 중간 (블로킹) | 완벽 | 전통적 웹 서비스, REST API |
+| Spring WebFlux | 높음 | 높음 (논블로킹) | 완벽 | 고동시성, 스트리밍 |
+| JAX-RS (Jersey) | 중간 | 중간 | 보통 | Jakarta EE 환경 |
+| Micronaut / Quarkus | 중간 | 높음 (AOT) | 없음 | 네이티브 이미지, 서버리스 |
+
+**결론:** Spring MVC는 검증된 생태계와 광범위한 레퍼런스로 대부분의 REST API 서버에 최선의 선택이다. 동시 연결 수가 수만 이상이거나 전체 스택이 논블로킹이어야 할 때 WebFlux를 고려한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **`@RequestBody` 없이 JSON 파싱 시도** — POST 요청 바디를 `@RequestParam`이나 파라미터로 받으면 null이 반환된다. JSON 바디는 반드시 `@RequestBody`를 사용하고, Content-Type을 `application/json`으로 전송해야 한다.
+
+2. **`@ExceptionHandler`를 컨트롤러마다 중복 정의** — 각 컨트롤러에 `@ExceptionHandler`를 반복 정의하면 코드가 중복된다. `@ControllerAdvice`(또는 `@RestControllerAdvice`)를 사용해 전역 예외 처리를 한 곳에서 관리해야 한다.
+
+3. **Filter와 Interceptor의 역할 혼동** — Spring Bean에 접근이 필요한 공통 처리(인증 토큰 검증, 로깅)를 Filter에 구현하면 Bean 주입이 어렵다. Spring Bean을 사용하는 공통 처리는 Interceptor에, 서블릿 컨테이너 수준 처리(문자 인코딩, CORS 사전 처리)는 Filter에 구현한다.
+
+4. **`@ModelAttribute` vs `@RequestBody` 혼동** — `@ModelAttribute`는 폼 데이터(form-urlencoded)를 바인딩하고, `@RequestBody`는 JSON/XML 바디를 역직렬화한다. REST API에서 `@ModelAttribute`를 사용하면 JSON 바디가 바인딩되지 않는다.
+
+5. **`ResponseEntity` 반환 없이 HTTP 상태 코드 제어** — `return "success"`처럼 단순 문자열을 반환하면 항상 200이 반환된다. 생성은 `201 Created`, 삭제는 `204 No Content`를 반환해야 하므로 `ResponseEntity`를 사용하거나 `@ResponseStatus`를 명시해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. DispatcherServlet의 역할은?**
+> Spring MVC의 프론트 컨트롤러다. 모든 HTTP 요청을 받아 ① HandlerMapping으로 컨트롤러를 찾고, ② HandlerAdapter로 컨트롤러를 실행하고, ③ ViewResolver로 응답을 렌더링한다. 공통 관심사(인코딩, 예외 처리)를 한 곳에서 처리한다.
+
+**Q2. `@RestController`와 `@Controller`의 차이는?**
+> `@RestController`는 `@Controller` + `@ResponseBody`의 조합이다. 모든 메서드의 반환값이 HTTP 응답 바디로 직렬화된다. `@Controller`만 사용하면 메서드 반환값이 View 이름으로 해석되어 ViewResolver를 통해 처리된다.
+
+**Q3. HandlerInterceptor의 3개 메서드 실행 시점은?**
+> `preHandle()`: 컨트롤러 실행 전. `false` 반환 시 이후 처리 중단. 인증 처리에 주로 사용. `postHandle()`: 컨트롤러 실행 후, View 렌더링 전. 예외 발생 시 호출되지 않는다. `afterCompletion()`: View 렌더링 후, 항상 호출. 리소스 정리(MDC.clear)에 사용.
+
+**Q4. `@ControllerAdvice`의 우선순위 제어 방법은?**
+> `@Order(1)`로 우선순위를 지정하거나, `@ControllerAdvice(basePackages = "com.example")`로 적용 범위를 제한한다. 여러 `@ControllerAdvice`가 같은 예외를 처리하면 `@Order`가 낮을수록 먼저 적용된다.
+
+**Q5. ArgumentResolver는 어떤 역할을 하는가?**
+> 컨트롤러 메서드의 파라미터를 HTTP 요청에서 추출해 바인딩하는 역할이다. `@RequestParam`, `@PathVariable`, `@RequestBody`, `@AuthenticationPrincipal` 등이 모두 `HandlerMethodArgumentResolver` 구현체다. 커스텀 ArgumentResolver를 구현해 `@CurrentUser` 같은 어노테이션을 만들 수 있다.

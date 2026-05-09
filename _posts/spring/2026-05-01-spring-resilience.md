@@ -357,3 +357,49 @@ public void subscribeEvents() {
         });
 }
 ```
+
+---
+
+## 왜 이 기술인가?
+
+| 라이브러리 | Circuit Breaker | Retry | Bulkhead | Rate Limiter | 적합한 상황 |
+|---|---|---|---|---|---|
+| Resilience4j | O | O | O | O | Spring Boot 표준, 경량 |
+| Hystrix (Netflix) | O | X | O | X | 레거시 (유지보수 종료) |
+| Sentinel (Alibaba) | O | O | O | O | Alibaba 클라우드 생태계 |
+| Failsafe | O | O | X | X | 순수 Java, Spring 통합 없음 |
+
+**결론:** Spring Cloud 2020 이후 Hystrix가 유지보수 종료되어 Resilience4j가 표준이다. 함수형 API, Spring Boot Actuator 통합, Micrometer 메트릭을 기본 제공한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **Circuit Breaker를 모든 외부 호출에 무조건 적용** — DB 쿼리나 내부 메서드에 Circuit Breaker를 적용하면 오히려 복잡도만 증가한다. 외부 네트워크 호출(HTTP, gRPC)처럼 실패 가능성이 있는 I/O에만 적용하는 것이 원칙이다.
+
+2. **Retry + Circuit Breaker 순서 잘못 설정** — Retry가 Circuit Breaker 바깥에 있으면, Circuit Breaker가 OPEN 상태에서도 Retry가 반복 호출을 시도한다. 올바른 순서: `Retry → Circuit Breaker → (실제 호출)`. Retry는 Circuit Breaker보다 먼저 감싸야 한다.
+
+3. **fallback 메서드 시그니처 불일치** — `@CircuitBreaker(fallbackMethod = "fallback")`에서 fallback 메서드는 원본 메서드와 같은 파라미터 + `Throwable`을 마지막에 받아야 한다. 시그니처가 다르면 런타임에 `NoSuchMethodException`이 발생한다.
+
+4. **Bulkhead 설정 없이 슬로우 API 하나가 전체 스레드풀 점유** — 외부 API가 느려지면 해당 API를 호출하는 스레드가 모두 블로킹된다. Bulkhead로 외부 API별 스레드/세마포어를 격리하지 않으면 하나의 느린 서비스가 전체 애플리케이션을 마비시킨다.
+
+5. **운영 환경에서 Half-Open 상태 모니터링 없음** — Circuit Breaker가 HALF_OPEN 상태에서 테스트 요청을 보내는데, 이 상태가 반복되면 서비스가 회복되지 않고 있다는 신호다. Actuator의 `/actuator/circuitbreakers` 또는 Micrometer 메트릭으로 상태 변화를 알림으로 연동해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Circuit Breaker의 세 가지 상태와 전환 조건은?**
+> CLOSED: 정상 동작, 실패율이 임계값(기본 50%) 미만. OPEN: 호출 차단, 대기 시간(`waitDurationInOpenState`, 기본 60초) 후 HALF_OPEN으로 전환. HALF_OPEN: 제한된 테스트 요청 허용, 성공하면 CLOSED, 실패하면 다시 OPEN으로 복귀.
+
+**Q2. Resilience4j의 Count-based와 Time-based 슬라이딩 윈도우 차이는?**
+> Count-based: 최근 N번의 호출로 실패율 계산. 트래픽이 적을 때 소수의 실패로 Circuit Breaker가 열릴 수 있다. Time-based: 최근 N초 동안의 호출로 실패율 계산. 트래픽 양과 무관하게 시간 기준으로 평가해 더 안정적이다.
+
+**Q3. Bulkhead의 두 가지 구현 방식은?**
+> Semaphore Bulkhead: 동시 호출 수를 세마포어로 제한. 같은 스레드에서 실행되어 오버헤드가 낮다. ThreadPool Bulkhead: 별도 스레드풀에서 실행해 완전히 격리. 느린 호출이 호출 스레드를 블로킹하지 않는다. Reactor/WebFlux에서는 Semaphore가 더 적합하다.
+
+**Q4. `@Retry`와 Circuit Breaker를 함께 사용할 때 올바른 순서는?**
+> `Retry(CircuitBreaker(RateLimiter(func)))` 순서로 감싼다. Retry가 가장 바깥에 있어야 Circuit Breaker OPEN 상태에서 불필요한 재시도를 하지 않는다. Circuit Breaker가 OPEN이면 즉시 예외를 반환하고, Retry가 그 예외를 받아 재시도를 결정한다.
+
+**Q5. Resilience4j 메트릭을 모니터링하는 방법은?**
+> `resilience4j-micrometer` 의존성 추가 시 Micrometer를 통해 Prometheus 등으로 메트릭이 자동 노출된다. 주요 메트릭: `resilience4j.circuitbreaker.state`(상태), `resilience4j.circuitbreaker.failure.rate`(실패율), `resilience4j.retry.calls`(재시도 횟수). Grafana 대시보드와 연동해 상태 변화를 시각화한다.

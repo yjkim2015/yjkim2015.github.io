@@ -23,7 +23,7 @@ toc_label: 목차
 ## 1번 다이어그램 - 렌더링 전략 비교
 
 ```mermaid
-graph TD
+graph LR
     CSR["CSR: 빈 HTML + JS 번"]
     SSR["SSR: 요청마다 서버 HTML"]
     SSG["SSG: 빌드 시 HTML 생성"]

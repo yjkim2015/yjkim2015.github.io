@@ -22,7 +22,7 @@ toc_label: 목차
 ## 스레드 vs 코루틴 — 메모리와 성능 비교
 
 ```mermaid
-graph TD
+graph LR
     T1["Thread 1"] --- T2["Thread 2"] --- T3["Thread 3~1000"]
     Mem1["총 메모리: ~1GB"]
     C1["Coroutine 1~1000"] --> Pool["Thread Pool"]
@@ -155,7 +155,7 @@ suspend fun fetchUserDataResilient(userId: Long): UserData = supervisorScope {
 ## Dispatchers — 어떤 스레드에서 실행할 것인가
 
 ```mermaid
-graph TD
+graph LR
     D["Dispatchers"] --> IO["Dispatchers.IO"]
     D --> Default["Dispatchers.Defaul"]
     D --> Main["Dispatchers.Main"]
@@ -560,3 +560,189 @@ flowchart LR
 | `SharedFlow` | 이벤트 방출 Flow | 이벤트 버스 패턴 |
 | `withTimeout` | 시간 제한 실행 | 외부 API 타임아웃 |
 | `withContext` | Dispatcher 전환 | I/O ↔ CPU 전환 |
+
+---
+
+## 왜 코루틴인가? (vs Thread vs RxJava vs WebFlux)
+
+| 방식 | 동시성 모델 | 메모리 | 코드 복잡도 | 선택 기준 |
+|------|-----------|--------|-----------|---------|
+| **Thread** | OS 스레드 | 스레드당 ~1MB | 낮음 | 간단한 비동기, 소규모 |
+| **ThreadPool** | 스레드 재사용 | 풀 크기 제한 | 낮음 | Spring MVC 기본 방식 |
+| **RxJava** | Reactive, 콜백 체인 | 낮음 | 높음 (러닝커브) | Android, 레거시 반응형 |
+| **Kotlin 코루틴** | 경량 코루틴 | 코루틴당 ~수KB | 낮음 (순차 스타일) | Kotlin 프로젝트, MSA |
+| **WebFlux (Reactor)** | 반응형, Mono/Flux | 낮음 | 높음 | Java 프로젝트, 반응형 스트림 |
+
+```
+코루틴을 선택하는 이유:
+1. 경량성: OS 스레드 1개 = 1MB 스택
+            코루틴 1개 = 수KB → 수만 개 동시 실행 가능
+2. 순차 스타일: 비동기 코드를 동기처럼 작성 (콜백 지옥 없음)
+3. 구조화된 동시성: 코루틴 범위(scope)로 생명주기 관리
+4. Kotlin 네이티브: suspend 함수로 자연스러운 통합
+
+Thread 대비:
+  스레드 10,000개 → JVM OOM 가능
+  코루틴 10,000개 → 수십 MB 수준, 문제없음
+
+RxJava 대비:
+  RxJava: .flatMap().switchMap().observeOn() 체인 복잡
+  코루틴: async { } + await() 순차 스타일로 동일 효과
+```
+
+---
+
+## 실무에서 자주 하는 실수
+
+#### 실수 1: GlobalScope 사용 (구조화된 동시성 위반)
+
+```kotlin
+// 나쁜 예 — GlobalScope는 애플리케이션 생명주기와 무관
+fun processOrder(orderId: Long) {
+    GlobalScope.launch {  // 취소 불가, 메모리 누수 위험
+        sendNotification(orderId)
+    }
+}
+
+// 좋은 예 — 적절한 scope 사용
+class OrderService(private val scope: CoroutineScope) {
+    fun processOrder(orderId: Long) {
+        scope.launch {  // scope 취소 시 코루틴도 자동 취소
+            sendNotification(orderId)
+        }
+    }
+}
+
+// Spring에서는 CoroutineScope를 Bean으로 등록
+@Bean
+fun applicationScope() = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+```
+
+#### 실수 2: blocking 코드를 IO Dispatcher 없이 실행
+
+```kotlin
+// 나쁜 예 — DB 호출을 Default Dispatcher에서 실행
+suspend fun getUser(id: Long): User = withContext(Dispatchers.Default) {
+    userRepository.findById(id)  // Blocking I/O → Default 스레드 블로킹
+}
+
+// 좋은 예 — Blocking I/O는 반드시 IO Dispatcher 사용
+suspend fun getUser(id: Long): User = withContext(Dispatchers.IO) {
+    userRepository.findById(id)  // IO Dispatcher = 블로킹 전용 스레드풀
+}
+
+// Dispatcher 선택 기준:
+// Dispatchers.Default: CPU 집약적 작업 (계산, 파싱)
+// Dispatchers.IO: 블로킹 I/O (JDBC, 파일, 소켓)
+// Dispatchers.Main: UI 업데이트 (Android)
+```
+
+#### 실수 3: async 예외 처리 누락
+
+```kotlin
+// 나쁜 예 — async에서 발생한 예외가 조용히 무시됨
+val deferred = async { riskyOperation() }
+// await() 호출 전까지 예외가 전파되지 않음
+
+// 좋은 예 — 반드시 await() 또는 try-catch
+try {
+    val result = async { riskyOperation() }.await()
+} catch (e: Exception) {
+    log.error("작업 실패", e)
+}
+
+// 또는 SupervisorJob으로 자식 실패가 부모에 전파되지 않게
+val result = supervisorScope {
+    val a = async { operationA() }
+    val b = async { operationB() }
+    // a 실패해도 b는 계속 실행
+    Pair(runCatching { a.await() }, runCatching { b.await() })
+}
+```
+
+#### 실수 4: suspend 함수를 일반 스레드에서 호출
+
+```kotlin
+// 나쁜 예 — suspend 함수는 코루틴 컨텍스트 필요
+fun main() {
+    getUser(1L)  // 컴파일 에러: suspend 함수는 코루틴 내에서만 호출 가능
+}
+
+// 좋은 예 — runBlocking으로 코루틴 컨텍스트 생성
+fun main() = runBlocking {
+    val user = getUser(1L)  // OK
+    println(user)
+}
+// 주의: runBlocking은 현재 스레드를 블로킹 → 프로덕션 코드에서는 지양
+```
+
+#### 실수 5: Flow 수집을 메인 스레드에서 하면서 UI 업데이트
+
+```kotlin
+// Flow 수집 시 적절한 컨텍스트 사용
+userFlow
+    .flowOn(Dispatchers.IO)      // 데이터 생성은 IO 스레드
+    .map { it.toUiModel() }      // 변환
+    .collect { uiModel ->
+        updateUi(uiModel)         // 수집은 호출한 스레드(Main)
+    }
+```
+
+---
+
+## 면접 포인트
+
+#### Q. 코루틴의 suspend 함수란 무엇인가요?
+
+```kotlin
+// suspend 함수: 실행을 일시 중단했다가 재개할 수 있는 함수
+suspend fun fetchUser(id: Long): User {
+    delay(100)  // 스레드를 블로킹하지 않고 100ms 대기
+    return userRepository.findById(id)
+}
+
+// 일반 함수와의 차이:
+// 일반 함수: 호출 → 완료까지 스레드 점유
+// suspend 함수: 중단점에서 스레드 해방 → 다른 코루틴 실행 → 재개
+
+// 컴파일 후: Continuation 객체로 변환 (CPS 변환)
+// → 상태 머신으로 구현, 스택 프레임 대신 힙에 상태 저장
+```
+
+#### Q. launch와 async의 차이는?
+
+```kotlin
+// launch: 결과값 없음, Job 반환 (fire-and-forget)
+val job: Job = launch {
+    sendEmail()  // 결과가 필요 없는 작업
+}
+job.cancel()  // 취소 가능
+
+// async: 결과값 있음, Deferred<T> 반환
+val deferred: Deferred<User> = async {
+    fetchUser(id)  // 결과가 필요한 작업
+}
+val user: User = deferred.await()  // 결과 대기
+
+// 병렬 실행 패턴
+val userDeferred = async { fetchUser(id) }
+val orderDeferred = async { fetchOrders(id) }
+val user = userDeferred.await()    // 병렬 실행 후 결과 수집
+val orders = orderDeferred.await()
+```
+
+#### Q. 코루틴의 구조화된 동시성(Structured Concurrency)이란?
+
+```
+구조화된 동시성의 핵심:
+1. 부모 코루틴이 취소되면 자식 코루틴도 모두 취소
+2. 자식 코루틴이 모두 완료될 때까지 부모가 대기
+3. 자식 코루틴의 예외가 부모로 전파
+
+이점:
+- 코루틴 누수(leak) 방지: scope가 닫히면 모든 코루틴 자동 정리
+- 예외 전파 명확: 어디서 에러가 났는지 추적 가능
+- 생명주기 관리 용이: HTTP 요청 취소 시 하위 DB 작업도 자동 취소
+
+GlobalScope는 이 원칙을 위반 → 사용 지양
+```

@@ -130,7 +130,7 @@ db.users.updateOne(
 MongoDB 설계의 핵심 질문: **"이 데이터를 어떻게 조회할 것인가?"**
 
 ```mermaid
-graph TD
+graph LR
     Q{"함께 조회하는가?<br>독립적으로 업데이트하는가?<br>1:N 비율은?"}
     Q -->|"항상 함께 조회\n1:少"| Embed["임베딩"]
     Q -->|"독립적 업데이트 필요\n1:多"| Ref["참조"]
@@ -190,7 +190,7 @@ graph TD
 ## 인덱스 — 없으면 풀 스캔
 
 ```mermaid
-graph TD
+graph LR
     Without["인덱스 없는 쿼리"]
     Without --> Scan["전체 도큐먼트 순차 스캔"]
     With["인덱스 있는 쿼리"]

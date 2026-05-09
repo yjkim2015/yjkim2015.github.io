@@ -18,7 +18,7 @@ Java의 모든 클래스는 명시적으로 상속을 선언하지 않아도 `ja
 Java는 **단일 루트 계층(Single Root Hierarchy)** 을 채택합니다. 모든 클래스가 Object를 상속하므로 다음이 보장됩니다.
 
 ```mermaid
-graph TD
+graph LR
     Object --> String & Integer & ArrayList & MyClass["MyCustomClass"] & Etc["... (모든 클래스)"]
 ```
 

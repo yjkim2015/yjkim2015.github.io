@@ -57,7 +57,7 @@ Kafka 클러스터를 구성하는 **개별 서버 노드**다. 각 브로커는
 > **비유**: 브로커는 우체국의 지점이다. 편지(메시지)를 보관하고, 발신자와 수신자의 요청을 처리한다. 여러 지점이 모여 하나의 우체국 네트워크(클러스터)를 이룬다.
 
 ```mermaid
-graph TD
+graph LR
     B1["Broker1: P0-Leader"]
     B2["Broker2: P1-Leader"]
     B3["Broker3: P2-Leader"]
@@ -161,7 +161,7 @@ public class OrderConsumer {
 > **비유**: Consumer Group은 팀 프로젝트다. 팀원(컨슈머)이 많을수록 업무(파티션)를 나눠서 빨리 끝낼 수 있다. 단 한 업무를 두 팀원이 동시에 담당하는 일은 없다. 다른 팀(다른 그룹)은 같은 자료(토픽)를 독립적으로 처음부터 읽을 수 있다.
 
 ```mermaid
-graph TD
+graph LR
     P0 & P1 --> A1[Group-A: C1] & B1[Group-B: C1]
     P2 --> A2[Group-A: C2] & B2[Group-B: C2]
     P3 --> A3[Group-A: C3] & B2
@@ -295,7 +295,7 @@ ZooKeeper가 관리하는 정보:
 Kafka 2.8에서 Early Access, 3.3에서 Production Ready로 발표된 **ZooKeeper 없는 모드**다. Kafka 4.0에서는 ZooKeeper 지원이 완전히 제거되었다.
 
 ```mermaid
-graph TD
+graph LR
     C1["Controller1(Active)"] <--> C2["Controller2(Standby)"]
     C2 <--> C3["Controller3(Standby)"]
     C1 <--> C3
@@ -523,7 +523,7 @@ public class KafkaProducerConfig {
 ### acks 설정 비교 요약
 
 ```mermaid
-graph TD
+graph LR
     P0["acks=0: Producer →"]
     P1["acks=1: Producer →"]
     PA["acks=all: Producer"]
