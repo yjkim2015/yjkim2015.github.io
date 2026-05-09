@@ -350,3 +350,47 @@ flowchart LR
 ```
 
 금융/결제 시스템은 반드시 내구성을 우선해야 한다. 일시적 장애 허용보다 데이터 정확성이 더 중요하다.
+
+---
+
+## 왜 Kafka 복제를 알아야 하는가?
+
+`replication.factor`, `min.insync.replicas`, `acks`의 조합이 내구성과 가용성의 균형을 결정한다. 이 세 가지를 잘못 설정하면 브로커 한 대 장애에도 쓰기가 전부 차단되거나, 반대로 데이터가 유실된다. 복제 내부를 이해하면 ISR 축소 알림이 왔을 때 올바른 판단을 내릴 수 있다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: replication.factor=1로 운영 토픽 생성**
+브로커 1대 장애 시 해당 파티션이 영구적으로 unavailable 상태가 된다. 운영 토픽은 최소 `replication.factor=3`으로 생성하고, 클러스터 수준 기본값(`default.replication.factor=3`)을 설정해야 한다.
+
+**실수 2: min.insync.replicas=1로 내구성 보장 무효화**
+`acks=all`로 설정해도 `min.insync.replicas=1`이면 리더만 확인하면 된다. 레플리카 없이도 쓰기가 성공해 실질적으로 `acks=1`과 동일하다. `min.insync.replicas=2`(replication.factor=3 환경)가 실무 표준이다.
+
+**실수 3: ISR 축소 알림을 무시**
+`UnderReplicatedPartitions` 메트릭이 0보다 크면 일부 레플리카가 ISR에서 제외된 것이다. 이 상태에서 리더 장애가 발생하면 데이터 유실 위험이 높다. ISR 축소를 즉시 알림으로 받고 원인(브로커 과부하, 네트워크 지연)을 파악해야 한다.
+
+**실수 4: 레플리카 페치 설정 미튜닝으로 복제 지연**
+`replica.fetch.max.bytes`, `num.replica.fetchers`가 기본값이면 대용량 트래픽에서 레플리카가 리더를 따라가지 못한다. ISR에서 반복적으로 제외됐다 복귀하는 패턴이 나타난다. `num.replica.fetchers`를 늘리고 `replica.fetch.max.bytes`를 조정한다.
+
+**실수 5: Preferred Leader 복구를 자동화하지 않음**
+브로커 재시작 후 파티션 리더가 원래 브로커(preferred leader)로 돌아오지 않아 특정 브로커에 리더가 집중된다. `auto.leader.rebalance.enable=true`(기본)로 설정하거나 `kafka-leader-election.sh --election-type PREFERRED`를 주기적으로 실행해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. replication.factor, min.insync.replicas, acks의 관계는?**
+`replication.factor`는 복사본 수. `min.insync.replicas`는 `acks=all` 시 최소 확인 레플리카 수. `acks`는 프로듀서가 기다리는 확인 수준. 권장 조합: `replication.factor=3`, `min.insync.replicas=2`, `acks=all` — 브로커 1대 장애에도 쓰기 가능하고 데이터 유실 없음.
+
+**Q2. ISR에서 레플리카가 제외되는 조건은?**
+`replica.lag.time.max.ms`(기본 30초) 동안 리더의 LEO를 따라잡지 못하면 ISR에서 제외된다. 원인: ① 레플리카 브로커 과부하 ② 네트워크 지연 ③ GC pause. 제외된 레플리카가 다시 따라잡으면 자동으로 ISR에 복귀한다.
+
+**Q3. Unclean Leader Election이란?**
+ISR에 없는 레플리카(out-of-sync)가 리더로 선출되는 것이다. 서비스 가용성은 회복되지만 그 레플리카가 놓친 메시지는 영구 유실된다. `unclean.leader.election.enable=false`(기본)로 데이터 유실을 방지하되, 서비스 중단을 감수한다. 금융 시스템은 반드시 false를 유지해야 한다.
+
+**Q4. Follower 레플리카가 리더로부터 데이터를 가져오는 방식은?**
+Follower가 리더에게 Fetch Request를 보내 LEO 이후의 메시지를 가져온다(Pull 방식). 리더는 Follower의 Fetch offset을 추적해 ISR 포함 여부를 판단한다. `num.replica.fetchers` 스레드가 병렬로 여러 파티션을 페치한다.
+
+**Q5. 복제 지연(Replica Lag)을 모니터링하는 방법은?**
+`kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions` JMX 메트릭이 0보다 크면 복제 지연 파티션이 있다. `kafka-topics.sh --describe`로 파티션별 ISR 상태 확인. Prometheus kafka_exporter의 `kafka_topic_partition_under_replicated_partition` 메트릭으로 알림 설정.

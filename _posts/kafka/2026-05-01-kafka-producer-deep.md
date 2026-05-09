@@ -442,3 +442,47 @@ max.block.ms를 짧게 설정 (빠른 실패)
 비동기 전송 + 예외 처리로 Kafka 지연이 서비스를 블로킹하지 않도록 설계
 Circuit Breaker 패턴 적용 (Kafka 연결 실패 시 fallback)
 ```
+
+---
+
+## 왜 Producer 설정을 알아야 하는가?
+
+`acks`, `retries`, `linger.ms`, `batch.size`는 처리량, 지연, 내구성의 트레이드오프를 결정한다. 이 값들의 의미를 모르면 "메시지가 가끔 유실된다", "처리량이 예상보다 낮다"는 문제의 원인을 찾을 수 없다. 특히 `enable.idempotence`와 `transactional.id`는 정확히 이해해야 exactly-once를 올바르게 구현할 수 있다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: acks=1 + retries=0으로 유실 허용**
+기본 `acks=1`에서 리더가 확인했지만 레플리카에 복제되기 전에 장애가 나면 메시지가 유실된다. `retries=0`이면 전송 실패 시 재시도도 없다. 중요 데이터는 `acks=all`, `enable.idempotence=true`로 설정해야 한다.
+
+**실수 2: linger.ms=0으로 배치 효과 미활용**
+기본 `linger.ms=0`은 메시지가 생성되는 즉시 전송한다. 처리량이 높은 상황에서 작은 메시지를 개별 전송해 네트워크 왕복 오버헤드가 크다. `linger.ms=5~10`, `batch.size=65536`으로 설정하면 처리량이 크게 향상된다. 단, 지연이 linger.ms만큼 증가한다.
+
+**실수 3: 동기 전송(send().get())을 고처리량 경로에 사용**
+`producer.send(record).get()`은 브로커 응답을 기다리는 동기 호출이다. 스레드가 블로킹되어 처리량이 급감한다. 비동기 전송 + 콜백으로 처리하고, 실패 시 DLQ(Dead Letter Queue)에 저장하거나 재시도한다.
+
+**실수 4: 메시지 키 없이 전송해 순서 보장 실패**
+키 없이 전송하면 파티션이 라운드 로빈으로 선택된다. 같은 사용자의 이벤트가 여러 파티션에 분산되어 순서가 보장되지 않는다. 순서가 중요한 이벤트는 `user_id` 등을 키로 설정해 같은 파티션에 배치해야 한다.
+
+**실수 5: compression.type 미설정으로 네트워크/스토리지 낭비**
+기본값 `none`으로 압축하지 않는다. JSON 등 텍스트 메시지는 `snappy`(속도 우선) 또는 `lz4`(균형)로 압축하면 네트워크 대역폭과 브로커 스토리지를 30~70% 절감할 수 있다. 압축은 배치 단위로 적용되므로 배치 크기가 클수록 효율적이다.
+
+---
+
+## 면접 포인트
+
+**Q1. acks 설정별 내구성과 성능 트레이드오프는?**
+`acks=0`: 브로커 응답 대기 없음, 최고 처리량, 유실 가능. `acks=1`: 리더만 확인, 중간 균형, 리더 장애 시 유실 가능. `acks=all`: ISR 전체 확인, 최강 내구성, 지연 증가. 금융·결제는 `acks=all + min.insync.replicas=2`, 로그·지표는 `acks=1`이 실무 표준이다.
+
+**Q2. 멱등성 프로듀서와 트랜잭션 프로듀서의 차이는?**
+멱등성(`enable.idempotence=true`): 단일 파티션에서 중복 쓰기 방지. 재시도로 인한 중복 제거. 트랜잭션(`transactional.id` 설정): 여러 파티션/토픽에 원자적으로 쓰기. 모두 성공하거나 모두 실패. 멱등성은 트랜잭션의 사전 조건이다(`enable.idempotence=true` 자동 활성화).
+
+**Q3. RecordAccumulator의 역할은?**
+프로듀서 내부의 메시지 버퍼다. `send()` 호출 시 메시지를 즉시 전송하지 않고 파티션별 배치에 누적한다. `batch.size` 도달 또는 `linger.ms` 경과 시 Sender 스레드가 브로커로 전송한다. 이 구조가 비동기 배치 전송을 가능하게 한다.
+
+**Q4. 프로듀서의 재시도(retries)가 메시지 순서를 깨는 경우는?**
+`max.in.flight.requests.per.connection > 1`(기본 5)에서 재시도가 발생하면 이전 배치가 실패하고 다음 배치가 먼저 성공해 순서가 역전될 수 있다. `enable.idempotence=true`는 이를 방지하기 위해 자동으로 `max.in.flight.requests.per.connection=5`를 유지하면서도 순서를 보장한다.
+
+**Q5. 프로듀서 메트릭에서 가장 중요한 것은?**
+`record-error-rate`: 전송 실패율 — 0이어야 정상. `record-send-rate`: 초당 전송 메시지 수 — 처리량 확인. `request-latency-avg`: 브로커 응답 시간 — 네트워크/브로커 지연 확인. `batch-size-avg`: 배치 크기 — `batch.size`에 비해 너무 작으면 linger.ms 조정 필요.

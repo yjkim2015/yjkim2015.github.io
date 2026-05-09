@@ -608,3 +608,47 @@ delete.retention.ms=86400000       # tombstone 보관 기간 (1일)
 | 트랜잭션 | 여러 파티션 원자적 쓰기, offset도 트랜잭션 포함 |
 | 리더 선출 | ISR 중 첫 번째 후보 선출, Controller가 조율 |
 | 로그 컴팩션 | 동일 키 최신값만 유지, offset은 불변 |
+
+---
+
+## 왜 Kafka 내부 구조를 알아야 하는가?
+
+`acks`, `min.insync.replicas`, `isolation.level` 같은 설정값은 내부 구조를 모르면 왜 그 값이 필요한지 이해할 수 없다. 장애 시 "왜 메시지가 유실됐는가?", "왜 오프셋이 뒤로 돌아갔는가?"를 분석하려면 리더 선출, ISR, 트랜잭션 코디네이터 동작을 알아야 한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: isolation.level=read_committed 미설정으로 미완성 트랜잭션 읽기**
+Kafka 트랜잭션을 사용하는 프로듀서가 있을 때 Consumer의 `isolation.level`이 기본값 `read_uncommitted`면 아직 커밋되지 않은 트랜잭션의 메시지를 읽는다. 롤백되면 그 메시지는 유효하지 않다. 트랜잭션 프로듀서와 조합할 때는 `isolation.level=read_committed`가 필수다.
+
+**실수 2: transactional.id 중복 설정**
+같은 `transactional.id`를 가진 프로듀서 인스턴스가 여러 개 뜨면 이전 인스턴스의 트랜잭션이 강제 abort된다. 프로듀서 재시작 시 의도치 않은 트랜잭션 취소가 발생한다. `transactional.id`는 프로듀서 인스턴스마다 고유해야 하고, 재시작 시 동일 ID를 재사용해야 중복 방지가 동작한다.
+
+**실수 3: 리더 선출 시간을 고려하지 않은 타임아웃 설정**
+브로커 장애 후 새 리더가 선출되는 동안(수 초) 프로듀서 쓰기가 실패한다. `retries`와 `retry.backoff.ms`를 충분히 설정하지 않으면 이 기간 동안의 메시지가 유실된다. `delivery.timeout.ms`(기본 2분)를 리더 선출 예상 시간보다 길게 설정해야 한다.
+
+**실수 4: __consumer_offsets 토픽의 중요성 간과**
+Consumer 오프셋이 저장되는 내부 토픽이다. 이 토픽의 복제 인수가 낮거나 브로커 장애로 접근 불가하면 Consumer Group 전체가 오프셋을 커밋할 수 없다. `offsets.topic.replication.factor=3`(기본)이 적용되어 있는지 확인해야 한다.
+
+**실수 5: Epoch(리더 에폭) 개념 없이 Fencing 미적용**
+구 리더가 네트워크 분리 후 복구됐을 때 새 리더와 동시에 쓰기를 시도할 수 있다. Leader Epoch 메커니즘이 이를 감지하고 구 리더의 쓰기를 거부한다. `enable.idempotence=true`가 이 보호를 활성화한다. 멱등성을 끄면 Split-Brain 상황에서 데이터 불일치가 생긴다.
+
+---
+
+## 면접 포인트
+
+**Q1. Kafka 트랜잭션의 동작 원리는?**
+① 프로듀서가 Transaction Coordinator에 `beginTransaction()` 요청 ② 여러 파티션에 메시지 전송(트랜잭션 마커 포함) ③ `commitTransaction()` 시 Coordinator가 COMMIT 마커를 모든 파티션에 기록 ④ Consumer(`read_committed`)는 COMMIT 마커를 확인한 메시지만 반환. 롤백 시 ABORT 마커가 기록되고 해당 메시지를 Consumer가 건너뛴다.
+
+**Q2. 멱등성 프로듀서(Idempotent Producer)가 중복을 방지하는 방법은?**
+프로듀서에 PID(Producer ID), 파티션별 시퀀스 번호를 부여한다. 브로커는 각 PID-파티션-시퀀스 조합을 추적해 이미 받은 시퀀스면 중복으로 판단하고 무시한다. 네트워크 재시도로 인한 중복 쓰기를 방지한다. `enable.idempotence=true`로 활성화한다.
+
+**Q3. Kafka의 로그 세그먼트 관리는?**
+파티션의 데이터는 세그먼트 파일 단위로 저장된다(`log.segment.bytes` 기본 1GB). 활성 세그먼트에만 쓰기가 발생하고, 닫힌 세그먼트는 보존 정책(`log.retention.hours`, `log.retention.bytes`)에 따라 삭제된다. Log Compaction 정책에서는 동일 키의 최신 값만 보존한다.
+
+**Q4. High Watermark(HW)와 Log End Offset(LEO)의 차이는?**
+LEO는 각 레플리카의 마지막 메시지 오프셋이다. HW는 ISR의 모든 레플리카에 복제된 오프셋으로, Consumer는 HW까지만 읽을 수 있다. HW 이후의 메시지는 아직 ISR 전체에 복제되지 않아 리더 장애 시 유실될 수 있다.
+
+**Q5. Controller 브로커의 역할은?**
+클러스터 내 하나의 브로커가 Controller로 선출된다(KRaft에서는 KRaft 컨트롤러 쿼럼). Controller는 ① 파티션 리더 선출 ② 브로커 장애 감지 및 리더 재선출 ③ 새 토픽/파티션 메타데이터 전파를 담당한다. KRaft에서는 이 기능이 ZooKeeper 없이 Raft 합의 프로토콜로 처리된다.

@@ -733,3 +733,111 @@ graph LR
 | 금융 거래 | L4 (초저지연) |
 | 카나리 배포 | L7 (가중치 라우팅) |
 | 글로벌 서비스 | DNS GSLB + L7 |
+
+---
+
+## 왜 로드밸런서인가? (vs DNS Round Robin vs 단일 서버 스케일업)
+
+| 방식 | 장애 감지 | 세션 유지 | 트래픽 제어 | 적합 용도 |
+|---|---|---|---|---|
+| 단일 서버 스케일업 | 불가 (단일 장애점) | 불필요 | 불가 | 소규모, DB |
+| DNS Round Robin | 느림 (TTL 의존) | 불가 | 가중치 조정만 | 글로벌 지역 분산 |
+| L4 로드밸런서 | 빠름 (TCP 연결 기준) | IP 기반 | 포트/프로토콜만 | 게임, DB, 고성능 |
+| L7 로드밸런서 | 빠름 (HTTP 응답 기준) | 쿠키/헤더 기반 | URL, 헤더, 내용 | 웹 앱, MSA, A/B 테스트 |
+
+**DNS Round Robin의 한계**: DNS 캐시 TTL 동안 장애 서버로 트래픽이 계속 간다. 클라이언트 측 DNS 캐시를 제어할 수 없으므로 운영 환경에서는 Health Check가 있는 로드밸런서가 필수다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+### 실수 1: L7 로드밸런서에서 WebSocket 연결 끊김
+
+HTTP 로드밸런서는 기본적으로 요청-응답 후 연결을 종료하는 HTTP/1.1 기준으로 동작한다. WebSocket은 지속 연결이 필요한데, idle timeout이 짧으면 연결이 끊긴다.
+
+```nginx
+# Nginx WebSocket 프록시 설정
+location /ws/ {
+    proxy_pass http://backend;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 3600s;   # WebSocket idle timeout (기본 60s는 너무 짧음)
+    proxy_send_timeout 3600s;
+}
+```
+
+AWS ALB에서는 idle timeout을 최대 4000초까지 늘릴 수 있다.
+
+### 실수 2: Health Check 엔드포인트가 너무 무거움
+
+Health Check 경로(`/health`)에서 DB 조회, 캐시 연결 확인 등 무거운 로직을 실행하면, 초당 수십 번의 Health Check 요청이 서비스에 부하를 준다.
+
+```python
+# 나쁜 예 — DB 조회를 포함한 health check
+@app.route('/health')
+def health():
+    db.execute("SELECT 1")          # 매 체크마다 DB 부하
+    redis.ping()
+    return "OK"
+
+# 좋은 예 — 프로세스 생존만 확인 (readiness와 분리)
+@app.route('/health/live')
+def liveness():
+    return "OK", 200               # 즉시 응답
+
+@app.route('/health/ready')
+def readiness():
+    db.execute("SELECT 1")         # 트래픽 받을 준비 확인
+    return "OK", 200
+```
+
+liveness(생존)와 readiness(준비) 엔드포인트를 분리하고, 로드밸런서 Health Check에는 liveness만 사용한다.
+
+### 실수 3: Sticky Session(세션 고정)에 의존하는 설계
+
+특정 서버에 세션이 고정되면, 해당 서버 장애 시 해당 사용자의 세션이 소실된다. 또한 서버 간 트래픽 불균형이 발생한다.
+
+```
+# 잘못된 구조
+클라이언트 A → 항상 서버 1 (서버 1 장애 시 세션 소실)
+클라이언트 B → 항상 서버 2
+
+# 올바른 구조 — 세션을 외부 스토어로 분리
+클라이언트 A → 서버 1 또는 서버 2 (어느 쪽이든 Redis에서 세션 조회)
+클라이언트 B → 서버 1 또는 서버 2
+```
+
+```javascript
+// Redis 세션 저장 예시 (Express)
+app.use(session({
+    store: new RedisStore({ client: redisClient }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+}));
+```
+
+---
+
+## 면접 포인트
+
+**Q1. L4와 L7 로드밸런서의 핵심 차이는?**
+
+L4는 Transport Layer(TCP/UDP)에서 동작하며 IP와 포트만 보고 라우팅한다. HTTP 헤더나 URL을 볼 수 없다. 패킷 단위로 처리하므로 속도가 빠르다. L7은 Application Layer에서 동작하며 HTTP 헤더, URL 경로, 쿠키, 요청 본문까지 볼 수 있다. `/api`는 API 서버로, `/static`은 CDN으로 라우팅하는 것이 L7의 장점이다. 대신 TLS 종료, HTTP 파싱 오버헤드가 있다.
+
+**Q2. 로드밸런서 알고리즘 중 Round Robin과 Least Connection의 차이는?**
+
+Round Robin은 요청을 순서대로 각 서버에 분배한다. 요청 처리 시간이 균일할 때 적합하다. Least Connection은 현재 활성 연결이 가장 적은 서버에 요청을 보낸다. 요청마다 처리 시간이 다를 때(파일 업로드 혼재 등) 더 공정한 분배가 된다. 실무에서는 가중치(Weight)를 조합한 Weighted Round Robin이나 IP Hash(세션 고정)도 자주 쓴다.
+
+**Q3. Active-Active vs Active-Standby 고가용성 구성 차이는?**
+
+Active-Active는 두 로드밸런서가 동시에 트래픽을 처리한다. 처리량이 두 배가 되고, 한 대 장애 시 나머지가 이어받는다. Active-Standby는 하나가 Primary로 모든 트래픽을 처리하고, 나머지는 대기한다. 장애 감지(Heartbeat) 후 Standby가 VIP(Virtual IP)를 인수한다. VRRP/HSRP 프로토콜이 이 역할을 한다.
+
+**Q4. 로드밸런서 앞단에 CDN을 두는 이유는?**
+
+CDN은 정적 콘텐츠(이미지, JS, CSS)를 엣지 서버에서 직접 응답하여 로드밸런서와 Origin 서버의 부하를 줄인다. DDoS 트래픽을 CDN 레이어에서 흡수하고, SSL/TLS를 엣지에서 종료하여 Origin까지의 경로를 보호한다. 구성 순서는 사용자 → CDN(엣지) → 로드밸런서 → 앱 서버다. 정적 리소스는 CDN에서 끝나고, 동적 요청만 로드밸런서로 전달된다.
+
+**Q5. Health Check 실패로 모든 서버가 Down 처리되면 어떻게 되는가?**
+
+로드밸런서마다 동작이 다르다. Nginx는 모든 서버가 unhealthy면 에러 없이 요청을 계속 분배한다(비정상이지만 서비스는 유지). AWS ALB는 모든 타겟이 unhealthy면 타겟 그룹 내 모든 인스턴스에 요청을 분배한다(504 대신 실제 응답 시도). 이를 방지하려면 최소 Health Check 임계값을 설정하고, Circuit Breaker 패턴과 함께 사용해 연쇄 장애를 막아야 한다.

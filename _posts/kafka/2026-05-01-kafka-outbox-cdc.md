@@ -446,3 +446,53 @@ Relay 배치 크기 증가 (findTop100 → findTop1000)
 CDC 방식으로 전환 (폴링 DB 부하 제거)
 Outbox 파티셔닝 (PostgreSQL 파티션 테이블로 오래된 데이터 분리)
 ```
+
+---
+
+## 왜 Outbox 패턴인가? (vs 직접 Kafka 발행 vs Dual Write)
+
+| 방식 | 문제점 |
+|------|--------|
+| **Dual Write** (DB 저장 + Kafka 발행 동시) | DB 성공 후 Kafka 실패 시 이벤트 유실. Kafka 성공 후 DB 실패 시 중복 이벤트 |
+| **직접 Kafka 발행** (DB 없이) | Kafka 장애 시 이벤트 유실, 재처리 불가 |
+| **Outbox 패턴** | DB 트랜잭션 내에 Outbox 테이블에 이벤트 저장 → 별도 프로세스가 Kafka로 발행 → 원자성 보장 |
+
+**핵심**: DB 트랜잭션과 Kafka 발행을 하나의 원자적 단위로 묶는 것이 Outbox의 목적이다. 이중 쓰기 문제 없이 at-least-once 보장이 가능하다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: Outbox 테이블을 폴링하면서 processed 컬럼만 업데이트**
+폴링 주기마다 `SELECT * FROM outbox WHERE processed = false`를 실행한다. 대용량 Outbox에서 인덱스 없이 풀스캔이 발생한다. `created_at`과 `processed` 복합 인덱스를 추가하거나 CDC(Debezium)로 폴링 자체를 제거해야 한다.
+
+**실수 2: Outbox 테이블에 오래된 레코드가 쌓임**
+발행 완료된 레코드를 삭제하지 않아 Outbox 테이블이 수억 건으로 불어난다. 발행 확인 후 즉시 삭제하거나 파티셔닝으로 주기적 DROP PARTITION을 적용해야 한다.
+
+**실수 3: CDC 커넥터 장애 시 모니터링 부재**
+Debezium 커넥터가 멈춰도 DB와 Kafka 사이의 이벤트 전달이 중단된 것을 모른다. Kafka Connect 커넥터 상태, Outbox 테이블 미발행 레코드 수, Consumer Lag을 모니터링하고 알림을 설정해야 한다.
+
+**실수 4: 동일 이벤트 중복 발행 시 downstream 멱등성 미확보**
+Outbox 폴링 재시도나 Debezium 재시작으로 같은 이벤트가 여러 번 발행될 수 있다. Downstream Consumer가 멱등성(이미 처리한 이벤트 ID 추적)을 보장하지 않으면 중복 처리가 발생한다.
+
+**실수 5: Saga 보상 트랜잭션에서 Outbox 미활용**
+Saga의 각 스텝이 직접 Kafka에 발행한다. 스텝 실패 후 보상 이벤트를 발행하다 Kafka 장애가 나면 보상 자체가 실패한다. 보상 이벤트도 Outbox를 통해 발행해야 원자성이 보장된다.
+
+---
+
+## 면접 포인트
+
+**Q1. Outbox 패턴이 필요한 이유를 두 문장으로 설명하면?**
+DB 트랜잭션과 메시지 발행은 서로 다른 시스템이라 동시에 원자적으로 처리할 수 없다. Outbox 패턴은 이벤트를 DB 트랜잭션 내에 함께 저장하고 별도 프로세스가 발행함으로써 이중 쓰기 문제 없이 일관성을 보장한다.
+
+**Q2. Debezium CDC와 Outbox 폴링의 차이는?**
+폴링은 주기마다 DB에 SELECT를 실행해 미발행 레코드를 가져온다. 지연이 폴링 주기에 종속되고 DB에 부하가 발생한다. Debezium CDC는 DB의 변경 로그(binlog/WAL)를 실시간으로 읽어 Kafka로 스트리밍한다. 폴링 부하가 없고 지연이 수십 ms 수준이며 별도 Outbox 테이블 없이도 동작 가능하다.
+
+**Q3. Outbox 패턴과 Saga 패턴의 관계는?**
+Saga는 분산 트랜잭션을 로컬 트랜잭션의 연쇄로 처리하는 패턴이다. 각 Saga 스텝이 이벤트를 발행할 때 Outbox 패턴을 적용하면 스텝의 DB 변경과 이벤트 발행이 원자적으로 보장된다. Saga + Outbox는 분산 시스템의 데이터 일관성을 보장하는 검증된 조합이다.
+
+**Q4. Transactional Outbox의 성능 오버헤드는?**
+Outbox 테이블에 INSERT가 추가되므로 쓰기 트랜잭션마다 추가 I/O가 발생한다. 일반적으로 수십 ms 이하로 허용 가능한 수준이다. Outbox 테이블에 인덱스를 최소화하고 발행 완료 후 즉시 삭제해 테이블 크기를 유지하면 영향을 최소화할 수 있다.
+
+**Q5. CDC 없이 Outbox를 구현하는 가장 단순한 방법은?**
+스케줄러(Spring `@Scheduled`)가 주기적으로 `SELECT ... WHERE published = false LIMIT 100`을 실행해 미발행 이벤트를 Kafka로 발행하고 `published = true`로 업데이트한다. 단순하지만 폴링 지연, DB 부하, 다중 인스턴스 경쟁 조건(동시에 같은 레코드 처리)을 해결해야 한다. 다중 인스턴스는 `SELECT ... FOR UPDATE SKIP LOCKED`로 경쟁을 방지한다.

@@ -289,3 +289,100 @@ public class UserService {
 ## 마치며
 
 Tomcat과 Netty는 각각 다른 문제를 해결하기 위해 설계됐다. Tomcat은 단순함과 안정성을, Netty는 극한의 처리량과 확장성을 추구한다. Java 21의 Virtual Thread 도입으로 Tomcat도 I/O 바운드 시나리오에서 경쟁력을 갖게 됐다. 새 프로젝트라면 Virtual Thread + Tomcat 조합이 학습 비용 대비 성능을 얻기 쉬운 선택이다.
+
+---
+
+## 왜 이 기술인가? — 서버 모델 선택 가이드
+
+### 서버 I/O 모델 비교
+
+| 항목 | Tomcat (BIO/NIO) | Netty (NIO) | Tomcat + Virtual Thread | Spring WebFlux |
+|------|-----------------|-------------|------------------------|----------------|
+| 프로그래밍 모델 | 동기/블로킹 | 비동기/이벤트 | 동기/블로킹 | 리액티브 |
+| 코드 복잡도 | 낮음 | 높음 | 낮음 | 높음 |
+| I/O 바운드 성능 | 보통 | 매우 높음 | 높음 | 매우 높음 |
+| CPU 바운드 성능 | 보통 | 별도 스레드 풀 필요 | 보통 | 별도 스케줄러 필요 |
+| JPA/JDBC 사용 | 자연스러움 | 불가(블로킹) | 자연스러움 | 불가(R2DBC 필요) |
+| 메모리 (1만 동시 연결) | ~10GB | ~수십MB | ~수백MB | ~수십MB |
+| 스택 트레이스 가독성 | 명확 | 복잡 | 명확 | 복잡(리액티브 체인) |
+| 학습 곡선 | 낮음 | 매우 높음 | 낮음 | 높음 |
+| 적합한 사례 | REST API, 레거시 | WebSocket, gRPC, IoT | REST API, Java 21+ | 스트리밍, SSE |
+
+**Tomcat을 선택해야 할 때:**
+- JPA/Hibernate를 사용하는 기존 코드베이스
+- 팀의 리액티브 프로그래밍 경험이 없을 때
+- 단순 CRUD 위주의 비즈니스 API
+
+**Netty를 선택해야 할 때:**
+- 수만 개의 동시 연결을 유지해야 하는 경우 (WebSocket, SSE, 게임 서버)
+- gRPC 서버 구축
+- 커스텀 프로토콜 처리가 필요한 경우
+
+---
+
+## 실무에서 자주 하는 실수
+
+### 실수 1: I/O 바운드 작업에 Tomcat 기본 설정 그대로 사용
+
+외부 API를 많이 호출하는 서비스에서 `server.tomcat.threads.max=200` 기본값을 유지한다. 각 요청이 평균 200ms 대기하면 초당 최대 1,000 req/s가 한계다. Virtual Thread 활성화나 스레드 수 증가, 또는 WebFlux 전환을 고려해야 한다.
+
+```yaml
+# Java 21 + Spring Boot 3.2: 한 줄로 해결
+spring:
+  threads:
+    virtual:
+      enabled: true
+```
+
+### 실수 2: WebFlux 환경에서 블로킹 코드를 호출한다
+
+Netty 기반 WebFlux에서 JPA나 `Thread.sleep()` 같은 블로킹 코드를 EventLoop 스레드에서 직접 실행한다. EventLoop 스레드가 블로킹되면 해당 스레드가 처리하는 **모든 연결이 멈춘다**.
+
+```java
+// 잘못된 예: EventLoop 스레드에서 블로킹 호출
+public Mono<User> getUser(Long id) {
+    User user = userRepository.findById(id).get(); // 블로킹!
+    return Mono.just(user);
+}
+
+// 올바른 예: boundedElastic 스케줄러로 오프로드
+public Mono<User> getUser(Long id) {
+    return Mono.fromCallable(() -> userRepository.findById(id).get())
+               .subscribeOn(Schedulers.boundedElastic());
+}
+```
+
+### 실수 3: Netty를 단순 REST API에 도입한다
+
+처리 시간이 짧은 단순 REST API(< 5ms)는 Tomcat과 Netty의 성능 차이가 거의 없다. 오히려 리액티브 코드의 복잡성, 디버깅 어려움, 팀 학습 비용이 더 크다. Netty는 **수만 개의 동시 연결 유지** 또는 **스트리밍**이 필요할 때 도입한다.
+
+### 실수 4: Tomcat 스레드 수를 무한정 늘린다
+
+`server.tomcat.threads.max=2000`으로 늘려도 효과가 없다. OS 스레드 하나당 기본 스택 메모리가 512KB ~ 1MB이므로, 2,000 스레드면 약 2GB를 스레드 스택에 사용한다. 컨텍스트 스위칭 비용도 급증한다. 스레드 수보다는 연결 자체를 비동기로 처리하는 것이 근본 해결책이다.
+
+### 실수 5: keep-alive 타임아웃을 너무 길게 설정한다
+
+```yaml
+server:
+  tomcat:
+    keep-alive-timeout: 60000  # 60초 — 너무 길다
+    max-keep-alive-requests: 100
+```
+
+keep-alive 시간이 길면 스레드가 유휴 연결을 잡고 있어 스레드 풀이 고갈된다. 로드밸런서(Nginx/ALB) 타임아웃보다 서버 타임아웃을 짧게 설정해야 한다. 통상 20~30초가 적정값이다.
+
+---
+
+## 면접 포인트
+
+### Q1: Tomcat의 이벤트 기반 NIO와 Netty의 차이는?
+
+Tomcat NIO도 비블로킹 I/O를 사용하지만, **요청당 하나의 스레드를 할당하는 모델**은 유지한다. 스레드가 I/O를 기다리는 동안에는 다른 작업을 하지 않고 대기한다. Netty는 소수의 EventLoop 스레드가 수천 개의 연결을 **이벤트 기반**으로 처리한다. I/O 대기 중에는 다른 연결의 이벤트를 처리하므로 스레드 효율이 훨씬 높다.
+
+### Q2: C10K 문제란 무엇이고, 어떻게 해결하는가?
+
+C10K(Concurrent 10,000 connections) 문제는 10,000개 동시 연결을 처리할 때 스레드 기반 서버가 한계에 부딪히는 현상이다. 스레드당 1MB 스택 메모리라면 10,000 스레드는 10GB가 필요하다. 해결책은 세 가지다: (1) Netty같은 이벤트 루프 모델, (2) Java 21 Virtual Thread, (3) WebFlux + R2DBC 리액티브 스택.
+
+### Q3: Virtual Thread가 Netty를 대체할 수 있는가?
+
+단순 I/O 바운드 API에서는 Virtual Thread + Tomcat이 Netty/WebFlux와 비슷한 성능을 낸다. 하지만 **수만 개 연결을 장시간 유지**하는 WebSocket, SSE, IoT 서버에서는 Netty가 여전히 유리하다. Virtual Thread는 연결 하나에 스레드 하나를 생성하므로, 연결 수만큼 Virtual Thread가 생기고 스케줄링 오버헤드가 발생할 수 있다. 반면 Netty는 연결 수와 무관하게 EventLoop 스레드 수는 고정이다.
