@@ -1,7 +1,7 @@
 ---
-title: "SYSTEM_DESIGN"
+title: "SYSTEMDESIGN"
 layout: default
-permalink: /categories/system_design/
+permalink: /categories/systemdesign/
 ---
 
 <div style="display:flex; justify-content:center; gap:1.5em; max-width:1400px; margin:0 auto; padding:2em;">
@@ -15,10 +15,10 @@ permalink: /categories/system_design/
       <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
     </div></aside>
   <div class="content-container" style="flex:1; min-width:0;">
-    <h1 class="category-page__title">SYSTEM_DESIGN</h1>
+    <h1 class="category-page__title">SYSTEMDESIGN</h1>
 
     <div class="posts-grid">
-      {% assign posts = site.categories["SYSTEM_DESIGN"] %}
+      {% assign posts = site.categories["SYSTEMDESIGN"] %}
       {% for post in posts %}
         {% include archive-single.html type="card" %}
       {% endfor %}
