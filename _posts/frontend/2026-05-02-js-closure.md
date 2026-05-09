@@ -611,3 +611,120 @@ mindmap
 ```
 
 클로저는 단순히 "외부 변수에 접근하는 함수"가 아닙니다. 자바스크립트의 함수형 프로그래밍, 모듈 시스템, 상태 관리의 근간이 되는 핵심 개념입니다. React Hooks, Redux, 모든 JavaScript 라이브러리가 클로저를 기반으로 동작합니다. 클로저를 이해하면 이 모든 것의 동작 원리가 보이기 시작합니다.
+
+---
+
+## 왜 클로저인가? (vs 전역 변수 vs 클래스)
+
+| 방식 | 캡슐화 | 상태 유지 | 부작용 위험 | 적합 용도 |
+|---|---|---|---|---|
+| 전역 변수 | 없음 | 가능 | 높음 (어디서든 수정) | 지양 |
+| 클래스 인스턴스 | 중간 (`private` 필요) | 가능 | 중간 | OOP 패턴 |
+| 클로저 | 완전 (외부 접근 불가) | 가능 | 낮음 | 함수형 패턴, 팩토리 |
+
+클로저는 `private` 키워드 없이도 진정한 캡슐화를 구현할 수 있는 유일한 방법이다. React의 `useState`가 클로저로 구현되는 것이 그 증거다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+### 실수 1: var 루프 클로저 트랩
+
+```javascript
+// 나쁜 예 — var는 함수 스코프, i가 공유됨
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0)
+}
+// 출력: 3, 3, 3 (루프 종료 후 i=3)
+
+// 해결 1 — let 사용 (블록 스코프)
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0)
+}
+// 출력: 0, 1, 2
+
+// 해결 2 — IIFE로 클로저 캡처
+for (var i = 0; i < 3; i++) {
+  ;(function(j) {
+    setTimeout(() => console.log(j), 0)
+  })(i)
+}
+```
+
+### 실수 2: useEffect에서 stale closure
+
+```javascript
+// 나쁜 예 — count가 초기값 0으로 고정됨 (stale closure)
+function Counter() {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount(count + 1)  // count는 항상 0
+    }, 1000)
+    return () => clearInterval(id)
+  }, [])  // 의존성 배열 비어있음
+
+// 좋은 예 — 함수형 업데이트로 최신 값 참조
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount(prev => prev + 1)  // 항상 최신 값
+    }, 1000)
+    return () => clearInterval(id)
+  }, [])
+}
+```
+
+### 실수 3: 클로저로 인한 메모리 누수
+
+```javascript
+// 위험한 패턴 — 큰 데이터가 클로저에 캡처되어 GC 불가
+function setup() {
+  const largeData = new Array(1000000).fill('data')
+  document.addEventListener('click', () => {
+    console.log(largeData[0])  // largeData가 클로저에 묶임
+  })
+  // 이벤트 리스너를 제거하지 않으면 largeData는 영원히 메모리에 남음
+}
+
+// 해결 — 리스너 제거 또는 필요한 데이터만 캡처
+function setup() {
+  const largeData = new Array(1000000).fill('data')
+  const firstItem = largeData[0]  // 필요한 것만 캡처
+  const handler = () => console.log(firstItem)
+  document.addEventListener('click', handler)
+  return () => document.removeEventListener('click', handler)  // cleanup 반환
+}
+```
+
+---
+
+## 면접 포인트
+
+**Q1. 클로저란 무엇인가?**
+
+함수가 자신이 생성된 렉시컬 환경(스코프)을 기억하여, 그 환경 밖에서 실행되더라도 해당 환경의 변수에 접근할 수 있는 특성이다. 함수가 반환된 후에도 외부 함수의 변수가 메모리에 유지되는 것이 핵심이다. 실용적으로는 "데이터 프라이버시"와 "상태 유지"를 함수만으로 구현하는 메커니즘이다.
+
+**Q2. 클로저가 React Hook에서 어떻게 쓰이는가?**
+
+`useState`는 내부적으로 클로저로 구현된다. `useState`가 반환하는 `setState` 함수는 상태 값이 저장된 렉시컬 환경을 캡처한다. `useCallback`이 반환하는 함수도 클로저다 — deps 배열이 변경되기 전까지 이전 렌더의 변수를 캡처한(stale) 함수를 반환한다. stale closure 버그가 이 원리에서 발생한다.
+
+**Q3. 클로저로 private 변수를 만드는 방법은?**
+
+```javascript
+function createCounter() {
+  let count = 0  // 외부에서 직접 접근 불가
+  return {
+    increment: () => ++count,
+    decrement: () => --count,
+    getCount: () => count
+  }
+}
+const counter = createCounter()
+counter.increment()
+console.log(counter.count)     // undefined (접근 불가)
+console.log(counter.getCount()) // 1
+```
+
+**Q4. 클로저와 스코프 체인의 관계는?**
+
+클로저는 스코프 체인의 영속화다. 일반적으로 함수 실행이 끝나면 실행 컨텍스트와 내부 변수가 제거된다. 하지만 내부 함수가 외부 함수의 변수를 참조하면, 해당 변수는 참조가 살아있는 한 GC 대상이 되지 않는다. 스코프 체인을 통해 내부 함수 → 외부 함수 → 전역 순으로 변수를 탐색하는 메커니즘이 클로저의 기반이다.

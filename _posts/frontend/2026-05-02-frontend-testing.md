@@ -489,3 +489,90 @@ jobs:
 ```
 
 테스트의 목적은 **버그를 찾는 것**이 아니라 **버그가 프로덕션에 가지 않도록 막는 것**입니다. 많은 테스트보다 **의미 있는 테스트**가 더 중요합니다. 사용자가 실제로 하는 행동을 테스트하세요. 내부 구현을 테스트하는 것은 리팩토링할 때마다 테스트를 고쳐야 하는 짐이 됩니다.
+
+---
+
+## 왜 이 테스트 전략인가? (vs 커버리지 100% vs 테스트 없음)
+
+| 전략 | 비용 | 신뢰도 | 유지보수 | 적합 상황 |
+|---|---|---|---|---|
+| 테스트 없음 | 초기 0 | 없음 | N/A | 1회성 프로토타입 |
+| 단위 테스트 100% | 높음 | 중간 (구현 변경 시 깨짐) | 높음 | 순수 함수 라이브러리 |
+| 통합 테스트 중심 | 중간 | 높음 | 중간 | 컴포넌트 기반 앱 |
+| E2E 테스트만 | 낮음 (작성) | 높음 | 낮음 (느리고 불안정) | 핵심 사용자 플로우 |
+| Testing Trophy | 중간 | 높음 | 중간 | 대부분의 프론트엔드 앱 |
+
+**Testing Trophy (Kent C. Dodds)**: 정적 분석(TypeScript, ESLint) → 단위 테스트(소량) → 통합 테스트(최다) → E2E(소량). 통합 테스트가 가장 ROI가 높다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+### 실수 1: 구현 세부사항을 테스트
+
+```typescript
+// 나쁜 예 — 내부 상태를 직접 검사
+test('counter increments', () => {
+  const { result } = renderHook(() => useCounter())
+  act(() => result.current.increment())
+  expect(result.current.count).toBe(1)  // 내부 상태 노출
+})
+
+// 좋은 예 — 사용자가 보는 것을 테스트
+test('counter increments', async () => {
+  render(<Counter />)
+  await userEvent.click(screen.getByRole('button', { name: /increment/i }))
+  expect(screen.getByText('Count: 1')).toBeInTheDocument()
+})
+```
+
+구현이 변경되어도(useState → useReducer) 사용자 행동 기반 테스트는 깨지지 않는다.
+
+### 실수 2: 모든 것을 Mock하는 단위 테스트
+
+```typescript
+// 나쁜 예 — 너무 많은 Mock으로 실제 동작 검증 불가
+jest.mock('../api/products')
+jest.mock('../hooks/useCart')
+jest.mock('../utils/price')
+// 실제로는 아무것도 테스트하지 않음
+
+// 좋은 예 — 외부 의존성(네트워크)만 Mock
+import { http, HttpResponse } from 'msw'
+const handlers = [
+  http.get('/api/products', () => HttpResponse.json([{ id: 1, name: 'Test' }]))
+]
+// 컴포넌트 → 훅 → API 호출까지 실제 코드 경로 검증
+```
+
+### 실수 3: `getByTestId`에 의존
+
+```typescript
+// 나쁜 예 — testId는 사용자가 볼 수 없는 구현 세부사항
+screen.getByTestId('submit-button')
+
+// 좋은 예 — 접근성 쿼리 사용 (스크린 리더도 테스트됨)
+screen.getByRole('button', { name: /제출/i })
+screen.getByLabelText('이메일')
+screen.getByPlaceholderText('검색어를 입력하세요')
+```
+
+---
+
+## 면접 포인트
+
+**Q1. 단위 테스트, 통합 테스트, E2E 테스트의 차이와 각각 언제 쓰는가?**
+
+단위 테스트는 순수 함수, 유틸리티, 훅을 격리하여 테스트한다. 빠르고 안정적이다. 통합 테스트는 컴포넌트가 훅, API와 함께 동작하는지 검증한다. RTL(React Testing Library) + MSW 조합이 표준이다. E2E는 Playwright/Cypress로 실제 브라우저에서 사용자 플로우 전체를 검증한다. 느리고 불안정하므로 핵심 플로우(로그인, 결제)에만 사용한다.
+
+**Q2. React Testing Library의 철학은 무엇인가?**
+
+"테스트는 소프트웨어가 사용되는 방식과 유사할수록 더 많은 신뢰를 준다." 내부 상태(`state`), 인스턴스 메서드, 컴포넌트 이름 기반 쿼리를 지양하고, 사용자가 실제로 보고 상호작용하는 것(`role`, `label`, `text`)으로 쿼리한다. 이 접근법은 리팩토링에 강하고, 접근성 개선을 자연스럽게 유도한다.
+
+**Q3. MSW(Mock Service Worker)를 사용하는 이유는?**
+
+`jest.mock`으로 API 모듈 자체를 Mock하면 실제 HTTP 클라이언트(axios, fetch) 로직이 검증되지 않는다. MSW는 서비스 워커 또는 Node.js 인터셉터로 실제 네트워크 레이어에서 요청을 가로채 Mock 응답을 반환한다. 동일한 핸들러를 개발 서버와 테스트 환경에서 재사용할 수 있다.
+
+**Q4. 테스트 커버리지 100%가 왜 좋지 않을 수 있는가?**
+
+커버리지는 줄이 실행되었는지만 측정하며, 의미 있는 검증이 됐는지는 보장하지 않는다. 커버리지를 채우기 위해 `expect(true).toBe(true)` 같은 무의미한 테스트를 작성하거나, 테스트하기 어려운 코드를 테스트하려고 프로덕션 코드를 테스트 친화적으로 억지로 변형하게 된다. 중요한 것은 커버리지 숫자가 아니라 핵심 사용자 플로우가 테스트되었는가다.

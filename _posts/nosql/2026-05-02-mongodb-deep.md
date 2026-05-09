@@ -403,3 +403,56 @@ graph LR
 | 금융 트랜잭션 | | O |
 | 복잡한 JOIN 보고서 | | O |
 | 수평 확장 필요 | O | 복잡 |
+
+---
+
+## 왜 MongoDB인가? (vs PostgreSQL JSONB vs Cassandra)
+
+| | **MongoDB** | **PostgreSQL + JSONB** | **Cassandra** |
+|--|-------------|------------------------|---------------|
+| **문서 모델** | 네이티브 | JSON 컬럼으로 지원 | 없음(와이드컬럼) |
+| **스키마 유연성** | 높음(동적) | 중간(스키마+JSON 혼용) | 낮음(컬럼 고정) |
+| **트랜잭션** | 4.0+ 다중 문서 ACID | 완전 ACID | 경량 트랜잭션만 |
+| **수평 확장** | 내장 샤딩 | 복잡(Citus 필요) | 네이티브, 선형 확장 |
+| **JOIN/집계** | 제한적(Aggregation Pipeline) | 강력 | 매우 제한적 |
+| **적합한 용도** | 콘텐츠, 카탈로그, 가변 스키마 | 구조화 데이터 + 일부 JSON | 대규모 쓰기, IoT, 시계열 |
+
+**실무 판단**: 스키마가 자주 변하고 중첩 구조가 많으면 MongoDB. 관계형 데이터가 주인데 일부 JSON이 필요하면 PostgreSQL JSONB. 초대규모 쓰기와 단순 조회가 핵심이면 Cassandra.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 인덱스 없이 대용량 컬렉션에 쿼리**
+`find({status: "active"})`를 인덱스 없이 실행한다. 컬렉션 풀스캔이 발생해 수억 건에서 수십 초가 걸린다. `explain("executionStats")`로 `COLLSCAN` 여부를 확인하고 자주 쓰는 필터 필드에 인덱스를 생성해야 한다.
+
+**실수 2: 무제한 배열 필드 설계**
+하나의 문서에 댓글, 태그, 좋아요 목록을 배열로 저장한다. 배열이 수천~수만 개로 늘어나면 문서 크기가 16MB BSON 한계에 가까워지고 업데이트마다 전체 문서를 다시 쓴다. 성장할 수 있는 배열은 별도 컬렉션으로 분리해야 한다.
+
+**실수 3: writeConcern=0으로 운영**
+응답 없이 발사하고 잊는(fire-and-forget) 쓰기는 서버 장애 시 데이터가 유실된다. 기본값 `writeConcern: {w: 1}`은 Primary 확인, `{w: "majority"}`는 레플리카 과반수 확인이다. 중요 데이터는 `{w: "majority", j: true}`(저널 포함)를 사용한다.
+
+**실수 4: ObjectId가 아닌 자체 문자열을 _id로 사용 시 성능 저하**
+UUID 문자열을 `_id`로 쓰면 ObjectId(12바이트)보다 크고 정렬이 비효율적이다. ObjectId는 타임스탬프를 포함해 삽입 시간 순서로 정렬된다. 자체 _id가 필요하면 UUID v7이나 ULID처럼 단조 증가하는 값을 사용한다.
+
+**실수 5: Aggregation Pipeline에서 $lookup 남용**
+`$lookup`(JOIN)은 MongoDB 설계 철학에 반한다. 자주 함께 조회하는 데이터는 임베딩하는 것이 MongoDB의 권장 방식이다. $lookup이 많아지면 RDBMS보다 성능이 나쁠 수 있다. $lookup은 가끔 필요한 관계에만 사용하고 핵심 쿼리 경로에서는 제거한다.
+
+---
+
+## 면접 포인트
+
+**Q1. MongoDB의 스키마 설계 원칙은?**
+"함께 접근하는 데이터는 함께 저장한다(embed), 독립적으로 접근하거나 크기가 무제한으로 증가하는 데이터는 분리한다(reference)." RDBMS의 정규화 원칙과 반대로 접근 패턴 중심으로 설계한다. 1:1, 1:소수(few)는 임베딩, 1:다수(many), N:M은 참조가 기본 원칙이다.
+
+**Q2. MongoDB Replica Set의 동작 원리는?**
+Primary 1개 + Secondary N개로 구성된다. 모든 쓰기는 Primary에, 읽기는 `readPreference`에 따라 Primary 또는 Secondary에서 수행한다. Primary 장애 시 Secondary들이 투표로 새 Primary를 선출한다(과반수 투표 필요 → 홀수 개 노드 권장). Arbiter는 데이터 없이 투표만 참여한다.
+
+**Q3. WiredTiger 스토리지 엔진의 특징은?**
+MongoDB 3.2+의 기본 스토리지 엔진이다. MVCC 기반으로 읽기-쓰기 충돌을 최소화한다. 문서 수준 잠금(document-level locking)으로 컬렉션 수준 잠금이었던 MMAPv1보다 동시성이 크게 향상됐다. 스내피(snappy) 압축으로 스토리지를 60~80% 줄인다.
+
+**Q4. 언제 MongoDB 트랜잭션을 사용하는가?**
+기본적으로 단일 문서 연산은 원자적이므로 트랜잭션이 불필요하다. 여러 컬렉션에 걸친 원자적 변경이 필요할 때 다중 문서 트랜잭션(4.0+)을 사용한다. 단, 트랜잭션은 성능 오버헤드가 크므로 남용하지 않는다. 트랜잭션이 자주 필요하다면 RDBMS가 더 적합한 선택일 수 있다.
+
+**Q5. Change Stream이란?**
+컬렉션, 데이터베이스, 클러스터 수준의 변경 이벤트를 실시간으로 수신하는 기능이다. 내부적으로 oplog를 기반으로 한다. CDC(Change Data Capture) 없이 MongoDB 변경을 다른 시스템에 반영하거나 이벤트 기반 아키텍처를 구현할 때 활용한다. Kafka Connect MongoDB Source Connector도 Change Stream을 기반으로 한다.

@@ -684,3 +684,28 @@ graph TB
 | Refresh | 검색 가능성 전환 | 기본 1초, 대량 인덱싱 시 비활성화 |
 
 **최종 원칙:** Elasticsearch는 **검색 엔진**이지 **데이터베이스**가 아니다. 원본 데이터는 RDBMS나 NoSQL에 저장하고, Elasticsearch는 검색·분석 전용 뷰로 사용하라. 매핑은 반드시 명시적으로 설정하고, 한국어 서비스라면 Nori는 선택이 아닌 필수다.
+
+---
+
+## 왜 Elasticsearch인가? (vs PostgreSQL 전문 검색 vs Solr)
+
+| | **Elasticsearch** | **PostgreSQL Full-Text** | **Solr** |
+|--|-------------------|--------------------------|----------|
+| **확장성** | 수평 확장, 수십억 문서 | 단일 서버 한계 | 수평 확장 가능 |
+| **실시간성** | ~1초 딜레이(refresh) | 즉시 | ~1초 딜레이 |
+| **집계/분석** | 강력(Aggregation) | 제한적 | 중간 |
+| **운영 편의** | REST API, Kibana | DB 내장, 추가 도구 불필요 | 관리 UI 있음 |
+| **한국어 지원** | Nori 플러그인 | pg_bigm | Nori 포팅 |
+| **주 용도** | 검색+분석 통합, 로그 분석(ELK) | 소규모 전문 검색 | 엔터프라이즈 검색 |
+
+**실무 판단**: 로그 분석(ELK Stack), 대규모 전문 검색, 실시간 분석 대시보드는 Elasticsearch. 데이터가 이미 PostgreSQL에 있고 검색 요구가 단순하면 pg_trgm + GIN 인덱스로 충분할 수 있다.
+
+---
+
+## 면접 포인트 (보강)
+
+**Q4. Elasticsearch 인덱스 샤드 수를 어떻게 결정하는가?**
+샤드는 나중에 줄일 수 없다(인덱스 재생성 필요). 너무 많으면 오버헤드(각 샤드가 Lucene 인스턴스), 너무 적으면 확장 불가. 경험 법칙: 샤드당 10~50GB, 노드당 샤드는 힙 1GB당 20개 이하. 초기에는 보수적으로(5~10개)로 시작하고 rollover API로 인덱스를 주기적으로 교체한다.
+
+**Q5. Elasticsearch의 Near Real-Time(NRT) 검색이란?**
+문서 색인 후 즉시 검색되지 않는다. `refresh_interval`(기본 1초)마다 메모리 버퍼를 Lucene 세그먼트로 flush해야 검색 가능해진다. 대량 인덱싱 시 `refresh_interval=-1`로 비활성화하고 완료 후 수동 refresh하면 처리량이 크게 향상된다.

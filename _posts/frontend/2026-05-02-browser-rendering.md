@@ -428,3 +428,90 @@ document.body.appendChild(fragment); // 1번만 리플로우
 ```
 
 브라우저 렌더링을 이해하면 성능 문제의 근본 원인을 파악하고 효과적으로 해결할 수 있습니다. 모든 최적화의 핵심은 결국 하나입니다. **불필요한 레이아웃 재계산과 페인트 작업을 줄이는 것.** 이 원칙만 기억해도 대부분의 성능 문제를 해결할 수 있습니다.
+
+---
+
+## 왜 이 개념인가? (vs 프레임워크가 다 해주는데)
+
+| 증상 | 표면적 원인 | 렌더링 지식 없으면 | 렌더링 지식 있으면 |
+|---|---|---|---|
+| 스크롤 버벅임 | "컴퓨터가 느려서" | 재시작, 최적화 포기 | Forced Reflow 감지, requestAnimationFrame 적용 |
+| 애니메이션 끊김 | "CSS가 문제" | 임의 수정 반복 | `left/top` → `transform` 전환으로 GPU 레이어 분리 |
+| 빈 화면 노출 | "API가 느려서" | 로딩 스피너만 추가 | CRP 이해 → 렌더링 블로킹 JS 제거, 인라인 크리티컬 CSS |
+| CLS (레이아웃 이동) | "디자인 문제" | 픽스 불가 | 이미지 width/height 명시, 동적 콘텐츠 공간 예약 |
+
+React/Vue가 Virtual DOM을 써도, 최종 DOM 업데이트 → 브라우저 Reflow/Repaint는 동일하게 발생한다. 프레임워크는 불필요한 DOM 업데이트를 줄여주지만, 레이아웃 트래싱이나 컴포지트 레이어 남용은 여전히 개발자 책임이다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+### 실수 1: 루프 안에서 Layout Thrashing
+
+```javascript
+// 나쁜 예 — 읽기/쓰기 교차로 Reflow 반복 유발
+const items = document.querySelectorAll('.item')
+items.forEach(item => {
+  const height = item.offsetHeight  // 읽기 → Reflow 강제
+  item.style.height = height + 10 + 'px'  // 쓰기 → 레이아웃 무효화
+})
+// N개 요소 → N번 Reflow 발생
+
+// 좋은 예 — 읽기를 먼저 모아서 처리
+const heights = Array.from(items).map(item => item.offsetHeight)  // 읽기 일괄
+items.forEach((item, i) => {
+  item.style.height = heights[i] + 10 + 'px'  // 쓰기 일괄
+})
+// 1번 Reflow
+```
+
+### 실수 2: 애니메이션에 left/top 사용
+
+```css
+/* 나쁜 예 — Reflow + Repaint 유발 */
+.moving { transition: left 0.3s; left: 100px; }
+
+/* 좋은 예 — GPU 컴포지트 레이어에서 처리 (Reflow/Repaint 없음) */
+.moving { transition: transform 0.3s; transform: translateX(100px); }
+```
+
+`transform`과 `opacity`만이 컴포지트 단계에서 처리되어 메인 스레드를 거치지 않는다.
+
+### 실수 3: will-change 남용
+
+```css
+/* 나쁜 예 — 모든 요소에 적용 시 VRAM 고갈 */
+* { will-change: transform; }
+
+/* 좋은 예 — 실제 애니메이션 직전에만 JS로 추가/제거 */
+element.addEventListener('mouseenter', () => {
+  element.style.willChange = 'transform'
+})
+element.addEventListener('animationend', () => {
+  element.style.willChange = 'auto'  // 반드시 해제
+})
+```
+
+---
+
+## 면접 포인트
+
+**Q1. Reflow와 Repaint의 차이는? 어떻게 최소화하는가?**
+
+Reflow(Layout)는 요소의 크기/위치를 재계산하는 과정이다. `width`, `height`, `margin`, `offsetTop` 같은 기하학적 속성 변경 시 발생하며, 부모-자식 관계로 전파된다. Repaint는 색상, 배경색, 그림자 등 시각적 속성만 변경될 때 발생하며 Reflow보다 비용이 낮다. 최소화 방법: DOM 변경을 batch 처리(DocumentFragment), 읽기/쓰기 분리, `transform`/`opacity` 전용 애니메이션.
+
+**Q2. async와 defer의 차이는?**
+
+둘 다 HTML 파싱을 블로킹하지 않고 스크립트를 병렬 다운로드한다. `async`는 다운로드 완료 즉시 실행하므로 실행 순서가 보장되지 않는다. `defer`는 HTML 파싱 완료 후, DOMContentLoaded 이벤트 직전에 선언 순서대로 실행된다. 독립적인 서드파티 스크립트(광고, 분석)는 `async`, 의존성이 있는 앱 스크립트는 `defer`.
+
+**Q3. transform이 left/top보다 빠른 이유는?**
+
+`left`/`top` 변경 시 브라우저는 레이아웃(Reflow) → 페인트(Repaint) → 컴포지트 전 과정을 거친다. `transform`은 이미 분리된 컴포지트 레이어에서 GPU가 직접 처리하므로 메인 스레드와 레이아웃 재계산을 건너뛴다. 60fps 애니메이션을 유지하려면 메인 스레드 작업이 16ms 이내여야 하는데, `transform`은 이 제약에서 자유롭다.
+
+**Q4. Critical Rendering Path 최적화 방법 3가지는?**
+
+(1) 렌더링 블로킹 CSS를 인라인 처리하거나 `<link rel="preload">`로 우선 로드한다. (2) `<script>`를 `</body>` 직전으로 이동하거나 `defer` 사용해 파싱 블로킹을 제거한다. (3) 초기 뷰포트에 필요한 크리티컬 CSS만 인라인으로 포함하고, 나머지는 비동기 로드한다.
+
+**Q5. requestAnimationFrame을 사용해야 하는 이유는?**
+
+`setTimeout(fn, 0)`으로 애니메이션을 처리하면 브라우저 렌더링 주기(16.7ms)와 어긋나 프레임 드롭이 발생한다. `requestAnimationFrame`은 브라우저가 다음 프레임을 그리기 직전에 콜백을 실행하므로 렌더링 주기와 동기화된다. 탭이 비활성화되면 자동으로 일시 정지되어 배터리/CPU를 절약한다.
