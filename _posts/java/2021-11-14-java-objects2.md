@@ -20,7 +20,7 @@ Part 1에서 객체·책임·의존·캡슐화를 다뤘습니다. 이번에는 
 Java에서는 **타입 상속**으로 다형성을 구현합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["타입 상속 두 가지"] --> B["인터페이스 상속"]
     A --> C["구현 상속"]
     B --> B1["다중 구현 가능"]
@@ -151,7 +151,7 @@ public class DataFlowController {
 추상화를 적용했지만 아직 if/else가 남아 있습니다. 어디선가 "어떤 구현체를 만들지" 결정해야 하기 때문입니다. 이 결정 책임을 **Factory** 객체로 분리하는 것이 팩토리 패턴입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["ByteSourceFactory\"] --> B["FileDataReader"]
     A --> C["HttpDataReader"]
     D["DataFlowController"] -->|"getByteSource() 요청"| A
@@ -258,7 +258,7 @@ void testDataFlowController() {
 추상화는 복잡도를 높입니다. 인터페이스, 팩토리 클래스가 늘어나면 코드 추적이 어려워집니다. **변화 가능성이 높은 곳에만** 추상화를 적용하는 것이 중요합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["추상화 적용 기준"] --> B["변화 가능성 높음"]
     A --> C["변화 가능성 낮음"]
     B --> B1["외부 시스템 연동 (DB, HTT"]
@@ -272,7 +272,7 @@ graph TD
 ## 8. 전체 요약
 
 ```mermaid
-graph TD
+graph LR
     A["다형성 & 추상화 핵심"] --> B["다형성"]
     A --> C["추상 타입"]
     A --> D["팩토리 패턴"]

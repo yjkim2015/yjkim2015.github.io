@@ -54,7 +54,7 @@ BiPredicate<Map<K,V>, Map.Entry<K,V>>  // 동일한 구조
 | `Consumer<T>` | `void accept(T t)` | `System.out::println` |
 
 ```mermaid
-graph TD
+graph LR
     A["기본 6종"] --> B["UnaryOperator"]
     A --> C["BinaryOperator"]
     A --> D["Predicate"]
@@ -95,7 +95,7 @@ IntUnaryOperator f = x -> x + 1;            // int 사용
 표준 인터페이스 중 필요한 용도에 맞는 것이 없거나, 다음 조건 중 하나 이상에 해당하면 전용 함수형 인터페이스를 직접 작성합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["전용 함수형 인터페이스"] --> B["API에서 자주 쓰이며"]
     A --> C["구현하는 쪽이 반드시"]
     A --> D["유용한 디폴트 메서드가"]

@@ -82,7 +82,7 @@ for (Iterator<Element> i2 = c2.iterator(); i.hasNext(); ) {  // 컴파일 오류
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["지역변수 범위 최소화"] --> B["처음 쓰일 때 선언"]
     A --> C["선언과 동시에 초기화"]
     A --> D["while보다 for"]

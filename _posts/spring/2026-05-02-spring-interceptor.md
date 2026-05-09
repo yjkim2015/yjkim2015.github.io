@@ -138,7 +138,7 @@ graph TB
 ### 언제 무엇을 사용해야 하는가
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["횡단 관심사 구현 필요"] --> B{"Spring Bean 접근 필요?"}
     B -->|"아니오"| C{"모든 요청에 적용?"}
     B -->|"예"| D{"URL 기반 제어 필요?"}
@@ -1060,7 +1060,7 @@ public class UltraOptimizedInterceptor implements HandlerInterceptor {
 **Interceptor 체인 최적화 원칙:**
 
 ```mermaid
-graph TD
+graph LR
     A["요청"] --> G{"경로 분기"}
     G -->|"/public"| H["성능만"]
     G -->|"/api"| I["로깅+인증+RL"]

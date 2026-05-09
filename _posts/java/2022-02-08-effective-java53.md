@@ -76,7 +76,7 @@ public void foo(int a1, int a2, int a3, int... rest) {}
 `EnumSet.of`가 이 기법을 사용합니다. 비트 필드를 대체하면서 성능까지 유지해야 하므로 가장 적절한 활용 예입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["가변인수 성능 최적화"] --> B["대부분 호출: 고정 매개변수 메서"]
     A --> C["소수 호출: 가변인수 메서드"]
     B --> D["foo()"]

@@ -44,7 +44,7 @@ public class WordList {
 - **양수**: `this > other`
 
 ```mermaid
-graph TD
+graph LR
     A["compareTo 4대 규약"] --> B["대칭성"]
     A --> C["추이성"]
     A --> D["반사성"]
@@ -197,7 +197,7 @@ TreeSet<Student> set = new TreeSet<>(students);  // 자동 정렬 컬렉션
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["값 클래스를 만든다면"] --> B{"순서 비교가"}
     B -->|"Yes (대부분)"| C["Comparable 구현"]
     B -->|"No"| D["구현 불필요"]

@@ -80,7 +80,7 @@ numberStack.popAll(objects);  // Object는 Number의 상위 타입 — OK
 ## 3. PECS 공식 — 어떤 와일드카드를 쓸지 결정하는 법
 
 ```mermaid
-graph TD
+graph LR
     A["와일드카드 타입 선택"] --> B{"매개변수가"}
     B -->|"값을 꺼내 제공\n(생산자, Pr"| C["<? extends E>"]
     B -->|"값을 받아 저장\n(소비자, Co"| D["<? super E>"]

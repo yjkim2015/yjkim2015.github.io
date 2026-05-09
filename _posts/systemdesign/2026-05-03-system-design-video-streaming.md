@@ -295,7 +295,7 @@ GPU 비용: g5.xlarge 기준 시간당 $1.006
 ### 4-1. DAG 기반 파이프라인 구조
 
 ```mermaid
-flowchart TD
+flowchart LR
     IN[원본 영상] --> SP["GOP 단위 분할"]
     SP --> V["코덱 변환"]
     SP --> AU["오디오 추출"]
@@ -642,7 +642,7 @@ flowchart LR
 매일 50만 건이 업로드되는 상황에서 사람이 일일이 검토하는 것은 불가능합니다. YouTube는 **자동 AI 심사**를 먼저 거치게 합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     UP[업로드 완료] --> AI{AI 심사}
     AI -->|명백히 위반| BL[즉시 차단]
     AI -->|의심| HQ[인적 심사 큐]
@@ -997,7 +997,7 @@ CDN 히트율 < 85% → Slack 알림 (Origin 비용 급증 경고)
 ## 요약: 핵심 설계 원칙
 
 ```mermaid
-flowchart TD
+flowchart LR
     P1[비동기 파이프라인<br/>업로드→트랜스코딩 분리] --> SCALE[확장성]
     P2[CDN 최우선<br/>Origin 보호] --> SCALE
     P3[Eventual Consistency<br/>조회수 카운터] --> PERF[성능]

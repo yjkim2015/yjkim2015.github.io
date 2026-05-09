@@ -19,7 +19,7 @@ Spring Cloud Gateway는 Spring 생태계의 API Gateway 솔루션이다. Netflix
 마이크로서비스 아키텍처에서 클라이언트가 각 서비스를 직접 호출하면 인증, 로깅, Rate Limiting을 모든 서비스에 중복 구현해야 한다. API Gateway는 이 공통 관심사를 단일 진입점에 집중시킨다.
 
 ```mermaid
-graph TD
+graph LR
     C["클라이언트"] --> GW["API Gateway"]
     GW --> R["라우팅"]
     R --> US["User Service"]

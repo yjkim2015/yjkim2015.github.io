@@ -116,7 +116,7 @@ public final class ThreadLocal<T> {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["문자열을 피해야 하는 상황"] --> B["수치 데이터"]
     A --> C["상수 집합"]
     A --> D["복합 데이터"]

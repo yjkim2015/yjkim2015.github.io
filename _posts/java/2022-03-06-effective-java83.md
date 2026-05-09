@@ -103,7 +103,7 @@ private FieldType getField() {
 지역 변수 `result`는 이미 초기화된 경우 `volatile` 필드를 단 한 번만 읽도록 보장해 성능을 높입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["지연 초기화 방법 선택"] --> B{"어떤 필드인가?"}
     B --> C["정적 필드"]
     B --> D["인스턴스 필드"]

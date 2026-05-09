@@ -221,7 +221,7 @@ if (m.isAnnotationPresent(ExceptionTest.class)
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["프로그램 요소에"] --> B["명명 패턴 금지"]
     A --> C["애너테이션 사용"]
     C --> D["마커 애너테이션"]

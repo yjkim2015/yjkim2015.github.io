@@ -18,7 +18,7 @@ toc_label: 목차
 ## SecurityContext와 SecurityContextHolder의 관계
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["SecurityContextHol"] --> B["저장 전략"]
     B --> C["MODE_THREADLOCAL"]
     B --> D["MODE_INHERITABLETH"]

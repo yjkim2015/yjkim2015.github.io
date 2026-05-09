@@ -89,7 +89,7 @@ let y = 20;
 JavaScript는 싱글 스레드이지만 이벤트 루프 덕분에 비동기 처리가 가능합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     CS["콜 스택"] -->|"비동기"| WA["Web APIs"]
     WA -->|"Promise"| MQ["마이크로태스크 큐"]
     WA -->|"타이머/이벤트"| TQ["태스크 큐"]
@@ -160,7 +160,7 @@ async function processInChunks(items, chunkSize = 100) {
 `this`는 **함수가 호출되는 방식**에 따라 결정됩니다. 선언 위치가 아닌 호출 시점의 컨텍스트입니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     Q["함수 호출 방식은?"]
     Q -->|"new 키워드"| NEW["new 바인딩"]
     Q -->|"call / apply / bin"| EXPLICIT["명시적 바인딩"]
@@ -250,7 +250,7 @@ class Button extends React.Component {
 클로저는 **함수가 생성될 때의 렉시컬 환경을 기억**하는 것입니다. 함수가 외부 함수의 실행이 끝난 후에도 외부 함수의 변수에 접근할 수 있는 메커니즘입니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     F["makeCounter(10): c"] --> RET["increment/decremen"]
     RET -.->|클로저 참조| ENV["렉시컬환경: count=10 (공"]
     ENV --> USE1["increment → 11"] --> USE2["increment → 12"] --> USE3["decrement → 11"]

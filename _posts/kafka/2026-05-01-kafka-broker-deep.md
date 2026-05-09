@@ -45,7 +45,7 @@ graph TD
 브로커 안에서 메시지가 어떤 경로로 처리되는지 이해하면 성능 병목을 찾을 수 있다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     CLIENT["Client(Producer/Co"] --> NET["Network Layer"]
     NET --> API["KafkaApis"] --> POOL["Request Handler Po"]
     POOL --> RM["ReplicaManager"]
@@ -209,7 +209,7 @@ mindmap
 ### Controller 선출
 
 ```mermaid
-flowchart TD
+flowchart LR
     Z1["ZK: /controller 노드"] --> Z2["먼저 생성한 브로커=Control"]
     Z2 --> Z3["장애시 ZK가 노드 삭제→재경쟁"]
     K1["KRaft: 별도 Controll"] --> K2["Raft 합의로 선출"]
@@ -273,7 +273,7 @@ KRaft 기반:
 ### 장애 복구 전체 흐름
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["1️⃣ Controller가 장애"]
     B["2️⃣ 장애 브로커가 Leader"]
     C["3️⃣ 각 파티션의 ISR에서 새"]
@@ -334,7 +334,7 @@ kafka-topics.sh --bootstrap-server kafka:9092 \
 안전한 파티션 증가 절차는 다음과 같다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["파티션 증가 필요"] --> B{"순서 의존?"}
     B -->|예| C["소비 완료 후 증가"] --> E{"마이그레이션?"}
     B -->|아니오| G["완료"]

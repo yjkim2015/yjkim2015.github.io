@@ -270,7 +270,7 @@ spring:
 Kafka 2.x까지의 전통적 구성으로, ZooKeeper가 클러스터 메타데이터를 관리한다.
 
 ```mermaid
-graph TD
+graph LR
     ZK1["ZK1(Leader)"] <--> ZK2["ZK2"]
     ZK2 <--> ZK3["ZK3"]
     ZK1 <--> ZK3

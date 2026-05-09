@@ -21,7 +21,7 @@ API를 운영하다 보면 특정 클라이언트가 초당 수천 건의 요청
 ### 왜 필요한가?
 
 ```mermaid
-graph TD
+graph LR
     A1["공격자"] -->|10000 req/s| S1["서버 다운"]
     A2["공격자"] -->|10000 req/s| RL["Rate Limiter"]
     RL -->|100 req/s| S2["서버 정상"]
@@ -41,7 +41,7 @@ graph TD
 ### Rate Limiting 적용 레벨
 
 ```mermaid
-graph TD
+graph LR
     INT["Internet"]
     INT --> NW["1️⃣ Nginx / AWS WA"]
     NW --> GW["2️⃣ API Gateway (K"]
@@ -175,7 +175,7 @@ String script =
 버킷에 **일정 속도로 토큰이 채워지고**, 요청이 올 때마다 토큰을 소비한다. 버킷이 가득 차면 새 토큰은 버려진다.
 
 ```mermaid
-graph TD
+graph LR
     GEN["토큰 생성기"]
     GEN --> BKT["버킷 (최대 10 토큰)"]
     BKT --> REQ{"요청 도착"}
@@ -685,7 +685,7 @@ http {
 로드밸런서가 요청을 분산시키므로, 각 서버의 인메모리 카운터는 전체 요청 수를 반영하지 못한다.
 
 ```mermaid
-graph TD
+graph LR
     C["클라이언트"] --> LB["로드밸런서"]
     LB --> S1["서버1"]
     LB --> S2["서버2"]
@@ -699,7 +699,7 @@ graph TD
 모든 서버가 Redis의 동일한 카운터를 읽고 쓴다. Lua 스크립트로 Race Condition을 방지한다.
 
 ```mermaid
-graph TD
+graph LR
     C["클라이언트"] --> LB["로드밸런서"]
     LB --> S1["서버1"]
     LB --> S2["서버2"]
@@ -945,7 +945,7 @@ graph LR
 ## 정리
 
 ```mermaid
-graph TD
+graph LR
     A{"환경 선택"} --> B{"단일 JVM?"}
     B -->|"간단한 제한"| C["Guava RateLimiter\"]
     B -->|"정교한 Token Bucket"| D["Bucket4j (InMemory"]

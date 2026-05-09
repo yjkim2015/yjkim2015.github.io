@@ -761,7 +761,7 @@ void printLine(Object obj) {
 ## 12. 버전별 마이그레이션 가이드
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["현재 Java 8 사용"] --> B{"Spring 6 필요?"}
     B -->|Yes| C["Java 17 LTS로 업그레이드"]
     B -->|No| D{"성능 개선 필요?"}

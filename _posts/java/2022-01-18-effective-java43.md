@@ -46,7 +46,7 @@ service.execute(() -> action());
 ## 3. 메서드 참조의 다섯 가지 유형
 
 ```mermaid
-graph TD
+graph LR
     A["메서드 참조 유형"] --> B["정적 메서드 참조"]
     A --> C["한정적 인스턴스 참조"]
     A --> D["비한정적 인스턴스 참조"]

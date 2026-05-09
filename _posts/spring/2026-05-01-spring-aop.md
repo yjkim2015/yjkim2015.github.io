@@ -334,7 +334,7 @@ public class PaymentService$$EnhancerBySpringCGLIB extends PaymentService {
 Spring Boot 2.0+부터 `spring.aop.proxy-target-class=true`가 기본값이므로 CGLIB을 먼저 사용한다.
 
 ```mermaid
-graph TD
+graph LR
     A["AOP 적용 대상 Bean"] --> B{"proxy-target-class=true?<br>(Spring Boot 기본값)"}
     B -->|"YES"| E["CGLIB 프록시 생성<br>(서"]
     B -->|"NO"| C{"인터페이스가 있는가?"}

@@ -102,7 +102,7 @@ private void readObject(ObjectInputStream s)
 `final` 필드는 방어적 복사가 불가능하므로, `start`와 `end`에서 `final`을 제거해야 합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["readObject 안전하게 작성"] --> B["방어적 복사"]
     A --> C["유효성 검사"]
     A --> D["재정의 가능 메서드 호출 금지"]

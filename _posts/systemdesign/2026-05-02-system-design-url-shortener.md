@@ -164,7 +164,7 @@ graph LR
 ## 전체 아키텍처
 
 ```mermaid
-graph TD
+graph LR
     Client["클라이언트"] --> LB["로드밸런서"]
     LB --> API["API 서버 (Auto Scali"]
     API --> Cache["Redis 클러스터<br>읽기 트"]
@@ -293,7 +293,7 @@ Consistent Hashing: 샤드 4→5개 증설 시 ~20%(1/N)의 키만 이동
 Kafka로 클릭 이벤트를 보내는 것은 시작일 뿐이다. 실제로 "어떤 링크가 얼마나 클릭됐는가"를 실시간 대시보드와 일별·시간별 집계로 제공하는 전체 파이프라인이 필요하다.
 
 ```mermaid
-graph TD
+graph LR
     Click["클릭 이벤트"] --> Kafka["Kafka"]
     Kafka --> Flink["Flink"]
     Kafka --> CH["ClickHouse"]
@@ -345,7 +345,7 @@ CREATE TABLE click_stats (
 ## URL 만료 처리
 
 ```mermaid
-graph TD
+graph LR
     A["만료 처리 전략"] --> B["Lazy (요청 시 확인)"]
     A --> C["Eager (배치 정리)"]
     B --> B1["장점: 구현 단순"]
@@ -374,7 +374,7 @@ def redirect(short_code: str):
 유명 방송에서 bit.ly 링크가 노출되면 순간 트래픽이 평상시 100배가 된다.
 
 ```mermaid
-graph TD
+graph LR
     Traffic["순간 초당 50만 요청"] --> CDN["CDN Edge<br>301 캐싱"]
     Traffic --> LB["Auto Scaling<br>서버"]
     LB --> LocalCache["각 서버 로컬 캐시<br>(Caf"]

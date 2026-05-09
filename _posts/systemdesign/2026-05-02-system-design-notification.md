@@ -111,7 +111,7 @@ SMS:          100만 건/일 →  11 QPS
 ## 전체 아키텍처
 
 ```mermaid
-graph TD
+graph LR
     Svc["마이크로서비스"] --> API["알림 API GW"]
     API --> P0["Kafka: critical/hi"]
     API --> P2["Kafka: normal/low"]
@@ -194,7 +194,7 @@ class DeduplicationService:
 ## 우선순위 큐 — 긴급 알림이 마케팅 알림에 막히지 않게
 
 ```mermaid
-graph TD
+graph LR
     Notif["알림 요청"] --> Classify{"우선순위 분류"}
     Classify -->|"P0: 보안/결제"| P0["Kafka: critical<br"]
     Classify -->|"P1: 주문/배송"| P1["Kafka: high<br>전용"]
@@ -211,7 +211,7 @@ graph TD
 APNs가 일시적으로 느려졌을 때 모든 워커가 즉시 재시도하면? 수천 개의 요청이 동시에 몰려 APNs를 더 힘들게 만든다(Thundering Herd). **지수 백오프 + 지터(Jitter)**:
 
 ```mermaid
-graph TD
+graph LR
     Send["알림 전송"] --> Fail{"실패?"}
     Fail -->|"1회"| W1["1초 대기"]
     W1 --> Send
@@ -296,7 +296,7 @@ def should_send_now(user_id: str, priority: str) -> bool:
 ## 극한 시나리오
 
 ```mermaid
-graph TD
+graph LR
     Marketing["마케팅팀: 1억명 캠페인 발송"] --> Segment["사용자 세그먼트 추출<br>(DB"]
     Segment --> Batch["1000명씩 10만 배치 분할"]
     Batch --> Kafka["Kafka: notificatio"]

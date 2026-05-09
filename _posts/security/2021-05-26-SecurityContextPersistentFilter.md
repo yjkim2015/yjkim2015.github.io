@@ -20,7 +20,7 @@ toc_label: 목차
 이 필터는 Spring Security 필터 체인에서 **가장 앞에 위치**합니다. 모든 보안 처리가 시작되기 전에 SecurityContext를 준비하고, 모든 처리가 끝난 후 SecurityContext를 저장합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["HTTP 요청"] --> B{"세션에"}
     B -- "있음" --> C["세션 로드"]
     B -- "없음" --> D["빈 Context 생성"]

@@ -75,7 +75,7 @@ System.out.println(plantsByLifeCycle);
 비검사 형변환 없음, 출력 레이블 자동 포함, 배열 인덱스 오류 원천 차단.
 
 ```mermaid
-graph TD
+graph LR
     A["EnumMap 장점"] --> B["키가 열거 타입"]
     A --> C["내부는 배열로 구현"]
     A --> D["toString이 키 이름 제공\"]
@@ -185,7 +185,7 @@ public enum Phase {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["새 상태 추가 시"] --> B["ordinal 배열 방식"]
     A --> C["EnumMap 방식"]
     B --> D["Phase에 1개"]

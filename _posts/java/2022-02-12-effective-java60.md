@@ -93,7 +93,7 @@ public static void main(String[] args) {
 ## 4. 언제 무엇을 쓸까
 
 ```mermaid
-graph TD
+graph LR
     A["정확한 수 계산이 필요"] --> B{"성능보다 편의가 중요"}
     B -- 예 --> C["BigDecimal"]
     B -- 아니오 --> D{"값의 범위"}

@@ -136,7 +136,7 @@ sequenceDiagram
 Spring Security는 여러 필터로 구성된 체인 구조로 동작합니다. 각 필터는 특정 보안 기능을 담당합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["HTTP 요청"] --> B["SecurityContextPer"]
     B --> C["UsernamePasswordAu"]
     C --> D["RememberMeAuthenti"]

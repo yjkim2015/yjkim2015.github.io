@@ -110,7 +110,7 @@ MySQL FULLTEXT가 있는데 왜 Elasticsearch인가?
 ```
 
 ```mermaid
-graph TD
+graph LR
     Query["검색어: '파이썬 머신러닝'"] --> Tokenize["1. 토크나이저: 단어 분리"]
     Tokenize --> T1["'파이썬'"]
     Tokenize --> T2["'머신러닝'"]
@@ -147,7 +147,7 @@ graph TD
 새 문서가 들어오면 검색 가능하게 처리하는 과정:
 
 ```mermaid
-graph TD
+graph LR
     Source["문서 소스"] --> Kafka["Kafka 문서 큐"]
     Kafka --> Parser["파서"]
     Parser --> Tokenizer["토크나이저"]
@@ -311,7 +311,7 @@ def index_document(doc_id: int, text: str):
 ## Elasticsearch 설계
 
 ```mermaid
-graph TD
+graph LR
     Client["검색 API"] --> Coord["코디네이터 노드"]
     Coord --> S1["샤드 1"]
     Coord --> S2["샤드 2"]
@@ -617,7 +617,7 @@ def get_trending(self, limit: int = 10) -> list:
 ## 전체 아키텍처
 
 ```mermaid
-graph TD
+graph LR
     User["사용자"] --> API["검색 API"]
     API --> AC["자동완성 Redis"]
     API --> QP["쿼리 파서"]

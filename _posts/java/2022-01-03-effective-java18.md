@@ -226,7 +226,7 @@ class Stack<E> extends Vector<E> { ... }
 ## 6. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["코드 재사용 방법 선택"] --> B{"is-a 관계인가?"}
     B -->|"Yes + 상위 클래스가 잘 설계"| C["상속 사용 가능"]
     B -->|"No 또는 has-a 관계"| D["컴포지션 + 전달(forwardi"]

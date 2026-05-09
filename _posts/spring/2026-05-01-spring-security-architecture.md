@@ -21,7 +21,7 @@ Spring Security는 **Servlet Filter 체인**으로 구현된다. HTTP 요청이 
 `DelegatingFilterProxy`가 Servlet 컨테이너와 Spring Security 사이의 다리 역할을 한다. Servlet 컨테이너는 Spring ApplicationContext를 모르기 때문에, `DelegatingFilterProxy`가 ApplicationContext에서 `FilterChainProxy` Bean을 찾아 실제 처리를 위임한다.
 
 ```mermaid
-graph TD
+graph LR
     A["HTTP 요청"] --> B["Servlet Container"]
     B --> C["DelegatingFilterPr"]
     C -->|"ApplicationContext"| D["FilterChainProxy<b"]
@@ -115,7 +115,7 @@ sequenceDiagram
 `AuthenticationManager`의 기본 구현체는 `ProviderManager`다. 등록된 `AuthenticationProvider` 목록을 순서대로 돌면서 해당 인증 방식을 지원하는 Provider를 찾아 위임한다.
 
 ```mermaid
-graph TD
+graph LR
     AM["AuthenticationMana"] -->|"구현체"| PM["ProviderManager"]
     PM -->|"순회"| AP1["DaoAuthenticationP"]
     PM --> AP2["JwtAuthenticationP"]
@@ -177,7 +177,7 @@ public class CustomUserDetails implements UserDetails {
 `SecurityContextHolder`는 현재 스레드의 인증 정보를 ThreadLocal에 저장한다. 덕분에 어디서든 `SecurityContextHolder.getContext()`로 현재 사용자 정보를 꺼낼 수 있다.
 
 ```mermaid
-graph TD
+graph LR
     A1["FilterChainProxy"] -->|"SecurityContext 생성"| B1["ThreadLocal-1"]
     B1 --> C1["Controller-1"]
     A2["FilterChainProxy"] -->|"SecurityContext 생성"| B2["ThreadLocal-2"]

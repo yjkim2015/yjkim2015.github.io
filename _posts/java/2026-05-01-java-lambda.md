@@ -364,7 +364,7 @@ String[] nameArr = names.stream().toArray(String[]::new);
 ### 메서드 레퍼런스 4종 요약
 
 ```mermaid
-graph TD
+graph LR
     A["메서드 레퍼런스 4종"] --> B["1️⃣ Class::staticM"]
     A --> C["2️⃣ instance::meth"]
     A --> D["3️⃣ Class::instanc"]
@@ -800,7 +800,7 @@ list.forEach(System.out::println);
 ## 정리 요약
 
 ```mermaid
-graph TD
+graph LR
     A["람다 핵심 포인트"] --> B["1️⃣ 함수형 인터페이스의 인스턴"]
     A --> C["2️⃣ 타입 추론"]
     A --> D["3️⃣ effectively fi"]

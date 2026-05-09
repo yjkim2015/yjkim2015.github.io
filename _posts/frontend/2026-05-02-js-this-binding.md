@@ -20,7 +20,7 @@ toc_label: 목차
 ## 1번 다이어그램 - this 바인딩 결정 전체 지도
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["함수 호출"] --> B{"new?"}
     B -->|"예"| C["new 바인딩: 새 객체"]
     B -->|"아니오"| D{"call/apply/bind?"}
@@ -289,7 +289,7 @@ console.log(window.count); // 0 — window.count가 생겨버림!
 > 비유: 일반 함수는 "내가 어디서 불렸느냐"에 따라 정체가 결정되는 용병입니다. 반면 화살표 함수는 "내가 어디서 태어났느냐"에 충성하는 세습 신하입니다. 태어난 순간의 주인(this)이 영구히 고정됩니다.
 
 ```mermaid
-graph TD
+graph LR
     A["화살표 함수"] --> B["자신의 this 없음"]
     B --> C["렉시컬 스코프의 this 사용"]
     C --> D["정의된 시점의 this 캡처"]
@@ -470,7 +470,7 @@ class MyComponent extends React.Component {
 `this` 손실 문제를 해결하는 세 가지 방법을 비교합니다.
 
 ```mermaid
-graph TD
+graph LR
     PROBLEM["this 손실 문제"] --> P1["패턴 1: 클로저"]
     PROBLEM --> P2["패턴 2: bind"]
     PROBLEM --> P3["패턴 3: 화살표 함수"]
@@ -578,7 +578,7 @@ console.log(calculator.addToValue(3)); // ??
 ## 11번 다이어그램 - this 결정 최종 알고리즘
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["this 결정"] --> B{"화살표 함수?"}
     B -->|예| B1["렉시컬 this(고정)"]
     B -->|아니오| C{"new?"}

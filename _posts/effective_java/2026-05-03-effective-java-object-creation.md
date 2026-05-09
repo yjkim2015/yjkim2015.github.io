@@ -80,7 +80,7 @@ public class Color {
 빌더 패턴의 핵심은 **불변 객체를 단계적으로 조립**할 수 있다는 점입니다. 필수 매개변수는 빌더 생성자에서, 선택 매개변수는 메서드 체이닝으로 설정합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["NutritionFacts.bui"] --> B["fat(12)"]
     B --> C["sodium(35)"]
     C --> D["carbohydrate(27)"]
@@ -281,7 +281,7 @@ for (long i = 0; i <= Integer.MAX_VALUE; i++) {
 > **비유:** 냉장고에 음식을 넣고 잊어버리면 유통기한이 지나도 공간을 차지합니다. **안 먹을 음식은 꺼내서 버려야** 냉장고(메모리)에 공간이 생깁니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["Stack.push()"] --> B["elements 배열에 저장"]
     B --> C["Stack.pop()"]
     C -->|"나쁜 코드"| D["size만 줄임 → 참조 유지 →"]
@@ -335,7 +335,7 @@ public Object pop() {
 > **비유:** 호텔 체크아웃 시 프론트에서 **자동으로 방 청소 요청**이 가는 시스템과, 손님이 **직접 전화해서 청소를 부탁**하는 시스템의 차이입니다. 자동 시스템(`try-with-resources`)이 훨씬 신뢰할 수 있습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["try-with-resources"] --> B["자원 획득"]
     B --> C["비즈니스 로직 실행"]
     C -->|"정상"| D["close() 자동 호출"]

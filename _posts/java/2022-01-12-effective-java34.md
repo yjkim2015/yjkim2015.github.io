@@ -44,7 +44,7 @@ public enum Orange { NAVEL, TEMPLE, BLOOD }
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["열거 타입의 장점"] --> B["컴파일타임 타입 안전성"]
     A --> C["각자의 이름공간"]
     A --> D["상수 값 변경해도"]
@@ -209,7 +209,7 @@ enum PayrollDay {
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["상수 집합이 필요하다면"] --> B["열거 타입 사용"]
     B --> C["단순 상수 집합: 기본 enum"]
     B --> D["상수마다 다른 동작: 상수별 메서"]

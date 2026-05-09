@@ -34,7 +34,7 @@ date: 2026-05-03
 ### 전체 구조
 
 ```mermaid
-graph TD
+graph LR
     TRACE["Trace"]
     TRACE --> ROOT["Root Span"]
     ROOT --> CHILD1["Child Span"]
@@ -203,7 +203,7 @@ OTel의 핵심 구성요소는 세 가지다.
 Jaeger는 Uber에서 개발한 오픈소스 분산 트레이싱 시스템이다. CNCF Graduated 프로젝트로, 프로덕션 검증이 잘 되어 있다.
 
 ```mermaid
-graph TD
+graph LR
     APP["App+OTel SDK"] -->|OTLP/gRPC| COL["Jaeger Collector"]
     COL --> KAFKA["Kafka(버퍼)"]
     KAFKA --> ING["Jaeger Ingester"]

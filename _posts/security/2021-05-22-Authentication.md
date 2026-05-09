@@ -43,7 +43,7 @@ public interface Authentication extends Principal, Serializable {
 ## Authentication의 5가지 구성 요소
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["Authentication 객체"] --> B["principal"]
     A --> C["credentials"]
     A --> D["authorities"]

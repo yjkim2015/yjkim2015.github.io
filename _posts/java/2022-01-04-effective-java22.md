@@ -47,7 +47,7 @@ public class Chemistry implements PhysicalConstants {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["상수 인터페이스의 문제"] --> B["내부 구현 세부사항을"]
     A --> C["클라이언트 코드가"]
     A --> D["상수가 더 이상 필요 없어도"]
@@ -113,7 +113,7 @@ double energy = BOLTZMANN_CONSTANT * temp;
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["상수 공개 방법 선택"] --> B{"상수가 특정"}
     B -->|"Yes"| C["해당 클래스에 직접 선언"]
     B -->|"No"| D{"열거 타입으로"}

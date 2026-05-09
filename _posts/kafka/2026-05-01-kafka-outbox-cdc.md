@@ -33,7 +33,7 @@ public void placeOrder(Order order) {
 이 코드에는 두 가지 실패 시나리오가 있다.
 
 ```mermaid
-graph TD
+graph LR
     S1A["DB 저장 성공"] --> S1B["Kafka 발행 실패"] --> S1C["데이터 불일치"]
     S2A["Kafka 발행 성공"] --> S2B["DB 커밋 실패"] --> S2C["유령 이벤트"]
 ```
@@ -273,7 +273,7 @@ outbox INSERT (aggregate_type='Payment')
 ### 언제 무엇을 선택할까
 
 ```mermaid
-flowchart TD
+flowchart LR
     Q1{"서비스 규모"} -->|소규모| POLL["Outbox 폴링"]
     Q1 -->|코드변경불가| LEGACY["직접 CDC"]
     Q1 -->|대규모| Q2{"레이턴시"}

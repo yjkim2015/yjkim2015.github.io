@@ -16,7 +16,7 @@ toc_label: 목차
 비유하자면 **추상 클래스는 혈통, 인터페이스는 자격증**입니다. 혈통(추상 클래스)을 가지려면 그 가문(상속 계층)에 속해야 합니다. 자격증(인터페이스)은 어느 가문 출신이든 따로 취득할 수 있습니다.
 
 ```mermaid
-graph TD
+graph LR
     A["다중 구현 메커니즘"] --> B["추상 클래스"]
     A --> C["인터페이스"]
     B --> B1["단일 상속만 허용"]
@@ -279,7 +279,7 @@ public class MyList extends OtherBase implements List<Integer> {
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["다중 구현 타입 선택"] --> B{"기존 클래스에 추가"}
     B -->|"Yes"| C["인터페이스 필수"]
     B -->|"No"| D{"구현 코드를"}

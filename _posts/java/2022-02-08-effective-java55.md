@@ -83,7 +83,7 @@ opt.ifPresent(n -> System.out.println("안녕하세요, " + n));
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["Optional<T> 처리"] --> B["orElse(기본값)"]
     A --> C["orElseGet(Supplier"]
     A --> D["orElseThrow(Suppli"]
@@ -162,7 +162,7 @@ OptionalDouble average = OptionalDouble.of(3.14);
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["Optional 사용 판단"] --> B{"반환 타입인가?"}
     B -- 예 --> C{"기본형인가?"}
     C -- 예 --> D["OptionalInt / Long"]

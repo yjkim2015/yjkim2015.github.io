@@ -30,7 +30,7 @@ System.out.println(s3 == s4);  // true — 동일 객체!
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["String Pool"] --> B["'kimchi' 인스턴스 1개"]
     B -->|"참조"| C["s3"]
     B -->|"참조"| D["s4"]
@@ -177,7 +177,7 @@ public class Period {
 ## 6. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["불필요한 객체 생성 패턴 3가지"] --> B["String 리터럴 대신"]
     A --> C["비싼 객체 반복 생성"]
     A --> D["박싱 타입으로 인한"]

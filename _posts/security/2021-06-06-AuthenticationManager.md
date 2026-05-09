@@ -37,7 +37,7 @@ public interface AuthenticationManager {
 Spring Security에서 `AuthenticationManager`의 기본 구현체는 `ProviderManager`입니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["인증 요청"] --> B["ProviderManager"]
     B --> C{"supports?"}
     C -->|true| D["authenticate()"]
@@ -109,7 +109,7 @@ public Authentication authenticate(Authentication authentication) throws Authent
 `ProviderManager`는 부모 `ProviderManager`를 설정할 수 있어, 계층적 인증 구조를 만들 수 있습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["인증 요청"] --> B["자식 ProviderManager"]
     B -- "처리 실패" --> C["부모 ProviderManager"]
     C -- "처리 실패" --> D["인증 최종 실패"]
@@ -244,7 +244,7 @@ providerManager.setEraseCredentialsAfterAuthentication(true);  // 기본값: tru
 ## 전체 아키텍처 정리
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["HTTP 요청"] --> B["SecurityFilter"]
     B --> C["DaoProvider"]
     B --> D["RememberMeProvider"]

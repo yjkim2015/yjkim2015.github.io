@@ -146,7 +146,7 @@ public class Chooser<T> {
 ## 5. 배열과 제네릭 비교 정리
 
 ```mermaid
-graph TD
+graph LR
     A["배열"] --> A1["공변"]
     A --> A2["실체화"]
     A --> A3["런타임에 타입 오류 발견"]

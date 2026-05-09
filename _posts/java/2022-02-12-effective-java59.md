@@ -57,7 +57,7 @@ int result = ThreadLocalRandom.current().nextInt(n);
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["무작위 수 생성"] --> B["직접 구현"]
     A --> C["Random.nextInt(n)\"]
     A --> D["ThreadLocalRandom\"]

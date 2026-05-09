@@ -18,7 +18,7 @@ toc_label: 목차
 **캡슐화의 5가지 이점:**
 
 ```mermaid
-graph TD
+graph LR
     A["캡슐화(정보 은닉) 효과"] --> B["개발 속도 향상"]
     A --> C["관리 비용 감소"]
     A --> D["성능 최적화 용이"]
@@ -210,7 +210,7 @@ module my.library {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["모듈 경계"] --> B["com.example.api (공"]
     A --> C["com.example.intern"]
     D["외부 모듈"] -->|"접근 가능"| B
@@ -226,7 +226,7 @@ graph TD
 ## 8. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["접근 제한자 결정 원칙"] --> B["클래스: public 꼭 필요한"]
     A --> C["멤버: 가능한 한 좁게"]
     A --> D["필드: 절대 public 금지"]

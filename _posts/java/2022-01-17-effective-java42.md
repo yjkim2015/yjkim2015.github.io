@@ -51,7 +51,7 @@ words.sort(comparingInt(String::length));
 ## 3. 람다를 인스턴스 필드에 — 열거 타입에 적용
 
 ```mermaid
-graph TD
+graph LR
     A["열거 타입 상수별 동작"] --> B["상수별 클래스 몸체"]
     A --> C["람다를 인스턴스 필드에 저장"]
     B --> D["자기 자신(this) 참조 가능\"]
@@ -90,7 +90,7 @@ public enum Operation {
 ## 4. 람다를 쓰면 안 되는 경우
 
 ```mermaid
-graph TD
+graph LR
     A["람다 사용 금지 상황"] --> B["코드가 3줄 초과"]
     A --> C["자신(this)을 참조해야 할 때"]
     A --> D["추상 클래스 인스턴스 생성"]

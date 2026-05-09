@@ -29,7 +29,7 @@ graph LR
 ## 2. Object 명세의 hashCode 3대 규약
 
 ```mermaid
-graph TD
+graph LR
     A["hashCode 3대 규약"] --> B["일관성"]
     A --> C["equals-hashCode 연동"]
     A --> D["다른 객체는 다른 hashCode"]
@@ -193,7 +193,7 @@ System.out.println(p1.hashCode() == p2.hashCode());  // true
 ## 8. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["equals 재정의"] -->|"반드시 함께"| B["hashCode 재정의"]
     B --> C["같은 객체 → 같은 hashCod"]
     C --> D["HashMap/HashSet 정상"]

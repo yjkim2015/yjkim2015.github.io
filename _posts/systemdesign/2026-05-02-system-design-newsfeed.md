@@ -149,7 +149,7 @@ graph LR
 ### 방법 3: 하이브리드 (실제 인스타그램/트위터 방식)
 
 ```mermaid
-graph TD
+graph LR
     Post["게시글 작성"] --> Check{"팔로워 수 확인"}
     Check -->|"< 1만 (일반 사용자)"| Push["쓰기 시 팬아웃"]
     Check -->|"> 1만 (셀럽)"| Pull["팬아웃 건너뜀"]
@@ -167,7 +167,7 @@ graph TD
 ## 전체 아키텍처
 
 ```mermaid
-graph TD
+graph LR
     Client["모바일/웹"] --> LB["로드밸런서"]
     LB --> PostSvc["게시글 서비스"]
     LB --> FeedSvc["피드 서비스"]

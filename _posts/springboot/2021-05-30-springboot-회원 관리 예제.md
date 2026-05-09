@@ -17,7 +17,7 @@ Spring Boot로 실제 동작하는 회원 관리 프로그램을 만들어보면
 ## 1단계: 레이어드 아키텍처 전체 구조
 
 ```mermaid
-graph TD
+graph LR
     CLI["클라이언트"] --> CTRL["Controller"]
     CTRL --> SVC["Service (비즈니스/트랜잭션"]
     SVC --> REPO["Repository (DB CRU"]

@@ -118,7 +118,7 @@ public final class StringList implements Serializable {
 비유하자면 **이사할 때 가구는 가져가고 임시 포장재는 버리는 것**입니다. 논리적 상태(가구)는 직렬화하고, 물리적 세부사항(임시 구조)은 제외합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["필드 직렬화 여부 판단"] --> B{"객체의 논리적 상태와"}
     B --> C["관련 있음"]
     B --> D["관련 없음"]

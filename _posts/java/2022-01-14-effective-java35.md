@@ -84,7 +84,7 @@ EnumSet<Ensemble> smallGroups = EnumSet.of(SOLO, DUET, TRIO);
 ## 4. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["열거 상수에 연결된"] --> B["ordinal() 사용 금지"]
     A --> C["인스턴스 필드에 저장"]
     B --> D["선언 순서 의존"]

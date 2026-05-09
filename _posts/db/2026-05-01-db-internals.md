@@ -16,7 +16,7 @@ toc_label: 목차
 ## 1. 쿼리 실행 과정
 
 ```mermaid
-graph TD
+graph LR
     Client -->|SQL| Parser
     Parser --> Optimizer
     Optimizer --> EE["실행엔진"]
@@ -42,7 +42,7 @@ graph TD
 MySQL의 두뇌. 동일한 결과를 얻는 여러 실행 계획 중 **최소 비용**의 계획을 선택한다.
 
 ```mermaid
-graph TD
+graph LR
     QT["Query Tree"] --> S1["통계 조회"]
     S1 --> S2["후보 열거"]
     S2 --> S3["비용 계산"]
@@ -60,7 +60,7 @@ graph TD
 옵티마이저가 생성한 실행 계획을 **Handler API**를 통해 스토리지 엔진에 명령을 내린다.
 
 ```mermaid
-graph TD
+graph LR
     EE[실행 엔진] -->|"인덱스 idx_user_id로 u"| InnoDB["InnoDB (Handler AP"]
     InnoDB --> BP[Buffer Pool / Disk]
     BP --> EE
@@ -118,7 +118,7 @@ MyISAM은 데이터와 인덱스가 분리 → 인덱스에서 데이터 위치(
 ### B+Tree 개요
 
 ```mermaid
-graph TD
+graph LR
     Root --> I1[Internal] & I2[Internal] & I3[Internal]
     I1 --> L1[Leaf] & L2[Leaf]
     I2 --> L3[Leaf] & L4[Leaf]
@@ -666,7 +666,7 @@ UUID v4는 완전 랜덤이므로 InnoDB 클러스터드 인덱스에 삽입할 
 MySQL/InnoDB의 핵심 동작 원리를 요약하면:
 
 ```mermaid
-graph TD
+graph LR
     Q["쿼리"] --> P["파서"]
     P --> O["옵티마이저"]
     O --> I["InnoDB"]

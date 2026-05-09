@@ -16,7 +16,7 @@ toc_label: 목차
 ## 2. Spring Batch 도메인 구조
 
 ```mermaid
-graph TD
+graph LR
     A[JobLauncher] --> B[Job]
     B --> C[Step1]
     B --> D[Step2: Chunk]
@@ -80,7 +80,7 @@ public Job conditionalJob(JobRepository jobRepository) {
 ```
 
 ```mermaid
-flowchart TD
+flowchart LR
     A[Step 1] -->|COMPLETED| B[Step 2]
     A -->|FAILED| C[Failure Step]
     B --> D[Step 3]
@@ -410,7 +410,7 @@ public JdbcCursorItemReader<Order> orderReader(
 ### 10.1 파티셔닝 구조
 
 ```mermaid
-graph TD
+graph LR
     A[Master Step] -->|"파티션 생성"| B[Partitioner]
     B --> C["Worker Step 1: ID"]
     B --> D["Worker Step 2: ID"]
@@ -681,7 +681,7 @@ public class LargeScaleBatchConfig {
 ## 14. 전체 흐름 정리
 
 ```mermaid
-flowchart TD
+flowchart LR
     A[JobLauncher] --> B[Step 시작]
     B --> C{Chunk?}
     C -->|Yes| D[Reader→Processor→Writer]

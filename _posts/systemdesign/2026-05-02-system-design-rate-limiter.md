@@ -244,7 +244,7 @@ graph TD
 **해결: 중앙화된 Redis**로 카운터를 공유한다.
 
 ```mermaid
-graph TD
+graph LR
     S1["서버 1"] --> R["Redis 클러스터"]
     S2["서버 2"] --> R
     S3["서버 3"] --> R
@@ -302,7 +302,7 @@ Retry-After: 60              → 재시도 가능까지 대기 초
 단일 계층만으로는 모든 상황을 막을 수 없다:
 
 ```mermaid
-graph TD
+graph LR
     Req["요청"] --> L1["L1: IP 레벨"]
     L1 --> L2["L2: API 키 레벨"]
     L2 --> L3["L3: 엔드포인트별"]
@@ -378,7 +378,7 @@ T+20초:  남은 서버에 부하 집중 → 연쇄 다운
 ### 시나리오 3 (기존): 봇넷 다층 방어
 
 ```mermaid
-graph TD
+graph LR
     DDoS["봇넷"] --> CF["Cloudflare"]
     CF --> WAF["AWS WAF"]
     WAF --> LB["로드밸런서"]

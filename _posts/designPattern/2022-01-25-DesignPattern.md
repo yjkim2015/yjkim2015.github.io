@@ -118,7 +118,7 @@ Bridge 패턴은 추상화 계층(리모컨)과 구현 계층(기기 종류)을 
 **비유:** 파일 시스템 (파일 + 폴더)
 
 ```mermaid
-graph TD
+graph LR
     A["📁 프로젝트 루트"] --> B["📄 README.md"]
     A --> C["📁 src"]
     A --> D["📄 build.gradle"]
@@ -280,7 +280,7 @@ Spring의 `@Transactional`, `@Cacheable`이 동적 프록시로 동작한다.
 ## 패턴 선택 가이드
 
 ```mermaid
-flowchart TD
+flowchart LR
     Q{"어떤 문제?"}
     Q --> A1["Adapter: 인터페이스 연결"]
     Q --> B1["Decorator: 기능 동적 추"]

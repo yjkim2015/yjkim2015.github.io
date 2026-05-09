@@ -81,7 +81,7 @@ public class OrderService {
 ### 2.2 IoC 컨테이너가 하는 일 — 5단계
 
 ```mermaid
-graph TD
+graph LR
     A["@Configuration 설정"] --> B["BeanDefinition 읽기"]
     B --> C["빈 생성 new"]
     C --> D["@Autowired 분석"]
@@ -199,7 +199,7 @@ public class MemberServiceImpl implements MemberService {
 `@Controller`, `@Service`, `@Repository`, `@Configuration`은 모두 내부에 `@Component`를 포함합니다. 그런데 왜 구분해서 쓸까요?
 
 ```mermaid
-graph TD
+graph LR
     A["@Component"] --> B["@Controller"]
     A --> C["@Service"]
     A --> D["@Repository"]
@@ -306,7 +306,7 @@ public class OrderServiceImpl implements OrderService {
 ### 5.4 주입 방법 결정 흐름
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["DI 방법 선택"] --> B{"필수 의존관계?"}
     B -->|"예 — 없으면 동작 불가"| C["1️⃣ 생성자 주입"]
     B -->|"아니오 — 없어도 됨"| D{"런타임 변경 필요?"}
@@ -363,7 +363,7 @@ public class RateDiscountPolicy implements DiscountPolicy { ... }
 ### 6.2 @Autowired 매칭 규칙 흐름
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["@Autowired"] --> B{"빈 개수?"}
     B -->|"1개"| D["주입 성공"]
     B -->|"0개"| E{"required=false?"}
@@ -617,7 +617,7 @@ sequenceDiagram
 > **비유:** XML, 자바 코드, 어노테이션 스캔은 각각 다른 언어로 작성된 이력서와 같다. Spring은 이 다양한 형식의 이력서를 내부적으로 표준 양식(BeanDefinition)으로 변환해서 처리한다.
 
 ```mermaid
-graph TD
+graph LR
     A["XML 설정"] --> C["BeanDefinitionReader"]
     B["@Configuration"] --> C
     D["@ComponentScan"] --> C
@@ -736,7 +736,7 @@ public class DiscountService {
 ## 12. 전체 흐름 정리
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["앱 시작"] --> B["Container 생성"]
     B --> C["@Configuration 읽기"] --> D["BeanDefinition"]
     D --> E["빈 생성"] --> F["@Autowired 주입"]
@@ -769,7 +769,7 @@ Spring IoC/DI의 핵심은 "객체가 스스로 의존관계를 만들지 않고
 IoC는 여러 곳에서 이미 사용되고 있는 범용적인 원리이다.
 
 ```mermaid
-graph TD
+graph LR
     IOC["IoC 제어의 역전"]
     IOC --> SERVLET["서블릿"]
     IOC --> TEMPLATE["템플릿 메소드 패턴"]
@@ -784,7 +784,7 @@ graph TD
 DI의 핵심은 컴파일 타임에는 구체 클래스를 모르고, 런타임에 컨테이너가 연결해 준다는 것이다. 두 클래스 A, B가 있을 때 A가 B를 사용한다면 A는 B에 의존한다. B가 변하면 A에 영향을 미치지만, A가 변해도 B는 영향을 받지 않는다. 이 **방향성**을 이해하는 것이 DI 설계의 출발점이다.
 
 ```mermaid
-graph TD
+graph LR
     SVC1["UserService"] -->|컴파일타임 의존| IFACE["UserRepository 인터페"]
     CTX["스프링 컨테이너"] -->|런타임 생성| IMPL["MySQLUserRepositor"]
     CTX -->|생성+주입| SVC2["UserService 인스턴스"]

@@ -14,7 +14,7 @@ toc_label: 목차
 > **비유**: RDBMS는 엄격한 파일 캐비닛이다. 모든 서류가 정해진 양식에 맞아야 한다. MongoDB는 자유로운 서랍장이다. 서류든 사진이든 영수증이든 같은 서랍에 넣을 수 있고, 각 항목의 형태가 달라도 된다.
 
 ```mermaid
-graph TD
+graph LR
     DB1["MongoDB DB"] --> Col["Collection"]
     Col --> Doc["Document"]
     DB2["RDBMS DB"] --> Table["테이블"]
@@ -297,7 +297,7 @@ const collection = db.collection("users", {
 단일 서버의 용량 한계를 넘을 때 데이터를 여러 서버에 분산한다.
 
 ```mermaid
-graph TD
+graph LR
     Client["애플리케이션"] --> MongosRouter["mongos (라우터)"]
     MongosRouter --> Shard1["샤드 1"]
     MongosRouter --> Shard2["샤드 2"]
@@ -384,7 +384,7 @@ public class OrderAnalyticsService {
 ## RDBMS vs MongoDB 선택 가이드
 
 ```mermaid
-graph TD
+graph LR
     Start(["데이터 특성 분석"]) --> Q1{"스키마가 자주"}
     Q1 -->|"YES"| Q2{"복잡한 트랜잭션이"}
     Q1 -->|"NO"| RDBMS["RDBMS"]

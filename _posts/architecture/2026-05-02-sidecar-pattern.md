@@ -112,7 +112,7 @@ graph LR
 도서관 사서(사이드카)가 책 목록(설정)이 변경될 때마다 연구원(메인 서비스)에게 알려주는 모습을 떠올리십시오. 연구원은 사서가 가져다주는 최신 책 목록만 보면 됩니다. 목록을 직접 찾아다닐 필요가 없습니다.
 
 ```mermaid
-graph TD
+graph LR
     Vault["Vault"] -- 변경 이벤트 --> CS["Config Watcher Sid"]
     Consul["Consul"] -- 변경 이벤트 --> CS
     CS -- 파일 갱신 --> CV[("Config Volume")]
@@ -883,7 +883,7 @@ graph TB
 아래 흐름도로 사이드카 패턴 도입 여부를 판단해 보십시오.
 
 ```mermaid
-graph TD
+graph LR
     Start["사이드카 도입?"] --> Q1{"여러 서비스?"}
     Q1 -- "아니오" --> NoSidecar["라이브러리"]
     Q1 -- "예" --> Q2{"다국어?"}

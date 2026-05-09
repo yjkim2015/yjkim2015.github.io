@@ -168,7 +168,7 @@ try (DatabaseConnection conn = new DatabaseConnection(url)) {
 ### 용도 2: 네이티브 피어(Native Peer) 자원 회수
 
 ```mermaid
-graph TD
+graph LR
     A["Java 객체"] -->|"JNI 호출"| B["네이티브 피어"]
     C["GC"] -->|"Java 객체 회수"| A
     C -->|"네이티브 피어는 모름!"| D["네이티브 메모리 누수"]
@@ -248,7 +248,7 @@ class Teenager {
 ## 6. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["자원 회수가 필요한 클래스"] --> B{"AutoCloseable"}
     B -->|"Yes (대부분)"| C["AutoCloseable 구현"]
     B -->|"네이티브 피어"| D["cleaner를 안전망으로만"]

@@ -54,7 +54,7 @@ graph LR
 샤딩은 최후의 수단이다. 도입 전에 더 단순한 방법들을 모두 시도해야 한다. 인덱스 최적화와 쿼리 튜닝만으로도 수십 배의 성능 향상이 가능하고, 읽기 복제와 캐싱은 대부분의 읽기 부하를 해결한다. 파티셔닝은 단일 서버 내 대용량 테이블 관리에 효과적이다.
 
 ```mermaid
-graph TD
+graph LR
     A["데이터 증가 / 성능 문제"] --> B{"인덱스 최적화·쿼리 튜닝으로 해결?"}
     B -->|"YES"| Z1["해결 완료"]
     B -->|"NO"| C{"읽기 복제 + 캐싱으로 해결?"}
@@ -91,7 +91,7 @@ graph LR
 샤드 키에 해시 함수를 적용하여 샤드를 결정한다. `shard_id = hash(user_id) % num_shards` 공식으로 데이터를 균등하게 분포시키므로 핫스팟 문제가 적다.
 
 ```mermaid
-graph TD
+graph LR
     K1["user_id = 1234"] --> SH2["Shard 2"]
     K2["user_id = 5678"] --> SH0["Shard 0"]
     K3["user_id = 9999"] --> SH3["Shard 3"]
@@ -139,7 +139,7 @@ graph LR
 별도의 **라우팅 테이블(Lookup Table)**에 각 키가 어느 샤드에 있는지 기록한다.
 
 ```mermaid
-graph TD
+graph LR
     C["클라이언트"] --> DS["Shard Directory Se"]
     DS --> SA["Shard A"]
     DS --> SB["Shard B"]
@@ -385,7 +385,7 @@ public class ShardedUserRepository {
 YouTube에서 MySQL 스케일링을 위해 개발한 오픈소스 미들웨어다. 애플리케이션은 MySQL 프로토콜로 VTGate에 연결하면 되고, 샤딩 로직은 VTGate와 VTTablet이 처리한다.
 
 ```mermaid
-graph TD
+graph LR
     APP["Application"] --> VTG["VTGate (프록시)"]
     VTG --> VT0["VTTablet"]
     VTG --> VT1["VTTablet"]
@@ -505,7 +505,7 @@ public class SnowflakeIdGenerator {
 성능 문제가 발생했을 때 바로 샤딩을 선택하면 안 된다. 단계별로 더 단순한 해결책을 시도해야 한다.
 
 ```mermaid
-graph TD
+graph LR
     A["성능 문제"] --> B{"읽기 과부하?"}
     B -->|"YES"| C["캐싱 → Read Replica"]
     C -->|"여전히 부족"| F["샤딩"]
@@ -640,7 +640,7 @@ public class UserService {
 근본 원인이 **Celebrity Problem**(팔로워 1000만 명인 인플루언서의 게시물 조회 폭발)이라면 해당 사용자의 데이터를 전용 샤드에 격리하거나 CDN/캐시 레이어로 DB 부하를 차단한다. 샤드 키 선택 자체가 오류라면 재샤딩을 검토해야 한다.
 
 ```mermaid
-graph TD
+graph LR
     A["핫 샤드 감지"] --> B{"원인 분석"}
     B -->|"샤드 키 선택 오류"| C["재샤딩 검토"]
     B -->|"Celebrity Problem"| D["해당 사용자 전용 샤드 격리"]

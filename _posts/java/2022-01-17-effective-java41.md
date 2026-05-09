@@ -36,7 +36,7 @@ public class User implements Serializable {
 **장점 1 — 타입으로 사용 가능해 컴파일타임 오류 검출**
 
 ```mermaid
-graph TD
+graph LR
     A["마커 인터페이스"] --> B["어엿한 타입"]
     B --> C["컴파일타임에 오류 검출"]
     D["마커 애너테이션"] --> E["타입이 아님"]
@@ -82,7 +82,7 @@ public interface FancyList extends List {
 ## 4. 선택 기준
 
 ```mermaid
-graph TD
+graph LR
     A["마킹이 필요한 상황"] --> B{"클래스·인터페이스에만"}
     B -->|"No\n메서드·필드·패키지 등"| C["마커 애너테이션 사용"]
     B -->|"Yes"| D{"마킹된 객체를"}

@@ -280,7 +280,7 @@ public Order findById(Long orderId) {
 Event Sourcing은 CQRS와 함께 쓸 때 강력합니다.
 
 ```mermaid
-graph TD
+graph LR
     CMD["Command"] --> AGG["Aggregate"]
     AGG --> ES[("Event Store")]
     ES --> KB["Kafka"]

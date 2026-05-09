@@ -83,7 +83,7 @@ function testLet() {
 `{}`로 감싸진 어떤 블록이든, 그 안에서 선언된 let/const는 밖에서 보이지 않습니다. 의도를 코드에 정확히 반영할 수 있는 이유가 바로 이것입니다.
 
 ```mermaid
-graph TD
+graph LR
     F["함수 경계(var)"] --> IF1["if블록"] --> VARX["var x: 함수 전체 접근"]
     F --> FOR["for블록"]
     F2["함수 경계(let/const)"] --> IF3["if블록 - let y: 블록 안"]
@@ -370,7 +370,7 @@ flowchart TD
 ## 9. 실전 가이드 — 언제 무엇을 쓸까
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["변수 선언"] --> B{"값이 바뀌나?"}
     B -->|"예"| C{"참조가 바뀌나?<br>vs 내용만 바뀌나?"}
     B -->|"아니오"| D["const 사용"]

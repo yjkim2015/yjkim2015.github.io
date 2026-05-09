@@ -65,7 +65,7 @@ public class Thread implements Runnable {
 `ThreadLocal.get()`을 호출하면 다음 순서로 동작합니다.
 
 ```mermaid
-graph TD
+graph LR
     GET["get() 호출"] --> MAP["ThreadLocalMap 접근"]
     MAP --> ENTRY["getEntry(this)"]
     ENTRY -->|"있음"| VALUE["값 반환"]
@@ -96,7 +96,7 @@ ThreadLocalMap getMap(Thread t) {
 각 Thread는 자신만의 `ThreadLocalMap`을 가지고, 동일한 `ThreadLocal` 키에 대해 서로 다른 값을 독립적으로 저장합니다.
 
 ```mermaid
-graph TD
+graph LR
     TLA["ThreadLocal-A"] -.->|키| E1A["T1: Value-1"]
     TLA -.->|키| E2A["T2: Value-X"]
     TLB["ThreadLocal-B"] -.->|키| E1B["T1: Value-2"]
@@ -703,7 +703,7 @@ public CompletableFuture<Result> processAsync() {
 ## 전체 구조 요약
 
 ```mermaid
-graph TD
+graph LR
     TL["ThreadLocal 핵심 정리"]
     TL --> STORAGE["저장: Thread.threadL"]
     TL --> WEAKREF["키=WeakRef, value=강"]

@@ -49,7 +49,7 @@ public class Stack {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["Stack.elements 배열"] --> B["[0]: Object@100 ←"]
     A --> C["[1]: Object@200 ←"]
     A --> D["[2]: Object@300 ←"]
@@ -231,7 +231,7 @@ sequenceDiagram
 ## 5. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["메모리 누수 3대 주범"] --> B["자기 메모리 직접 관리"]
     A --> C["캐시"]
     A --> D["리스너/콜백"]

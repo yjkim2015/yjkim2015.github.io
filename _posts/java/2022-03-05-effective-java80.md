@@ -91,7 +91,7 @@ Integer result = future.get();  // 완료될 때까지 대기 후 결과 수령
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["태스크 추상화"] --> B["Runnable"]
     A --> C["Callable"]
     D["실행 메커니즘"] --> E["ExecutorService"]

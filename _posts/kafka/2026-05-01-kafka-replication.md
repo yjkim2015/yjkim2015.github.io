@@ -146,7 +146,7 @@ Broker 1이 재시작 시:
 ### 복제 팩터 선택 가이드
 
 ```mermaid
-graph TD
+graph LR
     ENV{"환경"}
     DEV["복제 팩터 1"]
     RISK["복제 팩터 2"]
@@ -336,7 +336,7 @@ kafka-topics.sh --bootstrap-server kafka:9092 \
 네트워크 지연이나 브로커 과부하로 Follower들이 ISR에서 탈락하면 쓰기가 거부된다. 이때 `min.insync.replicas`를 임시로 낮추거나 `unclean.leader.election`을 허용하는 결정이 필요하다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["Follower ISR 탈락"]
     B["min.insync 미충족"]
     C["Producer 쓰기 거부"]

@@ -52,7 +52,7 @@ IoC의 핵심은 **"내가 사용할 객체를 내가 만들지 않는다"**는 
 Spring IoC 컨테이너는 **Bean Definition**을 읽어서 Bean을 생성하고 관리한다. 컨테이너가 시작할 때 설정 파일(또는 어노테이션)을 파싱하여 "어떤 클래스를 어떤 스코프로, 어떤 의존성과 함께 만들 것인가"라는 메타데이터를 BeanDefinition 객체로 변환한다. 그 후 이 메타데이터를 바탕으로 Bean 인스턴스를 만들고 의존성을 연결한다. 이 과정이 끝나야 비로소 애플리케이션이 요청을 받을 준비가 된다.
 
 ```mermaid
-graph TD
+graph LR
     A["1️⃣ Configuration"] --> B["2️⃣ BeanDefinition"]
     B --> C["3️⃣ Bean 인스턴스 생성<b"]
     C --> D["4️⃣ 의존성 주입<br>생성자/"]
@@ -116,7 +116,7 @@ public interface ApplicationContext extends
 ### 주요 구현체
 
 ```mermaid
-graph TD
+graph LR
     AC[ApplicationContext] --> ACAC["AnnotationConfigAp"]
     AC --> ACSWSAC["AnnotationConfigSe"]
     AC --> GXAC["GenericXmlApplicat"]
@@ -131,7 +131,7 @@ graph TD
 Bean의 생명주기를 정확히 이해해야 초기화 콜백을 올바른 시점에 사용할 수 있다. 예를 들어 DB 커넥션 풀을 초기화하려면, 커넥션 풀 Bean이 생성되고 **모든 의존성 주입이 완료된 후**에 초기화가 실행되어야 한다. `@PostConstruct`가 바로 그 시점을 보장한다. 생성자에서 초기화하면 의존성이 아직 주입되지 않은 상태일 수 있다.
 
 ```mermaid
-graph TD
+graph LR
     S([Spring Container 시작]) --> A
     A["1️⃣ Bean 인스턴스 생성<b"]
     A --> B["2️⃣ 의존성 주입 DI<br>생"]
@@ -380,7 +380,7 @@ class OrderServiceTest {
 타입으로 먼저 찾고, 같은 타입이 여러 개면 이름이나 한정자로 좁힌다. 이 순서를 모르면 "NoUniqueBeanDefinitionException이 왜 났지?" 하고 헤매게 된다.
 
 ```mermaid
-graph TD
+graph LR
     A["1️⃣ 타입Type으로 매칭 시도"] --> B{"타입 매칭 Bean이 2개 이상?"}
     B -->|"@Qualifier 있음"| C["2️⃣ @Qualifier 확인<"]
     B -->|"@Primary 있음"| D["3️⃣ @Primary 확인<br"]

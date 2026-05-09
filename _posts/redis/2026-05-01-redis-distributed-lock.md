@@ -24,7 +24,7 @@ toc_label: 목차
 ### 전체 아키텍처 흐름
 
 ```mermaid
-flowchart TD
+flowchart LR
     S1[서버1] & S2[서버2] & S3[서버3]
     S1 -->|"SET NX EX"| R[(Redis)]
     S2 -->|"SET NX EX"| R
@@ -119,7 +119,7 @@ private void releaseLock(String key, String value) {
 > **비유**: GET으로 "내 열쇠 맞나 확인" 하고 DEL로 "열쇠 반납" 하는 사이에, 다른 사람이 새 열쇠를 걸어버리면 남의 열쇠를 빼앗게 된다. Lua는 확인과 반납을 하나의 동작으로 묶어준다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A1["GET lock"] --> A2{"내 값?"}
     A2 -->|Yes| A3["DEL lock(비원자, 타 프로"]
     A2 -->|No| A4["중단"]
@@ -545,7 +545,7 @@ latch.await();
 4. 실패 시 모든 노드에서 락을 해제한다
 
 ```mermaid
-flowchart TD
+flowchart LR
     C[클라이언트] --> START[T1 기록]
     START -->|SET NX PX ttl| R1[Redis1:OK] & R2[Redis2:OK] & R3[Redis3:OK] & R4[Redis4:FAIL] & R5[Redis5:OK]
     R1 & R2 & R3 & R4 & R5 --> CHECK{과반수 충족?}
@@ -766,7 +766,7 @@ sequenceDiagram
 ## 11. 전체 선택 가이드
 
 ```mermaid
-flowchart TD
+flowchart LR
     Q1{인스턴스 수?} -->|단일| SYNC[synchronized/ReentrantLock]
     Q1 -->|멀티| Q2{복잡도?}
     Q2 -->|단순| LETTUCE[Lettuce SET NX EX]

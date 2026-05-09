@@ -44,7 +44,7 @@ graph LR
 실제 프로덕션 환경에서의 캐시 계층은 최대 5단계까지 존재할 수 있다. 각 계층마다 응답 속도, 용량, 비용이 다르다.
 
 ```mermaid
-graph TD
+graph LR
     Client["클라이언트"] -->|"1️⃣ CDN Hit: 5~50m"| CDN["CDN"]
     CDN -->|"Miss"| GW["2️⃣ API Gateway"]
     GW -->|"Miss"| L1["3️⃣ L1 Local Cache"]
@@ -506,7 +506,7 @@ public class GatewayCacheConfig {
 ### 트래픽 분산 시뮬레이션
 
 ```mermaid
-graph TD
+graph LR
     Total["100K TPS 유입"] --> CDN["CDN Hit 70%"]
     Total --> GW["Gateway Hit 5%"]
     Total --> Miss1["CDN+GW Miss"]

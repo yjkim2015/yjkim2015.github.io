@@ -80,7 +80,7 @@ for (Suit suit : suits) {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["중첩 반복 버그"] --> B["i.next()가 안쪽 루프에서"]
     B --> C["suits.size() != ra"]
     B --> D["suits.size() == ra"]

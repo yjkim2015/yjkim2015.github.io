@@ -105,7 +105,7 @@ suspend fun fetchAll(userId: Long): UserDashboard = coroutineScope {
 구조적 동시성 없이 코루틴을 쓰면 "코루틴 누수"가 발생한다. HTTP 요청이 취소됐는데 그 요청이 시작한 코루틴이 계속 실행되는 것이다.
 
 ```mermaid
-graph TD
+graph LR
     Parent["부모 coroutineScope"] --> C1["자식 코루틴 1"]
     Parent --> C2["자식 코루틴 2"]
     Parent --> C3["자식 코루틴 3"]
@@ -533,7 +533,7 @@ class OrderServiceTest {
 ## 코루틴 전체 구조 정리
 
 ```mermaid
-flowchart TD
+flowchart LR
     Normal["일반 함수"] -->|runBlocking| Scope["코루틴 스코프"]
     Scope -->|launch| Job["Job (결과 없음)"]
     Scope -->|async/await| Deferred["Deferred (결과 있음)"]

@@ -71,7 +71,7 @@ public class IndexOutOfBoundsException extends RuntimeException {
 비유하자면 **교통사고 보고서에 필요한 항목**입니다. 관련된 모든 수치를 담되, 무관한 정보로 장황하게 만들지는 않습니다.
 
 ```mermaid
-graph TD
+graph LR
     A["예외 상세 메시지에 포함할 것"] --> B["실패에 관여된"]
     A --> C["실패에 관여된"]
     A --> D["포함하지 말 것"]

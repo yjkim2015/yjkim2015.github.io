@@ -72,7 +72,7 @@ flowchart LR
 ```
 
 ```mermaid
-graph TD
+graph LR
     DOC[Document] --> HTML[html]
     HTML --> HEAD[head]
     HTML --> BODY[body]

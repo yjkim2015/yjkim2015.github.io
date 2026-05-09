@@ -20,7 +20,7 @@ Spring Security의 AnonymousAuthenticationFilter가 바로 이 역할입니다. 
 이 필터는 Spring Security 필터 체인에서 인증 관련 필터들 이후에 위치합니다. 앞선 필터들(UsernamePasswordAuthenticationFilter, RememberMeAuthenticationFilter 등)이 모두 인증을 처리하지 못했을 때 동작합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["HTTP 요청"] --> B["폼/RememberMe 필터"] --> D["AnonymousAuthentic"]
     D --> E{"Authentication 존재?"}
     E -->|있음| F["필터 통과"]

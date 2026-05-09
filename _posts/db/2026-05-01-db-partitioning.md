@@ -32,7 +32,7 @@ toc_label: 목차
 4️⃣ 결과적으로 스캔 범위가 최대 1/N으로 줄어든다.
 
 ```mermaid
-graph TD
+graph LR
     Single["단일 테이블 1억 건"]
     Single --> Part["파티셔닝 적용"]
     Part --> P2020["파티션 p2020"]
@@ -71,7 +71,7 @@ MySQL의 `PARTITION BY` 문법이 지원하는 것이 바로 수평 파티셔닝
 **동작 원리**: 캐시 효율과 I/O 감소가 목적이다. 핫 테이블은 Buffer Pool에 더 많이 캐싱되고, BLOB/TEXT 컬럼 로드를 필요할 때만 수행한다.
 
 ```mermaid
-graph TD
+graph LR
     Original["원본 테이블"]
     Original --> Hot["핫 테이블 자주 조회"]
     Original --> Cold["콜드 테이블 드물게 조회"]
@@ -110,7 +110,7 @@ INSERT 시 MySQL이 파티션 키 값을 평가하여 해당 범위의 파티션
 4️⃣ 해당 파티션 물리 파일에 행 저장
 
 ```mermaid
-graph TD
+graph LR
     Insert["INSERT order_date="]
     Insert --> Eval["YEAR 평가 = 2023"]
     Eval --> Check{"파티션 경계 확인"}

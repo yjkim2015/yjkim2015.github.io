@@ -31,7 +31,7 @@ if (cheeses != null && cheeses.contains(Cheese.STILTON)) {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["null 반환의 문제"] --> B["클라이언트마다"]
     A --> C["방어 코드 빠뜨리면"]
     A --> D["반환하는 쪽도"]

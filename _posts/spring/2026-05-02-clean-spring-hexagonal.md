@@ -182,7 +182,7 @@ public class OrderService {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A[OrderService] --> B["모든 비즈니스 로직"]
     C[Order] --> D["데이터만(getter/set)"]
     E[OrderSvc-DM] --> F["오케스트레이션만"]
@@ -197,7 +197,7 @@ graph TD
 ### 3.1 전통적인 계층형 아키텍처의 문제
 
 ```mermaid
-graph TD
+graph LR
     A[Controller] --> B[Service]
     B --> C[Repository]
     C --> D[Database]

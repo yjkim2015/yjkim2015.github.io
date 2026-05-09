@@ -113,7 +113,7 @@ function Counter() {
 Prop Drilling은 데이터가 필요한 컴포넌트까지 중간 컴포넌트들이 쓸데없이 props를 받아서 아래로 전달하는 문제입니다.
 
 ```mermaid
-graph TD
+graph LR
     A1["App(theme)"] -->|prop| B1[Layout]
     B1 -->|prop| C1[Sidebar]
     C1 -->|prop| D1[MenuItem]
@@ -366,7 +366,7 @@ flowchart LR
 ## 8번 다이어그램 - 상태 설계 결정 트리
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["상태 필요?"] -->|"단일 컴포넌트"| C["useState/useReduce"]
     A -->|"공유 필요"| D{"서버 데이터?"}
     D -->|"예"| E["React Query/SWR"]

@@ -76,7 +76,7 @@ CREATE TABLE persistent_logins (
 Remember Me 토큰 검증이 실패하는 경우와 그 처리 방식입니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["remember-me 쿠키"] --> B["autoLogin()"]
     B --> C{"토큰 유효?"}
     C -- "만료/불일치" --> D["onLoginFail()"]

@@ -16,7 +16,7 @@ toc_label: 목차
 비유하자면 **복사 허가증**입니다. "이 클래스는 복사해도 됩니다"라고 표시하는 용도인데, 실제 복사 기능(`clone()`)은 허가증 자체가 아닌 전혀 다른 곳(`Object`)에 있습니다. 게다가 `protected`로 숨겨져 있어 바깥에서 직접 호출도 못 합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["Cloneable 인터페이스"] -->|"메서드 없음\n(마커 인터페이스)"| B["구현 여부만 표시"]
     C["Object.clone()"] -->|"protected 메서드"| D["실제 복사 동작"]
     B --> E["Cloneable 구현 시:"]
@@ -186,7 +186,7 @@ public static Stack newInstance(Stack original) {
 **복사 생성자/팩토리의 장점:**
 
 ```mermaid
-graph TD
+graph LR
     B["복사 생성자/팩토리"]
     C["Cloneable/clone"]
     B --> B1["생성자 정상 사용"]
@@ -224,7 +224,7 @@ Set<String> treeSet = new TreeSet<>(hashSet);  // 자동 정렬된 TreeSet으로
 ## 9. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["객체 복사 방법 선택"] --> B{"Cloneable 이미"}
     B -->|"Yes"| C["clone() 올바르게 구현"]
     B -->|"No"| D["복사 생성자 또는 복사 팩토리 사"]

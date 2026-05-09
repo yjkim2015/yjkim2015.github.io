@@ -53,7 +53,7 @@ for (Stamp stamp : stamps) {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["Collection stamps"] --> B["stamps.add(new Coi"]
     B --> C["경고만 출력"]
     C --> D["런타임: ClassCastExce"]

@@ -85,7 +85,7 @@ public boolean removeIf(Predicate<? super E> filter) {
 ## 3. 디폴트 메서드 사용 규칙
 
 ```mermaid
-graph TD
+graph LR
     A["디폴트 메서드 사용 판단"] --> B{"새로운 인터페이스를"}
     B -->|"Yes"| C["디폴트 메서드로 편의 기능 제공\"]
     B -->|"No (기존 인터페이스)"| D{"꼭 필요한 경우인가?"}
@@ -143,7 +143,7 @@ class ReadOnlyService implements MyService { ... }
 ## 5. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["디폴트 메서드 핵심 교훈"] --> B["디폴트 메서드는"]
     A --> C["기존 구현체가 모두"]
     A --> D["컴파일 성공 ≠ 런타임 안전"]

@@ -96,7 +96,7 @@ infinite(); // RangeError: Maximum call stack size exceeded
 이벤트 루프가 하는 일을 정확히 표현하면 이렇습니다. 이 알고리즘을 외워두면 어떤 비동기 코드든 실행 순서를 예측할 수 있습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A{"콜스택 비었나?"} -->|아니오| B["콜스택 실행"] --> A
     A -->|예| C{"마이크로태스크?"}
     C -->|예| D["마이크로태스크 실행"] --> C
@@ -269,7 +269,7 @@ gantt
 브라우저는 렌더링도 이벤트 루프와 함께 동작합니다. 이것을 모르면 애니메이션 코드에서 깜빡임이 왜 생기는지 이해하기 어렵습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["태스크 실행"] --> B["마이크로태스크 처리"]
     B --> C{"렌더링 필요?"}
     C -->|"예"| D["rAF 콜백"]
@@ -330,7 +330,7 @@ console.log('script end');
 ```
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["script start"] --> B["setTimeout → 태스크 큐"]
     B --> C["Promise.then → 마이크"]
     C --> D["async start / awai"]
@@ -451,7 +451,7 @@ flowchart LR
 Node.js는 libuv를 사용하며 이벤트 루프 단계가 더 세분화됩니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["timers"] --> B["pending callbacks"] --> C["poll"] --> D["check/setImmediate"] --> E["close callbacks"] --> A
     MQ["마이크로태스크(Promise+ne"] -.->|"페이즈 전환마다"| A
 ```

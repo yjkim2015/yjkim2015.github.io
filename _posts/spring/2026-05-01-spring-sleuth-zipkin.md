@@ -23,7 +23,7 @@ date: 2026-05-01
 - **ParentSpanId**: 호출자의 SpanId. 이를 통해 서비스 간 호출 계층 구조를 파악한다.
 
 ```mermaid
-graph TD
+graph LR
     A["API Gateway"] --> B["Order Service"]
     B --> C["Payment Service"]
     B --> D["Inventory Service"]

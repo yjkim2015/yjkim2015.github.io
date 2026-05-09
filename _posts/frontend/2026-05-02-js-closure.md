@@ -41,7 +41,7 @@ console.log(vault.check('wrongpass')); // false
 > 비유: 학교 교칙을 생각해보세요. 학생은 어느 학교에 소속됐느냐에 따라 그 학교 규칙을 따릅니다. 외출해서 다른 학교 앞에 서 있어도, 본인 학교 규칙이 적용됩니다. 함수도 마찬가지입니다. 어디서 호출되든, 정의된 곳의 스코프 규칙을 따릅니다.
 
 ```mermaid
-graph TD
+graph LR
     G["전역: x=1"] --> O["outer: y=2"] --> I["inner: z=3"]
     I --> IA["x,y,z 접근 가능"]
     G --> GA["y,z 접근 불가"]
@@ -333,7 +333,7 @@ console.timeEnd('두 번째 계산'); // 거의 0ms — 캐시 히트!
 ```
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["함수 호출"] --> B{"캐시에 있나?"}
     B -->|"예"| C["캐시에서 반환"]
     B -->|"아니오"| D["함수 실행"] --> E["캐시 저장"] --> F["결과 반환"]
@@ -365,7 +365,7 @@ const getFirst = createHeavyResource();
 ```
 
 ```mermaid
-graph TD
+graph LR
     GF["getFirst 함수"] -->|"클로저 참조"| LD["largeData 4MB"]
     LD --> WASTE["999,999개 낭비"]
     GF2["getFirst2 함수"] -->|"클로저 참조"| FIRST["first만 저장"]

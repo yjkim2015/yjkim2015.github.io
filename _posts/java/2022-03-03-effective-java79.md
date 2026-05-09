@@ -146,7 +146,7 @@ private void notifyElementAdded(E element) {
 `CopyOnWriteArrayList`는 수정 시 항상 새 배열을 복사해 교체합니다. 내부 배열이 절대 수정되지 않으므로 순회 중 락이 필요 없습니다. 수정은 드물고 순회가 빈번한 관찰자 리스트에 최적입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["동기화 블록 안 외계인 메서드 문"] --> B["ConcurrentModifica"]
     A --> C["교착 상태"]
     B --> D["해결: 스냅샷 복사"]

@@ -30,7 +30,7 @@ Spring Batch의 핵심 구조는 크게 **세 계층**으로 나뉩니다. Appli
 이 세 계층이 어떻게 맞물리는지, 실행 흐름을 다이어그램으로 보겠습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["JobLauncher"] --> B["Job"]
     B --> C["Step(s)"]
     C -->|"Tasklet"| F["단일 작업"]

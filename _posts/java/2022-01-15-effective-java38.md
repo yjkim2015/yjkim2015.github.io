@@ -122,7 +122,7 @@ private static void test(Collection<? extends Operation> opSet,
 방법 2가 더 유연합니다. 여러 구현 타입의 연산을 조합해 한 번에 전달할 수 있습니다. 단, `EnumSet`과 `EnumMap`을 직접 쓸 수 없다는 단점이 있습니다.
 
 ```mermaid
-graph TD
+graph LR
     A["확장 연산 전달 방법"] --> B["Class<T extends En"]
     A --> C["Collection<? exten"]
     B --> D["단일 열거 타입 전달"]
@@ -155,7 +155,7 @@ public interface Operation {
 ## 6. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["확장 가능한"] --> B["열거 타입 상속 불가"]
     B --> C["인터페이스 정의"]
     C --> D["BasicOperation"]

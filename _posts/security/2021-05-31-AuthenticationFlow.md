@@ -141,7 +141,7 @@ public class CustomUserDetailsService implements UserDetailsService {
 ## 인증 실패 처리 흐름
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["인증 실패"] --> B{"예외 종류"}
     B -- "UsernameNotFound" --> C["BadCredentials로"]
     B -- "BadCredentials" --> D["FailureHandler"]

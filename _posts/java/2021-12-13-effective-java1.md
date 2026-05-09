@@ -155,7 +155,7 @@ public static <E extends Enum<E>> EnumSet<E> noneOf(Class<E> elementType) {
 JDBC가 대표적인 예입니다. `DriverManager.getConnection()`은 어떤 DB Driver가 등록될지 모르는 상태에서 작성되었지만, MySQL·Oracle·PostgreSQL 드라이버가 나중에 `Driver` 인터페이스를 구현하면 그것을 반환합니다. 이것이 **서비스 제공자 프레임워크(Service Provider Framework)** 의 핵심입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["서비스 제공자 프레임워크 구성"] --> B["서비스 인터페이스"]
     A --> C["제공자 등록 API"]
     A --> D["서비스 접근 API"]
@@ -211,7 +211,7 @@ List<Complaint> litany = Collections.list(legacyLitany);
 ## 9. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["정적 팩토리 메서드"] --> B["장점"]
     A --> C["단점"]
     B --> B1["이름으로 의도 표현"]

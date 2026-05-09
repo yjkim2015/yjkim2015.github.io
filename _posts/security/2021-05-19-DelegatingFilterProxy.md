@@ -18,7 +18,7 @@ toc_label: 목차
 **Spring 컨테이너 (ApplicationContext)**: Spring 빈들을 생성하고 의존성을 주입하는 IoC 컨테이너입니다. 서블릿 컨테이너와 별개로 동작합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["HTTP 요청"] --> B["서블릿 컨테이너"]
     B --> C["서블릿 필터 체인"]
     C --> D["DelegatingFilterPr"]
@@ -89,7 +89,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 **2. 요청에 맞는 필터 체인 선택**
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["HTTP 요청"] --> B["FilterChainProxy"]
     B --> C["등록된 SecurityFilter"]
     C --> D{"요청 URL이"}

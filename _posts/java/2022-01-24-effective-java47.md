@@ -48,7 +48,7 @@ for (ProcessHandle p : iterableOf(ProcessHandle.allProcesses())) { ... }
 비유하자면 **두 규격 모두 지원하는 멀티탭**입니다. `Collection`은 `Iterable`의 하위 타입이고 `stream()` 메서드도 제공하므로 반복문과 스트림 파이프라인 모두에서 사용할 수 있습니다.
 
 ```mermaid
-graph TD
+graph LR
     A["원소 시퀀스 반환 타입 결정"] --> B{"사용 목적이"}
     B -->|"스트림 전용"| C["Stream 반환"]
     B -->|"반복 전용"| D["Iterable 반환"]

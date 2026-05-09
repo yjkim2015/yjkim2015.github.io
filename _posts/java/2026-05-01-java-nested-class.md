@@ -18,7 +18,7 @@ Java는 클래스 안에 클래스를 선언할 수 있습니다. 이를 중첩 
 중첩 클래스의 가장 중요한 분류 기준은 **외부 클래스 인스턴스에 대한 참조를 보유하는가** 여부입니다. `static`으로 선언된 중첩 클래스는 외부 참조가 없어 독립적으로 생성 가능하고, 비static(inner) 클래스는 항상 외부 인스턴스를 참조합니다. 이 차이가 메모리 누수 가능성을 결정합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["중첩 클래스"] --> B["Static Nested"]
     A --> C["Inner Class"]
     B --> B1["외부 참조 없음"]
@@ -341,7 +341,7 @@ Runnable lambdaCounter = () -> { /* count++ 불가 */ };
 비static 내부 클래스 인스턴스가 외부 클래스 인스턴스보다 오래 살면 GC가 외부 클래스를 수거하지 못합니다. `Thread`나 `Handler` 같은 장수 객체가 내부 클래스 인스턴스를 보유할 때 특히 위험합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["Thread (GC Root)"] --> B["MyTask 인스턴스 (Runna"]
     B --> C["this$0 참조 (강참조)"]
     C --> D["MyActivity 인스턴스 (G"]
@@ -687,7 +687,7 @@ public class Outer {
 ## 12. 전체 요약
 
 ```mermaid
-graph TD
+graph LR
     A["중첩 클래스 선택"] --> B{"외부 인스턴스 불필요?"}
     B -->|"Yes"| C["Static Nested"]
     B -->|"No"| D{"이름 필요?"}

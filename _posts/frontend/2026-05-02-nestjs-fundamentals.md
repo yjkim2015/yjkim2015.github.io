@@ -27,7 +27,7 @@ NestJS는 Angular에서 영감을 받아 **모듈-컨트롤러-서비스**라는
 ## 1번 다이어그램 - NestJS 요청 처리 파이프라인
 
 ```mermaid
-graph TD
+graph LR
     CLIENT --> MW["미들웨어"] --> GUARD["가드"] --> PIPE["파이프"] --> CTRL["컨트롤러"]
     CTRL --> SERVICE["서비스"] --> REPO["레포지토리"]
     REPO --> SERVICE --> CTRL --> INTR["인터셉터"] --> CLIENT
@@ -56,7 +56,7 @@ export class UsersModule {}
 ```
 
 ```mermaid
-graph TD
+graph LR
     AM["AppModule"] --> UM["UsersModule"]
     AM --> EM["EmailModule"]
     UM --> UC["UsersController"]

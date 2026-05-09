@@ -145,7 +145,7 @@ public class OrderConsumerService {
 **poll() 동작 세부 과정:**
 
 ```mermaid
-graph TD
+graph LR
     A["1. poll(timeout) 호"]
     B["2. Fetcher가 각 파티션"]
     C["3. 브로커: High Water"]
@@ -237,7 +237,7 @@ max.poll.interval.ms:
 ### Eager Rebalancing (기존 방식)
 
 ```mermaid
-graph TD
+graph LR
     A["초기: C1=P0,P1 / C2="]
     B["Phase1 Stop-the-Wo"]
     C1C["C1=P0,P1"]
@@ -551,7 +551,7 @@ key="user-2" → {"name":"이영희", "email":"c@c.com"}  (유일값)
 ### 컴팩션 동작 과정
 
 ```mermaid
-graph TD
+graph LR
     CLEAN["Clean 영역 (컴팩션됨)"] --> DIRTY["Dirty 영역 (대상)"]
     DIRTY --> SCAN["1. Dirty 영역 스캔"]
     SCAN --> NEW["2. 새 세그먼트 생성"]

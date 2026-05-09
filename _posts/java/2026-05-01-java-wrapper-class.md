@@ -448,7 +448,7 @@ assert a == b;  // 운영: 실패! 다른 객체
 ## 8. 전체 요약
 
 ```mermaid
-graph TD
+graph LR
     WRAPPER["래퍼 클래스 핵심 정리"]
     WRAPPER --> PRIM["기본형=스택/빠름/null불가 v"]
     WRAPPER --> BOXING["오토박싱: valueOf()/in"]

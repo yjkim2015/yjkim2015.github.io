@@ -85,7 +85,7 @@ Optional.valueOf(str);
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["메서드 이름 선택"] --> B{"boolean 반환?"}
     B -- 예 --> C["is/has 시작"]
     B -- 아니오 --> D{"동작 수행?"}

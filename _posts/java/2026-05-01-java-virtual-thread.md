@@ -390,7 +390,7 @@ RPS ≈ Carrier Thread 수 × (1 / 실제 CPU 사용 시간)
 Virtual Thread가 블로킹 상태에서도 Carrier Thread에서 Unmount되지 못하고 **고정(Pinned)**되는 현상입니다. 피닝이 발생하면 Virtual Thread의 장점이 사라지고 Carrier Thread를 점유하게 됩니다.
 
 ```mermaid
-graph TD
+graph LR
   V1[VThread] --> BIO[블로킹 I/O]
   BIO --> UM[Unmount]
   UM --> RET[Carrier 반환]
@@ -1069,7 +1069,7 @@ public class RateLimitedService {
 ```
 
 ```mermaid
-graph TD
+graph LR
     VT["Virtual Thread(수십만"] -->|"I/O 대기시 반납"| CT["캐리어 스레드(코어수)"]
     VT --> SEM["Semaphore"]
     SEM --> DB["DB 풀(200)"]

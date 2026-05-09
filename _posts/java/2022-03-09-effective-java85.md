@@ -62,7 +62,7 @@ static byte[] bomb() {
 새로 작성하는 시스템에서는 자바 직렬화를 쓸 이유가 없습니다. 크로스-플랫폼 구조화 데이터 표현을 사용하세요.
 
 ```mermaid
-graph TD
+graph LR
     A["데이터 직렬화 선택"] --> B["자바 직렬화"]
     A --> C["JSON"]
     A --> D["Protocol Buffers"]

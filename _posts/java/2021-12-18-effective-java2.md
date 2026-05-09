@@ -262,7 +262,7 @@ NyPizza pizza = new NyPizza.Builder(SMALL)
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["선택적 매개변수가 많다면?"] --> B["4개 미만"]
     A --> C["4개 이상"]
     C --> D["불변 객체 보장"]

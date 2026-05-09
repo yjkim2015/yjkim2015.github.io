@@ -446,7 +446,7 @@ OBJECT ENCODING key
 ## 자료구조 선택 가이드
 
 ```mermaid
-graph TD
+graph LR
     Q1{"저장 목적"} -->|값·카운터·세션| STRING["String"]
     Q1 -->|순서 있는 목록·큐| LIST["List"]
     Q1 -->|중복 없는 집합| Q2{"집합 연산?"}

@@ -36,7 +36,7 @@ Set<Lark> exaltation = new HashSet<>();  // 컴파일러가 Lark 추론
 ## 2. 경고를 제거해야 하는 이유
 
 ```mermaid
-graph TD
+graph LR
     A["비검사 경고"] --> B{"제거했나?"}
     B -->|"Yes"| C["타입 안전성 보장"]
     B -->|"No (무시)"| D["런타임 ClassCastExcep"]

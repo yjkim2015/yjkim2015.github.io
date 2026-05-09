@@ -20,7 +20,7 @@ Java 컬렉션 프레임워크(Java Collections Framework, JCF)는 데이터를 
 ### 인터페이스 계층도
 
 ```mermaid
-graph TD
+graph LR
     Iterable --> Collection
     Collection --> List["List (순서O 중복O)"]
     Collection --> Set["Set (순서X 중복X)"]
@@ -204,7 +204,7 @@ public synchronized boolean add(E e) {
 **쓰기 시 배열 전체를 복사**하는 스레드 안전 List입니다. `java.util.concurrent` 패키지에 속합니다.
 
 ```mermaid
-graph TD
+graph LR
     R1["기존 readers"] --> A1["배열 A,B,C"]
     L["lock"] --> N["새 배열 A,B,C,D"] --> REF["참조 교체"] --> U["unlock"]
     REF --> A2["배열 A,B,C,D"]
@@ -254,7 +254,7 @@ public boolean add(E e) {
 HashSet의 중복 판단 과정:
 
 ```mermaid
-graph TD
+graph LR
     A["add() 호출"] --> B["hashCode() → 버킷 결정"]
     B --> C{"버킷에 원소?"}
     C -->|NO| D["저장"]
@@ -330,7 +330,7 @@ System.out.println(linked); // [Banana, Apple, Cherry] — 삽입 순서 유지
 내부적으로 이중 연결 리스트로 각 버킷의 원소들을 삽입 순서로 연결합니다.
 
 ```mermaid
-graph TD
+graph LR
     B2["bucket[2] Banana"]
     B7["bucket[7] Apple"]
     B4["bucket[4] Cherry"]
@@ -931,7 +931,7 @@ for (String s : cowList) {
 ### List 선택
 
 ```mermaid
-graph TD
+graph LR
     L0["순서가 중요한 데이터를 저장하고"]
     L1{"랜덤 접근(get)이 많은가?"}
     L2["ArrayList<br>(캐시 지"]
@@ -948,7 +948,7 @@ graph TD
 ### Set 선택
 
 ```mermaid
-graph TD
+graph LR
     S0["중복 없는 컬렉션"]
     Q1{"정렬?"}
     Q2{"삽입순서?"}
@@ -965,7 +965,7 @@ graph TD
 ### Map 선택
 
 ```mermaid
-graph TD
+graph LR
     M0["Key-Value 저장"] --> M1{"멀티스레드?"}
     M1 -->|YES| M2["ConcurrentHashMap"]
     M1 -->|NO| M3{"Key 정렬?"}

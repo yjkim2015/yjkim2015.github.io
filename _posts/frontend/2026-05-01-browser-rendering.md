@@ -28,7 +28,7 @@ toc_label: 목차
 ## 브라우저 렌더링 전체 파이프라인
 
 ```mermaid
-flowchart TD
+flowchart LR
     HTML["HTML"] --> DOM["DOM 트리"]
     CSS["CSS"] --> CSSOM["CSSOM 트리"]
     DOM --> RT["렌더 트리"]
@@ -329,7 +329,7 @@ transform: translateZ(0);          /* 핵 (hack), 남용 금지 */
 첫 화면 렌더링을 빠르게 하는 전략입니다. 핵심은 **렌더 블로킹 리소스를 최소화**하는 것입니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["render-blocking 제거"] --> B["Critical CSS 인라인"]
     B --> C["JS defer/async"]
     C --> D["Reflow 배치 처리"]

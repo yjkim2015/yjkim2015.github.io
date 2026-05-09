@@ -162,7 +162,7 @@ President.INSTANCE.governe();
 단 5줄로 완벽한 싱글톤입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["Enum 싱글톤의 보장"] --> B["리플렉션 공격 차단"]
     A --> C["직렬화 자동 처리"]
     A --> D["스레드 안전"]
@@ -200,7 +200,7 @@ c.newInstance("INSTANCE", 0);
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["싱글톤 선택 가이드"] --> B["상속이 필요 없다"]
     A --> C["API 유연성이 필요하다"]
     A --> D["단순하고 API 노출이 필요"]

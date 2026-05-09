@@ -80,7 +80,7 @@ class Point {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["외부 코드"] -->|"point.getX()"| B["getter 메서드"]
     A -->|"point.setX(5)"| C["setter 메서드"]
     B --> D["private double x"]
@@ -150,7 +150,7 @@ public final class Time {
 ## 5. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["필드 공개 여부 결정"] --> B{"public 클래스인가?"}
     B -->|"Yes"| C["반드시 private + 접근자"]
     B -->|"No (package-privat"| D["필드 직접 공개 가능"]

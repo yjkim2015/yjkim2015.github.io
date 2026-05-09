@@ -164,7 +164,7 @@ export async function generateStaticParams() {
 ## 5번 다이어그램 - App Router 파일 컨벤션
 
 ```mermaid
-graph TD
+graph LR
     ROOT["app/layout.tsx (루트"] --> HOME["page.tsx /"]
     ROOT --> BLOG["blog/layout.tsx"]
     BLOG --> BP["blog/page.tsx /blo"] & BD["blog/slug/page.tsx"]

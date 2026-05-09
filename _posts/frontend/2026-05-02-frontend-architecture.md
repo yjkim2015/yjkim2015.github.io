@@ -24,7 +24,7 @@ toc_label: 목차
 > 비유: 레고 블록을 생각해 보세요. 1x1 블록(원자), 2x4 블록(분자), 문 모듈(유기체), 집 설계도(템플릿), 완성된 집(페이지)처럼 계층적으로 조합됩니다.
 
 ```mermaid
-graph TD
+graph LR
     ATOMS["Atoms: Button, Inp"]
     MOLECULES["Molecules: SearchB"]
     ORGANISMS["Organisms: Header,"]
@@ -38,7 +38,7 @@ graph TD
 컴포넌트를 분리할지 말지 헷갈릴 때 사용하는 체크리스트입니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["컴포넌트 분리 고려"] --> B{"재사용 가능한가?"}
     B -->|"예"| C["분리 — 다른 곳에서도 쓸 수 있"]
     B -->|"아니오"| D{"너무 큰가? 150줄 이상"}
@@ -109,7 +109,7 @@ src/
 컴포넌트가 직접 `fetch`를 호출하는 코드는 테스트하기 어렵고, API URL이 바뀌면 모든 컴포넌트를 수정해야 합니다.
 
 ```mermaid
-graph TD
+graph LR
     COMPONENT["컴포넌트"] -->|"훅 사용"| HOOKS["커스텀 훅"]
     HOOKS -->|"데이터 요청"| REACT_QUERY["React Query / SWR"]
     REACT_QUERY -->|"API 호출"| API_LAYER["API Layer"]
@@ -177,7 +177,7 @@ export function useProducts(params?: { category?: string }) {
 ## 4. 상태 설계 패턴 — 상태를 분류하면 라이브러리 선택이 쉬워진다
 
 ```mermaid
-graph TD
+graph LR
     STATE["상태 분류"] --> LOCAL["로컬 상태<br>컴포넌트 내부만"]
     STATE --> SHARED["공유 상태<br>여러 컴포넌트가"]
     STATE --> SERVER["서버 상태<br>API 데이터"]

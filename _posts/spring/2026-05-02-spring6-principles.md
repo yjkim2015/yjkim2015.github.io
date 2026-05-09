@@ -89,7 +89,7 @@ graph LR
 ### 2.2 개방-폐쇄 원칙 (OCP)
 
 ```mermaid
-graph TD
+graph LR
     A["OCP: 확장에 열려있고, 변경에"] --> B[UserDao]
     A --> C["ConnectionMaker 인터"]
     B -->|"변경 없이"| D["새 DB로 전환 가능"]
@@ -241,7 +241,7 @@ public class UserService {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A[UserService] -->|"의존"| B["PlatformTransactio"]
     C[DataSourceTransactionManager] -->|"구현"| B
     D[JpaTransactionManager] -->|"구현"| B
@@ -294,7 +294,7 @@ public interface UserDao {
 ### 5.3 Spring의 DataAccessException 계층
 
 ```mermaid
-graph TD
+graph LR
     A["DataAccessExceptio"] --> B["NonTransient"]
     A --> C["Transient"]
     B --> D["DuplicateKeyExcept"]
@@ -439,7 +439,7 @@ public class OrderService {
 ### 7.1 SOLID 원칙 적용
 
 ```mermaid
-graph TD
+graph LR
     A[SOLID] --> B["SRP: 레이어 분리"]
     A --> C["OCP: 인터페이스+DI"]
     A --> D["LSP: 구현체 계약 준수"]
@@ -450,7 +450,7 @@ graph TD
 ### 7.2 템플릿 콜백 패턴 — Spring 전반에서 사용
 
 ```mermaid
-graph TD
+graph LR
     A["템플릿 콜백 패턴"] --> B[JdbcTemplate]
     A --> C[RestTemplate]
     A --> D[TransactionTemplate]

@@ -104,7 +104,7 @@ sequenceDiagram
 ### 상세 타임라인
 
 ```mermaid
-graph TD
+graph LR
     T0["t=0: Consumer A poll"]
     T1["t=1: off50 처리 완료"]
     T2["t=2: off51 처리 완료"]
@@ -218,7 +218,7 @@ graph TD
 ### 실제 영향
 
 ```mermaid
-graph TD
+graph LR
     B1["생성 P1-100"] --> B2["수정 P1-101"] --> B3["취소 P1-102"]
     B3 --> B4["Consumer: P1만 처리 →"]
     A1["생성 P1(기존)"] --> A4["Consumer1: 생성만 봄"]
@@ -268,7 +268,7 @@ graph TD
 ### 브로커 디스크 100% 상황
 
 ```mermaid
-graph TD
+graph LR
     D80["디스크 80%"] --> D90["90%"] --> D95["95%"] --> D99["99%"] --> D100["100%"]
     D100 --> E1["새 메시지 쓰기 실패"]
     D100 --> E2["프로듀서: TimeoutExcep"]
@@ -279,7 +279,7 @@ graph TD
 ### 단계별 장애 확산
 
 ```mermaid
-graph TD
+graph LR
     T0["t=0: 디스크 100% 도달"]
     T1["t=1: Partition 0 리"]
     T2["t=2: Producer 재시도"]
@@ -348,7 +348,7 @@ public void adjustRetentionPolicy() {
 ### ISR 점진적 축소 시나리오
 
 ```mermaid
-graph TD
+graph LR
     S0["ISR=B1(Leader),B2,"] -->|"B3 lag 초과"| S1["ISR=B1,B2"]
     S1 -->|"B2 Full GC"| S2["ISR=B1만"]
     S2 -->|"B1 장애"| S4["ISR 비어있음"]
@@ -497,7 +497,7 @@ spec:
 ### 긴급 대응 절차
 
 ```mermaid
-graph TD
+graph LR
     DETECT["Lag 폭증 감지"]
     S1["Step 1: 원인 파악 (5분"]
     S2["Step 2: 빠른 완화"]

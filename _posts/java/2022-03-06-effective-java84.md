@@ -68,7 +68,7 @@ Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
 응답 불가 문제를 `yield`나 우선순위로 해결하려 하면 원인을 가리기만 하고 같은 문제가 반복됩니다. 동시에 실행 가능한 스레드 수가 적어지도록 프로그램 구조 자체를 바꾸는 것이 올바른 해결책입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["스레드 스케줄러 의존 문제"] --> B["바쁜 대기"]
     A --> C["Thread.yield"]
     A --> D["스레드 우선순위"]

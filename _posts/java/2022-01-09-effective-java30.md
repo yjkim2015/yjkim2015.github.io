@@ -110,7 +110,7 @@ Integer maxNum = max(nums);   // 5
 ## 4. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["메서드 설계"] --> B{"형변환이"}
     B -->|"Yes"| C["제네릭 메서드로 변환"]
     B -->|"No"| D["이미 충분히 좋음"]

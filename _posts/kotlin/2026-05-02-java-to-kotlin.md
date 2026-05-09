@@ -234,7 +234,7 @@ val member = memberRepository.findByIdOrThrow(1L)  // null이면 즉시 예외
 스코프 함수(let, run, apply, also, with)는 처음 보면 "이게 왜 필요하지?" 싶지만, 각각 명확한 용도가 있다.
 
 ```mermaid
-graph TD
+graph LR
     ScopeFn["스코프 함수"] --> LambdaResult["반환값: 람다 결과"]
     ScopeFn --> ReceiverResult["반환값: 수신 객체 자신"]
     LambdaResult --> Let["let"]
@@ -351,7 +351,7 @@ JPA 엔티티는 `data class`로 만들면 안 된다. `equals`와 `hashCode`가
 ## 점진적 마이그레이션 전략
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["Java 프로젝트"] --> B["1단계: 새 파일은 Kotlin으"]
     B --> C["2단계: DTO, Value Ob"]
     C --> D["3단계: 서비스 계층 변환"]

@@ -78,7 +78,7 @@ public final class Period implements Serializable {
 비유하자면 **청사진으로 집을 짓는 것**입니다. 기존 집을 그대로 복사하는 대신, 청사진(프록시)을 전송하고 받는 쪽에서 청사진으로 새 집을 짓습니다. 새 집은 모든 건축 기준(불변식)을 자동으로 만족합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["직렬화"] --> B["writeReplace"]
     B --> C["프록시 직렬화"]
     C --> D["역직렬화"]

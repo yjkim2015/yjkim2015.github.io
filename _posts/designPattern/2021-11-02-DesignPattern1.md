@@ -66,7 +66,7 @@ Solution (해결책)
 GoF(Gang of Four)의 저서 *Design Patterns: Elements of Reusable Object-Oriented Software*에서 23가지 패턴을 세 범주로 분류했다.
 
 ```mermaid
-graph TD
+graph LR
     A["GoF 23 패턴"] --> B["생성 Creational"]
     A --> C["구조 Structural"]
     A --> D["행동 Behavioral"]
@@ -129,7 +129,7 @@ graph TD
 ## 패턴 선택 가이드
 
 ```mermaid
-flowchart TD
+flowchart LR
     Q1{"어떤 문제인가?"} --> C["객체 생성 방식 제어"]
     Q1 --> S["클래스/객체 조합 구조"]
     Q1 --> B["객체 간 통신/알고리즘"]

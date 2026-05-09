@@ -69,7 +69,7 @@ console.log(dog.type); // '동물' — 프로토타입에서 찾음
 속성을 찾을 때 체인을 따라 올라갑니다. 찾지 못하면 `undefined`를 반환합니다 (에러가 아닙니다). 단, 함수를 찾지 못하면 호출 시 에러가 납니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["dog.speak() 호출"] --> B{"dog에<br>speak가 있나?"}
     B -->|"예"| C["dog.speak() 실행"]
     B -->|"아니오"| D{"Animal.prototype에<br>speak가 있나?"}

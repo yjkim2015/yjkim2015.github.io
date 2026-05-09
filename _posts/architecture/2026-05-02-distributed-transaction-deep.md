@@ -55,7 +55,7 @@ sequenceDiagram
 ### 2PC의 문제점 — 왜 잘 안 쓰이나
 
 ```mermaid
-graph TD
+graph LR
     Issues["2PC 문제점"]
     Issues --> I1["1️⃣ 블로킹 프로토콜"]
     Issues --> I2["2️⃣ 단일 장애점"]
@@ -273,7 +273,7 @@ public class OrderSagaOrchestrator {
 ### 문제: 이벤트 발행의 원자성
 
 ```mermaid
-graph TD
+graph LR
     Problem["1️⃣ 문제 상황"]
     Problem --> Step1["DB 트랜잭션 완료"]
     Step1 --> Step2["Kafka 이벤트 발행 시도"]
@@ -288,7 +288,7 @@ graph TD
 ### 해결: Outbox 패턴 — "같은 트랜잭션에 이벤트를 먼저 DB에 저장"
 
 ```mermaid
-graph TD
+graph LR
     Solution["Outbox 패턴"]
     Solution --> Step1["1️⃣ DB 트랜잭션 내에서"]
     Step1 --> Step2["2️⃣ 별도 발행 워커가"]
@@ -473,7 +473,7 @@ public class Order {
 ## 7. CQRS (Command Query Responsibility Segregation) — 읽기와 쓰기를 분리
 
 ```mermaid
-graph TD
+graph LR
     Client["클라이언트"]
     Write["Command (쓰기)"] --> ES["이벤트 스토어"]
     ES --> Proj["프로젝터"]
@@ -546,7 +546,7 @@ public class OrderProjector {
 ## 8. 실전 주문 시스템 예제 — 쿠팡 주문 처리 전체 흐름
 
 ```mermaid
-graph TD
+graph LR
     User["사용자"] -->|즉시 응답| Order["주문 PENDING + Outbo"]
     Order --> K1["Kafka: order-creat"]
     K1 --> Pay{"결제 Saga"}
@@ -607,7 +607,7 @@ public class PaymentService {
 초당 10만 건의 주문이 들어올 때 분산 트랜잭션 처리:
 
 ```mermaid
-graph TD
+graph LR
     Flash["블랙프라이데이"] --> Async["비동기 Saga"]
     Async --> Queue["Kafka 큐"]
     Queue --> Workers["Saga 워커"]
@@ -623,7 +623,7 @@ graph TD
 ## 핵심 패턴 선택 가이드
 
 ```mermaid
-graph TD
+graph LR
     Q1{"서비스 수"}
     Q1 -->|"2~3개"| TwoPC["2PC"]
     Q1 -->|"4개 이상"| Q2{"흐름 복잡도"}

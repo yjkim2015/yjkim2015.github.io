@@ -43,7 +43,7 @@ try (Stream<String> words = new Scanner(file).tokens()) {
 수집기는 스트림의 원소를 컬렉션이나 다른 형태로 모으는 방법을 캡슐화합니다. `java.util.stream.Collectors`에 43개의 팩터리 메서드가 있지만, 가장 중요한 것은 5개입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["핵심 수집기 5종"] --> B["toList()"]
     A --> C["toSet()"]
     A --> D["toMap(keyMapper, v"]

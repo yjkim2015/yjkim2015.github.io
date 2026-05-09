@@ -199,7 +199,7 @@ AIMD 규칙:
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["Slow Start"] -->|"cwnd≥ssthresh"| B["Congestion Avoidan"]
     B -->|3 Dup ACK| C["Fast Recovery"]
     C --> B

@@ -121,7 +121,7 @@ ol.add("문자열");
 > **비유:** 만능 리모컨(제네릭)은 TV든 에어컨이든 **어떤 기기와도 페어링**됩니다. 기기별 전용 리모컨(형변환)을 따로 들고 다닐 필요가 없습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["제네릭 메서드"] --> B["컴파일 타임 타입 추론"]
     B --> C["형변환 불필요"]
     C --> D["ClassCastException"]
@@ -281,7 +281,7 @@ Integer i = f.getFavorite(Integer.class); // 42
 > **비유:** 정수 상수는 **번호표** — 3번이 "오렌지"인지 "행성 수성"인지 구분할 수 없습니다. 열거 타입은 **이름표** — "ORANGE"는 과일이고 "MERCURY"는 행성임이 명확합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["int 상수 패턴"] --> B["타입 안전 없음"]
     A --> C["네임스페이스 없음"]
     A --> D["디버깅 시 숫자만 보임"]

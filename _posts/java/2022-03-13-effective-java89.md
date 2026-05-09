@@ -101,7 +101,7 @@ public enum Elvis {
 열거 타입은 자바가 직렬화와 역직렬화를 특별하게 처리해 선언된 상수 외의 인스턴스가 생기지 않도록 보장합니다. `readResolve` 없이도 안전합니다.
 
 ```mermaid
-graph TD
+graph LR
     A["싱글턴 직렬화 방법 비교"] --> B["일반 클래스 + readResol"]
     A --> C["열거 타입"]
     B --> D["취약"]

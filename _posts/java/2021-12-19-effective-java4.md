@@ -152,7 +152,7 @@ public class DateUtils {
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["유틸리티 클래스 인스턴스화 방지"] --> B["방법"]
     A --> C["주의사항"]
     B --> B1["private 생성자 명시"]

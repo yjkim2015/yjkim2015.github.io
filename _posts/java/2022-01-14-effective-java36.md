@@ -37,7 +37,7 @@ text.applyStyles(STYLE_BOLD | STYLE_ITALIC); // 3 — 무슨 의미인지 불명
 - 정수 열거 패턴의 단점(타입 안전 없음, 이름공간 없음)을 그대로 계승
 
 ```mermaid
-graph TD
+graph LR
     A["비트 필드 문제"] --> B["출력값이 숫자"]
     A --> C["타입 안전 없음"]
     A --> D["API 설계 시"]
@@ -73,7 +73,7 @@ text.applyStyles(EnumSet.of(Style.BOLD, Style.ITALIC));
 ## 3. EnumSet의 내부 동작
 
 ```mermaid
-graph TD
+graph LR
     A["EnumSet 내부"] --> B["원소 64개 이하"]
     A --> C["원소 65개 이상"]
     B --> D["long 변수 하나로 표현"]
@@ -129,7 +129,7 @@ Set<Style> immutableStyles = Collections.unmodifiableSet(
 ## 6. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["열거 값들을 집합으로 사용"] --> B["비트 필드 금지"]
     A --> C["EnumSet 사용"]
     B --> D["출력 해석 불가"]

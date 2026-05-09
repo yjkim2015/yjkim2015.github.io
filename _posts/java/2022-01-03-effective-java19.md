@@ -16,7 +16,7 @@ toc_label: 목차
 비유하자면 **복잡한 기계 부품의 설계 도면**입니다. 도면(문서) 없이 부품을 개조하면, 개조자가 내부 연결 구조를 모른 채 한 곳을 건드렸다가 전혀 다른 곳이 망가집니다. 상속도 마찬가지입니다.
 
 ```mermaid
-graph TD
+graph LR
     A["상속용 클래스 설계 원칙"] --> B["재정의 가능 메서드의"]
     A --> C["내부적으로 어떤 메서드가"]
     A --> D["protected hook 메서드"]
@@ -166,7 +166,7 @@ sequenceDiagram
 `clone()`과 `readObject()`는 생성자와 유사합니다. 새 객체를 만들기 때문입니다. 따라서 동일한 규칙이 적용됩니다.
 
 ```mermaid
-graph TD
+graph LR
     A["clone() / readObje"] --> B["내부적으로 재정의 가능 메서드를\"]
     B --> C["readObject의 경우"]
     B --> D["clone의 경우"]
@@ -230,7 +230,7 @@ public class Base {
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["상속용 클래스를 만들어야 한다면"] --> B["자기 사용 패턴 모두 @implS"]
     A --> C["필요한 hook은 protecte"]
     A --> D["생성자에서 재정의 가능 메서드"]

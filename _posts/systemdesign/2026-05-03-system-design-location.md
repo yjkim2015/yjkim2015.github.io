@@ -127,7 +127,7 @@ toc_label: 목차
 ## 2. 고수준 아키텍처
 
 ```mermaid
-graph TD
+graph LR
     App["모바일 앱"] --> API["API Gateway"]
     API --> Search["검색 서비스"]
     API --> Track["위치 추적"]
@@ -204,7 +204,7 @@ Geohash는 지구를 재귀적으로 절반씩 나누면서 각 영역에 문자
 > **비유**: 강남구와 서초구의 경계에 있는 가게는 강남구 페이지에도 서초구 페이지에도 완전히 속하지 않습니다. Geohash 셀의 경계에 위치한 가게도 같은 문제가 생깁니다.
 
 ```mermaid
-graph TD
+graph LR
     Problem["경계 문제"]
     Problem --> Ex["사용자: wydm6w"]
     Ex --> Sol["해결책:"]
@@ -256,7 +256,7 @@ geohashes = get_nearby_geohashes(37.5172, 127.0473, precision=6)
 지도를 4등분하고, 각 구역에 데이터가 너무 많으면 다시 4등분합니다. 데이터 밀도에 따라 자동으로 정밀도가 조정됩니다.
 
 ```mermaid
-graph TD
+graph LR
     Root["전국 지도"]
     Root --> NW["북서"]
     Root --> NE["북동"]
@@ -655,7 +655,7 @@ async def find_best_rider(shop_lat: float, shop_lon: float,
 > **비유**: 서울에서 부산까지의 직선 거리는 325km지만 실제 도로 경로는 428km입니다. 라이더 매칭에서 "가장 가까운 라이더"가 아니라 "가장 빨리 도착하는 라이더"가 중요한 이유입니다.
 
 ```mermaid
-graph TD
+graph LR
     Input["출발지 + 목적지 좌표"]
     Input --> OSRM["OSRM"]
     Input --> Google["Google Directions"]
@@ -744,7 +744,7 @@ CREATE TABLE orders (
 > **비유**: 학교 앞 200m 이내에 들어오면 자동으로 안심귀가 알림이 가는 서비스와 똑같습니다. 배달 앱에서는 라이더가 고객 집 반경 30m 이내에 진입하면 "도착 임박" 알림을, 라이더가 그 영역을 5분 이상 머문 후 이탈하면 "배달 완료"를 자동으로 처리합니다.
 
 ```mermaid
-graph TD
+graph LR
     Update["라이더 위치 업데이트"]
     Update --> Check["Geofence 체크"]
     Check --> Far["30m 초과"]
@@ -802,7 +802,7 @@ async def check_delivery_geofence(rider_id: str, lat: float, lon: float):
 ### 2단계 캐시 설계
 
 ```mermaid
-graph TD
+graph LR
     Request["가게 검색 요청"]
     Request --> L1["L1: 로컬 캐시 (Caffein"]
     L1 -->|미스| L2["L2: Redis 클러스터"]

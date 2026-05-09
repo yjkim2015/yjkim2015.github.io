@@ -120,7 +120,7 @@ stream.forEach(System.out::println);
 많은 개발자가 "filter가 모든 요소를 처리한 다음, map이 모든 요소를 처리한다"고 오해합니다. 실제 동작은 그 반대로, 요소 하나가 파이프라인의 끝까지 이동한 뒤 다음 요소가 처리됩니다. 이 방식 덕분에 `limit(1)`을 붙이면 첫 번째 요소가 최종 연산을 통과하는 즉시 나머지 요소의 처리가 완전히 중단됩니다.
 
 ```mermaid
-graph TD
+graph LR
   F1["filter(A,B,C)"] --> M1["map(A,B,C)"] --> R1["forEach"]
   A["요소 A"] -->|"filter"| FA["통과"]
   FA -->|"map"| MA["변환"]
@@ -687,7 +687,7 @@ Stream<Integer> sequential = numbers.parallelStream().sequential();
 병렬 스트림은 내부적으로 `ForkJoinPool.commonPool()`을 사용해 데이터를 분할하고 각 스레드가 독립적으로 처리한 뒤 결과를 합산합니다. 이 분할-처리-합산(Fork-Join) 구조가 병렬 스트림의 핵심입니다. 기본 스레드 수는 `Runtime.getRuntime().availableProcessors()`로 결정되며, 대부분의 경우 CPU 코어 수와 동일합니다.
 
 ```mermaid
-graph TD
+graph LR
   DATA["전체 데이터"] -->|분할| T1["Thread 1"]
   DATA -->|분할| T2["Thread 2"]
   DATA -->|분할| T3["Thread 3"]

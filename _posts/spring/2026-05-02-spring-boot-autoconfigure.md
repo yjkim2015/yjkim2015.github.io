@@ -72,7 +72,7 @@ public class MyApplication {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A[@SpringBootApplication] --> B[@SpringBootConfiguration]
     A --> C[@EnableAutoConfiguration]
     A --> D[@ComponentScan]
@@ -206,7 +206,7 @@ public class DataSourceAutoConfiguration {
 ```
 
 ```mermaid
-flowchart TD
+flowchart LR
     A[DataSourceAutoConfiguration 평가] --> B{"DataSource.class"}
     B -->|"No — JDBC 의존성 없음"| C["자동 구성 완전히 건너뜀"]
     B -->|"Yes"| D{"DataSource 빈이"}
@@ -286,7 +286,7 @@ public class AppDataSourceProperties {
 ### 6.2 환경 변수 / 설정 우선순위 — 어떤 설정이 이긴다
 
 ```mermaid
-graph TD
+graph LR
     A["설정 우선순위 — 위로 갈수록 높"] --> B["1. 커맨드라인 인수"]
     B --> C["2. 환경변수"]
     C --> D["3. application-{pr"]
@@ -504,7 +504,7 @@ management:
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["Actuator"] --> B["/health"]
     A --> C["/metrics"]
     A --> D["/loggers"]
@@ -679,7 +679,7 @@ class OrderRepositoryTest {
 ## 13. 전체 자동 구성 흐름 정리
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["SpringApplication."] --> B["Environment + yml"]
     B --> C["ApplicationContext"]
     C --> D["AutoConfiguration."]

@@ -55,7 +55,7 @@ public boolean equals(Object o) {
 ## 3. equals 일반 규약 5가지
 
 ```mermaid
-graph TD
+graph LR
     A["equals 5대 규약"] --> B["반사성"]
     A --> C["대칭성"]
     A --> D["추이성"]
@@ -216,7 +216,7 @@ public boolean equals(Object o) {
 ## 5. equals 재정의 시 주의사항
 
 ```mermaid
-graph TD
+graph LR
     A["equals 재정의 주의사항"] --> B["hashCode도 반드시 함께 재"]
     A --> C["매개변수 타입은 반드시 Objec"]
     A --> D["지나치게 복잡하게 만들지 말 것"]
@@ -268,7 +268,7 @@ public record PhoneNumber(short areaCode, short prefix, short lineNum) {}
 **equals 재정의 결정 흐름:**
 
 ```mermaid
-graph TD
+graph LR
     A["equals 재정의 필요한가?"] --> B{"논리적 동치성"}
     B -->|"No"| C["재정의 불필요"]
     B -->|"Yes"| D{"상위 클래스 equals가"}

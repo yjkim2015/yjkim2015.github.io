@@ -244,7 +244,7 @@ graph TD
 ## 7. 전체 요약
 
 ```mermaid
-graph TD
+graph LR
     A["객체지향"] --> B["객체"]
     A --> C["책임"]
     A --> D["의존"]

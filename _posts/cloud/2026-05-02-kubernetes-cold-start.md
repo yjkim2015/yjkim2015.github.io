@@ -216,7 +216,7 @@ DaemonSet이 모든 노드에서 성공하면 배포 시 이미지 풀링 시간
 세 가지 Probe의 역할을 혼동하면 "기동 중인 Pod가 계속 재시작되는" 문제나 "초기화 안 된 Pod에 트래픽이 들어오는" 문제가 생긴다.
 
 ```mermaid
-graph TD
+graph LR
     Start["Pod 시작"] --> SP["startupProbe"]
     SP -->|"성공"| LP["livenessProbe"]
     SP -->|"성공"| RP["readinessProbe"]

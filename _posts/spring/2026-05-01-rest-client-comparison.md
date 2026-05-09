@@ -748,7 +748,7 @@ quadrantChart
 ### 의사결정 플로우
 
 ```mermaid
-graph TD
+graph LR
     A{"Boot 3.x?"} -->|Yes| B{"비동기?"}
     B -->|Yes| C["WebClient"]
     B -->|No| D{"MSA/Cloud?"}

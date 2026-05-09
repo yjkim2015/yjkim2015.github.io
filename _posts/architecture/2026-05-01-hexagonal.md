@@ -337,7 +337,7 @@ class OrderServiceTest {
 ## DDD와의 관계
 
 ```mermaid
-graph TD
+graph LR
     WA["Web Adapter"] -->|HTTP 요청| IP["Inbound Port"]
     IP --> UC["Application Servic"]
     UC --> E["Domain"]

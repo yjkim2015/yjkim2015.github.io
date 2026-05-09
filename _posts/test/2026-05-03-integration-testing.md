@@ -195,7 +195,7 @@ class OrderIntegrationTest {
 ### 어노테이션 선택 가이드
 
 ```mermaid
-flowchart TD
+flowchart LR
     Q1{"무엇을 테스트?"}
     Q1 -->|JPA 쿼리| A["@DataJpaTest (빠름)"]
     Q1 -->|HTTP 요청/응답| B["@WebMvcTest (빠름)"]
@@ -465,7 +465,7 @@ Spring Boot는 동일한 설정의 ApplicationContext를 캐싱한다. `@MockBea
 컨텍스트 수를 줄이는 것이 속도 최적화의 핵심이다. 모든 통합 테스트가 같은 부모 클래스를 상속받아 동일한 설정을 공유하면, 컨텍스트가 한 번만 생성된다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["테스트 클래스 A"] --> CTX1["Context 1"]
     B["테스트 클래스 B"] --> CTX1
     C["테스트 클래스 C"] --> CTX2["Context 2"]

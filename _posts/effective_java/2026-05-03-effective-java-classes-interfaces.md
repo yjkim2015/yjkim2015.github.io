@@ -28,7 +28,7 @@ date: 2026-05-03
 접근 수준은 네 가지가 있으며, **가능한 한 가장 낮은 수준**을 사용해야 합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["private"] -->|"같은 클래스만"| B["가장 제한적"]
     C["package-private"] -->|"같은 패키지"| D["기본값"]
     E["protected"] -->|"같은 패키지 + 하위 클래스"| F["상속 허용"]
@@ -160,7 +160,7 @@ public final class Complex {
 컴포지션(composition)은 기존 클래스를 **필드로 참조**하고, 새 클래스의 메서드에서 기존 클래스의 메서드를 호출(forwarding)하는 방식입니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["상속 방식"] --> B["InstrumentedHashSe"]
     B --> C["HashSet 내부 구현에 의존"]
     C --> D["addAll이 add를 호출하면"]
@@ -253,7 +253,7 @@ public class InstrumentedSet<E> extends ForwardingSet<E> {
 > **비유:** 추상 클래스는 **혈통(가문)**과 같습니다 — 하나만 선택할 수 있습니다. 인터페이스는 **자격증**과 같습니다 — 운전면허, 조리사 자격증, TOEIC 점수를 동시에 가질 수 있습니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["인터페이스"] --> B["다중 구현 가능"]
     A --> C["믹스인 정의 가능"]
     A --> D["default 메서드로 골격 제공"]
@@ -341,7 +341,7 @@ public final class PhysicalConstants {
 > **비유:** 한 명이 의사/변호사/교사 역할을 태그로 구분하면서 모두 수행하면 혼란스럽습니다. **각 역할을 전문가에게 맡기는 것**(클래스 계층구조)이 훨씬 깔끔합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["태그 달린 클래스"] -->|"리팩토링"| B["Figure (추상 클래스)"]
     B --> C["Circle"]
     B --> D["Rectangle"]
@@ -387,7 +387,7 @@ class Rectangle extends Figure {
 중첩 클래스(nested class)에는 네 가지 종류가 있습니다. 각각 쓰임이 다릅니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["중첩 클래스"] --> B["정적 멤버 클래스"]
     A --> C["비정적 멤버 클래스"]
     A --> D["익명 클래스"]

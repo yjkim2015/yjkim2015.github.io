@@ -18,7 +18,7 @@ toc_label: 목차
 ## 정규화가 필요한 이유
 
 ```mermaid
-graph TD
+graph LR
     UNF[비정규형 UNF<br>모든 데이터가 한 테이블] -->|원자값 분리| NF1[1NF<br>셀에 단일 값만]
     NF1 -->|부분 종속 제거| NF2[2NF<br>PK 전체에 종속]
     NF2 -->|이행 종속 제거| NF3[3NF<br>비키 → 비키 종속 없음]
@@ -303,7 +303,7 @@ graph LR
 ## 실무 판단 기준
 
 ```mermaid
-flowchart TD
+flowchart LR
     START["성능 문제"] --> INDEX{"인덱스로 해결?"}
     INDEX -->|"예"| ADD_IDX["인덱스 추가"]
     INDEX -->|"아니오"| CACHE{"캐시로 해결?"}

@@ -30,7 +30,7 @@ date: 2026-05-03
 `equals` 메서드는 **동치 관계(equivalence relation)**를 구현해야 하며, 다섯 가지 속성을 만족해야 합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["반사성: x.equals(x) ="] --> B["대칭성: x.equals(y) ="]
     B --> C["추이성: x=y, y=z → x="]
     C --> D["일관성: 변경 없으면 항상 같은"]
@@ -199,7 +199,7 @@ public String toString() {
 `clone` 메서드를 올바르게 구현하려면 다음 규칙을 따라야 합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["Cloneable 구현"] --> B["clone() 재정의"]
     B --> C{"가변 상태가 있는가?"}
     C -->|"없음 (불변)"| D["super.clone() 반환"]

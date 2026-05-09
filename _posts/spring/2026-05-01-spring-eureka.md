@@ -166,7 +166,7 @@ Eureka Server의 중요한 특성이다. 네트워크 장애로 인해 Heartbeat
 기대 Heartbeat 수보다 실제 수신량이 85% 미만이 되면 자가 보호 모드에 진입한다. 이 모드에서는 인스턴스 만료/제거가 중단된다. 네트워크가 복구되면 자동으로 해제된다.
 
 ```mermaid
-graph TD
+graph LR
     A["Heartbeat 감소 감지"] --> B{"실제 수신 < 85% 임계치?"}
     B -->|"Yes"| C["자가 보호 모드 진입"]
     B -->|"No"| D["정상 동작"]
@@ -213,7 +213,7 @@ eureka:
 ```
 
 ```mermaid
-graph TD
+graph LR
     ES1["Eureka 1"] <-->|Peer Replication| ES2["Eureka 2"]
     MS1["Order"] -->|Register| ES1
     MS2["User"] -->|Register| ES2

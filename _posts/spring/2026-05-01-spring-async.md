@@ -144,7 +144,7 @@ public class AsyncConfig implements AsyncConfigurer {
 > **함정**: 큐가 먼저 채워지고, 큐가 가득 찬 뒤에야 maxPoolSize까지 스레드가 늘어난다. 큐가 크면 스레드가 늘어나지 않아서 처리 속도가 느릴 수 있다.
 
 ```mermaid
-graph TD
+graph LR
     REQ["요청 도착"] --> C1{"corePoolSize 미만?"}
     C1 -->|"YES"| T1["새 스레드 생성해 즉시 처리"]
     C1 -->|"NO"| C2{"queueCapacity 여유?"}

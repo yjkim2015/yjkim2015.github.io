@@ -178,7 +178,7 @@ function ExpensiveList({ items, filter }) {
 ### useMemo를 쓸 때와 쓰지 말 때
 
 ```mermaid
-flowchart TD
+flowchart LR
     A{"계산이<br>비싼가?"}
     A -->|"예 복잡한 연산"| B["useMemo 사용"]
     A -->|"아니오 간단한 계산"| C["useMemo 불필요"]
@@ -428,7 +428,7 @@ function SearchInput() {
 ## 9. Hooks 규칙
 
 ```mermaid
-graph TD
+graph LR
     A["Hooks 규칙"] --> B["최상위에서만 호출"]
     A --> C["React 함수에서만 호출"]
     B --> B1["조건문 안 호출 금지"]
@@ -459,7 +459,7 @@ function BadComponent({ isAdmin }) {
 ## 2번 다이어그램 - Hooks 선택 가이드
 
 ```mermaid
-graph TD
+graph LR
     ROOT["Hooks 선택"] --> S["상태: useState / use"]
     ROOT --> E["부작용: useEffect / u"]
     ROOT --> O["최적화: useMemo / use"]

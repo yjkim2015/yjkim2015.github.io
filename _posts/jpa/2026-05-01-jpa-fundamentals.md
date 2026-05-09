@@ -51,7 +51,7 @@ public interface EntityManager {
 세 가지를 혼동하는 경우가 많다. 상하 관계를 명확히 이해해야 한다.
 
 ```mermaid
-graph TD
+graph LR
     SDJ["Spring Data JPA"] -->|사용| JPA["JPA 명세"]
     JPA -->|구현| HIB["Hibernate"] & ECL["EclipseLink"]
     HIB & ECL -->|사용| JDBC["JDBC"]
@@ -142,7 +142,7 @@ System.out.println(a == b); // true — 완전히 동일한 인스턴스
 `em.persist()`를 호출할 때마다 즉시 SQL을 날리지 않는다. **쓰기 지연 SQL 저장소**에 SQL을 모아두었다가 트랜잭션 커밋 시점에 한꺼번에 DB로 전송한다.
 
 ```mermaid
-graph TD
+graph LR
     PA["em.persist(A)"] --> CA["1차캐시+쓰기지연:A"]
     PB["em.persist(B)"] --> CB["1차캐시+쓰기지연:A,B"]
     CA & CB --> TC["tx.commit()"]
@@ -179,7 +179,7 @@ spring:
 JPA에서 엔티티를 수정할 때 `em.update()` 같은 메서드는 없다. 필드 값만 변경하면 트랜잭션 커밋 시점에 자동으로 UPDATE SQL이 실행된다.
 
 ```mermaid
-graph TD
+graph LR
     FIND["em.find()"] --> CACHE["1차 캐시 + 스냅샷 저장"]
     CACHE --> SET["필드 변경"]
     SET --> FL["flush()"] --> CMP["스냅샷 비교(변경 감지)"]

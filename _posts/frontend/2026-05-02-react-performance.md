@@ -25,7 +25,7 @@ React 성능 최적화도 같은 논리입니다. 그리고 가장 중요한 것
 ## 1번 다이어그램 - 성능 문제 진단 순서
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["성능 문제 발생"] --> B["Chrome DevTools Pr"]
     B --> C["어느 컴포넌트가 자주 렌더링되는지"]
     C --> D["번들 사이즈 분석"]
@@ -130,7 +130,7 @@ function ProductList({ products, category, onPurchase }) {
 ```
 
 ```mermaid
-graph TD
+graph LR
     A["products/category"] --> B["filteredProducts 재"]
     D["다른 상태 변경"] --> E["재계산 스킵 (useMemo)"]
     F["category 변경"] --> G["handlePurchase 새 함"]
@@ -413,7 +413,7 @@ const StockRow = React.memo(
 ## 3번 다이어그램 - 성능 최적화 우선순위
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["성능 최적화 시작"] --> B["1. 측정 먼저 — Profile"]
     B --> C["2. 번들 크기 줄이기 — 가장"]
     C --> D["3. 이미지 최적화"]

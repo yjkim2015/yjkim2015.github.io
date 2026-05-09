@@ -45,7 +45,7 @@ E get(int index);
 - 비검사 예외는 `@throws`로 전제조건을 암시적으로 기술
 
 ```mermaid
-graph TD
+graph LR
     A["메서드 문서화 주석"] --> B["@param"]
     A --> C["@return"]
     A --> D["@throws"]

@@ -17,7 +17,7 @@ date: 2026-05-01
 ## Observability 3대 요소
 
 ```mermaid
-graph TD
+graph LR
     OBS["Observability"]
     OBS --> METRICS["Metrics"]
     OBS --> LOGS["Logs"]

@@ -99,7 +99,7 @@ Java는 `char` 전용 스트림을 제공하지 않습니다. `chars()`는 `IntS
 ## 4. 반복문이 더 나은 경우
 
 ```mermaid
-graph TD
+graph LR
     A["코드 블록(반복문)만"] --> B["지역변수 읽기·수정"]
     A --> C["return으로 메서드 탈출"]
     A --> D["break·continue로"]
@@ -112,7 +112,7 @@ graph TD
 ## 5. 스트림이 적합한 경우
 
 ```mermaid
-graph TD
+graph LR
     A["스트림이"] --> B["원소 시퀀스를"]
     A --> C["원소 시퀀스를"]
     A --> D["하나의 연산으로 결합"]

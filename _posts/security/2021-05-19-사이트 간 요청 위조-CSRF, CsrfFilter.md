@@ -158,7 +158,7 @@ http
 `CsrfFilter`는 Spring Security 필터 체인의 초반에 위치합니다.
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["HTTP 요청"] --> B["CsrfFilter"]
     B --> C{"GET, HEAD, TRACE,"}
     C -- "예 (읽기 전용)" --> D["CSRF 검증 생략"]

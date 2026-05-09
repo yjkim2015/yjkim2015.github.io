@@ -197,7 +197,7 @@ public class CarService {
 ## 7. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["의존 객체 주입"] --> B["장점"]
     A --> C["주입 방식"]
     C --> D["생성자 주입 권장"]

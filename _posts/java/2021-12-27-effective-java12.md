@@ -110,7 +110,7 @@ public short getLineNum()  { return lineNum; }
 ## 3. toString 재정의의 실제 효과
 
 ```mermaid
-graph TD
+graph LR
     A["toString 재정의 여부"] --> B["재정의 안 함"]
     A --> C["재정의 함"]
     B --> B1["로그: PhoneNumber@1f"]

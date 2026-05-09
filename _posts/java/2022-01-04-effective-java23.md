@@ -56,7 +56,7 @@ public class Figure {
 ## 2. 태그 달린 클래스의 문제점
 
 ```mermaid
-graph TD
+graph LR
     A["태그 달린 클래스의 문제"] --> B["쓸데없는 코드 범람"]
     A --> C["여러 구현이 뒤섞여"]
     A --> D["사용하지 않는 필드가"]
@@ -151,7 +151,7 @@ public class Triangle extends Figure {
 ## 4. 계층구조의 장점
 
 ```mermaid
-graph TD
+graph LR
     A["클래스 계층구조의 장점"] --> B["각 필드가 final"]
     A --> C["관련 없는 필드 없음"]
     A --> D["switch 문 없음"]
@@ -183,7 +183,7 @@ public class Square extends Rectangle {
 ## 5. 요약
 
 ```mermaid
-graph TD
+graph LR
     A["클래스에 태그 필드가"] --> B{"리팩토링 가능한가?"}
     B -->|"Yes"| C["계층구조로 변환"]
     B -->|"No (외부 라이브러리 등)"| D["최소한 래퍼 클래스로 감싸기"]

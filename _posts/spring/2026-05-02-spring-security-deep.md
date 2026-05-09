@@ -30,7 +30,7 @@ Spring Security를 처음 보면 복잡해 보입니다. 하지만 핵심은 단
 > **비유:** Spring Security 필터는 Spring 컨테이너에서 관리되는 빈이다. 그런데 서블릿 필터는 서블릿 컨테이너(Tomcat)가 관리한다. 서로 다른 세계다. `DelegatingFilterProxy`는 Tomcat 세계에 있지만, 실제 일은 Spring 세계의 `FilterChainProxy` 빈에게 위임한다. 두 세계 사이의 다리 역할이다.
 
 ```mermaid
-graph TD
+graph LR
     A["HTTP 요청"] --> B["DelegatingFilterPr"]
     B --> C["Chain:/admin/**"]
     B --> D["Chain:/api/**"]
@@ -677,7 +677,7 @@ public class MultiSecurityConfig {
 ## 12. 전체 인증 흐름 정리
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["HTTP 요청"] --> B["SecurityContextPer"]
     B --> C["JwtAuthenticationF"]
     C --> D["AuthorizationFilte"]
