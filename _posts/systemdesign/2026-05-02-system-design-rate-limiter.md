@@ -95,6 +95,81 @@ Phase 4 (MAU 1억): Cloudflare Enterprise + 다층 WAF + ML 이상탐지
 
 > **면접 포인트**: "Rate Limiter를 어디에 배치하겠습니까?"라는 질문에 "API 서버에서 Redis로"만 답하면 미드 레벨이다. "CDN→WAF→Gateway→App 다층 방어를 구성하고, 각 계층이 담당하는 트래픽 유형이 다르다"고 답해야 시니어다. 앞단에서 90%를 걸러야 뒷단이 살아남는다.
 
+### 봇 vs 정상 사용자 구분 — 크롤러/스크래퍼 방어
+
+Rate Limiter의 가장 현실적인 유즈케이스는 **경쟁사 봇이 우리 사이트 데이터를 긁어가는 것을 막는 것**이다. 단순 QPS 제한으로는 해결 안 된다 — 봇은 일반 사용자처럼 행동하기 때문이다.
+
+**봇과 정상 사용자의 차이**:
+
+| 신호 | 정상 사용자 | 봇/스크래퍼 |
+|------|-----------|-----------|
+| 요청 간격 | 불규칙 (읽고 클릭하고) | 일정 간격 (0.5초마다 정확히) |
+| User-Agent | 일반 브라우저 | 가짜 UA 또는 라이브러리 기본값 |
+| 쿠키/JS 실행 | 정상 | 쿠키 미지원, JS 미실행 |
+| 페이지 패턴 | 홈→카테고리→상세 (자연스러운 흐름) | 상세 페이지만 순차 접근 |
+| 세션 시간 | 5~30분 | 수시간 연속 |
+| 마우스/스크롤 | 있음 | 없음 |
+
+**방어 전략 (단계별)**:
+
+```
+1단계: robots.txt + 크롤링 속도 제한
+   - robots.txt에 Crawl-delay 설정
+   - 효과: 선의의 봇(Google)만 준수, 악성 봇은 무시
+
+2단계: User-Agent + IP 패턴 분석
+   - 알려진 봇 UA 차단 (python-requests, curl, scrapy)
+   - 동일 IP에서 분당 100+ 상세 페이지 접근 시 차단
+   - 효과: 초보 스크래퍼 차단
+
+3단계: JS Challenge + 핑거프린팅
+   - 첫 요청 시 JS 챌린지 페이지 반환 (Cloudflare Turnstile)
+   - 브라우저가 아니면 JS 실행 불가 → 차단
+   - Canvas/WebGL 핑거프린트로 디바이스 고유 식별
+   - 효과: Headless Chrome 아닌 봇 대부분 차단
+
+4단계: 행동 분석 (ML 기반)
+   - 요청 간격 표준편차 분석 (봇은 σ ≈ 0)
+   - 페이지 접근 패턴 분석 (정상: 트리 탐색, 봇: 순차 스캔)
+   - 마우스 이벤트 유무 (프론트에서 수집)
+   - 효과: Headless Chrome 봇까지 탐지
+```
+
+**실무 코드 예시 — 행동 기반 봇 탐지**:
+
+```python
+def is_suspicious_bot(user_session):
+    # 1. 요청 간격이 너무 균일한가 (봇은 정확한 간격)
+    intervals = user_session.request_intervals
+    if len(intervals) > 10:
+        std_dev = statistics.stdev(intervals)
+        if std_dev < 0.1:  # 표준편차 100ms 미만 = 기계적
+            return True, "uniform_interval"
+
+    # 2. 상세 페이지만 접근하는가 (목록 안 거치고 직접 접근)
+    detail_ratio = user_session.detail_page_count / user_session.total_count
+    if detail_ratio > 0.9 and user_session.total_count > 50:
+        return True, "detail_only_pattern"
+
+    # 3. 세션이 비정상적으로 긴가
+    if user_session.duration_minutes > 120 and user_session.total_count > 500:
+        return True, "marathon_session"
+
+    return False, None
+```
+
+**봇으로 판정된 경우 대응**:
+
+| 대응 | 장점 | 단점 |
+|------|------|------|
+| 즉시 차단 (403) | 확실한 방어 | 오탐 시 정상 사용자 이탈 |
+| 속도 제한 (Throttle) | 부분 허용, 오탐 피해 적음 | 봇이 느려도 계속 긁어감 |
+| **허니팟 데이터 반환** | 봇이 가짜 데이터 수집 | 구현 복잡 |
+| CAPTCHA 챌린지 | 정상 사용자 통과 가능 | UX 저하, 봇도 CAPTCHA 풀기 서비스 이용 |
+| **점진적 지연 (Tar Pit)** | 봇의 자원을 소모시킴 | 우리 서버 커넥션도 점유 |
+
+> **핵심**: 단순 QPS 제한은 봇 방어의 10%밖에 안 된다. 봇은 속도를 낮춰서 제한을 우회하기 때문이다. **행동 패턴 분석**이 핵심이며, "요청 간격의 균일성 + 페이지 접근 패턴 + JS 실행 여부"를 조합해야 정상 사용자를 해치지 않으면서 봇을 막을 수 있다.
+
 ---
 
 ### 결정 4: 차단 기준 — 뭘 기준으로 막을 것인가
