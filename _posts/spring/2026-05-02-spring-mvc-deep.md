@@ -829,3 +829,49 @@ public class Application {
 ### 16.4 레거시 트러블슈팅 — 한국어 깨짐
 
 web.xml에 `CharacterEncodingFilter`가 없거나 DispatcherServlet 이후에 등록된 경우 POST 파라미터의 한글이 `???`로 깨진다. 필터 등록 순서는 `CharacterEncodingFilter`가 가장 먼저여야 한다.
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 모델 | 학습 곡선 | 적합한 상황 |
+|---|---|---|---|
+| 순수 Servlet | 블로킹, 수동 | 높음 | 저수준 제어 |
+| Spring MVC | 블로킹, 자동화 | 중간 | REST API 표준 |
+| Spring WebFlux | 논블로킹, 리액티브 | 높음 | 고동시성, 스트리밍 |
+| JAX-RS (Jersey) | 블로킹 | 중간 | Jakarta EE |
+
+**결론:** Spring MVC는 DispatcherServlet의 프론트 컨트롤러 패턴으로 공통 관심사를 중앙화하고, ArgumentResolver·HandlerAdapter 등 확장점을 통해 요청 처리를 자동화한다. 대부분의 REST API 서버에서 사실상 표준이다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **PRG(Post-Redirect-Get) 패턴 미적용** — 폼 제출 후 뷰를 직접 반환하면 새로고침 시 같은 POST 요청이 중복 제출된다. 반드시 `redirect:/orders/{id}`로 리다이렉트해 브라우저가 GET 요청을 하도록 해야 한다.
+
+2. **`@RequestParam` 필수 여부 미설정** — `@RequestParam String keyword`는 기본적으로 필수(required=true)다. 쿼리 파라미터 없이 요청하면 400 Bad Request가 발생한다. 선택적 파라미터는 `@RequestParam(required = false) String keyword` 또는 `Optional<String>`으로 선언해야 한다.
+
+3. **Filter에서 해야 할 일을 Interceptor에서 처리** — 인코딩 설정이나 멀티파트 파싱은 DispatcherServlet이 처리하기 전(Filter 단계)에 완료되어야 한다. Interceptor에서 처리하면 이미 인코딩이 깨진 상태로 도달한다.
+
+4. **`@ControllerAdvice`의 예외 처리 순서 미지정** — 여러 `@ControllerAdvice`가 같은 예외 타입을 처리할 때 `@Order` 없이는 순서가 불확정이다. 더 구체적인 예외(예: `OrderNotFoundException`)를 처리하는 Advice를 더 높은 우선순위로 설정해야 한다.
+
+5. **`HttpMessageConverter` 설정 없이 커스텀 타입 직렬화** — Spring MVC는 반환 타입을 `HttpMessageConverter`로 직렬화한다. Jackson 없이 커스텀 객체를 반환하거나, `LocalDate` 직렬화 형식을 지정하지 않으면 기본 형식(`[2024,1,15]`)으로 직렬화되어 클라이언트와 계약이 깨진다.
+
+---
+
+## 면접 포인트
+
+**Q1. Spring MVC 요청 처리 전체 흐름을 설명하라.**
+> ① HTTP 요청 → ② Filter Chain → ③ DispatcherServlet → ④ HandlerMapping(컨트롤러 탐색) → ⑤ Interceptor preHandle → ⑥ HandlerAdapter(ArgumentResolver로 파라미터 바인딩 → 컨트롤러 실행) → ⑦ Interceptor postHandle → ⑧ ViewResolver 또는 HttpMessageConverter(JSON 직렬화) → ⑨ Interceptor afterCompletion → ⑩ 응답 반환.
+
+**Q2. `@PathVariable`과 `@RequestParam`의 차이는?**
+> `@PathVariable`: URL 경로의 일부를 추출(`/orders/{id}`). 리소스 식별자에 사용. `@RequestParam`: 쿼리 파라미터 추출(`/orders?status=PENDING`). 필터링, 페이징, 검색 조건에 사용. REST 설계 원칙상 리소스 식별은 경로, 선택적 조건은 쿼리 파라미터가 올바르다.
+
+**Q3. `@ModelAttribute`의 동작과 폼 데이터 바인딩 과정은?**
+> `@ModelAttribute`는 HTTP 파라미터(form-urlencoded)를 Java 객체에 바인딩한다. 기본 생성자로 객체를 생성하고 setter 또는 필드에 값을 주입한다. 유효성 검증은 `@Valid`와 함께 `BindingResult`로 처리한다. REST API의 JSON 바디에는 `@RequestBody`를 사용해야 한다.
+
+**Q4. Spring MVC에서 예외 처리 우선순위는?**
+> ① `@ExceptionHandler`(해당 컨트롤러 내) → ② `@ControllerAdvice`의 `@ExceptionHandler`(전역) → ③ `SimpleMappingExceptionResolver` → ④ 기본 예외 처리(`DefaultHandlerExceptionResolver`). `@ControllerAdvice`에 여러 개 있으면 `@Order`로 우선순위 제어.
+
+**Q5. `HandlerInterceptor`와 `Filter`를 언제 선택하는가?**
+> Filter는 서블릿 컨테이너 레벨로 Spring 컨텍스트 외부에서 실행된다. Spring Bean에 접근하려면 `DelegatingFilterProxy`가 필요하다. Interceptor는 Spring MVC 레벨에서 실행되어 모든 Spring Bean에 바로 접근할 수 있다. 인증·인가·로깅은 Interceptor, 문자 인코딩·HTTPS 강제·멀티파트 처리는 Filter가 적합하다.

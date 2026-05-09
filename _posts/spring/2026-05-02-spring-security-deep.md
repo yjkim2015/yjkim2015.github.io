@@ -700,3 +700,49 @@ flowchart LR
 | CSRF 비활성화 | csrf.disable() | 쿠키 기반 앱에서 비활성화 → CSRF 취약점 |
 | CORS 설정 | CorsConfigurationSource | allowCredentials + wildcard → 예외 발생 |
 | 현재 사용자 | @AuthenticationPrincipal | SecurityContextHolder 직접 사용 → 코드 복잡 |
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | Spring 통합 | OAuth2/OIDC | 커스터마이징 | 적합한 상황 |
+|---|---|---|---|---|
+| Spring Security | 완벽 | O (내장) | 높음 | Spring 기반 서비스 표준 |
+| Apache Shiro | 보통 | 제한적 | 중간 | 단순 인증·인가 |
+| Keycloak (외부 IdP) | 좋음 | O (전용) | 중간 | SSO, 외부 IdP 위임 |
+| 직접 구현 | 없음 | 수동 | 완전 | 매우 특수한 요건 |
+
+**결론:** Spring 기반 서비스에서 Spring Security는 사실상 표준이다. OAuth2, JWT, LDAP, 폼 로그인 등 다양한 인증 방식을 선언적으로 구성할 수 있고, Spring Boot Auto-configuration으로 초기 설정이 간단하다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **`SecurityFilterChain` 내 `requestMatchers` 순서 오류** — 광범위한 패턴(`/api/**`)을 구체적인 패턴(`/api/admin/**`)보다 앞에 두면, 관리자 경로가 일반 규칙에 먼저 매칭된다. 구체적인 경로를 항상 먼저 선언해야 한다.
+
+2. **JWT 만료 예외를 401 대신 500으로 반환** — JWT 필터에서 `ExpiredJwtException`을 잡지 않고 그냥 던지면 `ExceptionTranslationFilter`가 처리하지 못해 500이 반환된다. `sendError(HttpServletResponse.SC_UNAUTHORIZED)`를 직접 호출하거나 SecurityContext를 비우고 체인을 계속 진행시켜야 한다.
+
+3. **Refresh Token을 LocalStorage에 저장** — XSS 공격으로 탈취 가능하다. Refresh Token은 HttpOnly + Secure 쿠키에 저장하고, Access Token만 메모리에 보관하는 패턴이 안전하다.
+
+4. **`@PreAuthorize` 미적용으로 URL 우회 가능** — `SecurityFilterChain`의 URL 기반 인가만 적용하면, URL 패턴을 벗어난 접근이나 내부 메서드 직접 호출 시 인가가 우회된다. `@EnableMethodSecurity`와 `@PreAuthorize("hasRole('ADMIN')")`으로 메서드 레벨 인가를 이중 적용해야 한다.
+
+5. **CORS 설정을 SecurityFilterChain과 WebMvcConfigurer 두 곳에 중복 설정** — Spring Security의 `cors()` 설정과 `WebMvcConfigurer.addCorsMappings()`가 충돌하면 CORS 헤더가 두 번 추가되거나 충돌한다. Spring Security를 사용하면 반드시 Security의 `cors()` 설정으로 통일해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Spring Security의 인증(Authentication) 처리 흐름은?**
+> ① `UsernamePasswordAuthenticationFilter`가 자격증명 추출 → ② `AuthenticationManager`(구현체: `ProviderManager`)에게 위임 → ③ `DaoAuthenticationProvider`가 `UserDetailsService.loadUserByUsername()`으로 사용자 조회 → ④ `PasswordEncoder`로 비밀번호 검증 → ⑤ 성공 시 `SecurityContextHolder`에 `Authentication` 저장.
+
+**Q2. JWT를 Spring Security에 통합하는 방법은?**
+> `OncePerRequestFilter`를 구현해 `Authorization` 헤더에서 JWT를 추출·검증하고, 유효하면 `UsernamePasswordAuthenticationToken`을 생성해 `SecurityContextHolder.getContext().setAuthentication(token)`으로 설정한다. `UsernamePasswordAuthenticationFilter` 앞에 이 필터를 추가한다.
+
+**Q3. OAuth2 로그인을 Spring Security로 구현하는 방법은?**
+> `spring-boot-starter-oauth2-client` 추가 후 `http.oauth2Login()`을 설정한다. `application.yml`에 provider(Google, Kakao 등) 클라이언트 ID/시크릿을 설정하면 Auto-configuration이 OAuth2 플로우를 자동으로 처리한다. `OAuth2UserService`를 커스터마이징해 소셜 로그인 사용자를 자체 DB에 저장할 수 있다.
+
+**Q4. `PasswordEncoder`를 반드시 사용해야 하는 이유는?**
+> 평문 비밀번호를 저장하면 DB 탈취 시 모든 사용자 계정이 즉시 노출된다. BCrypt는 솔트(salt)를 자동으로 추가해 같은 비밀번호도 다른 해시값을 가진다. 레인보우 테이블 공격과 사전 공격을 방지한다. `BCryptPasswordEncoder`가 Spring Security의 기본 권장 구현체다.
+
+**Q5. `@EnableMethodSecurity`(구 `@EnableGlobalMethodSecurity`)로 활성화하는 기능은?**
+> `@PreAuthorize`: 메서드 실행 전 SpEL 표현식으로 인가 검사. `@PostAuthorize`: 메서드 실행 후 반환값 기반 인가. `@Secured`: 역할(Role) 기반 간단한 인가. `@PreFilter`/`@PostFilter`: 컬렉션 파라미터/반환값 필터링. 실무에서는 `@PreAuthorize("hasRole('ADMIN')")`이 가장 많이 사용된다.

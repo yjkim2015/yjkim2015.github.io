@@ -1357,3 +1357,29 @@ mindmap
 ---
 
 Spring Interceptor는 Filter보다 Spring 친화적이고 AOP보다 HTTP 수준에서 직접 다루기 쉬운 절충점에 위치한 강력한 도구다. 인증·로깅·성능 측정 같은 횡단 관심사를 컨트롤러 코드 오염 없이 처리하되, 싱글톤 특성으로 인한 스레드 안전성과 ThreadLocal 정리를 반드시 챙겨야 실무에서 문제 없이 활용할 수 있다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **`preHandle()`에서 `false` 반환 후 응답 미작성** — `preHandle()`이 `false`를 반환하면 이후 처리가 중단되지만, 응답 바디를 직접 작성하지 않으면 빈 응답이 클라이언트에 반환된다. `response.setStatus(401)`과 `response.getWriter().write(...)`로 명시적으로 오류 응답을 작성해야 한다.
+
+2. **`afterCompletion()`에서 MDC.clear() 누락** — Interceptor의 `preHandle()`에서 `MDC.put("traceId", ...)`를 설정했다면 반드시 `afterCompletion()`에서 `MDC.clear()`를 호출해야 한다. 스레드 풀이 스레드를 재사용하므로, 정리하지 않으면 이전 요청의 MDC 값이 다음 요청 로그에 섞인다.
+
+3. **Interceptor에서 Spring Bean 사용 불가로 착각** — Filter와 달리 Interceptor는 Spring ApplicationContext 안에서 동작하므로 `@Autowired`로 모든 Spring Bean을 주입받을 수 있다. Spring Bean에 접근해야 하는 공통 처리는 Filter보다 Interceptor에 구현하는 것이 올바르다.
+
+4. **`postHandle()`이 예외 시 호출되지 않는다는 점 간과** — `postHandle()`은 컨트롤러가 정상 반환한 경우에만 호출된다. 예외가 발생하면 호출되지 않는다. 예외 포함 모든 요청 완료 후 실행해야 하는 로직(응답 시간 측정, 리소스 정리)은 반드시 `afterCompletion()`에 구현해야 한다.
+
+5. **Interceptor 등록 시 `addPathPatterns` 누락** — `WebMvcConfigurer.addInterceptors()`에서 `addPathPatterns("/**")`를 명시하지 않으면 인터셉터가 어떤 경로에도 적용되지 않는다. 반대로 `excludePathPatterns("/api/public/**")`로 공개 API는 제외해야 불필요한 인증 검사를 방지한다.
+
+---
+
+## 왜 이 기술인가? (보강)
+
+| 방식 | 동작 레벨 | Spring Bean 접근 | 적합한 상황 |
+|---|---|---|---|
+| Filter | 서블릿 컨테이너 | 어려움 (DelegatingFilterProxy 필요) | 인코딩, CORS, 보안 전처리 |
+| Interceptor | Spring MVC | 쉬움 (@Autowired) | 인증, 로깅, 권한 확인 |
+| AOP | 빈 메서드 | 완전 | 트랜잭션, 성능 측정, 공통 예외 처리 |
+
+**결론:** Spring Bean을 활용한 인증·인가, 요청/응답 로깅, 공통 헤더 처리에는 Interceptor가 최적이다. 서블릿 컨테이너 수준의 처리(문자 인코딩, HTTPS 강제)는 Filter, 메서드 수준의 횡단 관심사(트랜잭션, 캐시)는 AOP를 사용한다.
