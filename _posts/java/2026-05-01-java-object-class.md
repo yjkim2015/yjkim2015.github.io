@@ -706,3 +706,40 @@ graph LR
     EQUALS --> GOLDEN["황금 법칙: equals 오버라이"]
     HASHCODE --> GOLDEN
 ```
+
+---
+## 면접 포인트
+
+**Q1. equals()와 hashCode()를 함께 오버라이딩해야 하는 이유는?**
+HashMap/HashSet의 동작 원리 때문입니다. HashMap은 키를 버킷에 배치할 때 `hashCode()`로 버킷 인덱스를 계산하고, 같은 버킷 내 기존 키와 비교할 때 `equals()`를 사용합니다. `equals()`만 오버라이딩하면 논리적으로 같은 두 객체가 다른 hashCode를 가져 다른 버킷에 배치됩니다. `map.put(key1, value); map.get(key2)`에서 key1.equals(key2)가 true여도 null을 반환합니다. Java 규약: equals()가 true이면 hashCode()는 같아야 합니다.
+
+**Q2. clone()이 위험한 이유와 대안은?**
+`Object.clone()`은 얕은 복사(shallow copy)를 수행합니다. 필드가 참조 타입이면 참조만 복사되어 원본과 복사본이 같은 객체를 공유합니다. `Cloneable` 마커 인터페이스는 `clone()` 시그니처를 포함하지 않아 컴파일 타임 검증이 없습니다. Effective Java는 clone() 사용을 강하게 반대합니다. 대안: ① 복사 생성자 `new User(originalUser)` ② 복사 팩토리 메서드 `User.copyOf(original)` ③ 직렬화 후 역직렬화. 이 방식들이 더 명확하고 안전합니다.
+
+**Q3. toString()을 오버라이딩하지 않으면 어떤 문제가 생기는가?**
+기본 `toString()`은 `클래스명@해시코드(16진수)` 형태입니다. 로그에 `Order@1a2b3c4d`가 출력되면 디버깅이 불가합니다. 어떤 주문인지, 어떤 상태인지 알 수 없습니다. 특히 예외 메시지에 객체를 포함할 때 의미 없는 해시 코드만 남습니다. 운영 환경 장애 분석 시 로그에서 상태를 파악할 수 없어 추가 DB 조회가 필요합니다. 모든 도메인 객체는 `@ToString` (Lombok) 또는 수동 오버라이딩으로 의미 있는 문자열을 제공해야 합니다.
+
+**Q4. wait()/notify()와 현대적 동기화 도구의 차이는?**
+`wait()/notify()`는 Object의 메서드로 synchronized 블록 내에서만 사용 가능합니다. 구현이 복잡하고 `notify()`가 어떤 스레드를 깨울지 보장이 없습니다. 현대 대안: `ReentrantLock` + `Condition` — 특정 조건에 대한 대기/신호 분리 가능. `BlockingQueue` — 생산자-소비자 패턴의 표준. `CountDownLatch` — N개 작업 완료 대기. `Semaphore` — 리소스 접근 제어. `CyclicBarrier` — 여러 스레드가 동시에 특정 지점 도달 대기. 실무에서 `wait()/notify()` 직접 사용은 거의 없습니다.
+
+**Q5. Java의 equals() 5가지 규약을 설명하라.**
+① 반사성(Reflexive): `x.equals(x)` = true. ② 대칭성(Symmetric): `x.equals(y)` = true이면 `y.equals(x)` = true. ③ 추이성(Transitive): `x.equals(y)`, `y.equals(z)` = true이면 `x.equals(z)` = true. ④ 일관성(Consistent): 객체가 변경되지 않으면 반복 호출 시 항상 같은 결과. ⑤ null 비교: `x.equals(null)` = false (NullPointerException 던지지 않음). 상속 관계에서 equals()를 확장하면 대칭성이나 추이성을 깨기 쉽습니다. Effective Java 권장: 값 기반 동등성이 필요하면 상속보다 컴포지션을 사용합니다.
+
+---
+
+## 면접 포인트
+
+**Q1. equals와 hashCode를 같이 재정의해야 하는 이유는?**
+A. Java 명세는 equals()가 true인 두 객체는 동일한 hashCode()를 가져야 한다고 규정한다. hashCode만 재정의하지 않으면 HashMap/HashSet에서 동일 객체가 다른 버킷에 들어가 contains(), get() 조회가 실패한다. 반대로 equals만 재정의하면 동일 내용 객체가 컬렉션에 중복 저장된다.
+
+**Q2. == 연산자와 equals()의 차이점은?**
+A. ==는 참조(주소)를 비교하고, equals()는 객체의 논리적 동등성을 비교한다. String의 경우 `"hello" == "hello"`는 상수 풀에서 같은 객체를 가리킬 때 true지만, `new String("hello") == new String("hello")`는 false다. 문자열 비교는 항상 equals()를 사용해야 한다.
+
+**Q3. Object.clone()을 사용할 때 주의해야 할 점은?**
+A. clone()은 얕은 복사(shallow copy)만 수행한다. 객체가 참조 타입 필드를 가지면, 복사본과 원본이 같은 참조를 공유한다. 깊은 복사가 필요하면 clone() 내에서 참조 필드도 재귀적으로 복사하거나, 복사 생성자나 정적 팩터리 메서드를 대안으로 사용해야 한다.
+
+**Q4. finalize() 메서드가 권장되지 않는 이유는?**
+A. finalize()는 GC가 호출 시점을 보장하지 않아 자원 해제가 언제 일어날지 예측 불가하다. 심각한 경우 아예 호출되지 않을 수도 있다. Java 9부터 deprecated 됐으며, 자원 해제는 try-with-resources와 AutoCloseable로 처리해야 한다.
+
+**Q5. Object.wait()와 Thread.sleep()의 차이점은?**
+A. sleep()은 단순히 현재 스레드를 지정 시간 동안 일시 정지하며 락을 해제하지 않는다. wait()는 synchronized 블록 안에서만 호출 가능하며, 호출 시 락을 해제하고 다른 스레드가 notify()를 호출할 때까지 대기한다. 스레드 간 협력에는 wait/notify, 단순 지연에는 sleep을 사용한다.

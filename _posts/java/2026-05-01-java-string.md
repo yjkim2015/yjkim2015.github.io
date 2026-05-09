@@ -751,3 +751,21 @@ graph LR
     STRING --> TEXTBLOCK["Java 15+ - 텍스트 블록"]
     STRING --> GUIDE["선택: 단순→리터럴 / 반복→St"]
 ```
+
+---
+## 면접 포인트
+
+**Q1. String Pool(intern)의 동작 원리와 실무 주의사항은?**
+문자열 리터럴은 JVM 내 String Pool(Metaspace)에 저장됩니다. 같은 리터럴은 동일 인스턴스를 공유합니다. `new String("hello")`는 Pool 밖 Heap에 새 객체를 생성합니다. `intern()`을 호출하면 Pool에 추가하거나 이미 있는 Pool 인스턴스를 반환합니다. 대량의 동적 문자열에 `intern()`을 남발하면 Metaspace가 증가해 OOM이 발생할 수 있습니다. 실무에서 `intern()`은 반복적으로 등장하는 고정 문자열(국가코드, 통화코드 등)에만 사용합니다.
+
+**Q2. `+` 연산자로 문자열을 반복 연결하면 왜 O(n²)인가?**
+`String`은 불변이므로 `a + b`는 새 `String` 객체를 생성합니다. 루프에서 N번 연결하면 총 복사량이 1+2+3+...+N = N(N+1)/2 = O(n²). N=10만이면 약 50억 문자 복사. `StringBuilder`는 내부 char 배열에 append해 최종 `toString()` 시 한 번만 복사합니다. Java 컴파일러는 단순 `+` 연결을 `StringBuilder`로 자동 최적화하지만, 루프 내부에서 `+`를 사용하면 루프마다 새 `StringBuilder`를 생성하므로 최적화되지 않습니다.
+
+**Q3. String.format()과 문자열 템플릿 성능 차이는?**
+`String.format("Hello %s", name)`은 형식 문자열을 파싱하고 리플렉션을 사용하므로 단순 연결 대비 5~10배 느립니다. 로깅 핫 경로에서 `log.info("User: " + userId)` 대신 `log.info("User: {}", userId)`를 사용해야 하는 이유입니다(SLF4J는 로그 레벨이 활성화됐을 때만 문자열을 구성). Java 21 String Templates(Preview)는 컴파일 타임에 처리되어 성능 오버헤드가 없습니다. 일반 출력에는 `StringBuilder`, 로깅에는 파라미터화된 메시지를 사용합니다.
+
+**Q4. equals()로 문자열 비교 시 `==` 대신 써야 하는 이유는?**
+`==`는 참조(주소) 비교입니다. `new String("a") == new String("a")`는 `false`입니다. 서로 다른 객체이기 때문입니다. `equals()`는 내용 비교입니다. `"a".equals("a")`는 항상 `true`. 리터럴끼리는 Pool을 공유하므로 `==`가 우연히 true가 되지만, 런타임에 생성된 문자열(DB 조회, API 응답)은 반드시 `equals()`를 사용해야 합니다. Null-safe 비교는 `Objects.equals(a, b)` 또는 리터럴을 앞에 두는 `"expected".equals(variable)` 패턴을 사용합니다.
+
+**Q5. Java 9+ Compact Strings의 개선점은?**
+Java 8 이전 String은 내부적으로 `char[]`(2바이트/문자)를 사용했습니다. 영문자는 1바이트로 충분한데 2배 메모리를 낭비합니다. Java 9부터 `byte[]` + 인코딩 플래그를 사용합니다. Latin-1(ASCII 범위)이면 1바이트, 한글/일본어 등은 UTF-16 2바이트로 저장합니다. 영문 위주 서비스에서 Heap 내 String 메모리 사용량이 약 40~50% 감소합니다. 한글 문자열은 변화 없음. JVM 업그레이드만으로 자동 적용되는 무료 최적화입니다.

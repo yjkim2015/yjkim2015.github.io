@@ -601,3 +601,101 @@ class PaymentService {
    → DDD Domain Layer = 헥사고날 Application Core 내부
    → DDD Repository Interface = 헥사고날 Outbound Port
 ```
+
+---
+## 실무에서 자주 하는 실수
+
+**실수 1: Use Case 인터페이스를 도메인마다 1:1로 만들지 않고 Service 클래스에 모든 메서드 집중**
+`OrderService`에 `createOrder()`, `cancelOrder()`, `updateDeliveryAddress()`, `getOrderHistory()`를 모두 넣으면 SRP 위반이고, 어떤 Use Case가 어떤 Port를 사용하는지 파악하기 어렵습니다. 헥사고날에서는 `CreateOrderUseCase`, `CancelOrderUseCase`를 각각 인터페이스로 정의하고, Application Service가 이를 구현합니다.
+
+```java
+// 잘못된 방식: 거대한 서비스 클래스
+public class OrderService {
+    public Order createOrder(...) { }
+    public void cancelOrder(...) { }
+    public void updateAddress(...) { }
+    public List<Order> getHistory(...) { }
+    // 시간이 지나면 수백 줄짜리 God Class가 됨
+}
+
+// 올바른 방식: Use Case별 인터페이스 분리
+public interface CreateOrderUseCase {
+    Order createOrder(CreateOrderCommand command);
+}
+
+public interface CancelOrderUseCase {
+    void cancel(OrderId orderId, CancelReason reason);
+}
+
+@Service
+@RequiredArgsConstructor
+public class OrderCommandService implements CreateOrderUseCase, CancelOrderUseCase {
+    private final LoadProductPort loadProductPort;      // Outbound Port
+    private final SaveOrderPort saveOrderPort;          // Outbound Port
+
+    @Override
+    public Order createOrder(CreateOrderCommand command) {
+        Product product = loadProductPort.loadProduct(command.getProductId());
+        Order order = Order.create(product, command.getQuantity());
+        return saveOrderPort.save(order);
+    }
+
+    @Override
+    public void cancel(OrderId orderId, CancelReason reason) {
+        // ...
+    }
+}
+```
+
+**실수 2: Adapter에서 도메인 로직 실행**
+JPA Repository Adapter에서 `if (entity.getStatus() == PENDING) entity.setStatus(CANCELLED)`를 처리하면 도메인 규칙이 Adapter에 누출됩니다. Adapter는 오직 변환(Domain ↔ Entity)과 저장/조회만 담당해야 합니다. 상태 전환 로직은 반드시 Domain 객체의 메서드(`order.cancel()`)에 있어야 합니다.
+
+**실수 3: Inbound/Outbound Port 구분 없이 단일 인터페이스 사용**
+`OrderRepository`를 Inbound Port로 사용하면 Controller가 Repository를 직접 호출하는 구조가 됩니다. Inbound Port(UseCase)는 외부 → 도메인 방향, Outbound Port(Repository, ExternalService)는 도메인 → 외부 방향으로 방향이 명확히 구분되어야 합니다.
+
+---
+## 면접 포인트
+
+**Q1. 헥사고날 아키텍처의 가장 큰 실무 이점은?**
+테스트 용이성입니다. Outbound Port가 인터페이스이므로 Mock으로 교체해 DB 없이 도메인 로직 단위 테스트가 가능합니다. 실제 JPA 영속성 없이 `OrderCommandService`의 비즈니스 로직만 빠르게 테스트할 수 있습니다. 또한 PostgreSQL → MongoDB 저장소 교체 시 `JpaOrderRepository` Adapter만 교체하면 되고 Application Service와 Domain은 수정이 없습니다.
+
+**Q2. 헥사고날이 레이어드 아키텍처보다 나은 이유는?**
+레이어드에서는 도메인이 Infrastructure(JPA Entity)에 의존하는 경우가 많습니다. `@Entity` 어노테이션이 도메인 클래스에 붙고, JPA 제약(`@Column`, `fetch = LAZY`)이 도메인 설계를 오염시킵니다. 헥사고날은 Domain이 어떤 외부 기술에도 의존하지 않고(순수 Java), Adapter가 Domain을 향해 의존합니다. Domain 테스트에 Spring Context, H2 DB가 필요 없습니다.
+
+**Q3. Port와 Adapter의 개수가 늘어날 때 패키지 구조는?**
+```
+com.example.order
+├── domain/           # 순수 도메인 (의존성 0)
+│   ├── Order.java
+│   └── OrderId.java
+├── application/      # Use Case, Port 인터페이스
+│   ├── port/in/      # Inbound (CreateOrderUseCase)
+│   ├── port/out/     # Outbound (LoadProductPort, SaveOrderPort)
+│   └── service/      # Use Case 구현체
+└── adapter/
+    ├── in/web/       # REST Controller
+    ├── in/messaging/ # Kafka Consumer
+    ├── out/persistence/ # JPA Adapter
+    └── out/external/ # 외부 API Adapter
+```
+패키지 구조 자체가 아키텍처를 문서화합니다.
+
+**Q4. 헥사고날과 MSA의 관계는?**
+헥사고날은 단일 서비스 내부 구조 패턴이고, MSA는 서비스 간 분리 패턴입니다. 둘은 다른 레벨의 아키텍처입니다. MSA 각 서비스 내부에 헥사고날을 적용하는 것이 이상적입니다. 헥사고날로 설계된 서비스는 외부 의존(DB, 다른 서비스 API)이 Outbound Adapter에 격리되어 있어, 나중에 MSA로 분리할 때 Adapter만 교체하면 됩니다.
+
+**Q5. 헥사고날의 단점과 도입 시 주의사항은?**
+보일러플레이트 코드가 많습니다. UseCase 인터페이스, Command/Response DTO, Mapper, Adapter 클래스가 각각 필요해 파일 수가 레이어드 대비 3~4배. 소규모 팀이나 단순 CRUD 서비스에는 오버엔지니어링입니다. 도입 기준: 도메인 로직이 복잡하고(비즈니스 규칙 10개+), 팀 인원이 4명 이상이며, 저장소 기술 교체 가능성이 있을 때. 단순 게시판 API에는 레이어드 아키텍처로 충분합니다.
+
+---
+
+## 왜 이 아키텍처인가
+
+**헥사고날 아키텍처를 선택하는 이유는 비즈니스 로직이 외부 기술(DB, 프레임워크, 메시지 큐)에 오염되지 않게 하기 위해서다.**
+
+| 대안 | 문제점 | 헥사고날의 해결 |
+|------|--------|---------------|
+| 레이어드 아키텍처 | 상위 레이어가 하위 레이어에 직접 의존 | Port/Adapter로 의존 방향 제어 |
+| 스프링 직접 참조 | 도메인 서비스가 @Autowired 등에 의존 | 도메인은 순수 Java, 프레임워크는 Adapter에만 |
+| 테스트 어려움 | DB 없이 단위 테스트 불가 | In-memory Adapter로 빠른 테스트 가능 |
+
+DB를 MySQL에서 PostgreSQL로, HTTP를 gRPC로 교체할 때 Adapter만 바꾸면 되고 도메인 로직은 그대로 유지된다. 테스트에서 DB Adapter를 메모리 구현체로 교체하면 빠른 단위 테스트가 가능하다.

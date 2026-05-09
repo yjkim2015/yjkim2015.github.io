@@ -515,3 +515,26 @@ public class OrderService {
 | 비동기 + 논블로킹 | WebFlux, CompletableFuture | 복잡, 높은 처리량 |
 
 > **Java 21 Virtual Thread**: 동기 블로킹 코드로 작성하지만 내부적으로 비동기처럼 동작 — 복잡한 리액티브 없이 높은 처리량 달성 가능
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **Async와 Non-blocking을 동의어로 혼용** — 비동기는 호출 결과를 나중에 받는 제어 흐름이고, Non-blocking은 시스템 콜이 즉시 반환하는 I/O 모델이다. Node.js는 Non-blocking I/O 위에 비동기 콜백을 구현한다. 두 개념을 명확히 구분해야 올바른 설계 판단을 내릴 수 있다.
+
+2. **Spring WebFlux를 쓰면서 블로킹 코드 삽입** — WebFlux의 이벤트 루프 스레드에서 Thread.sleep(), JDBC 동기 호출을 하면 이벤트 루프 전체가 블록된다. 블로킹 작업은 반드시 별도 스케줄러(Schedulers.boundedElastic())에서 실행해야 한다.
+
+3. **@Async 메서드를 같은 클래스에서 직접 호출** — 스프링 AOP 프록시를 우회해 비동기가 동기로 실행된다. @Async 메서드는 반드시 다른 빈에서 호출해야 프록시를 거쳐 비동기로 처리된다.
+
+---
+
+## 면접 포인트
+
+**Q1. Blocking I/O와 Non-blocking I/O의 차이점을 설명하세요.**
+A. Blocking I/O는 시스템 콜(read, write)이 완료될 때까지 스레드가 대기 상태로 블록된다. Non-blocking I/O는 시스템 콜이 즉시 반환하고, 데이터가 준비되지 않았으면 EAGAIN을 반환한다. Selector/epoll로 여러 소켓을 단일 스레드에서 감시하는 것이 Non-blocking의 핵심이다.
+
+**Q2. Java 가상 스레드(Virtual Thread)가 기존 블로킹 모델을 어떻게 개선하나요?**
+A. 가상 스레드는 JVM이 관리하는 경량 스레드로, 블로킹 I/O 시 OS 스레드를 점유하지 않고 내부적으로 Non-blocking으로 전환한다. 기존 동기 코드 스타일을 유지하면서 수백만 개의 동시 연결을 처리할 수 있다. WebFlux의 리액티브 프로그래밍 복잡도 없이 높은 처리량을 달성할 수 있다.
+
+**Q3. CompletableFuture와 Reactive Streams의 선택 기준은?**
+A. CompletableFuture는 단일 비동기 값 처리에 적합하고 학습 비용이 낮다. Reactive Streams(Reactor, RxJava)는 데이터 스트림 처리, 배압(backpressure) 제어, 복잡한 비동기 파이프라인에 적합하다. 단순 외부 API 호출 비동기화는 CompletableFuture, 스트리밍 데이터 처리는 Reactive를 선택한다.

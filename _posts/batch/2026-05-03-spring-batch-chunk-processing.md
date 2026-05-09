@@ -530,3 +530,111 @@ JpaPagingItemReader는 페이지를 읽은 후 EntityManager를 clear합니다. 
 | **Fault Tolerance** | Skip + Retry 통합 체계 | noSkip/noRetry로 안전장치 |
 
 Chunk 기반 처리의 핵심은 **"적절한 크기로 나누어 안전하게 처리한다"**는 원칙입니다. chunk-size, skip/retry 정책, Reader 선택 모두 이 원칙에서 출발합니다.
+
+---
+## 왜 Chunk 처리인가 — 다른 방식 대비 선택 이유
+
+### Tasklet vs Chunk — 언제 무엇을 선택하는가
+
+**Tasklet으로 구현했을 때의 한계 (100만 건 처리):**
+
+```java
+// 잘못된 방식: Tasklet으로 대용량 처리
+@Bean
+public Tasklet processAllUsersTasklet() {
+    return (contribution, chunkContext) -> {
+        List<User> allUsers = userRepository.findAll();  // 100만 건 한번에 메모리 로드
+        // JVM Heap이 수십 GB 필요
+        // OutOfMemoryError 발생 가능
+        allUsers.forEach(user -> {
+            processUser(user);
+            // 중간에 실패하면 전체 재처리 필요 (체크포인트 없음)
+        });
+        return RepeatStatus.FINISHED;
+    };
+}
+```
+
+**Chunk 처리로 해결:**
+
+```java
+// 올바른 방식: Chunk 처리로 메모리 효율 + 재시작 지점 확보
+@Bean
+public Step processUsersStep(JobRepository jobRepository, PlatformTransactionManager tm) {
+    return new StepBuilder("processUsersStep", jobRepository)
+        .<User, UserResult>chunk(1000, tm)  // 1000건씩 처리
+        // 메모리: 최대 1000건만 유지 (수 MB 수준)
+        // 실패 시: 마지막 커밋된 청크 이후부터 재시작
+        .reader(pagingReader())
+        .processor(userProcessor())
+        .writer(resultWriter())
+        .build();
+}
+// 100만 건 처리: 1000건 × 1000번 트랜잭션
+// 중간 실패 시: 마지막 커밋 청크(예: 500번째) 이후부터 재시작
+// 전체 재처리 불필요
+```
+
+**실전 수치 비교:**
+
+| 방식 | 메모리 사용 | 실패 시 재처리 | 처리 속도 |
+|------|-----------|-------------|---------|
+| Tasklet (전체 로드) | 수십 GB | 전체 재처리 | 빠름(단일 트랜잭션) |
+| Chunk(size=100) | ~수십 MB | 마지막 100건 | 중간 |
+| Chunk(size=1000) | ~수백 MB | 마지막 1000건 | 빠름 |
+| Chunk(size=10000) | ~수 GB | 마지막 10000건 | 매우 빠름 |
+
+### Chunk Size 결정 기준 — 왜 이 숫자인가
+
+```java
+// Chunk Size 선택 공식
+// 목표: 커밋 간격 내 처리 시간 < 5초 (너무 길면 Lock 경합)
+//       메모리 사용량 < JVM Heap의 10%
+
+// 예시: 상품 정보 처리 Job
+// - 상품 1건 처리 시간: 5ms (DB 조회 + 외부 API 호출 포함)
+// - 5초 내 처리 가능 건수: 5000ms / 5ms = 1000건
+// - Chunk Size = 1000 적합
+
+// 예시: 단순 집계 Job
+// - 1건 처리 시간: 0.1ms
+// - 5초 내 처리 가능: 50,000건
+// - 단, 50,000건 × 행 크기(1KB) = 50MB 메모리
+// - Heap 10% = 200MB (2GB Heap 기준)라면 가능
+// - Chunk Size = 5000~10000 적합
+
+@Bean
+public JdbcPagingItemReader<Product> pagingReader(DataSource dataSource) {
+    return new JdbcPagingItemReaderBuilder<Product>()
+        .dataSource(dataSource)
+        .pageSize(1000)          // Chunk Size와 동일하게 설정 (DB 왕복 최소화)
+        .selectClause("SELECT *")
+        .fromClause("FROM products")
+        .whereClause("WHERE status = 'ACTIVE'")
+        .sortKeys(Map.of("id", Order.ASCENDING))
+        .rowMapper(new BeanPropertyRowMapper<>(Product.class))
+        .build();
+}
+```
+
+### 이걸 안 하면 생기는 실제 장애
+
+**장애 1: page-size < chunk-size 설정 불일치**
+`pageSize=100`, `chunkSize=1000`으로 설정하면 1청크를 완성하기 위해 DB를 10번 조회합니다. 10번의 페이지 쿼리 사이에 데이터가 변경되면 같은 행이 두 번 처리되거나 누락될 수 있습니다. `pageSize = chunkSize`가 기본 원칙입니다.
+
+**장애 2: JpaPagingItemReader에서 EntityManager 캐시 미클리어**
+JPA 2차 캐시가 활성화된 환경에서 `JpaPagingItemReader`를 사용하면 청크마다 EntityManager가 초기화되지 않아 이전 청크의 엔티티가 메모리에 누적됩니다. 1000건 × 1000청크 = 100만 엔티티가 힙에 남아 OOM. `saveState(false)` 또는 `EntityManager.clear()`를 명시적으로 호출해야 합니다.
+
+---
+
+## 왜 청크 처리인가
+
+**청크 기반 처리를 선택하는 이유는 수백만 건의 데이터를 메모리에 한 번에 올리지 않고 안전하게 처리하기 위해서다.**
+
+| 대안 | 문제점 | 청크 처리의 해결 |
+|------|--------|----------------|
+| 전체 데이터 한 번에 로드 | OutOfMemoryError 발생 | 청크 단위로 읽어 메모리 사용량 일정 유지 |
+| 건별 트랜잭션 | 100만 건 = 100만 번 커밋, 매우 느림 | 청크 단위 트랜잭션으로 커밋 횟수 최소화 |
+| 단순 루프 처리 | 중간 실패 시 처음부터 재시작 | Step 재시작 + Skip/Retry로 실패 지점 재개 |
+
+청크 크기 1,000으로 설정하면 100만 건은 1,000번의 트랜잭션으로 처리된다. 처리 중 오류가 발생해도 해당 청크만 롤백되고, JobRepository에 저장된 오프셋부터 재시작할 수 있다.

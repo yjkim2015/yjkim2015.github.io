@@ -1269,3 +1269,21 @@ ArrayList<String> list2 = new ArrayList<>(); // 피하세요
 ```
 
 성능 최적화가 필요하다면 **초기 capacity 지정**, **적절한 구현체 선택**, **불필요한 박싱/언박싱 제거** 순서로 접근하는 것을 권장합니다.
+
+---
+## 면접 포인트
+
+**Q1. HashMap의 내부 동작 원리와 시간복잡도는?**
+키를 `hashCode()`로 해싱해 버킷 인덱스를 계산합니다. 같은 버킷에 여러 키가 들어오면 LinkedList로 연결(체이닝). Java 8부터 버킷 내 항목이 8개 이상이면 LinkedList → Red-Black Tree로 전환해 최악 경우 O(n) → O(log n)으로 개선합니다. 기본 load factor는 0.75로, 75% 채워지면 capacity를 2배로 늘리고 전체 rehashing이 발생합니다. 초기 capacity를 예상 크기 / 0.75로 설정하면 rehashing 비용을 줄일 수 있습니다.
+
+**Q2. ConcurrentHashMap이 Hashtable과 다른 이유는?**
+Hashtable은 모든 메서드에 `synchronized`를 걸어 동시 읽기도 불가합니다. ConcurrentHashMap은 Java 8부터 각 버킷별 CAS(Compare-And-Swap) + synchronized를 적용해 다른 버킷의 읽기/쓰기는 블로킹 없이 진행합니다. 이론상 CPU 코어 수만큼 병렬 처리 가능. 단, `size()`는 정확하지 않을 수 있으며(추정값), 복합 연산 원자성은 `computeIfAbsent()` 등 전용 메서드로 보장해야 합니다.
+
+**Q3. ArrayList vs LinkedList 실무 선택 기준은?**
+ArrayList: 인덱스 접근 O(1), 중간 삽입/삭제 O(n)(이후 요소 이동). 메모리 연속 배치로 캐시 지역성 좋음. 대부분의 경우 ArrayList가 빠릅니다. LinkedList: 양 끝 삽입/삭제 O(1)이지만 각 노드가 prev/next 포인터를 가져 메모리 오버헤드 2배. 인덱스 접근 O(n). 실무에서 LinkedList가 ArrayList보다 빠른 경우는 거의 없습니다. Deque가 필요하면 `ArrayDeque`를 사용합니다.
+
+**Q4. equals()/hashCode() 계약이 깨지면 어떤 문제가 생기는가?**
+`hashCode()`를 override하지 않고 `equals()`만 override하면: 동일한 값을 가진 두 객체가 다른 hashCode를 반환합니다. HashMap에 첫 번째 객체로 put하고 두 번째 객체로 get하면 null을 반환합니다. HashSet에 같은 값 객체를 두 번 add하면 중복이 저장됩니다. 반드시 `equals()`와 `hashCode()`를 함께 override해야 합니다.
+
+**Q5. EnumSet이 HashSet보다 빠른 이유는?**
+EnumSet은 내부적으로 long 비트마스크를 사용합니다. Enum 상수가 64개 이하면 단일 long(RegularEnumSet), 이상이면 long 배열(JumboEnumSet)로 구현됩니다. 합집합은 비트 OR(`|`), 교집합은 AND(`&`), 차집합은 AND NOT으로 처리합니다. 해싱이 전혀 없어 HashSet 대비 훨씬 빠르고 메모리 효율이 높습니다. Enum 타입이 확정된 경우 항상 EnumSet을 우선 고려합니다.

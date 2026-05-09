@@ -313,3 +313,94 @@ replica-serve-stale-data yes     # 동기화 중에도 (약간 오래된) 데이
 
 **Q5. 체인 복제(레플리카의 레플리카)는 가능한가?**
 가능하다(`replicaof replica-ip port`). 마스터 → 레플리카 A → 레플리카 B 구조로 마스터의 복제 부담을 줄일 수 있다. 단, 복제 지연이 누적되고 체인이 길수록 장애 전파 복잡도가 높아진다. 일반적으로 2단계 이상의 체인은 권장하지 않는다.
+
+---
+## 극한 시나리오
+
+### 시나리오 1: 마스터 장애 — 레플리카 승격 중 데이터 유실
+
+마스터가 갑자기 다운됩니다. Sentinel이 레플리카를 새 마스터로 승격하는 데 30초 소요됩니다.
+
+**유실 구간:**
+- 마스터 다운 직전 3초간 처리된 쓰기 → 레플리카에 미반영 상태
+- Sentinel이 ODOWN 판정하는 데 10~15초
+- 레플리카 승격 완료까지 추가 15~20초
+- 이 30~35초 동안 쓰기 불가, 다운 직전 데이터 유실 가능
+
+```java
+// WAIT 명령으로 최소 복제 보장 (유실 최소화)
+// 1개 레플리카 확인 후 응답, 최대 500ms 대기
+Long replicasAcked = redisTemplate.execute(
+    (RedisCallback<Long>) conn -> conn.wait(1, 500)
+);
+if (replicasAcked < 1) {
+    log.warn("복제 지연 감지: 레플리카 동기화 미완료");
+    // 중요 데이터라면 DB에 직접 저장
+}
+```
+
+**실전 대응:**
+- `min-replicas-to-write 1`, `min-replicas-max-lag 10` 설정
+- 마스터가 레플리카와 10초 이상 동기화되지 않으면 쓰기 거부
+- 레플리카 없는 상태에서 중요 데이터를 쓰지 않아 유실 0화
+
+**수치:** 
+- 설정 없는 경우: 마스터 장애 시 최대 수십 초치 데이터 유실
+- `min-replicas-to-write 1` 적용: 유실 최소화(레플리카 동기화 시점까지만)
+
+### 시나리오 2: 전체 동기화 폭풍 — 다수 레플리카 동시 재연결
+
+배포 재시작으로 레플리카 5개가 동시에 마스터에 재연결을 시도합니다.
+
+**무슨 일이 발생하는가:**
+1. 레플리카 5개가 동시에 `PSYNC` 요청
+2. 마스터의 replication backlog가 충분하지 않으면 Full Sync 5회 발생
+3. 각 Full Sync마다 RDB 스냅샷 생성(fork) + 전송
+4. fork 시 CoW(Copy-on-Write) 메모리 사용량 2배 → OOM 위험
+5. 대규모 RDB 전송으로 네트워크 포화 → 마스터 응답 지연 급증
+
+```bash
+# backlog 크기를 충분히 설정 (기본 1MB는 너무 작음)
+# redis.conf
+repl-backlog-size 512mb  # 피크 쓰기량 × 예상 재연결 시간
+repl-backlog-ttl 3600
+
+# 레플리카 재연결 시간 분산 (배포 스크립트에서)
+for i in 1 2 3 4 5; do
+  restart_replica $i
+  sleep 30  # 레플리카별 30초 간격
+done
+```
+
+### 시나리오 3: 복제 지연으로 인한 읽기 불일치
+
+마스터에 썼는데 레플리카에서 이전 값이 조회됩니다. 사용자가 "방금 수정했는데 반영이 안 됐다"고 신고합니다.
+
+**발생 조건:**
+- 마스터 쓰기 TPS 높음 → 복제 버퍼 누적 → 레플리카 지연 수백 ms~수초
+- 쓰기 후 즉시 레플리카에서 읽기 → 이전 값 반환
+
+```java
+// 패턴 1: 쓰기 후 읽기는 마스터에서 (Read-Your-Writes)
+@Service
+public class UserProfileService {
+    @Autowired private StringRedisTemplate masterRedis;    // 마스터 전용
+    @Autowired private StringRedisTemplate replicaRedis;  // 레플리카 전용
+
+    public void updateProfile(Long userId, UserProfile profile) {
+        String key = "profile:" + userId;
+        masterRedis.opsForValue().set(key, serialize(profile));
+    }
+
+    public UserProfile getProfile(Long userId, boolean freshRead) {
+        String key = "profile:" + userId;
+        // 방금 수정한 경우 마스터에서 조회
+        StringRedisTemplate template = freshRead ? masterRedis : replicaRedis;
+        return deserialize(template.opsForValue().get(key));
+    }
+}
+
+// 패턴 2: 복제 지연 모니터링 및 알림
+// INFO replication의 slave_repl_offset과 master_repl_offset 차이가
+// 임계값(예: 10MB) 초과 시 알림
+```

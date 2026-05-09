@@ -758,3 +758,15 @@ enum의 이점:
 5. switch 문 활용 가능
 6. 싱글턴 보장: JVM이 인스턴스 하나만 생성
 ```
+
+---
+
+## 왜 이 원칙인가
+
+**제네릭과 열거형 원칙의 핵심은 타입 안전성을 컴파일 타임에 보장해 런타임 오류를 제거하기 위해서다.**
+
+로우 타입(Raw Type) 사용을 금지하는 이유는 컴파일러의 타입 검사를 우회하기 때문이다. `List list = new ArrayList()`는 `ClassCastException`을 런타임에야 발견하게 한다. `List<String>`으로 선언하면 잘못된 타입 추가를 컴파일 시 차단한다.
+
+열거형(Enum)을 정수 상수 대신 사용하는 이유는 타입 안전성과 가독성 때문이다. `int DIRECTION_NORTH = 0` 대신 `Direction.NORTH`를 쓰면 잘못된 정수 값 전달이 컴파일 오류로 잡힌다. Enum에 메서드와 필드를 추가할 수 있어 관련 로직을 응집할 수도 있다.
+
+한정적 와일드카드(`<? extends T>`, `<? super T>`)는 PECS(Producer-Extends, Consumer-Super) 원칙으로 API 유연성을 높인다. 읽기 전용 컬렉션에는 `extends`, 쓰기 전용에는 `super`를 써서 더 넓은 타입을 수용할 수 있다.

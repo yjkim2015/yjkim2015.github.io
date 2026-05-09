@@ -719,3 +719,121 @@ graph LR
 | Fallback | Redis 장애 시 L1으로, L1+Redis 장애 시 DB + Rate Limit |
 
 멀티 레이어 캐싱은 "트래픽을 상위 계층에서 최대한 흡수해서 하위 계층을 보호하는" 아키텍처다. 각 계층의 특성을 이해하고, TTL과 크기를 데이터 성격에 맞게 설정하며, 계층 간 동기화를 빠뜨리지 않는 것이 성공의 열쇠다.
+
+---
+## 왜 다계층 캐싱인가 — 단일 캐시로는 안 되는 이유
+
+### 단일 Redis만 사용했을 때의 한계
+
+**시나리오: 상품 상세 페이지, 초당 10만 건 조회**
+
+```
+단일 Redis 구성:
+- 서버 10대, 각 서버가 요청마다 Redis 조회
+- Redis 조회 레이턴시: 1~2ms (네트워크 포함)
+- 초당 10만 건 → Redis에 10만 QPS 집중
+- Redis 단일 노드 최대: 약 10만 QPS (한계 도달)
+- 피크 트래픽에서 Redis가 병목으로 등장
+```
+
+**L1(로컬 Caffeine) + L2(Redis) 다계층 구성:**
+```
+- L1 히트: 메모리 접근, < 0.1ms, Redis 요청 없음
+- 서버 10대, L1 히트율 80% 가정
+- Redis 실제 QPS: 10만 × 20% = 2만 QPS (5배 감소)
+- Redis 여유 용량으로 다른 서비스도 수용 가능
+```
+
+```java
+@Service
+public class ProductQueryService {
+
+    // L1: JVM 로컬 캐시 (Caffeine, 최대 1000개, 30초 TTL)
+    private final Cache<Long, Product> localCache = Caffeine.newBuilder()
+        .maximumSize(1000)
+        .expireAfterWrite(Duration.ofSeconds(30))
+        .recordStats()  // 히트율 모니터링
+        .build();
+
+    // L2: Redis 분산 캐시
+    private final RedisTemplate<String, Product> redisTemplate;
+
+    public Product getProduct(Long id) {
+        // 1단계: L1 로컬 캐시 (< 0.1ms)
+        Product product = localCache.getIfPresent(id);
+        if (product != null) {
+            metricsCounter.increment("cache.l1.hit");
+            return product;
+        }
+
+        // 2단계: L2 Redis 캐시 (1~2ms)
+        product = redisTemplate.opsForValue().get("product:" + id);
+        if (product != null) {
+            localCache.put(id, product);  // L1 워밍
+            metricsCounter.increment("cache.l2.hit");
+            return product;
+        }
+
+        // 3단계: DB 조회 (10~50ms)
+        product = productRepository.findById(id).orElseThrow();
+        redisTemplate.opsForValue().set("product:" + id, product, Duration.ofMinutes(10));
+        localCache.put(id, product);
+        metricsCounter.increment("cache.db.hit");
+        return product;
+    }
+}
+```
+
+**실전 수치 비교:**
+
+| 구성 | 평균 응답시간 | Redis QPS | DB QPS |
+|------|------------|-----------|--------|
+| 캐시 없음 | 45ms | 0 | 100K |
+| Redis만 | 2ms | 100K | 2K |
+| L1+L2 다계층 | 0.3ms | 20K | 400 |
+
+### 왜 L1 TTL을 L2보다 짧게 설정하는가
+
+L1은 서버별 로컬 메모리에 있어 업데이트 동기화가 어렵습니다. 상품 가격이 변경되면 Redis(L2)는 즉시 무효화 가능하지만, 10대 서버의 L1을 동시에 무효화하려면 Redis Pub/Sub 브로드캐스트가 필요합니다.
+
+```java
+// 가격 변경 시 L1 일괄 무효화
+@EventListener
+public void onProductPriceChanged(ProductPriceChangedEvent event) {
+    // 자신의 L1 즉시 삭제
+    localCache.invalidate(event.getProductId());
+
+    // 다른 서버의 L1 삭제 요청 브로드캐스트
+    redisTemplate.convertAndSend("cache:invalidate:product",
+        event.getProductId().toString());
+}
+
+@RedisListener(topic = "cache:invalidate:product")
+public void onInvalidateMessage(String productIdStr) {
+    localCache.invalidate(Long.parseLong(productIdStr));
+}
+```
+
+L1 TTL을 짧게(30초) 유지하면 Pub/Sub 실패 시에도 최대 30초 내 자동으로 새 데이터를 로드합니다. L2(Redis)는 10분 TTL로 DB 부하를 장기간 방어합니다.
+
+### 다계층 캐시가 오히려 독이 되는 경우
+
+- **쓰기가 읽기만큼 빈번한 데이터**: 재고 수량, 실시간 좌석 현황. L1과 L2 사이 불일치로 오판 발생
+- **정확성이 최우선인 데이터**: 결제 잔액, 쿠폰 사용 여부. 30초 지연된 L1 캐시로 이미 사용한 쿠폰을 재사용 허용하는 버그 발생
+- **팀의 운영 역량이 부족한 경우**: L1 무효화 동기화 실패 시 디버깅이 매우 어려움
+
+이런 경우는 단일 Redis(L2)만 사용하는 것이 더 안전합니다.
+
+---
+
+## 왜 이 전략인가
+
+**멀티 레이어 캐싱을 선택하는 이유는 각 계층의 지연 시간과 용량이 다르기 때문에, 단일 캐시로는 모든 요구사항을 충족할 수 없기 때문이다.**
+
+| 계층 | 지연 | 용량 | 적합 데이터 |
+|------|------|------|------------|
+| L1 (로컬 메모리) | ~1μs | 수백 MB | 초당 수천 번 읽히는 핫 데이터 |
+| L2 (Redis) | ~1ms | 수십 GB | 서버 간 공유, 세션, 분산 캐시 |
+| L3 (CDN) | ~10ms | 무제한 | 정적 파일, API 응답 글로벌 배포 |
+
+L1 로컬 캐시만 쓰면 서버 간 불일치가 발생하고, Redis만 쓰면 네트워크 왕복으로 수 ms의 지연이 생긴다. 레이어를 조합하면 핫 데이터는 로컬에서 μs로 처리하고, 콜드 데이터는 Redis로 ms 내에 처리한다.

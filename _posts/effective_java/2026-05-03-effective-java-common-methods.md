@@ -578,3 +578,15 @@ Comparator<T>:
   다양한 정렬 기준이 필요하면 Comparator 팩터리 메서드 활용
   list.sort(Comparator.comparing(Order::getAmount).reversed())
 ```
+
+---
+
+## 왜 이 원칙인가
+
+**공통 메서드(equals, hashCode, toString, Comparable) 원칙의 핵심은 Java 컬렉션과 라이브러리가 이 계약에 의존하기 때문이다.**
+
+equals를 재정의하면서 hashCode를 재정의하지 않으면 HashMap에서 키로 사용할 때 같은 객체가 다른 버킷에 들어가 조회가 실패한다. Java 명세는 equals가 true인 두 객체는 반드시 같은 hashCode를 가져야 한다고 규정한다.
+
+Comparable을 구현하면 TreeSet, TreeMap에 자동으로 정렬되고, Collections.sort()를 매개변수 없이 사용할 수 있다. 정렬 가능한 값 클래스(금액, 날짜, 점수)는 Comparable 구현이 자연스럽다.
+
+toString을 재정의하지 않으면 로그에 `Order@1a2b3c`만 출력돼 디버깅에 아무 도움이 되지 않는다. 객체의 핵심 필드를 포함한 toString은 운영 비용을 크게 줄인다.

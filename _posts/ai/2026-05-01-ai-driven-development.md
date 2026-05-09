@@ -717,3 +717,116 @@ Claude Code (에이전트 방식):
      "AI 없이 모든 걸 손으로 짜는 개발자"보다 생산적
      하지만 기본기(알고리즘, 자료구조, 아키텍처)는 여전히 필수
 ```
+
+---
+## 극한 시나리오
+
+### 시나리오 1: AI가 생성한 코드가 프로덕션에서 조용히 잘못 동작하는 경우
+
+AI에게 "결제 금액 계산 함수를 작성해달라"고 요청했습니다. AI는 완벽해 보이는 코드를 작성했고 테스트도 통과했습니다. 배포 후 3주간 일부 사용자의 결제 금액이 0.01원씩 차이납니다.
+
+**원인:** AI가 `double`로 금액 계산 코드를 작성했습니다. 부동소수점 오차가 누적됩니다.
+
+```java
+// AI가 생성한 코드 (버그 있음)
+public double calculateTotal(List<Item> items) {
+    return items.stream()
+        .mapToDouble(item -> item.getPrice() * item.getQuantity())
+        .sum();  // 부동소수점 오차 누적
+}
+
+// 올바른 코드 (리뷰어가 수정해야 함)
+public BigDecimal calculateTotal(List<Item> items) {
+    return items.stream()
+        .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+}
+```
+
+**대응 원칙:**
+- AI 생성 코드에 대해 도메인 전문가 리뷰 필수. 특히 금융·보안·동시성 영역
+- AI는 "작동하는" 코드를 작성하지만 "정확한" 코드를 작성하는 것은 다름
+- 단위 테스트에 경계값, 소수점 계산, 오버플로우 케이스를 명시적으로 포함
+
+### 시나리오 2: AI 도구 의존도 과다로 핵심 역량이 저하되는 경우
+
+6개월간 AI 코딩 어시스턴트에 전적으로 의존하던 개발자가 AI 없이 코드 리뷰, 알고리즘 설명, 디버깅을 해야 하는 상황에서 어려움을 겪습니다.
+
+**측정 지표 (실제 사례):**
+- AI 없이 SQL 쿼리 최적화 설명 불가 → 인덱스 원리를 모름
+- 코드를 생성하지만 왜 이 구조인지 설명 불가 → 리뷰어 질문에 답 못함
+- 장애 발생 시 로그만으로 원인 추적 불가 → AI에게 로그를 붙여넣고 기다림
+
+**실전 적용 원칙:**
+```
+AI 활용 성숙도 모델:
+Level 1: AI가 전부 작성, 나는 붙여넣기
+Level 2: AI 초안을 내가 검토하고 수정 (권장 최소 수준)
+Level 3: 내가 설계·구조 결정, AI는 반복 코드 생성 보조
+Level 4: AI와 페어 프로그래밍, 실시간 대안 검토
+Level 5: AI 결과를 비판적 평가, 한계를 이해하고 보완
+```
+
+Level 2 미만으로 사용하면 AI가 만든 기술 부채를 나중에 본인이 전부 갚게 됩니다. 실무에서 AI 생성 코드를 본인이 설명할 수 없다면 커밋하지 않아야 합니다.
+
+### 시나리오 3: LLM 기반 기능이 프로덕션에서 비결정론적으로 동작
+
+AI 추천 기능을 배포했습니다. 같은 사용자 프로필에 대해 매 요청마다 다른 추천이 반환됩니다. A/B 테스트 결과 재현이 불가합니다.
+
+**원인:** LLM의 `temperature > 0` 설정으로 확률적 응답 생성. 프롬프트에 현재 시각, 세션 ID가 포함되어 입력 자체가 달라짐.
+
+**대응:**
+```java
+// 재현 가능한 LLM 호출 설계
+@Service
+public class RecommendationService {
+
+    public RecommendationResult recommend(Long userId) {
+        // 1. 입력을 결정론적으로 정규화
+        UserProfile profile = userProfileService.getStableProfile(userId);
+        String prompt = buildDeterministicPrompt(profile);  // 시각·세션 제외
+        String promptHash = Hashing.sha256().hashString(prompt, UTF_8).toString();
+
+        // 2. 동일 입력은 캐시에서 반환 (LLM 호출 생략)
+        return cache.computeIfAbsent(promptHash, k ->
+            llmClient.complete(ChatRequest.builder()
+                .prompt(prompt)
+                .temperature(0.0)      // 완전 결정론적
+                .seed(42)              // 시드 고정 (지원 모델)
+                .build())
+        );
+    }
+}
+// 수치: temperature=0 + 캐시로 동일 프로필 응답 일관성 100%
+//       API 비용 60~80% 절감 (캐시 히트율 기준)
+```
+
+---
+## 실전 적용 사례
+
+**사례 1: Spring Boot 프로젝트 CLAUDE.md 작성 (즉각 효과)**
+```markdown
+# CLAUDE.md
+## 프로젝트 컨텍스트
+- Spring Boot 3.3, Java 21, JPA/Hibernate, MySQL 8.0
+- 결제 도메인: 금액은 반드시 BigDecimal, DB는 DECIMAL(19,4)
+
+## 코딩 규칙
+- 금액 계산에 double/float 절대 금지
+- 모든 public 메서드에 단위 테스트 필수
+- @Transactional은 Service 계층에만 적용
+
+## 금지 사항
+- System.out.println 사용 금지 (SLF4J 사용)
+- Optional을 DTO 필드로 사용 금지
+```
+이 파일 하나로 AI가 프로젝트 규칙을 인지해 잘못된 코드 제안을 80% 이상 줄였습니다.
+
+**사례 2: AI + TDD 조합으로 레거시 리팩토링 (2주 → 3일)**
+레거시 5000줄 서비스 클래스를 리팩토링해야 했습니다.
+1. AI에게 기존 코드를 읽게 하고 테스트 케이스 목록 생성 요청
+2. AI가 생성한 테스트 코드를 검토 후 실행 → 레거시 동작 문서화
+3. 테스트를 기준으로 AI가 리팩토링 코드 생성
+4. 사람이 비즈니스 규칙 정확성 검토
+
+결과: 2주 예상 작업을 3일에 완료. 테스트 커버리지 12% → 78%.

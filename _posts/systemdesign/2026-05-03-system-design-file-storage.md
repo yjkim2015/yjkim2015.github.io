@@ -1063,3 +1063,51 @@ def access_share_link(token, requester_ip):
 둘째, **메타데이터와 실제 데이터를 분리하라**. 조회 패턴이 다른 두 종류의 데이터를 같은 저장소에 넣으면 둘 다 최적화하기 어렵습니다. 메타데이터는 RDBMS, 블록은 오브젝트 스토리지로 역할을 명확히 분리해야 합니다.
 
 셋째, **실패를 가정하고 설계하라**. 네트워크는 끊어지고, 동시 편집은 충돌하고, 랜섬웨어는 존재합니다. 이 모든 상황에서 데이터를 보호하려면 재개 가능 업로드, 버전 이력, 이상 탐지가 선택이 아닌 필수입니다.
+
+---
+## 실무에서 자주 하는 실수
+
+**실수 1: 업로드 완료 전 메타데이터 먼저 커밋**
+파일 업로드를 시작하자마자 DB에 `status=uploading`으로 메타데이터를 저장하고, 업로드 중 클라이언트 연결이 끊기면 고아 레코드가 남습니다. 이 상태에서 동일 파일명으로 재업로드하면 중복 처리 로직이 없으면 두 개의 레코드가 생깁니다. 올바른 흐름: S3 멀티파트 업로드 `CompleteMultipartUpload` 성공 후 DB 커밋. 업로드 실패 시 S3 Lifecycle Rule로 미완성 파트 24시간 후 자동 삭제.
+
+```java
+// 업로드 완료 후 메타데이터 저장 (원자성 보장)
+public FileMetadata completeUpload(String uploadId, List<CompletedPart> parts) {
+    // 1. S3 멀티파트 완료
+    s3Client.completeMultipartUpload(
+        CompleteMultipartUploadRequest.builder()
+            .bucket(bucket).key(uploadId)
+            .multipartUpload(b -> b.parts(parts))
+            .build()
+    );
+    // 2. S3 성공 확인 후에만 DB 저장
+    return metadataRepository.save(new FileMetadata(uploadId, FileStatus.COMPLETED));
+}
+```
+
+**실수 2: 블록 해시를 MD5로 계산해 중복 판별**
+MD5는 해시 충돌이 실제로 발생할 수 있어 두 다른 블록이 같은 해시를 가질 수 있습니다. 결과적으로 A 사용자의 파일 블록이 B 사용자 파일에 사용됩니다. SHA-256 사용이 기본이며, 2025년 기준으로 충돌 공격이 이론적으로도 가능하지 않습니다. 블록 크기 4MB 기준 SHA-256 계산 비용은 CPU ~2ms로 무시 가능합니다.
+
+**실수 3: 동기화 이벤트를 Polling으로 처리**
+클라이언트가 2초마다 `/changes?since=timestamp`를 폴링하면, 10만 명 동시 접속 시 초당 5만 건의 DB 쿼리가 발생합니다. Dropbox 초기 아키텍처의 실제 병목이었습니다. WebSocket 또는 SSE(Server-Sent Events)로 서버 푸시 방식을 사용하고, 변경 이벤트를 Redis Pub/Sub 또는 Kafka로 분산해야 합니다.
+
+**실수 4: 파일 버전을 전체 복사로 저장**
+1GB 파일의 1KB만 수정해도 새 버전을 전체 1GB로 저장하면 버전 10개 = 10GB. Delta 방식(변경된 블록만 저장)이 필수입니다. 블록 단위 저장의 핵심 장점이 바로 이 Delta 업데이트입니다. 버전 복원 시에는 해당 버전의 블록 목록을 조회해 재조합합니다.
+
+---
+## 면접 포인트
+
+**Q1. 대용량 파일 업로드 시 Presigned URL을 쓰는 이유는?**
+클라이언트 → 앱서버 → S3 경로는 앱서버가 파일 데이터를 중계해 불필요한 네트워크 이중 전송과 앱서버 메모리 사용이 발생합니다. Presigned URL을 사용하면 클라이언트가 S3로 직접 업로드하므로 앱서버 부하 제거. 10GB 파일 업로드 시 앱서버 메모리 절감 효과는 직접적입니다. URL 만료 시간은 업로드 예상 시간 + 여유분(예: 4GB 파일은 15분 TTL)으로 설정합니다.
+
+**Q2. 청크 크기를 얼마로 설정하는가?**
+너무 작으면(1MB) HTTP 요청 오버헤드가 증가합니다. 너무 크면(100MB) 재시도 시 손실 데이터가 커집니다. 실무 권장값: 4~8MB. AWS S3 멀티파트 최소값은 5MB입니다. 네트워크 대역폭이 낮은 모바일 환경에서는 1MB로 동적 조정하는 것이 UX에 유리합니다.
+
+**Q3. 파일 공유 권한 설계는?**
+행 레벨 권한(Row-Level Security)이 기본입니다. `file_permissions(file_id, user_id, permission_level)` 테이블에 읽기/쓰기/소유자를 저장하고, 링크 공유는 별도 `share_tokens(token, file_id, expires_at, permission)` 테이블로 관리합니다. 폴더 권한은 하위 항목에 상속되므로, 조회 시 부모 체인을 순회해야 합니다. 재귀 쿼리 또는 경로 열거(Materialized Path) 패턴을 사용합니다.
+
+**Q4. 파일 삭제 후 스토리지 회수는 어떻게 하는가?**
+파일 삭제 즉시 S3에서 블록을 삭제하면 같은 블록을 공유하는 다른 사용자 파일이 손상됩니다. 레퍼런스 카운팅이 필요합니다. `block_references(block_hash, ref_count)` 테이블에서 `ref_count`가 0이 될 때 S3 삭제 작업을 Kafka에 발행하고 비동기로 처리합니다. Soft Delete → ref_count 감소 → 0이면 S3 삭제 예약 → 24시간 후 실제 삭제(복구 기간 확보).
+
+**Q5. 동시 편집 충돌 해결 전략은?**
+Google Docs는 OT(Operational Transformation)를 사용하지만 구현이 매우 복잡합니다. Dropbox 같은 파일 기반 시스템은 LWW(Last-Write-Wins)와 충돌 복사본 생성을 조합합니다. 서버 타임스탬프 기준으로 나중 쓰기가 승리하고, 기존 버전은 `file_conflict_copy_2026-05-07.docx`로 저장됩니다. 사용자가 수동 병합합니다. 실시간 협업이 필요하면 CRDT(Conflict-Free Replicated Data Type) 기반 라이브러리(Yjs, Automerge)를 사용합니다.

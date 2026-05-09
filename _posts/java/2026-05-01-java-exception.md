@@ -802,3 +802,34 @@ graph LR
     A --> D["커스텀: ErrorCode Enu"]
     A --> E["Spring: @RestContr"]
 ```
+
+---
+## 면접 포인트
+
+**Q1. Checked 예외와 Unchecked 예외를 언제 선택하는가?**
+Checked 예외: 호출자가 복구 가능한 상황. 파일 없음(`FileNotFoundException`), 네트워크 연결 실패 등. 컴파일러가 처리를 강제합니다. Unchecked 예외: 프로그래밍 오류(NullPointerException, IllegalArgumentException)나 복구 불가 상황. Spring, JPA 등 현대 프레임워크는 대부분 RuntimeException을 사용합니다. 실무 권장: 비즈니스 로직 예외는 커스텀 RuntimeException, 외부 시스템 연동 실패는 Checked 예외(호출자가 Fallback을 처리하도록 강제)로 구분합니다.
+
+**Q2. try-with-resources가 finally보다 나은 이유는?**
+finally에서 `close()`를 직접 호출할 때 close 자체가 예외를 던지면 원래 예외가 사라집니다. try 블록에서 IOException, finally에서 close() 시 SQLException이 발생하면 IOException이 suppressed되어 스택 트레이스에서 사라집니다. try-with-resources는 try 블록 예외를 primary로 유지하고 close 예외를 suppressed로 첨부합니다(`Throwable.getSuppressed()`로 확인 가능). 또한 여러 리소스를 선언 역순으로 안전하게 닫아줍니다.
+
+**Q3. 예외를 잡아서 로깅 후 다시 던질 때 올바른 방법은?**
+```java
+// 잘못된 방식: 스택 트레이스 손실
+} catch (Exception e) {
+    log.error("에러 발생: " + e.getMessage());  // cause 없음
+    throw new ServiceException("처리 실패");      // 원인 예외 누락
+}
+
+// 올바른 방식: cause 체이닝
+} catch (Exception e) {
+    log.error("DB 조회 실패: {}", e.getMessage(), e);
+    throw new ServiceException("사용자 조회 실패", e);  // cause 포함
+}
+```
+원인 예외를 cause로 전달하지 않으면 운영 중 장애 원인 추적이 불가합니다. `new RuntimeException(message, cause)` 형태가 표준입니다.
+
+**Q4. 전역 예외 핸들러(`@ControllerAdvice`)와 개별 try-catch의 사용 기준은?**
+`@ControllerAdvice`: HTTP 레이어에서 통일된 에러 응답 형식 보장. `BusinessException`, `ValidationException` 등 예측 가능한 도메인 예외를 HTTP 상태 코드로 변환합니다. 개별 try-catch: 예외 발생 후 로컬에서 복구(Fallback 반환, 재시도)가 필요한 경우. `@ControllerAdvice`만 사용하면 로컬 복구 로직을 넣을 수 없고, 개별 try-catch만 사용하면 에러 응답 형식이 산발적으로 됩니다. 두 가지를 계층적으로 조합합니다.
+
+**Q5. NullPointerException을 방지하는 실무 전략은?**
+① `Objects.requireNonNull(param, "파라미터명은 null일 수 없습니다")` — 진입점에서 명시적 검증. ② `Optional<T>` — null 반환 대신 Optional.empty() 반환, 호출자가 명시적으로 처리. ③ `@NonNull`/`@NotNull` 어노테이션 + IDE 정적 분석. ④ 컬렉션 반환 시 null 대신 빈 컬렉션(`Collections.emptyList()`) 반환. Java 14+ NullPointerException은 어떤 변수가 null인지 메시지에 명시("Cannot invoke ... because 'xxx' is null")되어 디버깅이 쉬워졌습니다.

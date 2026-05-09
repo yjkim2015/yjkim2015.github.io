@@ -1018,3 +1018,21 @@ graph LR
     TUNE["튜닝 3원칙: 측정먼저 / 하나씩"]
     LEAK["누수 방지: static컬렉션 r"]
 ```
+
+---
+## 면접 포인트
+
+**Q1. G1GC와 ZGC의 선택 기준은?**
+G1GC(Java 9+ 기본): Heap을 Region으로 나눠 Young/Old를 혼합 관리. Stop-The-World(STW) 시간을 목표값으로 설정 가능(`-XX:MaxGCPauseMillis=200`). 일반 서버 애플리케이션에 적합. ZGC(Java 15 Production Ready): 대부분의 GC 작업을 애플리케이션과 동시에 수행. STW < 1ms 보장. 단, throughput이 G1GC 대비 약간 낮고 메모리 오버헤드 있음. 선택 기준: P99 응답 레이턴시가 중요한 서비스(금융 거래, 실시간 게임)는 ZGC, 처리량이 중요한 배치는 G1GC.
+
+**Q2. GC 튜닝 시 어떤 지표를 먼저 보는가?**
+① GC 일시정지 시간(STW): `jstat -gcutil {pid} 1000`으로 YGC/FGC 빈도와 YGCT/FGCT 확인. P99 응답이 급등하는 시점과 GC 일시정지가 겹치는지 확인. ② Heap 사용률: Eden/Survivor/Old 각 영역의 사용률 추이. Old 영역이 지속 증가하면 메모리 누수 의심. ③ 객체 승격 비율: Survivor가 작아 Old로 조기 승격되면 Major GC 빈도 증가. `-XX:NewRatio`, `-XX:SurvivorRatio` 조정. GC 튜닝 순서: Heap 크기 설정 → GC 알고리즘 선택 → 세대 비율 조정.
+
+**Q3. OOM(OutOfMemoryError) 발생 시 원인 파악 방법은?**
+`-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/heap.hprof` 설정으로 OOM 시 자동 Heap Dump 생성. Eclipse MAT(Memory Analyzer Tool)로 Heap Dump 분석해 메모리를 가장 많이 점유한 객체와 GC Root 참조 체인 확인. 흔한 원인: ① 메모리 누수(static 컬렉션, 이벤트 리스너 미해제) ② 너무 큰 데이터 한번에 로드(배치 처리 없이 100만 행 SELECT) ③ ThreadLocal 미해제 ④ String intern() 과다 사용.
+
+**Q4. Minor GC와 Major GC의 차이와 발생 조건은?**
+Minor GC: Young Generation(Eden + Survivor) 수집. Eden이 가득 차면 발생. 수십 ms 이하로 빠름. 대부분의 객체가 여기서 소멸. Major GC(Old GC): Old Generation 수집. Old가 임계율을 넘으면 발생. 수백 ms~수 초 소요. Full GC는 전체 Heap + Metaspace 수집으로 가장 오래 걸림. "Major GC가 자주 발생한다"는 것은 Young에서 살아남아 Old로 승격되는 객체가 많다는 신호로, 객체 생명주기 설계를 재검토해야 합니다.
+
+**Q5. finalize() 메서드를 사용하면 안 되는 이유는?**
+`finalize()`는 GC가 객체를 수집하기 전에 호출되는 메서드입니다. 호출 시점이 불확정적이라 언제 리소스가 해제될지 보장할 수 없습니다. finalize() 실행 중 예외가 발생하면 무시되고, 다른 살아있는 객체를 참조해 GC에서 빠져나올 수도 있습니다. 실행에 시간이 걸리면 GC 스레드를 블로킹합니다. Java 9에서 Deprecated, Java 18에서 삭제 예정. 리소스 해제는 반드시 `AutoCloseable + try-with-resources`로 처리합니다.

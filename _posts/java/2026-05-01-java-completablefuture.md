@@ -644,3 +644,21 @@ CompletableFuture<String> result = CompletableFuture
 ## 마치며
 
 `CompletableFuture`는 Java에서 비동기 처리를 구성하는 표준 방법이다. `thenCompose`로 순차 비동기 작업을, `thenCombine`/`allOf`로 병렬 집계를 표현할 수 있다. 실무에서 가장 흔한 실수는 ForkJoinPool을 I/O 바운드 작업에 사용하는 것이다. 항상 커스텀 Executor를 지정하고, 타임아웃을 설정하며, 예외를 반드시 처리해야 한다.
+
+---
+## 면접 포인트
+
+**Q1. CompletableFuture와 Future의 핵심 차이는?**
+Future는 `get()` 호출 시 결과가 나올 때까지 현재 스레드를 블로킹합니다. 완료 콜백 등록이 불가하고, 예외 처리가 `ExecutionException`으로 감싸져 불편합니다. CompletableFuture는 완료 시 실행될 콜백을 등록(`thenApply`, `thenAccept`)해 논블로킹 파이프라인을 구성합니다. 여러 비동기 작업을 조합(`allOf`, `anyOf`, `thenCombine`)하는 것도 가능합니다. Spring WebFlux나 Reactor를 쓰지 않는 환경에서 비동기 처리의 표준 방법입니다.
+
+**Q2. thenApply와 thenApplyAsync의 차이는?**
+`thenApply`는 이전 작업을 완료한 스레드에서 콜백을 실행합니다. 이전 작업이 ForkJoinPool 스레드에서 완료됐다면 그 스레드가 콜백도 처리합니다. `thenApplyAsync`는 콜백을 ForkJoinPool의 다른 스레드(또는 지정 Executor)에 제출합니다. CPU 집약적인 콜백이 연속될 때 `thenApplyAsync`로 분산하면 스레드 독점을 방지합니다. I/O 대기가 없는 단순 변환은 `thenApply`로 충분합니다.
+
+**Q3. CompletableFuture에서 예외가 발생하면 다운스트림 콜백은 어떻게 되는가?**
+예외가 발생하면 해당 CompletableFuture가 예외 상태로 완료되고, 이후 `thenApply` / `thenAccept` 콜백은 모두 건너뜁니다. `exceptionally`나 `handle`을 등록한 단계에서 예외를 포착해 복구하거나 기본값을 반환해야 이후 체인이 정상 실행됩니다. `handle`은 성공/실패 모두에서 실행되므로 항상 후속 단계가 필요할 때 사용합니다.
+
+**Q4. allOf로 여러 Future를 기다릴 때 하나가 실패하면?**
+`CompletableFuture.allOf(f1, f2, f3)`는 하나가 예외로 완료돼도 나머지를 취소하지 않습니다. 모두 완료(성공 또는 실패)된 후에야 allOf Future가 완료됩니다. allOf에 `exceptionally`를 붙여도 실패한 개별 Future의 예외를 확인하려면 각각 `join()`을 try-catch로 감싸야 합니다. 하나라도 실패 시 즉시 전체 실패를 원하면 각 Future에 예외 발생 시 allOf의 completeExceptionally를 호출하는 로직을 추가해야 합니다.
+
+**Q5. Spring에서 CompletableFuture를 사용할 때 스레드 풀 설정은?**
+기본 ForkJoinPool.commonPool()을 사용하면 모든 비동기 작업이 공용 풀을 공유합니다. DB 조회처럼 블로킹 I/O가 많은 작업이 공용 풀을 점유하면 다른 비동기 작업에 영향을 줍니다. Spring에서는 `@Async`와 함께 사용할 전용 `ThreadPoolTaskExecutor`를 빈으로 등록하고 `supplyAsync(task, customExecutor)` 형태로 격리합니다. Virtual Thread(Java 21) 환경에서는 스레드 풀 튜닝 부담이 크게 줄어듭니다.

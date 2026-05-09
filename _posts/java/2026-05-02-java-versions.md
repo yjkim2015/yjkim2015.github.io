@@ -927,3 +927,39 @@ flowchart LR
 | Java 15 | X | 여러 줄 문자열 | Text Block, Sealed (preview) |
 | Java 17 | O | instanceof 캐스팅 반복 | Pattern Matching, Sealed Classes 정식 |
 | Java 21 | O | I/O 대기 스레드 낭비 | Virtual Thread, Sequenced Collections |
+
+---
+## 면접 포인트
+
+**Q1. Java 8의 Stream API와 for 루프의 성능 차이는?**
+단순 순회는 for 루프가 Stream보다 빠릅니다. Stream은 파이프라인 구성, 람다 인스턴스 생성, 이터레이터 오버헤드가 있습니다. 소규모 컬렉션(100개 이하)에서 Stream이 10~30% 느릴 수 있습니다. 그러나 `parallelStream()`을 사용하면 CPU 코어 수만큼 병렬 처리가 가능해 대규모 데이터에서 for 루프를 압도합니다. 실무에서 성능 차이는 프로파일링으로 확인하기 전까지는 가독성을 우선해 Stream을 사용합니다.
+
+**Q2. Java 9 모듈 시스템이 실무에서 잘 채택되지 않는 이유는?**
+레거시 코드와의 호환성 문제입니다. 많은 라이브러리가 모듈 정보(`module-info.java`)를 제공하지 않아 `Unnamed Module`로 취급됩니다. 리플렉션 접근 제한으로 Spring, Hibernate, Lombok 등이 `--add-opens` JVM 플래그 없이 동작하지 않습니다. 대규모 레거시 프로젝트를 모듈화하는 비용이 실제 이점보다 큽니다. 실무에서는 모듈 시스템 대신 패키지 가시성 컨벤션과 아키텍처 테스트(ArchUnit)로 의존성을 관리하는 경우가 많습니다.
+
+**Q3. Java 17 LTS의 Sealed Classes가 유용한 경우는?**
+```java
+// 결과 타입 계층을 완전히 통제
+public sealed interface PaymentResult
+    permits PaymentSuccess, PaymentFailed, PaymentPending {}
+
+public record PaymentSuccess(String transactionId) implements PaymentResult {}
+public record PaymentFailed(String errorCode, String message) implements PaymentResult {}
+public record PaymentPending(String trackingId) implements PaymentResult {}
+
+// Java 21 switch 표현식과 조합: 모든 케이스 강제
+PaymentResult result = processPayment(request);
+String message = switch (result) {
+    case PaymentSuccess s -> "완료: " + s.transactionId();
+    case PaymentFailed f -> "실패: " + f.message();
+    case PaymentPending p -> "대기: " + p.trackingId();
+    // 누락된 케이스는 컴파일 에러 → 런타임 버그 방지
+};
+```
+Sealed Classes + Record + Pattern Matching은 Java에서 대수적 데이터 타입을 안전하게 모델링합니다.
+
+**Q4. Java 21의 Virtual Thread는 기존 프로젝트에 어떻게 적용하는가?**
+Spring Boot 3.2+ 환경에서 `spring.threads.virtual.enabled=true` 하나로 활성화됩니다. 기존 코드 변경 없이 Tomcat, `@Async`, 스케줄러가 Virtual Thread를 사용합니다. 주의: `synchronized` 블록 내 블로킹 I/O는 Carrier Thread를 고정(pin)합니다. JDBC 드라이버의 내부 `synchronized` 사용이 문제가 될 수 있습니다. `jdk.tracePinnedThreads=full` JVM 플래그로 pin 발생 위치를 추적하고 `ReentrantLock`으로 교체합니다.
+
+**Q5. LTS 버전 선택 시 Java 11 vs Java 17 vs Java 21 비교는?**
+Java 11: 2023년 9월 EOL 예정(Oracle 무료 지원). 유지하면 보안 패치 미적용. Java 17: 2029년까지 지원. Record, Sealed Classes, Text Block, Pattern Matching 미리보기 포함. 현재 가장 많이 사용되는 LTS. Java 21: 2031년까지 지원. Virtual Thread, Sequenced Collections, Record Patterns 정식 포함. 신규 프로젝트 권장. 마이그레이션 비용: 11→17은 대부분 호환. 17→21도 호환성 높음. 단, 삭제된 API 확인 필요(`jdeprscan` 활용).

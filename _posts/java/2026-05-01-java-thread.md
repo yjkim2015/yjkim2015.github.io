@@ -2081,3 +2081,21 @@ Java 스레드와 동시성 프로그래밍의 핵심을 표로 정리합니다.
 | 분할 정복 병렬화 | `ForkJoinPool` + `RecursiveTask` |
 
 동시성 프로그래밍의 황금률: **공유 가변 상태를 최소화하라.** 공유가 필요하다면 불변 객체, 동시성 컬렉션, 적절한 동기화 도구를 사용하고, 반드시 리소스를 올바르게 해제하세요.
+
+---
+## 면접 포인트
+
+**Q1. synchronized와 ReentrantLock의 선택 기준은?**
+`synchronized`는 블록 진입/탈출 시 자동으로 락을 획득/해제하므로 코드가 간결하고 예외 시에도 안전합니다. `ReentrantLock`은 타임아웃(`tryLock(1, SECONDS)`), 인터럽트 가능한 락 획득, 공정 락(`new ReentrantLock(true)`), 조건 변수(`Condition`) 등 고급 기능을 제공합니다. 단순 임계 구역 보호는 `synchronized`, 타임아웃·페어니스·복수 조건이 필요하면 `ReentrantLock`을 선택합니다. `ReentrantLock`은 반드시 `finally`에서 `unlock()`을 호출해야 합니다.
+
+**Q2. volatile이 가시성은 보장하지만 원자성은 보장하지 못하는 이유는?**
+`volatile`은 CPU 캐시를 우회해 메인 메모리에서 직접 읽고 씁니다. 다른 스레드의 쓰기가 즉시 보입니다(가시성). 그러나 `count++`는 read → increment → write 세 단계로, 두 스레드가 동시에 read를 하면 같은 값을 읽고 둘 다 +1 후 쓰면 한 번만 증가합니다(원자성 없음). 단순 플래그(`boolean running`)처럼 단일 쓰기/읽기는 `volatile`로 충분합니다. 복합 연산은 `AtomicInteger.incrementAndGet()`이나 `synchronized`를 사용합니다.
+
+**Q3. 데드락이 발생하는 조건과 방지 방법은?**
+데드락 4가지 필요 조건: ① 상호 배제(락은 하나의 스레드만 보유) ② 점유 대기(락을 가진 채 다른 락 대기) ③ 비선점(락 강제 회수 불가) ④ 순환 대기(A→B→A 순환 의존). 방지: ① 락 획득 순서를 전역적으로 고정(Lock Ordering) ② `tryLock(timeout)`으로 타임아웃 후 획득한 락 반환 ③ 가능하면 단일 락 사용 ④ 락 없는 알고리즘(`ConcurrentHashMap`, `AtomicReference`) 사용. 실무에서는 락 순서 문서화와 코드 리뷰가 가장 현실적인 방지책입니다.
+
+**Q4. ThreadPoolExecutor의 파라미터 설정 기준은?**
+`corePoolSize`: 기본 스레드 수. 서비스 평균 동시 요청 수. `maxPoolSize`: 피크 시 최대 스레드 수. CPU 연산이면 `Runtime.getRuntime().availableProcessors()`, I/O 대기가 많으면 더 크게. `queueCapacity`: 큐 크기. 0이면 SynchronousQueue(즉시 스레드 생성), Integer.MAX_VALUE면 OOM 위험. 권장: `maxPoolSize × 평균 처리 시간(초)` 정도. `keepAliveTime`: core 초과 스레드의 유휴 시간. `RejectedExecutionHandler`: CallerRunsPolicy(호출자 스레드 직접 실행)가 Back-pressure 역할.
+
+**Q5. 스레드 안전한 싱글턴 구현 방법들의 차이는?**
+`synchronized` 메서드: 매 호출마다 락 오버헤드. `Double-Checked Locking + volatile`: 첫 생성 이후 락 없이 동작. `volatile` 없으면 부분 초기화 객체가 노출될 수 있음. `Initialization-on-demand Holder`: 정적 내부 클래스를 사용해 클래스 로딩 메커니즘이 스레드 안전을 보장. 락 없이 lazy 초기화. `Enum 싱글턴`: 직렬화·리플렉션에도 안전. 현재 가장 권장되는 방식. 실무에서는 Spring의 `@Bean`이 기본으로 싱글턴을 관리하므로 직접 싱글턴 패턴을 구현할 일이 드뭅니다.

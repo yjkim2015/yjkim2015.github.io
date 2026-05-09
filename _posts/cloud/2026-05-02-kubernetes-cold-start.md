@@ -553,3 +553,30 @@ graph LR
 | **합산** | **~230초** | **조합 적용** | **5초 이내 가능** |
 
 Cold Start는 단일 원인이 아닌 여러 단계의 합산이다. 병목 단계를 먼저 측정하고, 가장 큰 효과를 내는 최적화부터 적용하는 것이 핵심이다. 대부분의 경우 이미지 경량화와 올바른 Probe 설정만으로 Cold Start를 50~70% 줄일 수 있다.
+
+---
+
+## 왜 이 문제인가
+
+**Kubernetes Cold Start 문제를 해결해야 하는 이유는 오토스케일 환경에서 첫 요청이 수 초 지연되면 사용자 경험이 크게 나빠지기 때문이다.**
+
+| 원인 | 영향 | 해결 |
+|------|------|------|
+| 컨테이너 이미지 Pull | 수 GB 이미지는 수십 초 소요 | 경량 이미지, 노드에 이미지 사전 캐싱 |
+| JVM 클래스 로딩 | Spring Boot 기동 5~30초 | GraalVM Native Image, warm-up endpoint |
+| Readiness Probe 대기 | 준비 전 트래픽 유입 방지 | 세밀한 initialDelaySeconds 튜닝 |
+
+최소 레플리카를 1 이상으로 유지하면 완전한 cold start를 방지하지만 비용이 증가한다. KEDA(Kubernetes Event-driven Autoscaling)로 0에서 스케일아웃 시 예열(warm-up) 전략을 함께 적용해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Kubernetes에서 Cold Start를 줄이는 방법을 설명하세요.**
+A. 이미지 크기를 줄이고(Multi-stage build, 경량 베이스), Liveness/Readiness Probe를 정확히 설정해 실제 준비 완료 후 트래픽을 받게 한다. JVM 기반 앱은 GraalVM Native 컴파일로 기동 시간을 1초 미만으로 줄일 수 있다. PodDisruptionBudget과 minReplicas 설정으로 최소 인스턴스를 유지한다.
+
+**Q2. Readiness Probe와 Liveness Probe의 차이점은?**
+A. Liveness Probe 실패 시 컨테이너를 재시작한다. Readiness Probe 실패 시 Service의 엔드포인트에서 제외해 트래픽을 받지 않게 한다. 앱이 시작 중이거나 일시적으로 과부하 상태일 때는 Readiness만 실패시키고, 데드락처럼 회복 불가 상태에서만 Liveness를 실패시켜야 한다.
+
+**Q3. HPA(Horizontal Pod Autoscaler) 동작 원리는?**
+A. HPA는 메트릭 서버에서 CPU/메모리 사용률이나 커스텀 메트릭을 주기적으로 조회한다. 목표 메트릭 대비 현재 값의 비율로 필요한 레플리카 수를 계산한다. 스케일업은 빠르게(15초), 스케일다운은 천천히(5분) 진행해 급격한 변동을 방지한다.

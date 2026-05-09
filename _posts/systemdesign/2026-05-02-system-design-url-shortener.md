@@ -654,3 +654,53 @@ def validate_custom_slug(slug):
 | DB | Aurora MySQL | ACID + 읽기 레플리카 |
 | 클릭 추적 | Kafka 비동기 | 리다이렉트 응답 시간에 영향 없음 |
 | 샤딩 | Consistent Hashing | 샤드 추가 시 재배치 최소화 |
+
+---
+## 실무에서 자주 하는 실수
+
+**실수 1: 충돌 재시도 로직 없이 랜덤 코드 생성**
+Base62 7자리 = 3.5조 조합이지만, 실제 사용 중인 코드가 누적될수록 충돌 확률이 올라갑니다. 충돌 재시도 없이 단순 INSERT 후 실패하면 HTTP 500을 반환하는 구현은 트래픽이 커지면 장애로 이어집니다. 올바른 구현은 DB unique constraint 위반 시 최대 3회 재시도 후 최종 실패 처리입니다.
+
+```java
+public String createShortUrl(String longUrl) {
+    for (int attempt = 0; attempt < 3; attempt++) {
+        String code = generateRandomCode(7); // Base62 7자리
+        try {
+            urlRepository.save(new UrlMapping(code, longUrl));
+            return "https://short.ly/" + code;
+        } catch (DataIntegrityViolationException e) {
+            // 충돌 발생 시 재시도 (최대 3회)
+            log.warn("Code collision on attempt {}: {}", attempt + 1, code);
+        }
+    }
+    // Snowflake ID 기반 코드로 폴백
+    return createWithSnowflakeId(longUrl);
+}
+```
+
+**실수 2: 리다이렉트 캐시에 영구 TTL 설정**
+`redis.set("url:" + code, longUrl)` 후 TTL을 설정하지 않으면 URL이 삭제되어도 Redis에 남아있습니다. 만료된 URL로 리다이렉트가 발생하는 문제. TTL은 URL 만료 시각 - 현재 시각으로 동적 계산해 설정해야 합니다. URL 삭제 시 즉시 `redis.del("url:" + code)` 호출도 필수입니다.
+
+**실수 3: Analytics를 동기로 처리해 리다이렉트 응답 지연**
+클릭 시 IP, User-Agent, Referer를 동기로 DB에 기록하면 리다이렉트 응답이 DB 쓰기 레이턴시만큼 늦어집니다. 5ms → 50ms 증가. Kafka에 클릭 이벤트를 비동기로 발행하고, Consumer가 Analytics DB에 배치 저장하는 구조로 분리해야 합니다. 리다이렉트 응답 시간 목표: < 10ms.
+
+**실수 4: 단일 Redis 노드에서 카운터 관리**
+코드 생성을 Redis INCR로 처리할 경우 단일 노드 장애 시 서비스 전체 불가. Snowflake ID 방식(타임스탬프 + 워커ID + 시퀀스)을 각 서버에서 독립적으로 생성하면 Redis 의존 없이 전역 유일 ID를 확보할 수 있습니다.
+
+---
+## 면접 포인트
+
+**Q1. 301 vs 302 리다이렉트의 실무적 차이는?**
+301(영구 이동)은 브라우저가 캐시해 이후 요청을 서버에 보내지 않습니다. 클릭 추적이 불가능해지고, longUrl 변경 시 즉시 반영이 안 됩니다. 302(임시 이동)는 매번 서버를 거치므로 클릭 수 카운팅·A/B 테스트·URL 변경이 모두 가능합니다. bit.ly 같은 상용 서비스는 302를 사용합니다. 단, 302는 캐시 미활용으로 서버 부하가 높으므로 Redis 캐시와 조합이 필수입니다.
+
+**Q2. 코드 생성 전략별 트레이드오프는?**
+MD5 해시: 결정론적이라 같은 URL은 같은 코드(중복 저장 방지)지만 해시 충돌 가능성과 긴 해시를 잘라내는 과정에서 충돌 증가. 랜덤 Base62: 구현 단순하지만 DB에 충돌 체크 쿼리 필요. Snowflake ID + Base62: 전역 유일성 보장, 충돌 없음, 타임스탬프 포함으로 정렬 가능. 대규모 시스템에서는 Snowflake 방식이 표준입니다.
+
+**Q3. 초당 10만 건 단축 요청을 처리하려면?**
+병목은 DB 쓰기입니다. Aurora MySQL 단일 마스터는 약 1~2만 TPS가 한계. 해결: ① 단축 요청을 Kafka에 먼저 쌓고 Consumer가 배치 INSERT ② Snowflake ID를 각 서버가 독립 생성해 DB 시퀀스 의존 제거 ③ 코드 사전 생성(Pre-generation) — 백그라운드로 코드를 미리 만들어 풀에 적재, 요청 시 풀에서 꺼냄. 실제 Bit.ly 아키텍처가 이 방식입니다.
+
+**Q4. 만료된 코드 재사용 정책은?**
+만료된 코드를 즉시 재사용하면, 이전 URL로 캐시된 브라우저가 새 URL로 이동하는 문제가 생깁니다(캐시 오염). 안전한 정책: 만료 후 최소 30일 Grace Period 유지, 이후 재사용 가능. 또는 만료 코드를 재사용하지 않고 새 코드 생성(공간 낭비이지만 단순함). Base62 7자리 = 3.5조이므로 재사용 없이도 수십 년은 충분합니다.
+
+**Q5. URL 단축 서비스에서 악성 URL 차단은?**
+URL 저장 시 Google Safe Browsing API로 악성 여부를 동기 체크합니다(응답 100ms 이내). 기존 단축 URL에 악성으로 신고가 들어오면 Redis에 블록 리스트 추가 후 리다이렉트 시 차단 페이지로 응답. 정기적으로 저장된 URL 목록을 Safe Browsing API로 배치 재검증합니다.

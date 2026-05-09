@@ -567,3 +567,52 @@ score = engagement_score - time_decay(post_created_at, user_timezone)
 | 랭킹 | 시간 × 참여도 × 친밀도 | 단순 시간순보다 관련성 높은 피드 |
 | 페이지네이션 | 커서 기반 | OFFSET 없이 대용량 처리 |
 | 피드 크기 제한 | 사용자당 1000개 | Redis 메모리 폭발 방지 |
+
+---
+## 실무에서 자주 하는 실수
+
+**실수 1: 셀럽 계정을 하이브리드 없이 쓰기 팬아웃으로만 처리**
+팔로워 5천만 명 셀럽이 게시글을 올리면 쓰기 팬아웃은 5천만 건의 Redis LPUSH를 동기 또는 Kafka 소비로 처리해야 합니다. Kafka 파티션 1개에 이 부하가 집중되면 일반 사용자 피드 팬아웃도 지연됩니다. 실제 Instagram은 팔로워 1만 명 이상을 "셀럽"으로 분류해 읽기 팬아웃(Pull) 전환, 피드 조회 시점에 셀럽 게시글을 합산합니다.
+
+```java
+// 피드 조회 시 셀럽 게시글 합산 (하이브리드)
+public List<Post> getFeed(Long userId, int limit) {
+    // 일반 팔로이: Redis 캐시에서 pre-built 피드
+    List<Long> cachedPostIds = redisTemplate.opsForList()
+        .range("feed:" + userId, 0, limit - 1);
+
+    // 셀럽 팔로이: 조회 시점에 머지
+    List<Long> celebFollowees = followService.getCelebFollowees(userId);
+    List<Post> celebPosts = postRepository.findRecentByCelebIds(
+        celebFollowees, Instant.now().minusSeconds(86400));
+
+    return mergeAndRank(cachedPostIds, celebPosts, limit);
+}
+```
+
+**실수 2: 피드 Redis List에 post_id 대신 게시글 전체 직렬화 저장**
+post 객체 전체를 JSON으로 저장하면, 게시글 수정·삭제 시 피드에 이미 들어간 모든 사용자의 캐시를 순회해야 합니다. 팔로워 100만 명 게시글이면 Redis TTL 없이는 사실상 수정 불가. post_id만 저장하고 조회 시 `MGET`으로 최신 데이터를 가져오는 구조가 정답입니다.
+
+**실수 3: 페이지네이션에 OFFSET 사용**
+`SELECT * FROM posts ORDER BY created_at DESC LIMIT 20 OFFSET 100`은 100번 스캔 후 20개를 반환합니다. 피드 50페이지 = 1000행 스캔. 피드 갱신 중 OFFSET이 밀리면 같은 게시글이 두 번 노출되거나 누락됩니다. 커서(`last_seen_id`)를 사용해 `WHERE id < :cursor ORDER BY id DESC LIMIT 20`으로 처리해야 합니다.
+
+**실수 4: 팬아웃 Kafka 토픽 파티션 수를 사용자 ID로 라우팅하지 않음**
+같은 사용자의 팬아웃 이벤트가 다른 파티션에 배분되면 처리 순서 역전이 발생합니다. 나중에 올린 게시글이 먼저 팬아웃되는 현상. `userId % partitionCount`로 파티션 키를 설정해야 합니다.
+
+---
+## 면접 포인트
+
+**Q1. 팬아웃 전략 세 가지의 트레이드오프는?**
+쓰기 팬아웃(Push): 읽기 O(1)이지만 쓰기 O(팔로워 수). 셀럽 계정이 병목. 읽기 팬아웃(Pull): 쓰기 O(1)이지만 읽기 시 여러 서비스 조합 필요, 응답 지연. 하이브리드: 일반 계정은 Push, 셀럽 계정(팔로워 1만+)은 Pull. Instagram·Twitter 현재 방식. 면접에서 "팔로워 수 임계값을 얼마로 설정할지"와 "임계값 기준을 어떻게 런타임에 반영할지" 까지 논의하면 차별화됩니다.
+
+**Q2. 피드 일관성 수준을 어떻게 결정하는가?**
+결제·재고와 달리 피드는 Eventual Consistency 허용 영역입니다. 팬아웃 지연 3~5초는 사용자 경험에 무해합니다. 반면 삭제된 게시글이 피드에 남아있으면 심각한 문제(법적 분쟁 소지)입니다. 따라서 **쓰기는 Eventually Consistent, 삭제는 즉시 반영** 원칙을 적용합니다. 삭제 이벤트는 팬아웃 없이 게시글 DB에서 soft delete 후 피드 조회 시 필터링합니다.
+
+**Q3. Redis 피드 캐시 만료 정책은?**
+장기 비활성 사용자(30일 미접속)의 피드를 Redis에 유지하는 것은 낭비입니다. `EXPIRE feed:{userId} 604800`(7일)을 설정하고, 사용자 로그인 시 캐시 miss가 발생하면 최근 게시글 20개를 DB에서 재구성(Cold Start 피드)하는 로직이 필요합니다.
+
+**Q4. 게시글 랭킹 알고리즘을 실시간으로 변경하면 어떻게 되는가?**
+이미 캐시된 피드 순서는 기존 알고리즘 기준이므로, 랭킹 알고리즘 변경 시 전체 피드 캐시 무효화가 발생합니다. 실제 운영에서는 Feature Flag로 새 알고리즘을 10% → 50% → 100% 점진 적용하고, 피드 캐시에 알고리즘 버전을 키에 포함시킵니다: `feed:v2:{userId}`.
+
+**Q5. 피드 시스템에서 Hot Partition 문제가 발생하는 조건은?**
+동일 사용자 ID로 파티션 키를 설정한 경우, 팔로워 1억 명 셀럽의 게시글 이벤트가 단일 파티션에 집중됩니다. 해결책: 셀럽 이벤트를 별도 Kafka 토픽(`celeb-fanout`)으로 분리하고 파티션 수를 2배로 유지. 또는 이벤트 키를 `{userId}_{bucketNum}` 형태로 분산합니다.

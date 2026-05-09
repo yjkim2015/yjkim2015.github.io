@@ -1165,3 +1165,21 @@ PermGen은 고정 크기 JVM Heap 영역이었기 때문에 `OutOfMemoryError: P
 - [ZGC 설계 문서](https://wiki.openjdk.org/display/zgc)
 - [G1 GC 튜닝 가이드 (Oracle)](https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-g1-garbage-collector.html)
 - Eclipse Memory Analyzer (MAT): [https://eclipse.dev/mat/](https://eclipse.dev/mat/)
+
+---
+## 면접 포인트
+
+**Q1. JVM의 클래스 로딩 위임 모델(Parent Delegation)이 보안에 기여하는 이유는?**
+클래스 로딩 요청이 항상 Bootstrap ClassLoader까지 위임된 후 내려옵니다. 악성 코드가 `java.lang.String`이라는 이름의 클래스를 등록해도, Bootstrap이 이미 JDK의 String을 로딩했으므로 악성 클래스가 로딩되지 않습니다. JDK 핵심 클래스의 위장이 원천 차단됩니다. 단, OSGi나 플러그인 시스템처럼 격리된 클래스 로딩이 필요한 경우 위임 모델을 의도적으로 우회합니다(Context ClassLoader).
+
+**Q2. Metaspace가 Java 8에서 PermGen을 대체한 이유와 OOM 차이는?**
+PermGen은 JVM Heap 내 고정 크기 영역이었습니다. 클래스가 많이 로딩되면 `OutOfMemoryError: PermGen space`가 발생했고 JVM 재시작이 필요했습니다. Metaspace는 Native Memory(OS 메모리)를 사용해 기본적으로 크기 제한이 없습니다. 그러나 `-XX:MaxMetaspaceSize`를 설정하지 않으면 클래스 로더 누수 시 OS 메모리를 무한히 점유합니다. Metaspace OOM은 Native Memory 부족으로 서버 전체에 영향을 줄 수 있어 오히려 더 위험합니다. `-XX:MaxMetaspaceSize=256m` 같은 상한을 반드시 설정합니다.
+
+**Q3. JVM Stack에서 StackOverflowError가 발생하는 조건은?**
+각 메서드 호출마다 Stack Frame이 JVM Stack에 쌓입니다. 재귀 호출이 깊어지면 Stack이 가득 차 `StackOverflowError`가 발생합니다. 기본 스택 크기는 512KB~1MB. `-Xss2m`으로 늘릴 수 있지만 스레드 수 × 스택 크기만큼 메모리가 필요합니다. 재귀를 반복문(꼬리 재귀 최적화)으로 변환하는 것이 근본 해결책입니다. Java는 Scala와 달리 꼬리 재귀 최적화를 JVM 레벨에서 지원하지 않습니다.
+
+**Q4. JVM의 Escape Analysis가 GC 압력을 줄이는 메커니즘은?**
+JIT의 Escape Analysis는 객체가 생성된 메서드 밖으로 "탈출"하지 않는다는 것을 분석합니다. 탈출하지 않는 객체는 Heap 대신 Stack에 할당합니다(Stack Allocation). Stack에 할당된 객체는 메서드 종료 시 자동으로 해제되어 GC 대상이 되지 않습니다. 또한 탈출하지 않는 객체에 대한 동기화(`synchronized`)를 제거(Lock Elision)합니다. `-XX:+PrintEscapeAnalysis`로 분석 결과를 확인할 수 있습니다.
+
+**Q5. JVM 튜닝 시 Heap 크기 설정 기준은?**
+`-Xms`(초기)와 `-Xmx`(최대)를 같은 값으로 설정하면 JVM이 메모리를 동적으로 조정하지 않아 예측 가능한 동작을 합니다. 일반 권장: 컨테이너 메모리의 70~75% 할당(OS와 JVM Native Memory를 위해 여유 확보). 예: 4GB 컨테이너 → `-Xms3g -Xmx3g`. GC 튜닝 시작점: `Young:Old = 1:2`(G1GC 기본). GC 로그(`-Xlog:gc*:file=gc.log`)를 분석해 Full GC 빈도, 힙 사용 패턴을 확인 후 조정합니다. 컨테이너 환경에서 `-XX:+UseContainerSupport`(Java 10+)로 컨테이너 메모리 한계를 자동 감지합니다.

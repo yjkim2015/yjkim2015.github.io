@@ -663,3 +663,136 @@ flowchart LR
 | **ThreadPool** | gridSize와 동일 | QueueCapacity=0 권장 |
 
 병렬 처리의 핵심은 **"데이터를 안전하게 분할하고, 각 조각을 독립적으로 처리한다"**는 원칙입니다. 이 원칙을 지키면 스레드 안전성 문제를 원천적으로 차단할 수 있고, 확장도 자연스럽습니다.
+
+---
+## 왜 파티셔닝인가 — 단일 스레드 배치의 한계와 극복
+
+### 단일 스레드 Chunk 처리의 한계
+
+**시나리오: 월말 정산 배치 — 회원 500만 명, 처리 시간 목표 2시간**
+
+```
+단일 스레드 처리:
+- 회원 1명 처리 시간: 10ms (DB 2회 조회 + 계산 + 저장)
+- 500만 명 × 10ms = 50,000초 = 약 14시간
+- 목표(2시간) 대비 7배 초과 → SLA 위반
+```
+
+**Multi-threaded Step 적용:**
+```java
+// 단순 병렬화: 스레드 10개
+@Bean
+public Step settlementStep(JobRepository jobRepository, PlatformTransactionManager tm) {
+    return new StepBuilder("settlementStep", jobRepository)
+        .<Member, Settlement>chunk(1000, tm)
+        .reader(memberReader())
+        .processor(settlementProcessor())
+        .writer(settlementWriter())
+        .taskExecutor(new SimpleAsyncTaskExecutor())
+        .throttleLimit(10)  // 동시 10 스레드
+        .build();
+    // 처리 시간: 14시간 / 10 = 1.4시간 → 목표 달성
+    // 단, JdbcPagingItemReader는 thread-safe하지 않아 별도 처리 필요
+}
+```
+
+**Partitioning으로 진정한 병렬화:**
+```java
+// Partitioner: 500만 건을 ID 범위로 10개 파티션으로 분할
+@Component
+public class MemberRangePartitioner implements Partitioner {
+
+    @Override
+    public Map<String, ExecutionContext> partition(int gridSize) {
+        long totalCount = memberRepository.count();  // 500만
+        long rangeSize = totalCount / gridSize;      // 50만씩
+
+        Map<String, ExecutionContext> result = new LinkedHashMap<>();
+        for (int i = 0; i < gridSize; i++) {
+            ExecutionContext context = new ExecutionContext();
+            long minId = i * rangeSize + 1;
+            long maxId = (i == gridSize - 1) ? Long.MAX_VALUE : (i + 1) * rangeSize;
+            context.putLong("minId", minId);
+            context.putLong("maxId", maxId);
+            context.putString("name", "partition" + i);
+            result.put("partition" + i, context);
+        }
+        return result;
+        // 파티션 0: ID 1~50만
+        // 파티션 1: ID 50만1~100만
+        // ...
+        // 파티션 9: ID 450만1~500만
+    }
+}
+
+// 각 파티션이 자신의 ID 범위만 처리 (독립적, 충돌 없음)
+@Bean
+@StepScope
+public JdbcPagingItemReader<Member> partitionedReader(
+        @Value("#{stepExecutionContext['minId']}") Long minId,
+        @Value("#{stepExecutionContext['maxId']}") Long maxId) {
+
+    return new JdbcPagingItemReaderBuilder<Member>()
+        .whereClause("WHERE id BETWEEN " + minId + " AND " + maxId)
+        .pageSize(1000)
+        // ...
+        .build();
+}
+```
+
+**실전 수치 비교:**
+
+| 전략 | 처리 시간(500만 건) | 메모리 | 재시작 |
+|------|-------------------|--------|--------|
+| 단일 스레드 | 14시간 | 낮음 | 청크 단위 |
+| Multi-threaded(10) | 1.4시간 | 중간 | 재시작 불안정 |
+| Partitioning(10) | 1.4시간 | 중간 | 파티션 단위 재시작 |
+| Partitioning(50) | 17분 | 높음 | 파티션 단위 재시작 |
+
+### 왜 Partitioning이 Multi-threaded Step보다 나은가
+
+**Multi-threaded Step의 재시작 문제:**
+```
+처리 중 서버 재시작 발생:
+- 스레드 1: 청크 1~50 완료
+- 스레드 2: 청크 51~100 완료
+- 스레드 3: 청크 101~150 처리 중 (미완료)
+- 스레드 4~10: 청크 151~500 처리 중 (미완료)
+
+재시작 시: JdbcPagingItemReader는 상태 저장 불가
+→ 어느 청크가 완료됐는지 추적 불가
+→ 전체 재처리 필요 (중복 처리 위험)
+```
+
+**Partitioning의 재시작:**
+```
+처리 중 서버 재시작 발생:
+- 파티션 0~3: COMPLETED (재처리 안 함)
+- 파티션 4: FAILED (여기서부터 재시작)
+- 파티션 5~9: STARTING → 재처리
+
+→ 실패한 파티션만 정확히 재시작
+→ 완료된 파티션은 건너뜀 (중복 처리 없음)
+```
+
+### 이걸 안 하면 생기는 장애
+
+**장애: 월말 정산 배치가 새벽 3시에 시작해 오전 업무 시작 전까지 완료가 안 됨**
+단일 스레드로 구현한 배치가 매월 말 처리 시간이 늘어납니다. 회원이 100만 명에서 500만 명으로 증가했는데 배치는 단일 스레드 그대로입니다. 오전 9시 업무 시작 시에도 배치가 실행 중이라 정산 데이터가 없어 고객센터 문의 폭주. Partitioning 도입 후 처리 시간 14시간 → 1.5시간으로 단축, 문제 해결.
+
+**장애: 파티셔닝 적용 후 중복 정산 발생**
+파티션 경계 설정 시 `BETWEEN minId AND maxId`에서 maxId가 다음 파티션의 minId와 겹쳐 경계 ID가 두 번 처리됩니다. 파티션 범위를 `minId <= id < maxId` (상한 미포함)로 정의하거나, 마지막 파티션만 `maxId = Long.MAX_VALUE`로 설정하는 방식으로 방지합니다.
+
+---
+
+## 왜 파티셔닝인가
+
+**파티셔닝을 선택하는 이유는 단일 스레드 순차 처리로는 시간 제약 안에 처리가 불가능한 대용량 배치를 병렬화하기 위해서다.**
+
+| 대안 | 문제점 | 파티셔닝의 해결 |
+|------|--------|---------------|
+| 단일 Step 순차 처리 | 1억 건 = 수 시간, 야간 배치 시간 초과 | N개 파티션 병렬 처리로 시간 1/N로 단축 |
+| 직접 멀티스레드 코딩 | 스레드 안전성, 트랜잭션 관리 복잡 | Master-Worker 구조로 프레임워크가 관리 |
+| 여러 Job 분리 실행 | 실행 조율, 실패 시 재시작 복잡 | 단일 Job 안에서 파티션별 독립 재시작 |
+
+ID 범위를 파티션으로 나누면(1~100만, 100만~200만 등) 각 Worker Step이 독립적으로 처리하고, 특정 파티션 실패 시 해당 파티션만 재실행한다. 원격 파티셔닝으로 여러 서버에 분산하면 처리량을 더 확장할 수 있다.

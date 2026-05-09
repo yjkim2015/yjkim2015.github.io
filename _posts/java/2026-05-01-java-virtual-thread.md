@@ -1121,3 +1121,28 @@ Virtual Thread 핵심 요약
   → 다수의 외부 API 호출을 병렬로 수행하는 서비스
   → Spring Boot 3.2+에서 spring.threads.virtual.enabled=true 한 줄로 시작
 ```
+
+---
+## 면접 포인트
+
+**Q1. Virtual Thread가 기존 Platform Thread와 다른 근본적인 차이는?**
+Platform Thread는 OS 스레드와 1:1 매핑됩니다. OS 스레드는 스택 메모리 약 1MB, 생성/컨텍스트 스위칭 비용이 큽니다. 10만 스레드 = 100GB 메모리 필요. Virtual Thread는 JVM이 관리하는 경량 스레드입니다. 소수의 Carrier Thread(OS 스레드) 위에서 수백만 개의 Virtual Thread가 실행됩니다. I/O 블로킹 시 Virtual Thread를 Carrier에서 분리(unmount)해 다른 Virtual Thread가 Carrier를 사용합니다. 스레드당 메모리는 수 KB 수준입니다.
+
+**Q2. Virtual Thread에서 synchronized 블록이 문제가 되는 이유는?**
+Virtual Thread가 `synchronized` 블록 내에서 블로킹 I/O를 만나면 Carrier Thread에서 unmount되지 않고 고정(pin)됩니다. 즉, Carrier Thread 자체가 블로킹됩니다. 10개 Carrier Thread에서 10개 Virtual Thread가 모두 `synchronized` 블록 내 DB 대기 중이면 나머지 수백만 Virtual Thread도 멈춥니다. Java 21에서는 `synchronized` 대신 `ReentrantLock`을 사용하면 pin 없이 unmount가 가능합니다. JDBC 드라이버, 일부 라이브러리의 `synchronized` 사용이 Virtual Thread의 성능 병목이 될 수 있습니다.
+
+**Q3. Virtual Thread를 Spring Boot에서 활성화하는 방법과 주의사항은?**
+```yaml
+# application.yml (Spring Boot 3.2+)
+spring:
+  threads:
+    virtual:
+      enabled: true
+```
+이 설정 하나로 Tomcat, `@Async`, `@Scheduled`가 모두 Virtual Thread를 사용합니다. 주의: ThreadLocal을 과도하게 사용하면 Virtual Thread 수만큼 ThreadLocal 복사본이 생겨 메모리 증가. Java 21의 `ScopedValue`를 대안으로 검토합니다. 또한 CPU 집약적 연산은 Virtual Thread로 이득이 없으며 오히려 Carrier Thread 경합으로 성능이 저하될 수 있습니다.
+
+**Q4. Virtual Thread가 적합한 작업과 적합하지 않은 작업은?**
+적합: I/O 대기가 많은 작업 — DB 조회, HTTP 외부 API 호출, 파일 I/O. 스레드가 대기 중일 때 Carrier Thread를 다른 Virtual Thread에 양보하므로 처리량이 크게 향상됩니다. 적합하지 않음: CPU 집약적 연산 — 이미지 처리, 암호화, ML 추론. CPU를 점유하는 동안 Carrier Thread를 독점하므로 Platform Thread와 차이 없습니다. 오히려 스케줄링 오버헤드만 추가됩니다. 판단 기준: 작업 중 I/O 대기 비율이 높을수록 Virtual Thread 효과가 큽니다.
+
+**Q5. Virtual Thread 도입 후 성능이 개선되지 않는 원인은?**
+① DB 커넥션 풀이 병목 — 10만 Virtual Thread가 동시에 DB 쿼리를 시도해도 커넥션 풀이 100개면 99,900개는 대기. HikariCP `maximumPoolSize`를 Virtual Thread 수에 맞게 늘려야 합니다(단, DB 서버의 max_connections 고려). ② synchronized pin — 위에서 설명한 Carrier Thread 고정 문제. ③ CPU 작업이 병목 — Virtual Thread는 I/O 병목에서만 효과적. ④ ThreadLocal 경합 — 수십만 Virtual Thread가 같은 ThreadLocal 변수에 접근 시 내부 맵 경합 발생. 프로파일링으로 실제 병목 위치를 먼저 확인합니다.

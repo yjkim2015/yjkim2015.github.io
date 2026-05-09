@@ -1352,3 +1352,49 @@ def validate_location_update(rider_id, new_lat, new_lng, new_accuracy_m, timesta
 | 가게 캐시 | Geohash6 단위 Redis TTL 300s | 셀 단위 무효화 용이, 피크 시 DB 보호 |
 | 스푸핑 방지 | 속도 검증 + GPS 정확도 필터 | 물리적 이동 한계 초과 감지, accuracy_m 임계값 |
 | 개인정보 보호 | 배달 구간만 수집 + 30일 삭제 | GDPR/개인정보보호법 준수, 최소 수집 원칙 |
+
+---
+## 실무에서 자주 하는 실수
+
+**실수 1: 위치 업데이트를 매 GPS 수신마다 서버에 전송**
+스마트폰 GPS는 초당 1회 업데이트됩니다. 라이더 10만 명이 모두 초당 1회 HTTP 요청을 보내면 100K RPS가 위치 업데이트만으로 소진됩니다. 실무에서는 클라이언트 측 throttling으로 4~5초 간격만 서버에 전송하고, 이동 거리가 임계값(예: 10m) 이하면 전송 자체를 생략합니다. Uber는 이동 중 4초, 정차 중 30초 간격을 사용합니다.
+
+**실수 2: MySQL의 ST_Distance_Sphere로 반경 검색**
+인덱스 없이 `WHERE ST_Distance_Sphere(point, target) < radius`를 실행하면 전체 테이블 스캔입니다. 라이더 100만 명 테이블에서 Full Scan은 수백 ms. MySQL의 공간 인덱스(SPATIAL INDEX)를 사용해도 반경 쿼리의 인덱스 활용이 제한적입니다. Geohash를 키로 사용하는 Redis GEOSEARCH 또는 `ZRANGEBYLEX`가 10~50배 빠릅니다.
+
+```java
+// 잘못된 방법: DB Full Scan
+// SELECT * FROM drivers WHERE ST_Distance_Sphere(location, ST_GeomFromText(?)) < 1000
+
+// 올바른 방법: Redis GEOSEARCH
+List<GeoWithin<String>> nearby = redisTemplate.opsForGeo()
+    .search("drivers",
+        GeoReference.fromCoordinate(userLng, userLat),
+        new Distance(1, Metrics.KILOMETERS),
+        GeoSearchCommandArgs.newGeoSearchArgs().includeDistance().limit(20));
+// 응답 시간: < 5ms (DB 방식 대비 20배 이상 빠름)
+```
+
+**실수 3: Geohash 경계 케이스 미처리**
+Geohash는 격자 경계 근처 위치를 인접 셀로 분류할 수 있습니다. 검색 셀과 인접 8개 셀을 함께 조회하지 않으면 경계에 있는 드라이버를 놓칩니다. 중심 셀만 조회하는 구현은 경계 근처 사용자에게 "근처 드라이버 없음"을 잘못 반환합니다.
+
+**실수 4: 위치 히스토리를 RDBMS에 초 단위로 저장**
+라이더 1만 명 × 초당 1개 = 초당 1만 행 삽입. 하루 8.64억 행. MySQL에서 이 쓰기 속도를 감당하려면 과도한 스펙이 필요하고 인덱스 유지 비용이 폭증합니다. 위치 히스토리는 시계열 DB(InfluxDB, TimescaleDB)나 Cassandra(시간 기반 파티셔닝)가 적합합니다. 쓰기 TPS 10배 이상 차이.
+
+---
+## 면접 포인트
+
+**Q1. Geohash와 Quadtree의 실무 선택 기준은?**
+Geohash: 구현 단순, Redis GEO 명령어와 호환, 셀 크기 고정이라 인구 밀도 불균등 처리 어려움. 인접 셀 8개 추가 조회로 경계 문제 해결. Quadtree: 트리 구조로 밀도에 따라 셀 크기 동적 조정 가능(인구 밀집 지역 = 작은 셀). 구현 복잡, 메모리 내 트리 유지 필요. 실무에서는 Geohash + Redis가 압도적으로 많이 사용됩니다. Quadtree는 지도 타일 렌더링, 공간 데이터 분석에 적합합니다.
+
+**Q2. 드라이버 위치를 Redis에 저장할 때 키 설계는?**
+`GEOADD drivers {longitude} {latitude} {driverId}` 명령으로 단일 Sorted Set에 전체 드라이버를 저장하면 Redis 단일 샤드 한계(메모리)에 부딪힙니다. 지역별 Sharding이 필요합니다. Geohash 상위 4자리(약 40km × 20km)를 키 접두사로 사용해 `drivers:9q5c`, `drivers:9q5f` 식으로 분산합니다. 각 셀당 드라이버 수는 수백~수천 명으로 제한됩니다.
+
+**Q3. 실시간 위치 추적에서 WebSocket vs HTTP Polling 선택 기준은?**
+드라이버 → 서버 위치 업데이트: HTTP POST가 단순하고 충분합니다. 연결을 유지할 필요 없고, 4~5초 간격 요청은 Polling 비용이 낮습니다. 서버 → 사용자 위치 실시간 전달: WebSocket 또는 SSE가 적합합니다. 1~2초 간격으로 드라이버 위치를 사용자에게 Push할 때 HTTP Polling은 2배 이상 불필요한 요청을 만듭니다. Uber·카카오택시는 사용자 추적은 WebSocket, 드라이버 업로드는 HTTP POST를 사용합니다.
+
+**Q4. ETA 계산은 어떻게 구현하는가?**
+단순 직선 거리/평균속도는 실제 도로망과 교통 상황을 반영 못합니다. 실무: ① OSRM, Valhalla 같은 오픈소스 라우팅 엔진을 내부 인프라에 배포 ② Google Maps Directions API (비용 발생) ③ 반복적 경로(출퇴근 시간 대 강남→여의도)는 미리 계산해 Redis에 캐시(TTL 5분). 단, 사고·공사로 경로가 변경될 수 있으므로 TTL을 짧게 유지합니다. 목표 응답 시간: ETA 계산 < 50ms.
+
+**Q5. 위치 기반 서비스에서 개인정보 보호는 어떻게 처리하는가?**
+수집 최소화: 배달 중·주행 중만 위치 수집, 서비스 종료 시 즉시 중단. 저장 기간 제한: 이동 완료 후 상세 경로 30일 후 삭제, 집계 통계만 보존. 모호화(Fuzzing): 일반 사용자에게 드라이버 위치를 100~200m 오차 포함해 노출해 정확한 집 주소 추적 방지. GDPR/개인정보보호법: 위치 데이터 처리 목적을 명시하고 동의를 받아야 합니다. 실제 사례로 Uber는 드라이버 위치를 라이더에게 근사값으로만 제공합니다.

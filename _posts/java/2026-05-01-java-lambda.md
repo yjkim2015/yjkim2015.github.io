@@ -810,3 +810,21 @@ graph LR
     A --> H["7️⃣ 내부 구현"]
     A --> I["8️⃣ 성능"]
 ```
+
+---
+## 면접 포인트
+
+**Q1. 람다와 익명 클래스의 핵심 차이는?**
+익명 클래스는 항상 새 클래스를 생성하고 `this`는 익명 클래스 인스턴스를 가리킵니다. 람다는 별도 클래스를 만들지 않고 `invokedynamic` 바이트코드를 통해 런타임에 구현 방식을 결정합니다(JVM이 최적화). `this`는 람다를 감싼 외부 클래스를 가리킵니다. 이벤트 리스너를 람다로 등록하면 `this`가 외부 클래스이므로 외부 상태에 접근하기 쉽지만, 외부 클래스가 GC되지 않는 문제에 주의해야 합니다.
+
+**Q2. effectively final 규칙이 있는 이유는?**
+람다가 외부 변수를 캡처할 때 변수의 복사본을 만듭니다. 만약 캡처 후 원본이 변경되면 람다 내부의 복사본과 불일치가 생깁니다. 특히 람다가 다른 스레드에서 실행될 때 원본과 복사본 사이에 메모리 가시성 문제가 발생할 수 있습니다. effectively final 제약으로 "변경되지 않는 값만 캡처"를 강제해 이 문제를 컴파일 타임에 차단합니다. 변경이 필요하면 `AtomicInteger`나 1-element 배열 등 컨테이너 객체를 사용합니다.
+
+**Q3. 메서드 레퍼런스 4가지 유형과 사용 기준은?**
+`Class::staticMethod` — 정적 메서드 참조. `Integer::parseInt` = `s -> Integer.parseInt(s)`. `instance::method` — 특정 인스턴스 메서드. `System.out::println`. `Class::instanceMethod` — 임의 인스턴스 메서드. `String::toUpperCase` = `s -> s.toUpperCase()`. `Class::new` — 생성자 참조. `ArrayList::new` = `() -> new ArrayList<>()`. 람다의 본문이 단순히 다른 메서드 호출 하나뿐이라면 메서드 레퍼런스로 가독성을 높입니다. 중간 처리 로직이 있으면 람다를 유지합니다.
+
+**Q4. 람다를 사용할 때 성능상 주의할 점은?**
+람다는 첫 호출 시 `invokedynamic`으로 구현체를 생성합니다. 이후 동일 람다는 재사용합니다(상태를 캡처하지 않는 경우). 상태를 캡처하는 람다(`() -> doSomething(capturedVar)`)는 매 호출마다 새 인스턴스를 만들 수 있어 GC 압력이 생깁니다. 초당 수만 번 호출되는 핫 경로에서 캡처 없는 람다를 static 상수로 유지하면 인스턴스 재사용이 보장됩니다. 그러나 대부분의 경우 람다 성능 오버헤드는 무시할 수 있는 수준입니다.
+
+**Q5. 함수형 인터페이스를 직접 정의해야 하는 경우는?**
+표준 함수형 인터페이스(`Function`, `Consumer`, `Supplier`, `Predicate`)가 커버하지 못하는 경우입니다. ① checked 예외를 던져야 할 때 — `Function<T, R>`은 unchecked 예외만 허용. `ThrowingFunction<T, R, E extends Exception>`을 정의하거나 checked 예외를 unchecked로 감쌉니다. ② 3개 이상의 파라미터 — `BiFunction`은 2개까지. `TriFunction<A, B, C, R>`을 직접 정의합니다. ③ 도메인 의미가 있는 명시적 타입 — `Predicate<User>` 대신 `UserValidator`로 의도를 명확히 합니다.

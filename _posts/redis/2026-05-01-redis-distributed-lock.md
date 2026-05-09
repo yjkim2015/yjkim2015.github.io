@@ -843,3 +843,109 @@ Redis 복제는 비동기다. 마스터가 락을 저장한 직후 장애가 나
 
 **Q5. 분산 락 대신 DB 수준 제어로 해결할 수 있는 경우는?**
 재고 차감: `UPDATE stock = stock - 1 WHERE id = ? AND stock > 0` (원자적 조건부 업데이트). 중복 요청 방지: DB UNIQUE 제약 + 멱등성 키. 분산 락은 "읽고 → 외부 API 호출 → 쓰기" 같이 DB 단일 쿼리로 처리할 수 없는 복합 작업에서만 필요하다.
+
+---
+## 극한 시나리오
+
+### 시나리오 1: 결제 중복 방지 — 네트워크 단절 후 재시도
+
+사용자가 결제 버튼을 클릭했는데 응답이 없어 한 번 더 클릭합니다. 서버는 두 요청을 동시에 받습니다.
+
+**락 없는 경우:**
+```
+요청1: SELECT balance → 100,000원 확인 → 차감 시작
+요청2: SELECT balance → 100,000원 확인 → 차감 시작  (요청1 커밋 전)
+결과: 100,000원짜리 결제가 두 번 실행 → 200,000원 이중 차감
+```
+
+**Redis 분산 락 적용:**
+```java
+@Service
+@RequiredArgsConstructor
+public class PaymentService {
+    private final RedissonClient redissonClient;
+    private final PaymentRepository paymentRepository;
+
+    public PaymentResult processPayment(String orderId, BigDecimal amount) {
+        String lockKey = "payment:lock:" + orderId;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            // 3초 대기, 10초 후 자동 해제 (Watchdog가 연장)
+            if (!lock.tryLock(3, 10, TimeUnit.SECONDS)) {
+                throw new PaymentInProgressException("결제가 이미 진행 중입니다.");
+            }
+            // 멱등성 체크: 이미 처리된 주문인지 확인
+            if (paymentRepository.existsByOrderId(orderId)) {
+                return paymentRepository.findByOrderId(orderId);
+            }
+            return executePayment(orderId, amount);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PaymentException("결제 처리 중 인터럽트 발생");
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+}
+```
+
+**수치:** Redis 락 획득 레이턴시 < 1ms. DB Lock 대비 10~50배 빠름. 10만 TPS 환경에서 충돌 없이 처리 가능.
+
+### 시나리오 2: 재고 선점 — 플래시 세일 1만 명 동시 접근
+
+1만 개 재고에 10만 명이 동시 접근. 각 사용자가 재고를 "선점(Reserve)"하는 5초 동안 다른 사용자는 해당 재고를 가져갈 수 없어야 합니다.
+
+```java
+// 선점 락: 사용자별로 특정 재고 아이템을 잠금
+public boolean reserveItem(Long itemId, Long userId) {
+    String lockKey = "item:reserve:" + itemId;
+    RLock lock = redissonClient.getLock(lockKey);
+
+    try {
+        // 즉시 획득 실패 시 대기 없이 반환 (재고 없음 응답)
+        if (!lock.tryLock(0, 5, TimeUnit.SECONDS)) {
+            return false;  // 다른 사용자가 선점 중
+        }
+        // 5초 내 결제 완료 필요, 미완료 시 TTL 만료로 자동 해제
+        reservationCache.put(itemId, userId);
+        return true;
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return false;
+    }
+    // 주의: unlock을 여기서 하지 않음 (결제 완료 시 해제)
+}
+
+public void completePayment(Long itemId, Long userId) {
+    String lockKey = "item:reserve:" + itemId;
+    RLock lock = redissonClient.getLock(lockKey);
+    // 결제 완료 후 락 해제
+    if (lock.isHeldByCurrentThread()) {
+        lock.unlock();
+    }
+}
+```
+
+### 시나리오 3: Redis 노드 장애 시 락이 유실되면?
+
+**문제:** 락을 획득한 직후 Redis 마스터가 다운되면, Sentinel이 레플리카를 마스터로 승격합니다. 새 마스터는 락 정보가 없으므로 다른 프로세스가 같은 락을 획득합니다. 두 프로세스가 동시에 임계 구역을 실행합니다.
+
+**Redlock 알고리즘 (N=5 독립 Redis 노드):**
+```java
+// Redisson MultiLock으로 5개 노드 중 3개 이상 획득 시 유효
+RLock lock1 = redisson1.getLock("payment:lock:" + orderId);
+RLock lock2 = redisson2.getLock("payment:lock:" + orderId);
+RLock lock3 = redisson3.getLock("payment:lock:" + orderId);
+RLock lock4 = redisson4.getLock("payment:lock:" + orderId);
+RLock lock5 = redisson5.getLock("payment:lock:" + orderId);
+
+RLock multiLock = redissonClient.getMultiLock(lock1, lock2, lock3, lock4, lock5);
+multiLock.lock();
+// 5개 노드 중 3개 이상에 락이 기록되므로
+// 하나의 노드 장애로는 락 유실 없음
+```
+
+**실무 적용 기준:** 결제·재고처럼 중복 실행이 금전적 손해로 이어지는 경우 Redlock 도입. 일반 중복 방지(알림 중복 발송 등)는 단일 노드 락 + 멱등성 DB 체크 조합으로 충분합니다.

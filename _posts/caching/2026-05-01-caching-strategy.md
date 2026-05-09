@@ -480,3 +480,109 @@ public class CacheWarmup implements ApplicationRunner {
     }
 }
 ```
+
+---
+## 왜 이 캐싱 전략인가 — 비교와 선택 기준
+
+### Cache-Aside vs Read-Through — 언제 무엇을 선택하는가
+
+**Cache-Aside(Lazy Loading)를 선택해야 하는 경우:**
+- 애플리케이션이 캐시 미스 처리를 직접 제어해야 할 때
+- 읽기 패턴이 불규칙하고 전체 데이터셋의 일부만 자주 조회될 때(파레토 80/20)
+- 다양한 DB(RDB, NoSQL, 외부 API)를 조합해 캐시를 구성해야 할 때
+
+```java
+// Cache-Aside: 애플리케이션이 캐시 로직을 직접 제어
+public Product getProduct(Long id) {
+    Product cached = cache.get(id);
+    if (cached != null) return cached;       // 캐시 히트: < 1ms
+
+    Product product = db.findById(id);       // 캐시 미스: 10~50ms
+    cache.set(id, product, Duration.ofMinutes(10));
+    return product;
+}
+// 이걸 안 하면: 초당 1만 건 상품 조회가 모두 DB에 도달 → DB CPU 100% → 장애
+```
+
+**Read-Through를 선택해야 하는 경우:**
+- 캐시 레이어가 표준화되어 있고 애플리케이션 코드를 단순하게 유지하고 싶을 때
+- 모든 읽기가 동일한 DB 접근 패턴을 사용할 때
+- JPA 2nd Level Cache처럼 프레임워크 레벨에서 캐시를 제공할 때
+
+**실무에서 Cache-Aside가 압도적으로 많이 사용되는 이유:**
+1. 캐시 장애 시 애플리케이션이 DB로 Fallback 가능(유연성)
+2. 캐시에 없는 데이터만 로드(메모리 효율)
+3. 여러 소스(DB + API + 계산 결과)를 조합해 캐시 구성 가능
+
+---
+
+### Write-Through vs Write-Behind — 일관성 vs 성능의 트레이드오프
+
+**Write-Through를 선택해야 하는 경우:**
+```java
+// Write-Through: 쓰기 시 캐시와 DB 동시 저장
+@Transactional
+public void updatePrice(Long productId, BigDecimal newPrice) {
+    product.setPrice(newPrice);
+    db.save(product);           // DB 저장
+    cache.set(productId, product, Duration.ofMinutes(10));  // 캐시도 즉시 갱신
+    // 이후 읽기 캐시 히트율 높음, 데이터 일관성 보장
+}
+```
+선택 기준: 쓰기 직후 읽기가 빈번한 데이터(사용자 프로필 수정 후 즉시 조회). 데이터 일관성이 성능보다 중요한 경우.
+
+**Write-Behind를 선택해야 하는 경우:**
+```java
+// Write-Behind: 캐시에만 쓰고 DB는 배치로 나중에
+public void recordClick(Long postId) {
+    cache.increment("clicks:" + postId);          // 즉시 응답 < 1ms
+    // DB에는 10초마다 배치로 flush (초당 10만 건도 처리 가능)
+}
+// 이걸 안 하면: 인기 게시글 클릭마다 DB UPDATE → 초당 수천 건 → DB 과부하
+```
+선택 기준: 쓰기 빈도가 매우 높고 약간의 데이터 유실(캐시 장애 시 마지막 flush 전 데이터)을 허용할 수 있을 때. 조회수, 좋아요 수, 실시간 통계 등에 적합.
+
+**선택이 잘못되면 발생하는 장애:**
+- Write-Through를 조회수에 적용: 인기 영상 조회수 업데이트마다 DB WRITE → 초당 수만 건 WRITE 경합 → DB 응답 수십 배 증가
+- Write-Behind를 결제 금액에 적용: 서버 장애 시 마지막 N분치 결제 데이터 유실 → 금전적 손해
+
+---
+
+### 캐시 전략 선택 결정 트리
+
+```
+데이터 읽기 빈도가 높은가?
+├─ Yes → 캐시 도입 필요
+│   ├─ 쓰기 빈도가 낮은가? (읽기 : 쓰기 > 10:1)
+│   │   ├─ Yes → Cache-Aside (Read) + Write-Through
+│   │   └─ No → 쓰기 빈도가 매우 높은가? (초당 수천 건+)
+│   │           ├─ Yes + 유실 허용 → Write-Behind
+│   │           └─ No → Cache-Aside + Write-Through
+│   └─ 캐시 미스 시 DB 부하가 집중되는가? (Stampede 위험)
+│       ├─ Yes → Mutex Lock 또는 PER 알고리즘
+│       └─ No → 기본 Cache-Aside
+└─ No → 캐시 불필요 (복잡도만 증가)
+```
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **Cache-Aside에서 캐시 미스 폭풍(Cache Stampede)** — 캐시가 만료되는 순간 수백 개의 요청이 동시에 DB를 직접 타격한다. Mutex Lock 또는 Probabilistic Early Expiration으로 한 요청만 DB를 조회하고 나머지는 대기하게 해야 한다.
+
+2. **Write-Through를 읽기 빈도 낮은 데이터에 적용** — 거의 읽히지 않는 데이터도 쓸 때마다 캐시에 저장해 메모리를 낭비한다. 읽기 빈도가 낮은 데이터는 Cache-Aside로 Lazy Loading하는 것이 효율적이다.
+
+3. **TTL 없이 캐시 무기한 유지** — 원본 데이터가 변경돼도 캐시가 영원히 오래된 값을 반환한다. 비즈니스 신선도 요구사항에 맞는 TTL을 반드시 설정해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Cache-Aside와 Read-Through의 차이점은?**
+A. Cache-Aside는 애플리케이션이 직접 캐시를 확인하고 미스 시 DB를 조회해 캐시를 채운다. Read-Through는 캐시 계층이 DB 조회를 대신 처리한다. Cache-Aside는 유연하지만 코드가 복잡하고, Read-Through는 캐시 라이브러리 지원이 필요하다.
+
+**Q2. Write-Back과 Write-Through의 선택 기준은?**
+A. Write-Through는 쓸 때마다 DB와 캐시를 동시에 업데이트해 데이터 손실이 없다. Write-Back은 캐시에만 먼저 쓰고 나중에 DB에 반영해 쓰기 성능이 좋지만, 캐시 장애 시 데이터 유실 위험이 있다. 금융 데이터는 Write-Through, 로그/분석 데이터는 Write-Back이 적합하다.
+
+**Q3. Cache Stampede를 어떻게 방지하나요?**
+A. 세 가지 방법이 있다. 첫째, Mutex Lock으로 한 요청만 DB를 조회하게 한다. 둘째, TTL에 랜덤 지터를 추가해 만료 시점을 분산시킨다. 셋째, Probabilistic Early Expiration으로 만료 전에 미리 갱신 요청을 발생시킨다.

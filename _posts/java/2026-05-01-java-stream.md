@@ -1081,3 +1081,21 @@ Stream API 핵심 포인트:
   - 무한 스트림에는 반드시 limit 사용
   - 중간 연산에서 부수효과 금지
 ```
+
+---
+## 면접 포인트
+
+**Q1. Stream의 지연 연산(Lazy Evaluation)이 성능에 미치는 영향은?**
+중간 연산(`filter`, `map`)은 최종 연산이 호출될 때까지 실행되지 않습니다. `stream.filter(...).map(...).filter(...)` 파이프라인은 최종 연산 호출 시 요소 하나씩 전체 파이프라인을 통과합니다. `findFirst()`처럼 조기 종료가 가능한 최종 연산과 조합하면 컬렉션 전체를 처리하지 않고도 결과를 얻을 수 있습니다. 100만 개 중 조건에 맞는 첫 번째 요소를 찾을 때 `for` 루프 대신 `stream().filter().findFirst()`가 동일한 단락 평가를 합니다.
+
+**Q2. parallelStream() 사용 시 주의사항은?**
+`parallelStream()`은 `ForkJoinPool.commonPool()`을 사용합니다. 이 풀은 JVM 전역 공유 풀이므로, 다른 병렬 처리(CompletableFuture 기본 풀)와 경합합니다. 블로킹 I/O(DB 조회, 외부 API)를 parallelStream 내부에서 수행하면 공용 풀 스레드가 블로킹돼 다른 스레드가 기아 상태가 됩니다. 순수 CPU 연산에만 parallelStream을 사용하고, 블로킹 작업은 별도 스레드 풀로 격리합니다. 실제 성능 개선 여부는 데이터 크기와 작업 복잡도에 따라 다르므로 반드시 벤치마크해야 합니다.
+
+**Q3. reduce와 collect의 차이는?**
+`reduce`는 불변 방식으로 결합합니다. `Optional<T>` 또는 `T`를 반환. 중간에 새 객체를 계속 생성하므로 컬렉션 구축에 비효율적입니다. `collect`는 mutable 컨테이너를 사용합니다. `Collector`가 컨테이너를 한 번 생성 후 요소를 하나씩 추가합니다. `Collectors.toList()`, `groupingBy()`, `joining()` 등이 collect 방식입니다. 리스트나 맵으로 결과를 모을 때는 항상 `collect`를 사용합니다.
+
+**Q4. Stream에서 flatMap의 사용 기준은?**
+`map`은 요소 1개 → 결과 1개. `flatMap`은 요소 1개 → Stream(0개 이상). 중첩 구조를 평탄화할 때 사용합니다. 주문 목록에서 모든 주문 상품을 모으려면: `orders.stream().flatMap(o -> o.getItems().stream())`. `Optional`에서도 `flatMap`을 사용합니다: `Optional<Optional<T>>`를 `Optional<T>`로 평탄화. `map` 결과가 `Stream<Stream<T>>`가 된다면 `flatMap`이 필요한 신호입니다.
+
+**Q5. Stream 재사용이 불가능한 이유는?**
+Stream은 일회용 파이프라인입니다. 최종 연산이 실행되면 소비(consumed)된 상태가 되어 재사용 시 `IllegalStateException: stream has already been operated upon or closed`가 발생합니다. Stream을 재사용하고 싶다면 `Supplier<Stream<T>>`에 Stream 생성 로직을 담아 필요할 때마다 새 Stream을 생성합니다. 여러 번 순회가 필요한 경우 `collect(toList())`로 먼저 구체화(materialization)한 후 사용합니다.

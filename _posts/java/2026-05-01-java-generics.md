@@ -1479,3 +1479,21 @@ public class TypeSafeEventBus {
 - **기본형 불가**: 래퍼 클래스(`Integer`, `Double` 등)로 대체
 - **반환 타입에 와일드카드 금지**: 호출자가 불편해짐
 - **재귀 타입 바운드**: 자기 자신과 비교/체이닝이 필요할 때 `T extends Comparable<T>` 패턴 활용
+
+---
+## 면접 포인트
+
+**Q1. 타입 소거(Type Erasure)란 무엇이고 어떤 제약을 만드는가?**
+Java 제네릭은 컴파일 타임에만 타입 정보를 사용하고, 런타임에는 소거됩니다. `List<String>`과 `List<Integer>`는 런타임에 모두 `List`입니다. 이로 인한 제약: ① `instanceof List<String>` 불가 → `instanceof List<?>` 사용. ② `new T()` 불가 → Class 객체를 파라미터로 전달 후 `clazz.newInstance()` 사용. ③ `static T field` 불가 — T가 클래스 단위로 공유되면 타입 혼용 위험. Reified 제네릭(런타임 타입 정보 유지)이 없는 Java의 근본적 한계입니다.
+
+**Q2. 와일드카드에서 PECS 원칙이란?**
+Producer Extends, Consumer Super. `? extends T`: 데이터를 읽기(produce)만 하는 경우 — 상한 와일드카드. `List<? extends Number>`에서 읽으면 Number로 처리 가능, 쓰기 불가. `? super T`: 데이터를 쓰기(consume)만 하는 경우 — 하한 와일드카드. `List<? super Integer>`에 Integer를 add 가능, 읽으면 Object로 반환. `Collections.copy(dest, src)`에서 src는 `? extends T`(읽기), dest는 `? super T`(쓰기)로 적용된 전형적인 사례입니다.
+
+**Q3. 제네릭 메서드와 제네릭 클래스의 차이는?**
+제네릭 클래스의 타입 파라미터는 인스턴스 생성 시 확정됩니다. `new Box<String>()`으로 생성하면 해당 인스턴스는 항상 String 박스. 제네릭 메서드의 타입 파라미터는 메서드 호출마다 독립적으로 추론됩니다. static 유틸리티 메서드(`Collections.sort()`, `Arrays.asList()`)는 제네릭 메서드로 구현해 클래스 인스턴스 없이 타입 안전하게 호출합니다.
+
+**Q4. 제네릭 타입의 배열을 생성할 수 없는 이유는?**
+`new T[10]`은 컴파일 에러입니다. 배열은 런타임에 타입을 검사하는데(covariant), 제네릭은 타입 소거로 런타임 타입 정보가 없어서 안전성을 보장할 수 없기 때문입니다. 대신 `Object[]`로 생성 후 캐스팅하거나, `ArrayList<T>`를 사용합니다. `@SuppressWarnings("unchecked")`로 경고를 억제하는 패턴은 실제 타입 안전성을 코드 작성자가 책임져야 합니다.
+
+**Q5. 제네릭에서 공변성(Covariance)이 없는 이유는?**
+`String`은 `Object`의 서브타입이지만, `List<String>`은 `List<Object>`의 서브타입이 아닙니다. 만약 공변이라면: `List<Object> list = new ArrayList<String>(); list.add(new Integer(1));`이 가능해져 String 리스트에 Integer가 들어가는 타입 오염이 발생합니다. 배열은 공변(`String[]`을 `Object[]`에 할당 가능)이지만 런타임에 `ArrayStoreException`으로 잡습니다. 제네릭은 컴파일 타임 타입 안전성을 위해 불공변으로 설계되었습니다.

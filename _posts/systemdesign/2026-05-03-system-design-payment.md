@@ -1219,3 +1219,66 @@ def create_payment_record(order_id, amount_usd, pg_transaction_id):
 | 소수점 오차 | BigDecimal + DECIMAL(19,4) |
 
 결제 시스템을 설계할 때는 **"이게 실패하면 어떻게 복구하는가"**를 모든 단계에서 먼저 생각하는 것이 시니어 엔지니어의 사고방식입니다. 해피 패스보다 에러 패스가 훨씬 복잡한 도메인입니다.
+
+---
+## 실무에서 자주 하는 실수
+
+**실수 1: 멱등성 키를 클라이언트에서만 생성**
+클라이언트가 생성한 `idempotency_key`를 서버가 그대로 신뢰하면, 악의적 클라이언트가 동일 키로 다른 금액 결제를 시도할 수 있습니다. 서버는 `{userId}:{orderId}:{amount}` 조합의 해시를 멱등성 키로 독립 계산하고, 클라이언트 제공 키는 참고용으로만 사용해야 합니다. 또한 멱등성 키를 Redis에만 저장하면 Redis 장애 시 멱등성이 깨집니다. DB unique constraint와 Redis를 이중으로 사용합니다.
+
+```java
+// 서버 측 멱등성 키 생성 (클라이언트 키를 신뢰하지 않음)
+public String buildIdempotencyKey(Long userId, Long orderId, BigDecimal amount) {
+    String raw = userId + ":" + orderId + ":" + amount.toPlainString();
+    return Hashing.sha256().hashString(raw, StandardCharsets.UTF_8).toString();
+}
+
+// DB unique constraint + Redis 이중 체크
+public PaymentResult processPayment(PaymentRequest request) {
+    String idemKey = buildIdempotencyKey(request.getUserId(),
+        request.getOrderId(), request.getAmount());
+    
+    // 1차: Redis로 빠른 중복 체크 (< 1ms)
+    if (redisTemplate.opsForValue().setIfAbsent("payment:" + idemKey, "1", 
+            Duration.ofHours(24)) == Boolean.FALSE) {
+        return paymentRepository.findByIdempotencyKey(idemKey)
+            .map(PaymentResult::from).orElseThrow();
+    }
+    
+    try {
+        // 2차: DB unique constraint가 최종 보호막
+        return executePayment(request, idemKey);
+    } catch (DataIntegrityViolationException e) {
+        // Redis 정상이지만 DB에 이미 존재 → 중복 요청
+        return paymentRepository.findByIdempotencyKey(idemKey)
+            .map(PaymentResult::from).orElseThrow();
+    }
+}
+```
+
+**실수 2: 결제 금액 계산에 double/float 사용**
+`double price = 0.1 + 0.2`의 결과는 `0.30000000000000004`입니다. 결제 시스템에서 부동소수점 오차가 누적되면 장부 불일치, 감사 실패, 규제 기관 제재로 이어집니다. 반드시 `BigDecimal`을 사용하고, DB 컬럼은 `DECIMAL(19, 4)`로 정의합니다. 절대로 `new BigDecimal(0.1)`을 쓰지 말고(여전히 부동소수점 오차 포함), `new BigDecimal("0.1")` 또는 `BigDecimal.valueOf(0.1)`을 사용합니다.
+
+**실수 3: Saga 보상 트랜잭션에 실패 처리 없음**
+주문 Saga에서 결제 취소(보상) 중 PG사 API가 타임아웃을 반환하면 어떻게 되는가? 보상 실패를 처리하지 않으면 돈은 빠져나갔는데 주문은 취소된 불일치 상태가 됩니다. 보상 트랜잭션도 Outbox 패턴으로 관리하고, 지수 백오프로 재시도, 최종 실패 시 수동 검토 큐에 적재하는 체계가 필수입니다.
+
+**실수 4: 복식부기 없이 잔액 컬럼만 업데이트**
+`UPDATE accounts SET balance = balance - 1000 WHERE id = ?`만 실행하면 감사(Audit) 추적이 불가합니다. "언제, 왜 잔액이 줄었는가"를 알 수 없습니다. 복식부기(Double-Entry Bookkeeping)로 모든 금액 이동을 `journal_entries` 테이블에 기록해야 합니다. `SUM(amount)`이 항상 0이어야 하며, 이 조건이 깨지면 즉시 알림을 보내야 합니다.
+
+---
+## 면접 포인트
+
+**Q1. 결제 시스템에서 ACID가 왜 MSA에서 보장하기 어려운가?**
+ACID는 단일 DB 트랜잭션 내에서 보장됩니다. MSA에서는 주문 서비스 DB, 결제 서비스 DB, 재고 서비스 DB가 분리되어 있어 하나의 트랜잭션으로 묶을 수 없습니다. 2PC(Two-Phase Commit)로 분산 ACID를 구현할 수 있지만 코디네이터 SPOF, 블로킹, 성능 저하로 인해 실무에서는 Saga 패턴 + 결과적 일관성을 채택합니다. "완벽한 원자성" 대신 "보상 가능한 일관성"이 현실적 목표입니다.
+
+**Q2. PG사 Webhook이 중복 발송되면 어떻게 처리하는가?**
+PG사는 결제 완료 알림을 2~3회 중복 발송하는 경우가 있습니다(네트워크 타임아웃으로 인한 재전송). 수신 엔드포인트에서 `payment_id` 기준으로 멱등성을 보장해야 합니다. 처리 완료된 `payment_id`는 Redis에 24시간 캐시하고, 중복 Webhook은 200 OK를 반환하되 재처리하지 않습니다. 400이나 500을 반환하면 PG사가 계속 재시도하므로 반드시 200을 반환해야 합니다.
+
+**Q3. 결제 타임아웃 후 상태가 불명확할 때 어떻게 처리하는가?**
+PG사 API 호출 후 30초 타임아웃이 발생하면 실제 결제가 성공했는지 실패했는지 알 수 없습니다. 이를 "불확실(Unknown)" 상태로 처리합니다. 백그라운드 Job이 PG사의 결제 조회 API로 실제 상태를 확인하고, 성공이면 완료 처리, 실패면 주문 취소+환불 보상 트랜잭션을 실행합니다. 이 Reconciliation Job은 5분 간격으로 수행합니다.
+
+**Q4. 환불 처리 시 발생하는 복잡성은?**
+부분 환불(50% 환불), 분할 결제 환불, 포인트+카드 혼합 결제 환불이 각각 다른 로직을 요구합니다. 포인트는 즉시 반환 가능하지만 카드 환불은 PG사를 통해 3~5 영업일이 걸립니다. 환불 상태를 `PENDING → PG_REFUND_REQUESTED → COMPLETED`로 관리하고, 각 단계의 Outbox 이벤트로 처리합니다. 환불도 복식부기로 기록해야 원래 결제 + 환불의 전체 흐름이 추적됩니다.
+
+**Q5. 결제 시스템에서 모니터링 핵심 지표는?**
+비즈니스 지표: 결제 성공률(목표 > 99%), 평균 결제 완료 시간(목표 < 3초), PG사별 성공률 비교. 기술 지표: Outbox 미처리 이벤트 수(> 100이면 알림), 멱등성 키 충돌 빈도, 보상 트랜잭션 실행 횟수. 이상 감지: 특정 PG사 성공률이 5분 내 5%p 급락하면 자동으로 다른 PG사로 라우팅 전환. 장부 불일치 감지: 복식부기 `SUM(amount) != 0`이면 즉시 P0 알림.

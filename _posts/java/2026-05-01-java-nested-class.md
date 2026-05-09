@@ -703,3 +703,42 @@ graph LR
 2. 멤버 내부 클래스 + 백그라운드 작업 → 메모리 누수 반드시 확인
 3. 함수형 인터페이스 → 람다로 교체
 4. `this$0` 참조를 항상 인식하고 설계할 것
+
+---
+## 면접 포인트
+
+**Q1. Static 중첩 클래스와 내부 클래스(Inner Class)의 핵심 차이는?**
+내부 클래스는 외부 클래스 인스턴스에 대한 숨겨진 참조를 가집니다. 외부 클래스 인스턴스 없이 생성할 수 없고(`outer.new Inner()`), 외부 클래스가 GC되지 않습니다. Static 중첩 클래스는 외부 클래스 인스턴스 없이 생성 가능하며(`new Outer.Nested()`), 외부 참조가 없어 메모리 누수가 없습니다. 외부 클래스의 상태에 접근할 필요가 없다면 항상 static 중첩 클래스를 사용합니다.
+
+**Q2. 내부 클래스가 메모리 누수를 만드는 실제 사례는?**
+Android의 Activity에서 비동기 작업을 수행하는 익명 내부 클래스(`new AsyncTask() {...}`)는 Activity 인스턴스를 암묵적으로 참조합니다. 화면 회전으로 Activity가 재생성되어도 이전 Activity는 GC되지 않고 메모리에 남습니다. 비동기 작업이 완료될 때까지 이전 Activity가 살아있어 메모리 사용량이 누적됩니다. 해결: `WeakReference<Activity>`를 사용하거나 static 중첩 클래스로 변환합니다.
+
+**Q3. 익명 클래스와 람다를 구분해서 사용해야 하는 경우는?**
+람다로 대체 가능한 경우: 함수형 인터페이스(메서드 1개) 구현 시. `new Runnable() { run() {...} }` → `() -> {...}`. 익명 클래스를 유지해야 하는 경우: ① 추상 클래스 구현 시(람다는 인터페이스만 가능) ② 메서드가 2개 이상인 인터페이스 구현 ③ 인스턴스 초기화 블록이나 상태(필드)가 필요한 경우 ④ `this`가 익명 클래스 자신을 가리켜야 하는 경우(재귀 등).
+
+**Q4. 지역 클래스(Local Class)는 언제 사용하는가?**
+메서드 내에서만 사용되고, 여러 메서드가 필요해 람다로 표현이 어렵고, 외부에 노출할 필요 없는 헬퍼 클래스에 사용합니다. 실무에서는 거의 사용되지 않으며, 대부분 람다나 private static 중첩 클래스로 대체됩니다. 지역 클래스도 내부 클래스처럼 effectively final 변수만 캡처할 수 있습니다.
+
+**Q5. Builder 패턴에서 Static 중첩 클래스를 사용하는 이유는?**
+```java
+public class HttpRequest {
+    private final String url;
+    private final int timeout;
+
+    private HttpRequest(Builder builder) {  // private 생성자
+        this.url = builder.url;
+        this.timeout = builder.timeout;
+    }
+
+    public static class Builder {  // static 중첩 클래스
+        private String url;
+        private int timeout = 30;
+
+        public Builder url(String url) { this.url = url; return this; }
+        public Builder timeout(int seconds) { this.timeout = seconds; return this; }
+        public HttpRequest build() { return new HttpRequest(this); }
+    }
+}
+// 사용: new HttpRequest.Builder().url("...").timeout(10).build()
+```
+Builder가 외부 클래스 인스턴스 없이 독립적으로 사용되어야 하므로 static. 외부 클래스의 private 생성자에 접근 가능. Lombok의 `@Builder`도 동일한 패턴으로 코드를 생성합니다.

@@ -629,3 +629,17 @@ Pod는 하나 이상의 컨테이너를 감싸는 K8s의 최소 배포 단위다
 **Q5. K8s에서 무중단 배포를 보장하려면?**
 
 다섯 가지를 조합해야 한다: (1) `readinessProbe` — 준비된 Pod에만 트래픽 전달, (2) `PodDisruptionBudget` — 동시에 내려가는 Pod 수 제한, (3) `rollingUpdate.maxUnavailable: 0` — 항상 기존 Pod 유지 후 신규 시작, (4) `preStop` 훅 — 로드밸런서 제거 대기, (5) `terminationGracePeriodSeconds` — 진행 중 요청 완료 대기. 이 다섯 가지 중 하나라도 빠지면 다운타임이 발생할 수 있다.
+
+---
+
+## 왜 이 기술인가
+
+**Kubernetes를 선택하는 이유는 수십~수백 개의 컨테이너를 수동으로 관리하는 것이 불가능하기 때문이다.**
+
+| 대안 | 문제점 | Kubernetes의 해결 |
+|------|--------|-----------------|
+| 직접 Docker 실행 | 장애 시 수동 재시작, 배포 자동화 없음 | Self-healing, 자동 재시작 |
+| Docker Compose | 단일 호스트 제한, 오토스케일링 없음 | 멀티 노드 클러스터, HPA 자동 확장 |
+| 수동 로드밸런싱 | 새 인스턴스 추가 시 수동 등록 | Service가 Pod 등록/해제 자동화 |
+
+트래픽 급증 시 HPA가 CPU 메트릭 기반으로 Pod를 자동 증가시키고, 장애 Pod는 Kubelet이 감지해 자동으로 재시작한다. Rolling Update로 무중단 배포가 가능하고, Rollback도 명령 한 줄로 처리된다.

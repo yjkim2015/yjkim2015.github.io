@@ -368,3 +368,123 @@ chunk-size=10,000이면 한 트랜잭션에서 10,000건을 처리합니다. 실
 | **ItemWriter** | 데이터 저장 (묶음) | 박스 포장 |
 
 Spring Batch는 이 구성요소들의 **관심사 분리**와 **메타데이터 기반 상태 관리**로, 수십억 건의 데이터도 안정적으로 처리할 수 있는 기반을 제공합니다.
+
+---
+
+## 왜 Spring Batch인가
+
+**Spring Batch를 선택하는 이유는 배치 처리에 필요한 재시작, 재시도, 건너뛰기, 로깅, 모니터링을 직접 구현하지 않아도 되기 때문이다.**
+
+| 대안 | 문제점 | Spring Batch의 해결 |
+|------|--------|-------------------|
+| 직접 스크립트 작성 | 실패 지점 추적, 재시작 로직 없음 | JobRepository로 실행 이력 관리, 재시작 지원 |
+| 단순 @Scheduled | 대용량 처리 구조 없음, 상태 관리 없음 | Job/Step/Chunk 계층 구조로 대용량 처리 |
+| Quartz 단독 | 실행 스케줄만 관리, 처리 구조 없음 | 스케줄(Quartz) + 처리 구조(Batch) 분리 조합 |
+
+100만 건 처리 중 50만 건에서 실패해도 JobRepository에 마지막 성공 Chunk가 기록돼 있어, 재실행 시 51만 번째부터 이어서 처리한다. Skip/Retry 정책으로 특정 예외는 무시하고 계속 진행할 수 있다.
+
+---
+## 왜 Spring Batch인가 — 직접 구현 대비 선택 이유
+
+### 직접 구현(스케줄러 + 반복문)의 한계
+
+**단순 구현의 문제점:**
+```java
+// 직접 구현: 표면적으로 단순해 보이지만 운영에서 무너짐
+@Scheduled(cron = "0 0 2 * * *")  // 매일 새벽 2시
+public void dailySettlement() {
+    List<Order> orders = orderRepository.findByDate(LocalDate.now().minusDays(1));
+    // 문제 1: 100만 건이면 OOM
+    for (Order order : orders) {
+        processSettlement(order);
+        // 문제 2: 500번째에서 실패하면 어디서부터 재시작?
+        // 문제 3: 중복 처리 방지 없음
+    }
+    // 문제 4: 동시 실행 방지 없음
+    // 문제 5: 실행 이력, 처리 건수 기록 없음
+}
+```
+
+**Spring Batch가 제공하는 것:**
+```java
+@Bean
+public Job settlementJob(JobRepository jobRepository, Step settlementStep) {
+    return new JobBuilder("settlementJob", jobRepository)
+        .start(settlementStep)
+        // JobRepository가 자동으로:
+        // - 실행 이력(시작시각, 종료시각, 상태) 기록
+        // - 실패 시 마지막 성공 청크 이후부터 재시작 지원
+        // - 동일 파라미터로 중복 실행 방지
+        .build();
+}
+```
+
+**직접 구현 vs Spring Batch 비교:**
+
+| 기능 | 직접 구현 | Spring Batch |
+|------|---------|-------------|
+| 대용량 메모리 처리 | OOM 위험 | Chunk 처리로 안전 |
+| 실패 후 재시작 | 전체 재처리 | 마지막 청크부터 재시작 |
+| 실행 이력 관리 | 별도 구현 필요 | JobRepository 자동 기록 |
+| 중복 실행 방지 | 별도 락 구현 | JobInstance로 자동 방지 |
+| 오류 데이터 처리 | 전체 실패 | Skip/Retry 정책 |
+| 병렬 처리 | 직접 스레드 관리 | Partitioning/MultiThread Step |
+
+### 왜 JobRepository가 핵심인가
+
+```java
+// JobRepository는 배치 실행의 "블랙박스" 역할
+// 모든 실행 정보가 DB에 기록됨
+
+// 확인 가능한 정보:
+// BATCH_JOB_INSTANCE: 어떤 파라미터로 실행됐는가
+// BATCH_JOB_EXECUTION: 시작/종료시각, 상태(COMPLETED/FAILED)
+// BATCH_STEP_EXECUTION: 각 Step의 read/write/skip/error 건수
+// BATCH_JOB_EXECUTION_PARAMS: Job 실행 파라미터
+
+// 실무 활용:
+@Bean
+public JobLauncher jobLauncher(JobRepository jobRepository) throws Exception {
+    TaskExecutorJobLauncher launcher = new TaskExecutorJobLauncher();
+    launcher.setJobRepository(jobRepository);
+    // 비동기 실행으로 HTTP 응답을 즉시 반환
+    launcher.setTaskExecutor(new SimpleAsyncTaskExecutor());
+    launcher.afterPropertiesSet();
+    return launcher;
+}
+
+// Job 실행 및 이력 조회
+@RestController
+@RequiredArgsConstructor
+public class BatchController {
+    private final JobLauncher jobLauncher;
+    private final Job settlementJob;
+    private final JobExplorer jobExplorer;
+
+    @PostMapping("/batch/settlement")
+    public String runSettlement(@RequestParam String date) throws Exception {
+        JobParameters params = new JobParametersBuilder()
+            .addString("settlementDate", date)
+            .addLong("timestamp", System.currentTimeMillis())  // 재실행 허용
+            .toJobParameters();
+        JobExecution execution = jobLauncher.run(settlementJob, params);
+        return "Job ID: " + execution.getJobId();
+    }
+
+    @GetMapping("/batch/settlement/{jobId}")
+    public String getStatus(@PathVariable Long jobId) {
+        JobExecution execution = jobExplorer.getJobExecution(jobId);
+        return execution.getStatus().name() +
+               " | 처리: " + execution.getStepExecutions().stream()
+                   .mapToLong(StepExecution::getWriteCount).sum() + "건";
+    }
+}
+```
+
+### 이걸 안 하면 생기는 실제 장애
+
+**장애 1: 배치 중복 실행으로 정산 금액 2배 계산**
+스케줄러가 2개 서버에서 동시에 실행됩니다. 동시 실행 방지 없이 직접 구현한 배치가 두 서버 모두에서 전체 주문을 처리합니다. 100만 건이 200만 건으로 정산됩니다. Spring Batch는 동일 `JobInstance`(같은 날짜 파라미터) 재실행을 `JobRepository`에서 막아 이 문제를 원천 차단합니다.
+
+**장애 2: 배치 실패 후 재실행 시 전체 재처리**
+100만 건 중 50만 건 처리 후 서버 재시작. 직접 구현에서는 어디까지 처리됐는지 기록이 없어 처음부터 재처리합니다. 이미 정산된 50만 건이 다시 정산됩니다. Spring Batch `JobRepository`의 `StepExecution`은 마지막 커밋된 청크의 위치를 기록해 정확히 50만 1건부터 재시작합니다.

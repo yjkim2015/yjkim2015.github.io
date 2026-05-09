@@ -1127,3 +1127,56 @@ flowchart LR
 | Content ID 핑거프린트 | 저작권 자동 처리로 규모 대응 |
 
 동영상 스트리밍 시스템의 진짜 어려움은 **단일 기술의 복잡성**이 아닙니다. 업로드, 트랜스코딩, CDN, 추천, 라이브, 모더레이션이라는 **여섯 개의 복잡한 서브시스템이 하나의 매끄러운 경험으로 동작**하도록 만드는 것입니다. 그리고 이 모든 것이 매초 500시간의 영상이 추가되는 가운데 무중단으로 운영되어야 합니다.
+
+---
+## 실무에서 자주 하는 실수
+
+**실수 1: 트랜스코딩을 단일 거대 Job으로 처리**
+1시간짜리 영상을 단일 FFmpeg 프로세스로 360p/720p/1080p 세 해상도로 순차 처리하면 완료까지 30~60분. 그 사이 Job 서버가 재시작되면 처음부터 다시 시작해야 합니다. DAG 기반 파이프라인으로 영상을 2분짜리 세그먼트로 분할 후 각 세그먼트×해상도를 독립 Task로 병렬 처리하면 전체 시간을 1/10로 단축할 수 있습니다. YouTube의 실제 접근법입니다.
+
+```java
+// 세그먼트 단위 병렬 트랜스코딩 Job 등록
+public void scheduleTranscoding(String videoId, String rawS3Key) {
+    List<Segment> segments = segmentSplitter.split(rawS3Key, Duration.ofMinutes(2));
+    List<Resolution> resolutions = List.of(Resolution.R360, Resolution.R720, Resolution.R1080);
+
+    for (Segment seg : segments) {
+        for (Resolution res : resolutions) {
+            transcodeJobQueue.publish(TranscodeJob.builder()
+                .videoId(videoId)
+                .segmentId(seg.getId())
+                .inputKey(seg.getS3Key())
+                .outputResolution(res)
+                .build());
+        }
+    }
+    // 3 해상도 × N세그먼트가 병렬 처리됨
+}
+```
+
+**실수 2: CDN 캐시 키를 URL 경로만으로 설정**
+같은 영상이라도 사용자 지역, 디바이스, ABR 품질에 따라 다른 세그먼트를 반환해야 하는데, CDN 캐시 키가 경로만이면 첫 사용자의 응답이 다른 사용자에게 잘못 서빙됩니다. 특히 `Accept-Language`, 자막 포함 여부가 쿼리 파라미터에 있을 때 이를 캐시 키에 포함시키지 않으면 자막이 없는 세그먼트를 자막 요청자에게 서빙합니다.
+
+**실수 3: ABR 로직을 서버에서 결정**
+서버가 클라이언트 네트워크 상태를 정확히 알 수 없으므로, 서버가 해상도를 결정하면 실제 클라이언트 상황과 괴리가 생깁니다. HLS/DASH는 클라이언트가 세그먼트 다운로드 속도를 측정해 스스로 해상도를 선택(ABR)합니다. 서버가 해야 할 일은 모든 해상도의 세그먼트를 미리 만들어두고 매니페스트 파일에 선택지를 제공하는 것뿐입니다.
+
+**실수 4: 영상 메타데이터를 트랜스코딩 완료 전에 검색 인덱스에 노출**
+트랜스코딩이 완료되지 않은 영상 URL이 검색에 노출되면 사용자가 재생을 시도했을 때 404 또는 불완전한 영상을 보게 됩니다. 상태 머신(`UPLOADED → TRANSCODING → READY`)을 엄격히 관리하고, `READY` 상태가 된 이후에만 Elasticsearch 인덱싱과 추천 시스템 등록이 이루어져야 합니다.
+
+---
+## 면접 포인트
+
+**Q1. HLS와 DASH의 차이는? 실무에서 무엇을 선택하는가?**
+HLS(HTTP Live Streaming): Apple이 개발. `.m3u8` 매니페스트, `.ts` 세그먼트. iOS/macOS 네이티브 지원 필수. DASH(Dynamic Adaptive Streaming over HTTP): 오픈 표준. `.mpd` 매니페스트, `.mp4` 세그먼트. DRM 유연성 높음. 실무 선택: 글로벌 서비스는 두 가지 모두 제공합니다. iOS는 HLS, Android/Web은 DASH. YouTube는 DASH + HLS 병행, Netflix는 DASH + Widevine DRM 중심.
+
+**Q2. 트랜스코딩 비용을 최소화하는 전략은?**
+모든 업로드 영상을 최고 화질로 트랜스코딩하면 비용이 폭증합니다. 전략: ① 조회수 임계값 기반 트랜스코딩 — 1080p는 즉시, 4K는 조회수 1천 초과 후 시작 ② 원본 해상도 초과 트랜스코딩 금지 — 720p 원본을 1080p로 올리는 것은 낭비 ③ GPU 인스턴스 Spot Instance 활용 — 비용 60~70% 절감, 중단 시 재시도 로직 필수. 실제 YouTube는 트랜스코딩 인프라에 연간 수억 달러를 지출하며 효율화가 핵심 과제입니다.
+
+**Q3. 라이브 스트리밍과 VOD의 아키텍처 차이는?**
+VOD: 업로드 → 트랜스코딩 → CDN 배포의 단방향 파이프라인. 지연 허용 가능. 라이브: RTMP로 수신 → 실시간 트랜스코딩(< 2초) → HLS/DASH 세그먼트 생성(2초 단위) → CDN Edge에 즉시 배포. LL-HLS 사용 시 세그먼트를 200ms 단위로 더 잘게 쪼개 E2E 지연 2~3초 달성. 라이브는 CDN 캐시 TTL을 세그먼트 길이(2~4초)로 매우 짧게 유지해야 합니다.
+
+**Q4. 영상 불법 복제 방지를 어떻게 구현하는가?**
+DRM(Digital Rights Management): Widevine(Google, Android/Chrome), FairPlay(Apple, iOS/Safari), PlayReady(Microsoft) 세 가지를 동시 지원. 라이선스 서버가 재생 권한을 토큰으로 발급합니다. Signed URL: S3/CDN 세그먼트 URL에 만료 시각과 서명을 포함해 URL 공유만으로는 재생 불가. 워터마킹: 사용자 ID를 영상 픽셀에 비가시적으로 삽입해 유출 경로 추적.
+
+**Q5. 영상 추천 시스템과 스트리밍의 연계 포인트는?**
+추천 시스템이 영상 ID를 반환하면 스트리밍 시스템은 해당 영상의 CDN 프리페치를 트리거합니다. 사용자가 추천 영상에 마우스를 올리는 순간(`hover` 이벤트) 첫 세그먼트를 미리 로드하면 재생 버튼 클릭 후 지연이 0에 가깝습니다. 이 프리페치 신호는 서버에 전달되어 해당 영상 세그먼트를 Edge CDN에 미리 올립니다. Netflix는 이 방식으로 재생 시작 시간을 평균 200ms 이하로 달성합니다.
