@@ -190,10 +190,10 @@ graph LR
     B["복사 생성자/팩토리"]
     C["Cloneable/clone"]
     B --> B1["생성자 정상 사용"]
-    B --> B2["final 필드 문제 없음"]
+    B --> B2["final 필드 OK"]
     B --> B3["인터페이스 타입 가능"]
-    C --> C1["final 필드 할당 불가"]
-    C --> C2["CloneNotSupportedException"]
+    C --> C1["final 필드 불가"]
+    C --> C2["CloneNotSupported"]
     style B fill:#51cf66,color:#fff
     style C fill:#ff6b6b,color:#fff
 ```

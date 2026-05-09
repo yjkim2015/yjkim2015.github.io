@@ -464,3 +464,50 @@ public class NotificationService {
 ✅ CompletableFuture 반환으로 결과 추적 가능하게 설계
 ✅ 스레드 이름 prefix 설정 (로그에서 async- 접두사로 구분)
 ```
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 스레드 차단 | 결과 추적 | 복잡도 | 적합한 상황 |
+|---|---|---|---|---|
+| 동기 호출 | O | 쉬움 | 낮음 | 결과가 즉시 필요한 경우 |
+| @Async (Fire-and-forget) | X | 불가 | 낮음 | 이메일 발송, 알림, 로그 |
+| @Async + CompletableFuture | X | 가능 | 중간 | 병렬 API 호출 후 결합 |
+| WebFlux (Reactive) | X | 가능 | 높음 | 대용량 스트리밍, 논블로킹 전체 |
+| Virtual Thread (Java 21+) | X (캐리어 스레드) | 쉬움 | 낮음 | 기존 동기 코드 그대로 활용 |
+
+**결론:** 단순한 비동기 처리(이메일, 알림, 통계)는 `@Async` + `ThreadPoolTaskExecutor`가 가장 간단하다. 결과를 조합해야 하면 `CompletableFuture`를 사용하고, 전체 스택이 논블로킹이어야 한다면 WebFlux로 전환한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **같은 클래스 내 `@Async` 메서드 호출 (Self-invocation)** — `this.sendEmail()`처럼 내부 호출하면 Spring AOP 프록시를 우회해 동기로 실행된다. 반드시 별도 빈으로 분리하거나 `ApplicationContext.getBean()`으로 프록시를 통해 호출해야 한다.
+
+2. **기본 SimpleAsyncTaskExecutor 사용** — `@EnableAsync`만 선언하면 기본 실행기가 스레드를 매 요청마다 새로 생성한다(재사용 없음). 반드시 `ThreadPoolTaskExecutor`를 빈으로 등록해 스레드풀을 설정해야 한다.
+
+3. **MDC 컨텍스트 비전파** — `@Async` 스레드는 부모 스레드의 `MDC`를 상속받지 않는다. `TaskDecorator`를 구현해 `MDC.getCopyOfContextMap()`을 복사하지 않으면 비동기 로그에서 `traceId`가 사라진다.
+
+4. **`@Transactional` + `@Async` 조합 오용** — `@Async` 메서드에 `@Transactional`을 붙이면 호출자의 트랜잭션과 완전히 분리된 새 트랜잭션으로 실행된다. 호출자 트랜잭션 커밋 전에 비동기 메서드가 실행되어 데이터가 없는 경우가 발생한다. `TransactionalEventListener(phase = AFTER_COMMIT)`을 사용해야 한다.
+
+5. **스레드풀 포화(saturation) 대응 없음** — `queueCapacity`를 초과하면 `TaskRejectedException`이 발생한다. `setRejectedExecutionHandler`로 거절 정책(CallerRunsPolicy 등)을 명시하지 않으면 요청이 예외와 함께 유실된다.
+
+---
+
+## 면접 포인트
+
+**Q1. `@Async`가 동작하려면 무엇이 필요한가?**
+> `@EnableAsync`가 붙은 설정 클래스 + 별도 빈으로 분리된 `@Async` 메서드 + `public` 접근제어자. Spring AOP 프록시를 통해야 하므로 `private` 메서드나 같은 클래스 내 self-invocation에서는 동작하지 않는다.
+
+**Q2. `@Async` 메서드의 예외는 어떻게 처리하는가?**
+> `void` 반환 타입이면 예외가 `AsyncUncaughtExceptionHandler`로 전달된다. `Future` / `CompletableFuture` 반환이면 `get()` 호출 시점에 예외를 받을 수 있다. 반드시 `AsyncUncaughtExceptionHandler`를 등록해 예외 유실을 방지해야 한다.
+
+**Q3. MDC를 비동기 스레드에 전파하는 방법은?**
+> `TaskDecorator`를 구현하여 `ThreadPoolTaskExecutor.setTaskDecorator()`에 등록한다. Decorator 안에서 `MDC.getCopyOfContextMap()`으로 부모 스레드 컨텍스트를 복사하고, 작업 완료 후 `MDC.clear()`로 정리한다.
+
+**Q4. `ThreadPoolTaskExecutor`의 `corePoolSize`, `maxPoolSize`, `queueCapacity` 관계는?**
+> 요청이 들어오면 먼저 `corePoolSize`까지 스레드를 생성한다. 이후 `queueCapacity`가 다 찰 때까지 큐에 쌓는다. 큐도 가득 차면 `maxPoolSize`까지 스레드를 추가 생성한다. `maxPoolSize`도 초과하면 `RejectedExecutionHandler`가 호출된다.
+
+**Q5. `@Async`와 WebFlux 중 언제 무엇을 선택하는가?**
+> 기존 MVC 스택에서 일부 작업만 비동기화할 때는 `@Async`가 적합하다. 전체 I/O가 논블로킹이어야 하거나 대용량 스트리밍이 필요하면 WebFlux로 전환한다. Java 21의 Virtual Thread는 기존 동기 코드 그대로 높은 처리량을 얻을 수 있어 `@Async`의 좋은 대안이다.

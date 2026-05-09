@@ -1095,13 +1095,10 @@ boolean success = stampedRef.compareAndSet(
 
 ```mermaid
 graph LR
-    TA[ThreadA] --> CELL["AtomicLong: count"]
-    TB[ThreadB] --> CELL
-    TC[ThreadC] --> CELL
+    TA[ThreadA] & TB[ThreadB] & TC[ThreadC] --> CELL["AtomicLong"]
     T1[Thread1] --> C1["Cell:3"]
     T2[Thread2] --> C2["Cell:7"]
-    T3[Thread3] --> C3["Cell:2"]
-    C1 & C2 & C3 -->|"sum()"| SUM["LongAdder 합계"]
+    C1 & C2 -->|"sum()"| SUM["LongAdder 합계"]
 ```
 
 ```java
@@ -2016,6 +2013,53 @@ metrics.computeIfAbsent("api.calls", k -> new LongAdder()).increment();
 100K TPS 이상에서는 단일 JVM의 한계를 넘어 **메시지 큐(Kafka, RabbitMQ)** 와 **분산 캐시(Redis)** 로 상태를 외부화하는 아키텍처가 필요합니다.
 
 ---
+
+## 왜 이 기술인가? — Java 스레드 vs 대안들
+
+| 비교 항목 | Java Thread (OS 스레드) | Virtual Thread (Java 21+) | Reactive (WebFlux) |
+|-----------|------------------------|--------------------------|---------------------|
+| 프로그래밍 모델 | 동기식 (직관적) | 동기식 (직관적) | 비동기 파이프라인 |
+| I/O 대기 처리 | 스레드 블로킹 (비효율) | Carrier 반납 (효율적) | 논블로킹 콜백 |
+| 최대 동시 수 | 수천 개 | 수백만 개 | 스레드 수에 무관 |
+| 디버깅 편의 | 높음 (스택 트레이스 직관적) | 높음 | 낮음 (체인 추적 어려움) |
+| 학습 곡선 | 낮음 | 낮음 | 높음 |
+| CPU 바운드 성능 | 좋음 | 좋음 | 좋음 |
+| I/O 바운드 처리량 | 제한적 | 매우 높음 | 매우 높음 |
+
+**언제 synchronized를 쓰고 ReentrantLock을 쓰는가?**
+
+`synchronized`는 코드가 짧고 단순할 때, 재진입만 필요할 때 선택합니다. `ReentrantLock`은 `tryLock()` 타임아웃이 필요하거나, 공정 락(fairness)이 필요하거나, Condition을 여러 개 써야 할 때, Virtual Thread의 피닝(pinning)을 방지해야 할 때 선택합니다.
+
+**언제 AtomicInteger를 쓰고 synchronized를 쓰는가?**
+
+단일 변수의 원자적 연산(카운터, 플래그)에는 `AtomicInteger`가 낫습니다. lock-free이므로 경합이 적을 때 더 빠릅니다. 여러 변수를 함께 원자적으로 변경해야 하는 복합 연산은 `synchronized`나 `ReentrantLock`이 필요합니다.
+
+---
+
+## 면접 포인트
+
+**Q1. synchronized와 ReentrantLock의 차이를 설명하세요.**
+
+`synchronized`는 JVM 내장 키워드로 자동 락 해제, 재진입 지원을 제공합니다. `ReentrantLock`은 `java.util.concurrent` 패키지의 클래스로 `tryLock()` 타임아웃, 공정 락 옵션, `Condition`을 통한 세밀한 대기/신호 제어가 가능합니다. Virtual Thread 환경에서는 `synchronized` 블록 내 블로킹 I/O가 피닝을 유발하므로 `ReentrantLock`을 권장합니다. 반드시 `finally`에서 `unlock()`을 호출해야 합니다.
+
+**Q2. volatile 키워드는 무엇을 보장하고 무엇을 보장하지 않나요?**
+
+`volatile`은 가시성(visibility)을 보장합니다. 한 스레드의 쓰기가 다른 스레드의 읽기에 즉시 반영됩니다. CPU 캐시를 우회하고 메인 메모리에 직접 접근합니다. 단, 원자성(atomicity)은 보장하지 않습니다. `volatile int count; count++`는 읽기-수정-쓰기 세 단계라 여전히 경쟁 조건이 발생합니다. 원자성이 필요하면 `AtomicInteger`나 `synchronized`를 사용해야 합니다.
+
+**Q3. 데드락의 4가지 조건을 설명하고 회피 방법을 말씀하세요.**
+
+상호 배제(하나의 스레드만 자원 점유), 점유 대기(자원을 점유한 채로 다른 자원 대기), 비선점(점유한 자원을 강제로 빼앗을 수 없음), 순환 대기(A→B→A 같은 순환 의존성). 이 중 하나만 깨도 데드락이 방지됩니다. 실무에서는 락 획득 순서를 항목의 `identityHashCode` 기준으로 고정하거나, `tryLock()` 타임아웃을 사용합니다.
+
+**Q4. Executors.newFixedThreadPool()을 직접 쓰면 안 되는 이유는?**
+
+`newFixedThreadPool`은 내부적으로 `LinkedBlockingQueue(Integer.MAX_VALUE)`를 사용합니다. 작업 처리보다 제출 속도가 빠르면 큐에 수백만 개의 작업이 쌓여 OOM이 발생합니다. 실무에서는 `ThreadPoolExecutor`를 직접 생성해 큐 크기와 거부 정책을 명시적으로 설정해야 합니다.
+
+**Q5. CountDownLatch와 CyclicBarrier의 차이는?**
+
+`CountDownLatch`는 일회성입니다. N개의 이벤트가 발생할 때까지 하나 이상의 스레드가 대기합니다. 재사용 불가능합니다. `CyclicBarrier`는 재사용 가능합니다. N개의 스레드가 모두 배리어에 도달할 때까지 서로 대기하고, 이후 모두 동시에 재개합니다. 다단계 병렬 처리에 적합합니다.
+
+---
+
 ## 정리
 
 Java 스레드와 동시성 프로그래밍의 핵심을 표로 정리합니다.

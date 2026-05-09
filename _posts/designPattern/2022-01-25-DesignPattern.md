@@ -56,14 +56,13 @@ classDiagram
         +request()
     }
     class Adapter {
-        -adaptee
         +request()
     }
     class Adaptee {
         +specificRequest()
     }
     Target <|.. Adapter
-    Adapter --> Adaptee : 위임
+    Adapter --> Adaptee
 ```
 
 ```java

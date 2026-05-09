@@ -29,7 +29,7 @@ graph LR
 
 ```mermaid
 graph TD
-    B1["ProducerBatch 1 (꽉 참)"] --> B2["ProducerBatch 2 (현재)"]
+    B1["ProducerBatch1(꽉참)"] --> B2["ProducerBatch2(현재)"]
 ```
 
 배치 전송 트리거 조건:
@@ -47,9 +47,9 @@ props.put(ProducerConfig.LINGER_MS_CONFIG, 20);         // 20ms 대기
 
 ```mermaid
 graph TD
-    A["linger.ms=0: msg1→"]
-    B["linger.ms=20: msg1"]
-    B --> C["t=20: 배치 전송(1번, 처리"]
+    A["linger=0: 즉시전송"]
+    B["linger=20: msg1~N"]
+    B --> C["t=20: 배치 전송"]
 ```
 
 ### 압축(Compression)

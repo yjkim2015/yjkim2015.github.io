@@ -533,3 +533,53 @@ DB 서버 설정 확인:
     max-lifetime: 300000     # 5분 (NLB 350초보다 짧게) → 커넥션 선제 교체
     connection-test-query: SELECT 1  # JDBC4 미지원 시 사용 전 검증
 ```
+
+---
+
+## 왜 커넥션 풀인가? (vs 매번 연결 vs 외부 프록시)
+
+| 방식 | 장점 | 단점 |
+|------|------|------|
+| **매번 new Connection** | 구현 단순 | TCP 3-way handshake + TLS + DB 인증 매 요청마다 발생, 수십~수백 ms 오버헤드 |
+| **커넥션 풀 (HikariCP)** | 재사용으로 오버헤드 제거, 동시성 제어 | 풀 크기 튜닝 필요 |
+| **PgBouncer (외부 프록시)** | 수천 개 클라이언트 → 수십 개 DB 연결로 집약, 서버리스 환경에 적합 | 별도 인프라, Prepared Statement 모드 제한 |
+
+**결론**: 단일 앱 서버라면 HikariCP로 충분하다. 수백 개 Pod가 뜨는 Kubernetes 환경이라면 PgBouncer나 RDS Proxy를 앞에 두어 DB 연결 폭발을 막아야 한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: maximumPoolSize를 무조건 크게 설정**
+DB 서버의 `max_connections`를 고려하지 않고 앱 서버마다 풀 크기 100으로 설정한다. 앱 서버 10대면 DB에 1,000개 연결이 맺히고, DB는 연결 관리에만 메모리를 소진한다. HikariCP 공식 권장은 `(CPU 코어 수 × 2) + 유효 디스크 수`다.
+
+**실수 2: connectionTimeout을 기본값(30초)으로 방치**
+풀이 고갈될 때 스레드가 30초씩 대기한다. 서비스 전체가 느려지며 타임아웃이 연쇄 발생한다. `connectionTimeout=3000`(3초)로 빠르게 실패시키고 Circuit Breaker와 조합해야 한다.
+
+**실수 3: try-with-resources 미사용으로 커넥션 누수**
+`connection.close()`를 finally 블록에서 호출하지 않거나 예외 분기에서 누락한다. 풀이 서서히 고갈되다 새벽에 장애가 난다. `leak-detection-threshold=2000` 설정으로 조기에 감지해야 한다.
+
+**실수 4: 트랜잭션 안에서 외부 API 호출**
+DB 커넥션을 잡은 채 HTTP 호출(수백 ms~수 초)을 한다. 커넥션이 불필요하게 점유되어 풀이 빠르게 고갈된다. 외부 호출은 트랜잭션 밖으로 꺼내야 한다.
+
+**실수 5: 테스트 환경과 운영 환경의 풀 설정 동일**
+로컬 테스트는 DB가 같은 머신이라 지연이 없다. 운영에서는 네트워크 지연과 연결 overhead가 다르므로 `minimumIdle`, `keepaliveTime` 등을 별도로 튜닝해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. HikariCP가 다른 커넥션 풀보다 빠른 이유는?**
+바이트코드 최적화(JavaAssist 미사용), ConcurrentBag이라는 커스텀 lock-free 자료구조로 커넥션 대여/반납, 불필요한 예외 생성 최소화. Commons DBCP2 대비 처리량이 수 배 높다.
+
+**Q2. 풀 크기를 어떻게 결정하는가?**
+Brian의 공식: `pool_size = (core_count * 2) + effective_spindle_count`. SSD 환경에서는 1개로 계산해 코어 × 2 + 1이 시작점이다. 실제로는 부하 테스트로 응답 시간과 처리량 곡선을 그려서 결정한다.
+
+**Q3. 커넥션 풀 고갈 시 어떻게 대응하는가?**
+즉시: `connectionTimeout` 단축으로 빠른 실패, 서킷 브레이커 open. 근본 원인 파악: 슬로우 쿼리로 커넥션 오래 점유하는지, 트랜잭션 안에서 외부 호출하는지, 누수인지 구분. 중기: 풀 크기 조정 또는 PgBouncer 도입.
+
+**Q4. read-only 커넥션 풀을 분리하는 이유는?**
+읽기 요청을 레플리카로 분산해 마스터 부하를 줄이기 위해서다. Spring에서는 `@Transactional(readOnly=true)` + AbstractRoutingDataSource로 라우팅한다. 레플리카 지연(replication lag)으로 최신 데이터가 보이지 않을 수 있다는 트레이드오프를 인지해야 한다.
+
+**Q5. Kubernetes 환경에서 커넥션 풀 운영 시 주의점은?**
+Pod 스케일 아웃 시 DB 연결 수가 급증한다. Pod 100개 × 풀 10개 = DB 연결 1,000개. HPA 설정 시 `minimumIdle=1`로 낮추거나, PgBouncer/RDS Proxy를 중간에 배치해 연결을 집약해야 한다.

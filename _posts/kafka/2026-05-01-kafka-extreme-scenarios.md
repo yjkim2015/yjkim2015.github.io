@@ -88,30 +88,28 @@ props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 ```mermaid
 sequenceDiagram
     participant CA as Consumer A
-    participant CB as Consumer C (신규)
-    participant K as Kafka (P0)
-    CA->>K: poll() → [off50, off51, off52] 수신
-    Note over CA: off50 처리 완료
-    Note over CA: off51 처리 완료
-    Note over CA: off52 처리 중...
-    Note over CA,K: 리밸런싱 발생! (Consumer C 합류)
-    CA->>K: onPartitionsRevoked() → offset=52까지 커밋 (off51 완료)
+    participant K as Kafka
+    participant CB as Consumer C
+    CA->>K: poll() off50~52
+    Note over CA: off50,51 처리완료
+    Note over CA,K: 리밸런싱(C 합류)
+    CA->>K: offset=51 커밋
     K->>CB: P0 할당
-    CB->>K: poll() → [off52, off53, ...] 수신
-    Note over CB: off52 처리 ← 중복! (Consumer A도 처리했었음)
+    CB->>K: poll() off52~
+    Note over CB: off52 중복 처리!
 ```
 
 ### 상세 타임라인
 
 ```mermaid
 graph LR
-    T0["t=0: Consumer A poll"]
-    T1["t=1: off50 처리 완료"]
-    T2["t=2: off51 처리 완료"]
-    T3["t=3: off52 처리 시작"]
-    T5["t=5: 리밸런싱 시작"]
-    T6["t=6: Consumer C P0 할당"]
-    T7["t=7: off52 중복 처리"]
+    T0["t=0: A poll"]
+    T1["t=1: off50 완료"]
+    T2["t=2: off51 완료"]
+    T3["t=3: off52 시작"]
+    T5["t=5: 리밸런싱"]
+    T6["t=6: C→P0 할당"]
+    T7["t=7: off52 중복"]
     T0 --> T1 --> T2 --> T3 --> T5 --> T6 --> T7
 ```
 
@@ -418,10 +416,10 @@ default.replication.factor=3         ← 여유 복제본
 graph LR
     LEO["Log End Offset"]
     CO["Committed Offset"]
-    LAG["Lag = LEO - Offset"]
+    LAG["Lag=LEO-Offset"]
     CO -->|차이| LEO
     LEO --> LAG
-    NOTE["Producer 속도 > Consumer"]
+    NOTE["Producer > Consumer"]
 ```
 
 ### Lag 폭증 원인별 분류

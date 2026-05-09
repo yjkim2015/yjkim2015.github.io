@@ -957,3 +957,50 @@ graph LR
 ```
 
 Redis 장애 시 **로컬 캐시 폴백**을 기본 전략으로, Hot Key는 **키 샤딩**으로 대응하고, 모든 Rate Limit 응답에는 **표준 헤더(X-RateLimit-*, Retry-After)**를 반드시 포함하는 것이 실무 표준이다.
+
+---
+
+## 왜 이 기술인가?
+
+| 알고리즘 | 버스트 허용 | 정확도 | 메모리 | 적합한 상황 |
+|---|---|---|---|---|
+| Fixed Window Counter | O (경계에서 2x) | 낮음 | 최소 | 단순한 보호, 정확도 불필요 |
+| Sliding Window Log | X | 매우 높음 | 높음 (요청마다 저장) | 금융·결제 API |
+| Sliding Window Counter | O (최소) | 높음 | 낮음 | 실무 표준 |
+| Token Bucket | O (자연스럽게) | 높음 | 낮음 | 일반 API, 버스트 허용 |
+| Leaky Bucket | X (고정 속도) | 높음 | 낮음 | 다운스트림 보호 |
+
+**결론:** 대부분의 실무에서는 Redis 기반 Sliding Window Counter 또는 Token Bucket을 사용한다. Spring Cloud Gateway에서는 내장 `RequestRateLimiter` 필터가 Redis Token Bucket을 구현한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **분산 환경에서 로컬 RateLimiter 사용** — `Guava RateLimiter`나 `Bucket4j` InMemory는 JVM 단위로 동작한다. 인스턴스가 3개라면 실제 허용량이 3배가 된다. 분산 환경에서는 반드시 Redis 기반을 사용해야 한다.
+
+2. **Rate Limit 초과 응답에 표준 헤더 미포함** — `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `Retry-After` 헤더를 반환하지 않으면 클라이언트가 재시도 시점을 알 수 없어 요청 폭풍(retry storm)이 발생한다.
+
+3. **키 설계 실수 — 너무 광범위한 키** — `rateLimiter.userId` 대신 `rateLimiter.global`로 설정하면 모든 사용자가 하나의 버킷을 공유한다. 사용자별, 엔드포인트별로 키를 분리해야 한다.
+
+4. **Redis 장애 시 폴백 전략 없음** — Redis가 다운되면 Rate Limit 로직이 예외를 던져 API 자체가 불능이 된다. Redis 장애 시 로컬 카운터로 폴백하거나, 일시적으로 허용하는 전략을 미리 정의해야 한다.
+
+5. **429 응답을 무한 재시도하는 클라이언트** — 클라이언트가 429를 받아도 `Retry-After` 헤더를 무시하고 즉시 재시도하면 서버 부하가 오히려 증가한다. 지수 백오프(exponential backoff)를 클라이언트에 강제해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Token Bucket과 Sliding Window Counter의 차이는?**
+> Token Bucket은 토큰이 일정 속도로 채워지고 요청마다 소비된다. 버킷이 차면 버스트를 자연스럽게 허용한다. Sliding Window Counter는 현재 시간 기준 N초 이전의 요청 수를 가중 평균으로 계산한다. Token Bucket은 버스트 허용이 필요한 API에, Sliding Window는 정확한 속도 제한이 필요한 곳에 적합하다.
+
+**Q2. Fixed Window Counter의 경계 버스트 문제란?**
+> 1분 100개 제한에서, 0:59초에 100개, 1:00초에 100개 요청이 들어오면 2초 동안 200개가 처리된다. Sliding Window는 이 문제를 이전 윈도우 비율로 현재 카운트를 보정하여 해결한다.
+
+**Q3. Spring Cloud Gateway에서 Rate Limiting을 구현하는 방법은?**
+> `spring-boot-starter-data-redis-reactive` + `RequestRateLimiter` GatewayFilter를 사용한다. `KeyResolver`로 사용자별 키를 정의하고, `redis-rate-limiter.replenishRate`(초당 토큰 보충)와 `redis-rate-limiter.burstCapacity`(버킷 최대 용량)를 설정한다.
+
+**Q4. Rate Limiting 키를 어떻게 설계해야 하는가?**
+> 목적에 따라 다르다. IP 기반(`clientIp`)은 NAT 뒤의 사용자를 모두 하나로 묶는 문제가 있다. 인증된 사용자라면 `userId`를 키로 사용하고, 특정 엔드포인트 보호가 목적이면 `userId:endpoint`를 조합한다. 공개 API는 API Key를 키로 사용한다.
+
+**Q5. Redis가 장애일 때 Rate Limiter를 어떻게 처리해야 하는가?**
+> Fail-Open(허용) vs Fail-Closed(차단) 정책을 명시적으로 결정해야 한다. 일반적으로 Fail-Open을 선택하되, 로컬 카운터로 폴백해 기본 보호를 유지한다. 결제·보안 API는 Fail-Closed가 더 안전하다.

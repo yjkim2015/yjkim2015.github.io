@@ -183,11 +183,10 @@ public class OrderService {
 
 ```mermaid
 graph LR
-    A[OrderService] --> B["모든 비즈니스 로직"]
-    C[Order] --> D["데이터만(getter/set)"]
-    E[OrderSvc-DM] --> F["오케스트레이션만"]
+    A[OrderService] --> B["모든 비즈니스로직"]
+    C[Order] --> D["데이터(getter/set)"]
+    E[OrderSvc-DM] --> F["오케스트레이션"]
     G[Order-DM] --> H["cancel/getTotal"]
-    I[Item] --> J["removeStock"]
 ```
 
 ---

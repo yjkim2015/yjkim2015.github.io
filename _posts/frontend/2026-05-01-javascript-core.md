@@ -590,3 +590,93 @@ obj = { name: 'Lee' }; // ❌ TypeError
 | var/let/const | 스코프와 TDZ | 기본적으로 const, 재할당 필요 시 let |
 
 JavaScript의 이 개념들은 서로 연결되어 있습니다. 실행 컨텍스트가 클로저의 기반이 되고, 이벤트 루프가 Promise의 실행 순서를 결정하며, 프로토타입이 class 문법의 내부 동작입니다. 하나하나 이해하면 "왜 이렇게 동작하는가"를 설명할 수 있게 됩니다.
+
+---
+
+## 왜 JavaScript인가? (vs TypeScript vs 타 언어)
+
+JavaScript는 브라우저의 유일한 네이티브 언어다. Python, Java 등은 서버에서 실행되지만 브라우저 DOM을 직접 다룰 수 없다. Node.js 등장 이후 서버·CLI·도구까지 하나의 언어로 커버하는 유일한 선택지다.
+
+| 비교 | JavaScript | TypeScript |
+|------|-----------|-----------|
+| 타입 체크 | 런타임 | 컴파일 타임 |
+| 학습 곡선 | 낮음 | 중간 |
+| IDE 지원 | 기본 | 강력한 자동완성 |
+| 버그 조기 발견 | 어려움 | 쉬움 |
+| 대규모 팀 적합성 | 낮음 | 높음 |
+
+**TypeScript를 선택하는 이유**: 정적 타입으로 컴파일 타임에 버그를 잡는다. 타입이 자동 문서가 된다. 리팩토링 시 영향 범위를 IDE가 정확히 추적한다. 3인 이상 팀 프로젝트에서는 사실상 표준이다.
+
+---
+
+## 추가 실무 실수
+
+**실수 1: var 루프 클로저 함정**
+
+```javascript
+// ❌ 3, 3, 3 출력 — 모든 콜백이 같은 var i를 참조
+for (var i = 0; i < 3; i++) {
+    setTimeout(() => console.log(i), 100);
+}
+
+// ✅ let으로 해결 — 블록마다 새 바인딩 생성
+for (let i = 0; i < 3; i++) {
+    setTimeout(() => console.log(i), 100);  // 0, 1, 2
+}
+```
+
+**실수 2: Promise 에러를 catch하지 않아 프로세스 크래시**
+
+```javascript
+// ❌ reject된 Promise가 처리되지 않으면 UnhandledPromiseRejection
+async function fetchData() {
+    const data = await api.get('/items');
+    return data;
+}
+fetchData();  // .catch() 없음 → Node.js에서 프로세스 종료 가능
+
+// ✅ try/catch 필수
+try {
+    const data = await fetchData();
+} catch (err) {
+    console.error('API 실패:', err.message);
+}
+```
+
+**실수 3: == 연산자 타입 강제 변환 의존**
+
+```javascript
+// ❌ 예측하기 어려운 타입 변환
+0 == false      // true
+'' == false     // true
+null == undefined  // true
+[] == false     // true
+
+// ✅ 항상 === 사용 (타입까지 비교)
+// 유일한 예외: null 체크 시 == null은 null과 undefined를 동시에 잡음
+if (value == null) { ... }  // null || undefined 둘 다 처리
+```
+
+---
+
+## 추가 면접 포인트
+
+**Q1. 이벤트 루프에서 마이크로태스크와 태스크 큐의 차이는?**
+
+콜 스택이 비었을 때 이벤트 루프는 마이크로태스크 큐를 완전히 소진한 뒤 태스크 큐에서 하나를 꺼낸다. `Promise.then`, `queueMicrotask`, `MutationObserver`는 마이크로태스크다. `setTimeout`, `setInterval`, DOM 이벤트는 태스크다. 마이크로태스크가 무한히 추가되면 태스크(렌더링 포함)가 영원히 실행되지 않는다.
+
+**Q2. 클로저를 활용한 모듈 패턴이란?**
+
+외부 스코프 변수를 내부 함수가 참조하면, 외부 함수 실행이 끝나도 변수가 GC되지 않는다. 이를 이용해 `private` 변수와 `public` 인터페이스를 분리한다. ES 모듈 이전에는 IIFE + 클로저 패턴이 모듈 시스템을 대체했고, React의 `useState`도 내부적으로 클로저로 이전 상태를 보존한다.
+
+**Q3. `==`와 `===`의 차이, 언제 `==`를 써도 되는가?**
+
+`==`는 타입 강제 변환 후 비교해 예측하기 어렵다. 실무에서는 항상 `===`를 사용한다. 단, `value == null`은 `null`과 `undefined` 둘 다 잡아야 할 때 의도적으로 허용되는 유일한 패턴이다.
+
+**Q4. 프로토타입 체인과 ES6 class의 관계는?**
+
+`class` 문법은 프로토타입 기반 상속의 문법적 설탕이다. 내부적으로는 동일하게 `[[Prototype]]` 체인을 사용한다. `class A extends B`는 `A.prototype`의 `[[Prototype]]`을 `B.prototype`으로 설정한다. `typeof class`가 `"function"`인 것이 이를 증명한다.
+
+**Q5. 호이스팅이 실제로 문제가 되는 시나리오는?**
+
+`var`로 선언된 변수를 선언 전에 읽으면 `undefined`가 반환되어 조용히 버그가 발생한다. 조건문 안에 `var`를 쓰면 함수 전체 스코프로 올라가 의도치 않은 참조가 생긴다. `let`/`const`는 TDZ 덕분에 선언 전 접근 시 즉시 `ReferenceError`로 명시적 실패를 유도해 더 안전하다.

@@ -191,8 +191,8 @@ pureObject.key = 'value';
 ```mermaid
 graph LR
     PF["function Animal()"]
-    PP["Animal.prototype.speak"]
-    CC["class Animal { speak }"]
+    PP["prototype.speak"]
+    CC["class Animal"]
     PF -.->|"동일한 결과"| CC
     PP -.->|"동일한 결과"| CC
     style CC fill:#9b59b6,color:#fff

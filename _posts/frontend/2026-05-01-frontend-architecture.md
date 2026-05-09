@@ -581,3 +581,101 @@ function CartHeader() {
 | 테스트 피라미드 | 단위 60% + 통합 30% + E2E 10% | 느린 테스트 스위트, 낮은 신뢰성 |
 
 좋은 프론트엔드 아키텍처의 최종 목표는 **"변경이 두렵지 않은 코드"**입니다. 요구사항은 언제나 바뀝니다. 변경의 영향 범위를 최소화하는 경계를 잘 설계하는 것이 시니어 개발자의 핵심 역량입니다.
+
+---
+
+## 왜 이 아키텍처인가? (vs 모노리식 vs 마이크로프론트엔드)
+
+| 방식 | 특징 | 적합한 상황 |
+|------|------|------------|
+| 단일 파일/폴더 플랫 구조 | 빠른 시작, 규칙 없음 | 1인 프로젝트, 프로토타입 |
+| Feature 기반 모듈화 (권장) | 기능 단위 응집, 명확한 의존성 | 중~대규모 팀 프로젝트 |
+| 마이크로프론트엔드 | 팀별 독립 배포, 기술 스택 혼용 | 대기업 다팀 조직 |
+
+Feature 기반 모듈화는 "마이크로프론트엔드가 필요하지 않은 대부분의 프로젝트"에서 최적의 균형점이다. 독립성과 유지보수성을 확보하면서 단일 레포(monorepo)의 단순함을 유지한다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 프레젠테이션 컴포넌트 안에서 API 직접 호출**
+
+```tsx
+// ❌ UI와 데이터 로직이 섞여 Storybook 개발·단위 테스트 불가
+function ProductCard({ productId }) {
+    const [product, setProduct] = useState(null);
+    useEffect(() => {
+        fetch(`/api/products/${productId}`).then(r => r.json()).then(setProduct);
+    }, [productId]);
+    return <div>{product?.name}</div>;
+}
+
+// ✅ 컨테이너가 데이터를, 프레젠테이션이 UI만 담당
+function ProductCard({ productId }) {
+    const { data } = useProduct(productId);
+    return <ProductCardView product={data} />;
+}
+```
+
+**실수 2: 필터/검색 상태를 전역 스토어에 저장**
+
+```tsx
+// ❌ 새로고침 시 상태 초기화, URL 공유 불가, 뒤로가기 이상 동작
+const useFilterStore = create(set => ({ category: 'all' }));
+
+// ✅ URL searchParams로 관리 — 공유·새로고침·히스토리 자동 해결
+// /products?category=electronics&sort=price&page=2
+```
+
+**실수 3: features/ 내부 파일을 외부에서 직접 import**
+
+```tsx
+// ❌ 내부 구현 직접 참조 → 리팩토링 시 모든 import 경로 깨짐
+import { authSlice } from '@/features/auth/store/authSlice';
+
+// ✅ 공개 API(index.ts)를 통해서만 접근
+import { useAuth } from '@/features/auth';
+```
+
+**실수 4: Context를 전역 상태 만능 해결책으로 남용**
+
+```tsx
+// ❌ Context 값이 바뀌면 모든 구독 컴포넌트 리렌더링
+// 장바구니 수량 변경 시 Header, Footer, 모든 ProductCard 재렌더링
+const AppContext = createContext({ cart, user, theme, language });
+
+// ✅ 관심사별 Context 분리 또는 Zustand로 선택적 구독
+const items = useCartStore(state => state.items); // items만 구독
+```
+
+**실수 5: HTTP 클라이언트를 컴포넌트에서 직접 사용**
+
+```tsx
+// ❌ axios를 10개 컴포넌트에서 직접 사용 → fetch로 교체 시 10곳 수정
+import axios from 'axios';
+const res = await axios.get('/api/products');
+
+// ✅ API 레이어 추상화 — 교체 시 httpClient.ts 한 곳만 수정
+import { productApi } from '@/features/products';
+const products = await productApi.getList();
+```
+
+---
+
+## 면접 포인트
+
+**Q1. Atomic Design의 각 단계를 실제 컴포넌트 예시로 설명하라.**
+
+Atoms는 Button, Input, Badge처럼 더 이상 쪼갤 수 없는 최소 단위다. Molecules는 SearchBar(Input + Button 조합)처럼 원자의 조합으로 하나의 기능을 수행한다. Organisms는 Header(Logo + Nav + SearchBar)처럼 실제 UI 섹션이다. Templates는 레이아웃만 정의하고 실제 데이터는 없다. Pages는 Templates에 실제 데이터를 주입한 최종 화면이다.
+
+**Q2. 상태를 어떤 기준으로 로컬/전역/서버 상태로 분류하는가?**
+
+데이터의 출처와 사용 범위로 결정한다. 하나의 컴포넌트 안에서만 쓰이면 로컬 상태(useState). 여러 컴포넌트가 공유하되 서버와 무관하면 전역 상태(Zustand). API에서 오는 데이터는 서버 상태(React Query) — 캐싱, 리페칭, 동기화가 필요하기 때문이다. URL로 표현 가능한 필터·검색·페이지는 URL 상태로 관리한다.
+
+**Q3. 컴포넌트 테스트 가능성을 높이려면 어떤 설계 원칙을 따르는가?**
+
+프레젠테이션 컴포넌트를 순수하게 유지한다. props만 받아 UI를 렌더링하면 테스트에서 props만 주입해 어떤 상태든 재현할 수 있다. API 호출은 커스텀 훅으로 격리하고, 테스트에서 MSW로 모킹한다. 의존성 역전 원칙으로 구체적인 구현 대신 인터페이스에 의존하면 Mock 교체가 쉬워진다.
+
+**Q4. Feature 모듈의 index.ts(공개 API)가 왜 중요한가?**
+
+내부 구현 파일을 외부에서 직접 import하면, 내부 리팩토링 시 해당 파일을 import한 모든 곳을 수정해야 한다. index.ts를 공개 인터페이스로 고정하면 내부 파일 구조가 바뀌어도 외부 코드는 영향받지 않는다. 객체지향의 캡슐화 원칙을 모듈 레벨에 적용한 것이다.

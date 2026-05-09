@@ -103,8 +103,8 @@ graph LR
 
 ```mermaid
 graph TD
-    FROM1["From Space: A* B C* D"] -->|"살아있는 객체만 복사"| TO2["To Space: A* C*"]
-    FROM2["From Space: 전체 비움"]
+    FROM1["From: A* B C* D"] -->|"살아있는 객체 복사"| TO2["To: A* C*"]
+    FROM2["From: 전체 비움"]
 ```
 
 **장점**: 단편화 없음, 할당 속도 빠름(포인터 하나만 이동).
@@ -118,7 +118,7 @@ Young Generation의 Eden ↔ Survivor 복사에 이 방식을 사용합니다.
 ```mermaid
 graph LR
     A["A count=1"] --> B["B count=1"] --> C["C count=1"] --> A
-    NOTE["순환참조: 외부 없어도 count>=1"]
+    NOTE["순환참조: count>=1"]
 ```
 
 ---
@@ -133,9 +133,9 @@ graph LR
 
 ```mermaid
 graph LR
-    S["짧은 수명(대다수)"] -->|"수명증가→객체수 급감"| L["긴 수명(소수)"]
-    N1["대부분 생성 직후 회수"]
-    N2["살아남으면 오래 생존"]
+    S["짧은 수명(대다수)"] -->|"수명↑→객체수 급감"| L["긴 수명(소수)"]
+    N1["생성 직후 회수"]
+    N2["살아남으면 장수"]
 ```
 
 이 가설을 바탕으로 메모리를 **Young Generation**과 **Old Generation**으로 분리합니다.
@@ -144,9 +144,9 @@ graph LR
 
 ```mermaid
 graph LR
-    Eden["Eden 약 80%"] --> S0["S0 Survivor"]
+    Eden["Eden 80%"] --> S0["S0 Survivor"]
     S0 --> S1["S1 Survivor"]
-    TLAB["TLAB: Thread-Local 할당"]
+    TLAB["TLAB: TL 할당"]
 ```
 
 ### Minor GC vs Major GC vs Full GC
@@ -163,15 +163,12 @@ graph TD
 sequenceDiagram
     participant Eden
     participant S0 as Survivor S0
-    participant S1 as Survivor S1
-    participant Old as Old Generation
-    Note over Eden: 1단계: 새 객체 할당 (A,B,C,D,E)
-    Eden->>S0: 2단계: Minor GC - 살아있는 객체(A,C,E) 복사 (age=1)
-    Note over Eden: Eden 전체 비움
-    S0->>S1: 3단계: 다음 Minor GC - 살아있는 객체(A,E) 복사 (age=2)
-    Note over S0: B,C 등 죽은 객체 회수
-    S1->>Old: 4단계: age >= MaxTenuringThreshold(15) 도달 시 승격(Promote)
-    Note over Old: 장수 객체들 보관
+    participant Old as Old Gen
+    Note over Eden: 새 객체 할당(A,B,C)
+    Eden->>S0: Minor GC→생존(A,C) age=1
+    Note over Eden: Eden 비움
+    S0->>Old: age>=15→승격
+    Note over Old: 장수 객체 보관
 ```
 
 ---
@@ -309,8 +306,8 @@ byte[] hugeArray = new byte[2 * 1024 * 1024]; // 2MB → Humongous
 
 ```mermaid
 graph TD
-    CT["Old Region Card Table"] -->|"참조 발생 시 기록"| RS["Young Region RemSet"]
-    NOTE["Young GC 시 RS만 확인"]
+    CT["Old Region CardTable"] -->|"참조 기록"| RS["Young Region RemSet"]
+    NOTE["Young GC: RS만 확인"]
     RS --> NOTE
 ```
 
@@ -328,9 +325,9 @@ graph TD
 
 ```mermaid
 graph LR
-    P1["일반 포인터: 실제 주소 64비트"]
-    P2["ZGC: 실제주소 42비트 + 메타4비트"]
-    META["상위 4비트 GC 상태 저장"]
+    P1["일반 포인터: 64비트"]
+    P2["ZGC: 42비트+메타4비트"]
+    META["4비트=GC 상태"]
     P2 --> META
 ```
 
@@ -397,8 +394,8 @@ RedHat이 개발한 **동시 압축(Concurrent Compaction)** GC입니다.
 ```mermaid
 graph TD
     BP["Brooks Pointer"] --> OH["Object Header"] --> OF["Object Fields"]
-    OLD["Old Location"] -->|"Brooks Pointer → New"| NEW["New Location"]
-    NOTE["모든 스레드가 old 통해 new 접근"]
+    OLD["Old Location"] -->|"BP → New"| NEW["New Location"]
+    NOTE["old 통해 new 접근"]
 ```
 
 | 항목 | ZGC | Shenandoah |

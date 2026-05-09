@@ -121,7 +121,6 @@ stream.forEach(System.out::println);
 
 ```mermaid
 graph LR
-  F1["filter(A,B,C)"] --> M1["map(A,B,C)"] --> R1["forEach"]
   A["요소 A"] -->|"filter"| FA["통과"]
   FA -->|"map"| MA["변환"]
   MA -->|"forEach"| RA["출력"]

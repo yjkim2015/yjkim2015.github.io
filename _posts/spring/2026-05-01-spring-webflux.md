@@ -439,11 +439,9 @@ Flux.range(1, 5)
 
 ```mermaid
 graph LR
-    PA["소스(main)"] --> PB["map(A)"]
-    PB --> PC["publishOn(parallel)"]
-    PC --> PD["map(B)"] --> PE["map(C)"] --> PF[subscribe]
-    SA["소스"] --> SB["map(A)"] --> SC["map(B)"]
-    SC --> SD["subscribeOn(elastic)"]
+    PA["소스(main)"] --> PB["map(A)"] --> PC["publishOn"]
+    PC --> PD["map(B)&map(C)"] --> PF[subscribe]
+    SA["소스"] --> SB["map(A)&map(B)"] --> SD["subscribeOn"]
     SD --> SE["subscribe(main)"]
 ```
 

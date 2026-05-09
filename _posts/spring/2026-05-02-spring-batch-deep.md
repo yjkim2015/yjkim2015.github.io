@@ -97,11 +97,9 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant S as Step
-    participant R as Reader
-    participant P as Processor
+    participant R as Reader/Processor
     participant W as Writer
-    S->>R: read() 아이템
-    S->>P: process(item)
+    S->>R: read()+process()
     S->>W: write(chunk)
     W-->>S: 완료/커밋
 ```

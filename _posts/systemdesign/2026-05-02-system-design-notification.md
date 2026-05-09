@@ -468,6 +468,84 @@ APNs P99 > 1초 → Slack 알림 (서킷 브레이커 상태 확인)
 
 ---
 
+## 실무에서 놓치기 쉬운 케이스
+
+### 1. 알림 피로 — 하루 30개 알림에 사용자가 앱을 삭제한다
+
+"알림을 보낼 수 있으면 무조건 보내자"는 마케팅 논리가 시스템 설계에 스며들면 사용자는 알림을 무시하거나 앱을 삭제한다. 실제로 앱 삭제 사유 1위가 "알림이 너무 많아서"인 서비스가 적지 않다.
+
+해결책은 **사용자별 일일 알림 상한선(Daily Cap)** 과 **채널별 우선순위 필터링**이다.
+
+```python
+DAILY_CAP = {
+    "marketing": 3,   # 마케팅 알림 하루 최대 3개
+    "social": 10,     # 팔로우·좋아요 등 소셜 알림
+    "system": None,   # 결제·보안 알림은 무제한
+}
+
+def should_send(user_id, category):
+    key = f"notif_count:{user_id}:{today()}:{category}"
+    cap = DAILY_CAP.get(category)
+    if cap is None:
+        return True  # system 알림은 항상 전송
+    count = redis.incr(key)
+    if count == 1:
+        redis.expire(key, 86400)  # 자정 초기화
+    return count <= cap
+```
+
+알림 발송 전 이 함수를 호출해 상한을 초과한 알림은 큐에서 드롭한다. 사용자 설정 화면에서 카테고리별 알림을 켜고 끌 수 있게 하면 이탈률이 추가로 낮아진다.
+
+---
+
+### 2. 알림 묶음 처리 — "좋아요 1개"를 1분 뒤 "좋아요 47개"로 바꾸기
+
+인기 게시글에 1분 안에 좋아요가 47개 눌리면 47개의 개별 푸시가 발사된다. 사용자 입장에서는 폰이 진동 47번을 한다. 이는 알림 피로의 가장 흔한 원인이다.
+
+**Aggregation Window** 패턴으로 해결한다.
+
+```
+좋아요 이벤트 발생 → Kafka 토픽(notif-like)에 적재
+                      ↓
+              Flink / Kafka Streams (30초 윈도우)
+              같은 post_id + user_id 묶음 집계
+                      ↓
+              "김철수 외 46명이 좋아요를 눌렀습니다" 단일 알림 발송
+```
+
+묶음 기준은 수신자(알림 받는 사람)와 알림 유형의 조합이다. 단, 결제 완료·보안 로그인 알림은 절대 묶지 않는다. 묶음 적용 여부를 `notification_type` 메타데이터로 관리하면 실수를 막을 수 있다.
+
+---
+
+### 3. 푸시 토큰 만료 — 보내도 안 가는데 왜 성공으로 찍히나
+
+APNs와 FCM은 디바이스 토큰이 유효하지 않을 때 HTTP 410 또는 `InvalidRegistration` 에러를 반환한다. 이 에러를 무시하고 재시도하면 해당 토큰에 대한 발송이 영구히 실패하는데도 발송 성공률 지표는 정상으로 보인다.
+
+토큰 무효화가 발생하는 대표 상황:
+- 사용자가 앱을 삭제하고 재설치 (새 토큰 발급)
+- iOS 업데이트 후 APNs 토큰 재발급
+- 오래된 토큰 (FCM은 270일 미사용 시 만료)
+
+```python
+def handle_fcm_response(user_id, token, response):
+    if response.status_code == 200:
+        result = response.json()
+        # FCM은 200이어도 내부에 에러가 있을 수 있음
+        if "error" in result.get("results", [{}])[0]:
+            error = result["results"][0]["error"]
+            if error in ("NotRegistered", "InvalidRegistration"):
+                # 즉시 토큰 무효화 처리
+                db.execute(
+                    "UPDATE device_tokens SET valid=0 WHERE token=%s",
+                    (token,)
+                )
+                log.warning(f"Token invalidated for user {user_id}")
+```
+
+토큰 유효성을 주기적으로 검증하는 배치 작업(월 1회)과 발송 시 실시간 무효화 처리를 함께 운영해야 한다. 무효 토큰 비율이 5%를 넘으면 알림 인프라 비용이 눈에 띄게 증가한다.
+
+---
+
 ## 핵심 설계 결정 요약
 
 | 결정 | 선택 | 이유 |

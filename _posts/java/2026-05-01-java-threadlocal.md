@@ -700,6 +700,132 @@ public CompletableFuture<Result> processAsync() {
 
 ---
 
+## 왜 이 기술인가? — ThreadLocal vs 대안들
+
+| 비교 항목 | ThreadLocal | 메서드 파라미터 전달 | synchronized 공유 변수 | ScopedValue (Java 21+) |
+|-----------|------------|------------------|----------------------|------------------------|
+| 스레드 격리 | O | O (명시적) | X (공유) | O |
+| 코드 침습성 | 낮음 (전역 접근) | 높음 (모든 시그니처 변경) | 낮음 | 낮음 |
+| 성능 | 높음 (락 없음) | 높음 | 낮음 (락 경합) | 높음 |
+| 메모리 누수 위험 | 높음 (remove 필수) | 없음 | 낮음 | 없음 (자동 해제) |
+| 가변성 | O (set/get 자유) | O | O | X (불변 바인딩) |
+| Virtual Thread | 메모리 주의 | 문제없음 | 문제없음 | 최적화됨 |
+
+**언제 ThreadLocal을 선택하는가?**
+
+요청 컨텍스트(사용자 인증 정보, 트랜잭션 ID, 로케일)를 호출 스택 전체에서 접근해야 하는데, 모든 메서드 시그니처를 바꾸는 것이 현실적으로 불가능할 때입니다. Spring Security, MDC, Spring 트랜잭션 관리가 이 패턴을 사용합니다.
+
+**언제 ThreadLocal을 피해야 하는가?**
+
+비동기 처리(`CompletableFuture`, `@Async`)에서는 다른 스레드로 컨텍스트가 전달되지 않습니다. 스레드 풀 환경에서 `remove()`를 누락하면 값 오염과 메모리 누수가 동시에 발생합니다. Java 21+ Virtual Thread를 대량 사용하는 경우 `ScopedValue`가 더 안전합니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 스레드 풀에서 remove() 미호출로 값 오염**
+
+```java
+// 심각한 보안 버그 — 50개 스레드 풀에서 운영 중인 REST API
+@RestController
+class OrderController {
+    private static final ThreadLocal<String> currentUserId = new ThreadLocal<>();
+
+    @GetMapping("/orders")
+    public List<Order> getOrders(HttpServletRequest req) {
+        currentUserId.set(extractUserId(req));
+        return orderService.getOrders(currentUserId.get());
+        // remove() 없음! → Thread-1이 "user-A"를 저장 후 풀에 반환
+        // 다음 요청 Thread-1이 재사용될 때 "user-A"가 그대로 남아있음
+        // B 사용자가 A의 주문을 볼 수 있는 데이터 유출 발생!
+    }
+}
+
+// 올바른 패턴 — Filter에서 생명주기 관리
+public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
+    try {
+        currentUserId.set(extractUserId(req));
+        chain.doFilter(req, res);
+    } finally {
+        currentUserId.remove(); // 반드시 finally에서 제거
+    }
+}
+```
+
+**실수 2: 비동기 처리에서 ThreadLocal 값 미전달**
+
+```java
+// 문제: CompletableFuture는 다른 스레드에서 실행
+@Service
+class ReportService {
+    public CompletableFuture<Report> generateAsync() {
+        String tenantId = TenantContext.get(); // ThreadLocal에서 가져옴
+        return CompletableFuture.supplyAsync(() -> {
+            // 별도 스레드 → tenantId ThreadLocal 값이 없음!
+            String id = TenantContext.get(); // null → NullPointerException
+            return queryReport(id);
+        });
+    }
+}
+
+// 해결: 값을 명시적으로 캡처해서 전달
+public CompletableFuture<Report> generateAsync() {
+    String tenantId = TenantContext.get(); // 현재 스레드에서 캡처
+    return CompletableFuture.supplyAsync(() -> {
+        TenantContext.set(tenantId); // 새 스레드에 명시적 설정
+        try {
+            return queryReport(tenantId);
+        } finally {
+            TenantContext.clear(); // 정리
+        }
+    });
+}
+```
+
+**실수 3: static이 아닌 ThreadLocal 인스턴스 필드 선언**
+
+```java
+// 안티패턴: 인스턴스마다 다른 ThreadLocal 생성
+@Service // 싱글톤이지만...
+class BadService {
+    private ThreadLocal<String> local = new ThreadLocal<>(); // non-static
+    // 스프링 빈이 프로토타입이면 매 요청마다 새 ThreadLocal 생성 → 관리 불가
+}
+
+// 올바른 패턴: static final로 선언
+@Service
+class GoodService {
+    private static final ThreadLocal<String> local = new ThreadLocal<>();
+    // 하나의 ThreadLocal 인스턴스, 스레드별로 독립된 값 저장
+}
+```
+
+---
+
+## 면접 포인트
+
+**Q1. ThreadLocal의 메모리 누수 원인을 설명하세요.**
+
+`ThreadLocalMap.Entry`의 키는 `WeakReference<ThreadLocal<?>>`입니다. 외부에서 ThreadLocal 변수를 null로 해도 키의 WeakReference가 GC에 의해 수거됩니다. 그러나 Entry의 value는 강참조로 남아 있습니다. 스레드 풀의 스레드는 JVM 종료까지 살아있으므로, 스레드가 살아있는 한 값이 계속 메모리를 점유합니다. 해결책은 반드시 `finally`에서 `remove()`를 호출하는 것입니다.
+
+**Q2. ThreadLocal.withInitial()의 사용 목적은?**
+
+`get()`을 처음 호출할 때 null 대신 기본값을 반환하도록 초기값 공급자를 지정합니다. `ThreadLocal.withInitial(() -> new ArrayList<>())`처럼 사용하면 각 스레드가 처음 `get()` 호출 시 새 ArrayList를 받습니다. null 체크 없이 바로 사용할 수 있어 코드가 간결해집니다.
+
+**Q3. InheritableThreadLocal의 한계는?**
+
+부모 스레드에서 자식 스레드를 생성할 때 값을 상속합니다. 그러나 스레드 풀에서는 스레드가 풀 초기화 시점에 한 번만 생성됩니다. 이후 요청마다 스레드를 재사용하므로 부모(요청 처리) 스레드의 값이 자식 스레드에 전파되지 않습니다. 스레드 풀 + 컨텍스트 전파가 필요하면 Alibaba의 `TransmittableThreadLocal(TTL)`을 사용합니다.
+
+**Q4. ScopedValue와 ThreadLocal의 핵심 차이는?**
+
+`ThreadLocal`은 언제든 `set()`으로 값을 변경할 수 있고 `remove()`를 수동으로 호출해야 합니다. `ScopedValue`는 `where().run()` 블록 내에서만 유효한 불변 바인딩입니다. 블록을 벗어나면 자동으로 해제됩니다. Virtual Thread 환경에서 수백만 개의 스레드가 생성될 때 메모리 효율이 훨씬 좋습니다. Java 21+ 권장 대안입니다.
+
+**Q5. Spring Security는 왜 ThreadLocal을 사용하나요?**
+
+HTTP 요청-응답 주기 동안 인증된 사용자 정보(`Authentication`)를 어디서든 접근할 수 있어야 합니다. 메서드 파라미터로 전달하면 모든 서비스/레포지토리 메서드 시그니처에 `Authentication`이 추가되어야 합니다. ThreadLocal을 사용하면 코드 침습 없이 `SecurityContextHolder.getContext().getAuthentication()`으로 어디서나 접근 가능합니다. Spring이 `SecurityContextPersistenceFilter`에서 요청 시작 시 설정하고 종료 시 정리합니다.
+
+---
+
 ## 전체 구조 요약
 
 ```mermaid

@@ -451,3 +451,168 @@ inhibit_rules:
       alertname: 'HighLatency'
     equal: ['job']
 ```
+
+---
+
+## 왜 Prometheus + Grafana인가? (vs 대안 비교)
+
+| 도구 | 특징 | 비용 | 선택 기준 |
+|------|------|------|---------|
+| **Prometheus + Grafana** | 오픈소스, Pull 방식, PromQL | 무료 (인프라 비용만) | 쿠버네티스 환경, 커스터마이징 중요할 때 |
+| **Datadog** | SaaS, 에이전트 Push, 전방위 모니터링 | 호스트당 $23~+ /월 | 빠른 도입, 팀 규모 작을 때 |
+| **New Relic** | APM 강점, 코드 레벨 분석 | 사용량 기반 | Java 애플리케이션 심층 분석 |
+| **Grafana Cloud** | Prometheus + Loki + Tempo 통합 SaaS | 무료 티어 있음 | 자체 운영 부담 줄이면서 OSS 스택 유지 |
+| **AWS CloudWatch** | AWS 네이티브, 별도 설치 불필요 | 메트릭당 과금 | AWS 단일 클라우드 환경 |
+
+```
+Prometheus를 선택하는 핵심 이유:
+1. Pull 방식 → 서비스가 죽어도 Prometheus는 살아있음 (장애 격리)
+2. PromQL → 유연한 집계 (rate, histogram_quantile, by 절)
+3. Kubernetes 네이티브 (ServiceMonitor, PodMonitor CRD)
+4. 오픈소스 생태계: Alertmanager, Thanos, Cortex
+
+Datadog을 선택하는 경우:
+- 팀이 작고 운영 부담을 줄이고 싶을 때
+- APM + Logs + Metrics를 하나의 UI에서 보고 싶을 때
+- 비용이 문제 없을 때
+```
+
+---
+
+## 실무에서 자주 하는 실수
+
+#### 실수 1: 모든 로그에 INFO 레벨 사용
+
+```java
+// 나쁜 예 — 정상 흐름에 INFO 남발
+log.info("getUser 호출됨: userId={}", userId);
+log.info("DB 조회 완료: {}", user);
+log.info("응답 반환: {}", response);
+// → 트래픽 많으면 초당 수천 줄 → ELK 스토리지 폭발
+
+// 좋은 예 — 레벨 구분
+log.debug("getUser 호출: userId={}", userId);     // 개발 환경에서만
+log.warn("캐시 미스 빈번: {}회/분", missCount);    // 이상 징후
+log.error("결제 처리 실패: orderId={}", orderId, e); // 반드시 알림
+```
+
+#### 실수 2: 알림 임계값을 너무 낮게 설정 (Alert Fatigue)
+
+```yaml
+# 나쁜 예 — 1초라도 에러 나면 알림
+- alert: AnyError
+  expr: rate(http_errors_total[1m]) > 0
+  # → 새벽 3시에도 알림 → 담당자가 알림을 무시하기 시작
+
+# 좋은 예 — 의미있는 임계값 + 지속 시간
+- alert: HighErrorRate
+  expr: rate(http_errors_total[5m]) / rate(http_requests_total[5m]) > 0.01
+  for: 2m  # 2분간 지속될 때만 알림
+  # → 일시적 스파이크 무시, 실제 장애만 감지
+```
+
+#### 실수 3: 메트릭 카디널리티 폭발
+
+```java
+// 나쁜 예 — userId를 레이블로 사용
+Counter.builder("api.calls")
+    .tag("userId", userId.toString())  // 사용자 100만명 → 레이블 100만개
+    .register(registry);
+// → Prometheus OOM
+
+// 좋은 예 — 카디널리티 낮은 레이블만 사용
+Counter.builder("api.calls")
+    .tag("endpoint", "/api/orders")   // 엔드포인트 수십 개
+    .tag("status", "200")             // 상태 코드 수십 개
+    .register(registry);
+```
+
+#### 실수 4: 분산 추적 없이 MSA 운영
+
+```
+증상: "주문 API가 가끔 3초 걸리는데 어디가 문제인지 모르겠다"
+원인: 각 서비스 로그를 따로 뒤져야 하고 연결할 방법이 없음
+
+해결: Spring Sleuth + Zipkin 또는 OpenTelemetry 도입
+  → 모든 서비스에 TraceId 자동 전파
+  → 단일 TraceId로 전체 요청 흐름 추적
+  → 어느 서비스에서 얼마나 걸렸는지 시각화
+```
+
+#### 실수 5: 로그에 민감정보 포함
+
+```java
+// 나쁜 예
+log.info("결제 요청: cardNumber={}, cvv={}", cardNumber, cvv);
+log.info("로그인: userId={}, password={}", userId, password);
+
+// 좋은 예 — 마스킹 처리
+log.info("결제 요청: cardNumber=****{}", cardNumber.substring(cardNumber.length()-4));
+log.info("로그인 시도: userId={}", userId);  // 비밀번호 절대 로깅 금지
+```
+
+---
+
+## 면접 포인트
+
+#### Q. Prometheus의 Pull 방식과 Push 방식의 차이점은?
+
+```
+Pull 방식 (Prometheus):
+  Prometheus가 각 서비스의 /metrics 엔드포인트를 주기적으로 호출
+  장점: 서비스가 죽으면 scrape 실패로 즉시 감지
+       Prometheus 장애가 서비스에 영향 없음
+  단점: 방화벽 내부 서비스 scrape 어려움 (Pushgateway로 해결)
+
+Push 방식 (Datadog, Graphite):
+  각 서비스가 중앙 서버로 메트릭을 능동적으로 전송
+  장점: 방화벽 뒤 서비스도 쉽게 수집
+  단점: 에이전트 장애 시 메트릭 유실, 중앙 서버 부하 집중
+```
+
+#### Q. PromQL에서 rate()와 irate()의 차이는?
+
+```
+rate(metric[5m]):
+  지정 기간(5분) 전체의 평균 증가율
+  → 안정적, 트래픽 급증에 둔감
+  → 대부분의 알림 규칙에 적합
+
+irate(metric[5m]):
+  마지막 두 샘플 간의 순간 증가율
+  → 반응성 높음, 스파이크 감지에 유리
+  → 그래프가 불안정해 보일 수 있음
+
+실무 권장: 알림 규칙은 rate(), 실시간 대시보드는 irate()
+```
+
+#### Q. Grafana 대시보드에서 P95 응답시간은 어떻게 구하는가?
+
+```promql
+histogram_quantile(0.95,
+  sum(rate(http_server_requests_seconds_bucket[5m])) by (le, uri)
+)
+
+핵심: histogram_quantile은 버킷(bucket) 메트릭에서만 동작
+      _bucket suffix가 있어야 함 (Micrometer 자동 생성)
+      le 레이블 = less than or equal (버킷 상한값)
+      0.95 = P95, 0.99 = P99, 0.5 = P50(중앙값)
+```
+
+#### Q. 로그, 메트릭, 트레이스를 언제 각각 써야 하는가?
+
+```
+Metrics: 지금 시스템이 어떤 상태인가? (정량적)
+  → "에러율 2%", "TPS 5000", "Heap 85%"
+  → 알림 트리거에 사용
+
+Logs: 무슨 일이 있었는가? (이벤트 기록)
+  → "OrderId 123 결제 실패: 잔액 부족"
+  → 원인 분석, 감사 로그
+
+Traces: 어디서 느렸는가? (요청 흐름)
+  → "Order → Payment(200ms) → Inventory(50ms)"
+  → MSA 환경 병목 지점 파악
+
+세 요소는 서로 보완: Metrics로 이상 감지 → Logs로 원인 파악 → Traces로 위치 특정
+```

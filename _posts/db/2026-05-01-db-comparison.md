@@ -898,3 +898,22 @@ RDBMS 선택에서 "최고의 데이터베이스"는 존재하지 않는다. 워
 - **SQL Server**: Microsoft 생태계, Azure, .NET 환경에서 가장 자연스러운 선택.
 
 클라우드 시대에는 Aurora(MySQL/PostgreSQL 호환)나 AlloyDB(PostgreSQL 호환)도 충분히 실용적인 대안이다. 스타트업이라면 PostgreSQL + RDS/Cloud SQL로 시작하여 성장에 따라 Aurora나 Citus(분산 PostgreSQL)로 전환하는 경로를 추천한다.
+
+---
+
+## 면접 포인트
+
+**Q1. MySQL과 PostgreSQL의 가장 큰 차이점은?**
+MySQL은 기본 스토리지 엔진(InnoDB)이 교체 가능한 플러그인 구조이고, `utf8`이 실제로 3바이트라는 함정이 있다. PostgreSQL은 MVCC 구현 방식이 다르며(힙 기반 다중 버전), 배열·JSON·범위 타입 등 풍부한 네이티브 타입, 강력한 확장성(PostGIS, pg_vector 등), 표준 SQL 준수도가 높다. 신규 프로젝트에서 특별한 이유가 없다면 PostgreSQL을 선택하는 것이 최근 업계 트렌드다.
+
+**Q2. Oracle이 비싼데도 사용하는 이유는?**
+Real Application Clusters(RAC)를 통한 Active-Active 고가용성, Data Guard의 검증된 DR 솔루션, 수십 년간 금융·공공 환경에서 검증된 안정성, PL/SQL 자산이 수백만 줄인 레거시 시스템 때문이다. 마이그레이션 비용이 라이선스 비용을 초과하는 경우가 많다.
+
+**Q3. Aurora는 MySQL/PostgreSQL과 무엇이 다른가?**
+스토리지 레이어를 분리해 6개 AZ에 걸쳐 6개 복사본을 유지한다. Write는 6개 중 4개 확인 후 커밋, Read는 로컬 캐시 활용으로 MySQL 대비 최대 5배, PostgreSQL 대비 최대 3배 처리량을 낸다. 스토리지 auto-scaling(최대 128TB), 복제 지연이 수십 ms 수준이다.
+
+**Q4. 어떤 기준으로 DB를 선택하는가?**
+① 팀의 기존 역량 ② 워크로드 특성(OLTP/OLAP/혼합) ③ 확장 요구사항(수직/수평) ④ 클라우드 관리형 서비스 지원 여부 ⑤ 라이선스 비용. 기술 선택 자체보다 선택 이유를 명확히 문서화하는 것이 중요하다.
+
+**Q5. RDBMS와 NoSQL을 같이 쓰는 경우는?**
+대부분의 실무 시스템은 폴리글랏(polyglot persistence)을 채택한다. 주문·결제는 PostgreSQL(ACID), 세션·캐시는 Redis, 로그·이벤트는 Elasticsearch, 사용자 피드 같은 대규모 document는 MongoDB 식으로 각 문제에 최적 도구를 선택한다.

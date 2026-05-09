@@ -41,7 +41,7 @@ OS 스레드는 생성 비용과 유지 비용이 매우 큽니다.
 
 ```mermaid
 gantt
-  title Platform Thread I/O 블로킹
+  title Thread I/O 블로킹
   dateFormat X
   axisFormat %s
   section Thread-1
@@ -50,9 +50,6 @@ gantt
   section Thread-2
   처리 : 0, 2
   HTTP 대기 : crit, 2, 8
-  section Thread-3
-  처리 : 0, 2
-  파일IO : crit, 2, 5
 ```
 
 ### 비동기 프로그래밍의 복잡성
@@ -116,14 +113,9 @@ Virtual Thread 스위칭:
 
 ```mermaid
 graph LR
-    JT1[Java Thread 1] --> OST1[OS Thread 1]
-    JT2[Java Thread 2] --> OST2[OS Thread 2]
-    JT3[Java Thread 3] --> OST3[OS Thread 3]
-    VT1[VThread 1] --> CT1[Carrier 1]
-    VT2[VThread 2] --> CT1
-    VT3[VThread 3] --> CT2[Carrier 2]
-    CT1 --> OS1[OS Thread 1]
-    CT2 --> OS2[OS Thread 2]
+    JT1[Java Thread] & JT2[Java Thread2] --> OST1[OS Thread1] & OST2[OS Thread2]
+    VT1[VThread1] & VT2[VThread2] & VT3[VThread3] --> CT1[Carrier1]
+    CT1 --> OS1[OS Thread]
 ```
 
 ---
@@ -750,6 +742,30 @@ public class PinningBenchmark {
 ```
 
 ---
+
+## 왜 이 기술인가? — Virtual Thread vs 대안들
+
+| 비교 항목 | Platform Thread 풀 | Virtual Thread | Project Reactor (WebFlux) | Kotlin Coroutines |
+|-----------|------------------|---------------|--------------------------|-------------------|
+| 프로그래밍 모델 | 동기식 | 동기식 | 선언형 파이프라인 | suspend 함수 |
+| 학습 곡선 | 낮음 | 낮음 | 높음 | 중간 |
+| 기존 코드 호환 | 높음 | 높음 | 낮음 (전면 재작성) | 중간 |
+| 동시 처리 수 | 수백~수천 | 수백만 | 스레드 수에 무관 | 스레드 수에 무관 |
+| 디버깅 편의 | 높음 | 높음 | 낮음 | 중간 |
+| CPU 바운드 | 좋음 | 좋음 | 좋음 | 좋음 |
+| I/O 바운드 처리량 | 제한적 | 매우 높음 | 매우 높음 | 매우 높음 |
+| 메모리 효율 | 낮음 (1MB/스레드) | 높음 (수 KB) | 높음 | 높음 |
+
+**Virtual Thread가 Reactive보다 나은 이유는?**
+
+Reactive 프로그래밍은 I/O 대기 중에 스레드를 반납하는 동일한 목표를 달성하지만, 콜백/파이프라인 기반 코드는 스택 트레이스가 의미없어지고, 디버깅이 어렵고, 기존 동기식 라이브러리와 혼용이 불가능합니다. Virtual Thread는 `Thread.sleep()`, `InputStream.read()` 같은 기존 블로킹 API를 그대로 쓰면서도 Reactive와 동일한 확장성을 달성합니다. 기존 Spring MVC 코드를 거의 수정하지 않고도 적용할 수 있습니다.
+
+**Virtual Thread가 Kotlin Coroutines보다 나은 경우는?**
+
+Java만 사용하는 프로젝트에서 Kotlin 도입 없이 동일한 효과를 얻을 수 있습니다. `spring.threads.virtual.enabled=true` 한 줄이 전부입니다. 반면 Coroutines는 Kotlin 언어가 전제이며 `suspend` 키워드를 모든 함수에 전파해야 합니다.
+
+---
+
 ## 11. 마이그레이션 가이드
 
 ### 단계별 마이그레이션

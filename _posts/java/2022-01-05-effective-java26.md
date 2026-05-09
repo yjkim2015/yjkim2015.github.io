@@ -190,8 +190,8 @@ if (o instanceof Set) {         // 로 타입으로 검사
 
 ```mermaid
 graph TD
-    A["List&lt;E&gt; 제네릭"] --> B["List&lt;String&gt; 매개변수화"]
-    A --> C["List 로타입 (위험)"]
+    A["List&lt;E&gt; 제네릭"] --> B["List&lt;String&gt; 파라미터화"]
+    A --> C["List 로타입(위험)"]
     A --> D["List&lt;?&gt; 와일드카드"]
     style C fill:#ff6b6b,color:#fff
     style B fill:#51cf66,color:#fff

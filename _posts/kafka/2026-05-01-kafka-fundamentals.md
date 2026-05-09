@@ -176,12 +176,11 @@ graph TD
 
 ```mermaid
 graph LR
-    P0[P0] --> C1[Consumer 1]
-    P1[P1] --> C2[Consumer 2]
-    P2[P2] --> C3[Consumer 3]
-    P3[P3] --> C4[Consumer 4]
-    IDLE1["Consumer 5 — 유휴"]
-    IDLE2["Consumer 6 — 유휴"]
+    P0[P0] --> C1[Consumer1]
+    P1[P1] --> C2[Consumer2]
+    P2[P2] --> C3[Consumer3]
+    P3[P3] --> C4[Consumer4]
+    IDLE["C5 & C6 유휴"]
 ```
 
 ---
@@ -297,8 +296,8 @@ Kafka 2.8에서 Early Access, 3.3에서 Production Ready로 발표된 **ZooKeepe
 
 ```mermaid
 graph TD
-    C1["Controller 1 (Active)"] <--> C2["Controller 2 (Standby)"]
-    C2 <--> C3["Controller 3 (Standby)"]
+    C1["Controller1(Active)"] <--> C2["Controller2(Standby)"]
+    C2 <--> C3["Controller3(Standby)"]
     C1 <--> C3
     C1 & C2 & C3 --- META["__cluster_metadata"]
 ```
@@ -362,7 +361,7 @@ graph LR
 ```mermaid
 graph LR
     RW1["seek→write"] --> RW2["seek→write"] --> RW3["seek→write"]
-    SW["sequential write (append-only)"]
+    SW["순차쓰기(append)"]
 ```
 
 Kafka가 빠른 이유:

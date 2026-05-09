@@ -148,12 +148,10 @@ Broker 1이 재시작 시:
 ```mermaid
 graph LR
     ENV{"환경"}
-    DEV["복제 팩터 1"]
-    RISK["복제 팩터 2"]
-    PROD["복제 팩터 3 (권장)"]
-    CRITICAL["복제 팩터 4+"]
+    DEV["팩터 1(개발)"]
+    PROD["팩터 3(권장)"]
+    CRITICAL["팩터 4+(금융)"]
     ENV -->|"개발"| DEV
-    ENV -->|"비권장"| RISK
     ENV -->|"프로덕션"| PROD
     ENV -->|"금융/의료"| CRITICAL
     style DEV fill:#e74c3c,color:#fff
@@ -337,15 +335,15 @@ kafka-topics.sh --bootstrap-server kafka:9092 \
 
 ```mermaid
 flowchart LR
-    A["Follower ISR 탈락"]
+    A["ISR 탈락"]
     B["min.insync 미충족"]
-    C["Producer 쓰기 거부"]
+    C["쓰기 거부"]
     D{"가용성 vs 내구성"}
-    E["min.insync 임시 감소"]
+    E["min.insync 감소"]
     F["브로커 복구 대기"]
     A --> B --> C --> D
-    D -->|"가용성 우선"| E
-    D -->|"내구성 우선"| F
+    D -->|"가용성"| E
+    D -->|"내구성"| F
     style C fill:#e74c3c,color:#fff
     style E fill:#e67e22,color:#fff
     style F fill:#2ecc71,color:#fff

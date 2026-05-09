@@ -625,6 +625,120 @@ public LocalDate parse(String date) {
 
 ---
 
+## 왜 이 기술인가? — String vs char[] vs StringBuilder
+
+String이 불변인 이유는 단순한 설계 선택이 아닙니다. 보안, 성능, 스레드 안전성을 동시에 달성하기 위한 필수 결정이었습니다.
+
+| 비교 항목 | String (불변) | char[] (가변 배열) | StringBuilder (가변) |
+|-----------|-------------|-----------------|---------------------|
+| 스레드 안전 | O (동기화 불필요) | X (외부 동기화 필요) | X |
+| String Pool 공유 | O (메모리 절약) | X | X |
+| 해시코드 캐싱 | O (HashMap 키로 최적) | X | X |
+| 반복 연결 성능 | 나쁨 O(n²) | 나쁨 (직접 확장 구현 필요) | 좋음 O(n) |
+| null 표현 | O | X (null 배열) | O |
+| API 풍부성 | 매우 풍부 | 기본적 | 중간 |
+
+**왜 char[]을 쓰지 않는가?** 배열은 final로 선언해도 내용은 변경 가능합니다(`arr[0] = 'x'`). String의 불변성은 `private final byte[]`와 이를 외부에 노출하지 않는 캡슐화로 함께 달성됩니다. 보안 민감 정보(패스워드)에 char[]를 쓰는 이유는 역설적으로 GC 전 명시적 초기화(`Arrays.fill(password, '\0')`)가 가능하기 때문입니다.
+
+**왜 StringBuffer 대신 StringBuilder인가?** StringBuffer는 모든 메서드가 synchronized로 성능 오버헤드가 있습니다. 단일 스레드에서 문자열 조작에는 StringBuilder가 항상 우선입니다. StringBuffer가 필요한 경우는 여러 스레드가 동일한 버퍼에 동시에 append할 때뿐이며, 실무에서는 거의 없습니다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+**실수 1: 반복문 안에서 String + 연산으로 OOM**
+
+```java
+// 나쁜 예: O(n²) 객체 생성
+String result = "";
+for (String line : logLines) {  // 10만 줄
+    result += line + "\n";  // 매 반복마다 새 String 생성
+}
+// 10만 라인이면 약 50억 번의 문자 복사 → OOM 또는 수십 초 소요
+
+// 좋은 예: O(n)
+StringBuilder sb = new StringBuilder(logLines.size() * 80); // 예상 용량 사전 할당
+for (String line : logLines) {
+    sb.append(line).append('\n');
+}
+String result = sb.toString();
+```
+
+**실수 2: == 비교가 테스트에서만 통과하는 버그**
+
+```java
+// 테스트: Pool 범위의 리터럴만 써서 통과
+String a = "hello";
+String b = "hello";
+System.out.println(a == b); // true (둘 다 Pool)
+
+// 운영: DB, API, 파일에서 읽은 값은 Pool 밖
+String dbValue = resultSet.getString("col"); // new String
+System.out.println(a == dbValue); // false → 조건 분기 실패, 버그
+// 항상 equals() 사용
+```
+
+**실수 3: split() 정규식 미컴파일로 반복 오버헤드**
+
+```java
+// 나쁜 예: 루프마다 Pattern.compile() 내부 호출
+for (String line : lines) {
+    String[] parts = line.split(","); // 매번 정규식 컴파일
+}
+
+// 좋은 예: 사전 컴파일
+private static final Pattern COMMA = Pattern.compile(",");
+for (String line : lines) {
+    String[] parts = COMMA.split(line); // 재사용
+}
+```
+
+**실수 4: trim() vs strip() 차이 무시 (Java 11+)**
+
+```java
+String s = "\u2000hello\u2000"; // 유니코드 공백 포함
+s.trim();   // "\u2000hello\u2000" — 제거 안 됨 (ASCII 공백만 처리)
+s.strip();  // "hello" — 유니코드 공백까지 제거
+
+// Java 11+에서는 strip()을 기본으로 사용
+```
+
+**실수 5: String.format() 남용으로 로그 성능 저하**
+
+```java
+// 나쁜 예: 로그 레벨이 DEBUG여도 format 비용은 항상 발생
+log.debug(String.format("User %s processed %d items", userId, count));
+
+// 좋은 예: SLF4J 지연 평가 활용
+log.debug("User {} processed {} items", userId, count); // DEBUG 꺼져있으면 format 안 함
+```
+
+---
+
+## 면접 포인트
+
+**Q1. String이 불변인 이유 3가지를 설명하세요.**
+
+String Pool 공유 안전성(불변이어야 같은 객체를 여러 변수가 공유할 수 있음), 해시코드 캐싱(HashMap 키로 반복 사용 시 재계산 불필요), 보안(파일 경로, DB URL 등 보안 민감 정보가 중간에 변경되지 않음). 그리고 스레드 안전성(불변 객체는 동기화 없이 공유 가능)을 추가로 언급하면 좋습니다.
+
+**Q2. new String("hello")와 "hello"의 차이는 무엇인가요?**
+
+리터럴 `"hello"`는 컴파일 시 상수풀에 등록되고, JVM 로딩 시 String Pool에 배치됩니다. `new String("hello")`는 항상 Heap에 새 객체를 생성합니다. `==` 비교 결과가 다르며, 내용 비교에는 항상 `equals()`를 사용해야 합니다. `intern()`을 호출하면 Pool 객체를 반환합니다.
+
+**Q3. 반복문에서 StringBuilder를 써야 하는 이유는?**
+
+`String + 연산`은 컴파일러가 `new StringBuilder().append(...).toString()`으로 변환하지만, 반복문 안에서는 **매 반복마다** 새 StringBuilder를 생성합니다. n번 반복하면 누적 복사량이 O(n²)입니다. 외부에 StringBuilder를 선언하고 반복문 안에서 `append()`만 호출하면 O(n)입니다.
+
+**Q4. String Pool의 위치가 Java 7에서 왜 변경됐나요?**
+
+Java 6 이하에서는 PermGen(Method Area)에 있었습니다. PermGen은 고정 크기이고 GC 대상이 아니었기 때문에, `intern()`을 남용하면 `OutOfMemoryError: PermGen space`가 발생했습니다. Java 7부터 Heap으로 이동해 GC 대상이 됐으며, Java 8부터 PermGen이 Metaspace로 교체됐습니다.
+
+**Q5. 텍스트 블록(Text Block)이 기존 방식보다 나은 점은?**
+
+멀티라인 문자열에서 `\n`, `\"`, `+` 연산자를 직접 쓸 필요가 없어 가독성이 대폭 향상됩니다. 닫는 `"""`의 위치로 공통 들여쓰기를 자동 제거합니다. `stripIndent()`와 `translateEscapes()`가 자동 적용됩니다. SQL, JSON, HTML 같은 멀티라인 리터럴 작성에 필수입니다.
+
+---
+
 ## 10. 전체 요약
 
 ```mermaid

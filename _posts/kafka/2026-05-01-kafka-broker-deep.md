@@ -153,15 +153,14 @@ log.retention.minutes=1440       # 최소 1일 보존 후 compaction
 
 ```mermaid
 sequenceDiagram
-    participant B2 as Broker2(장애)
     participant C as Controller
     participant B3 as Broker3(새리더)
     participant PC as Producer/Consumer
-    C->>C: Broker2 장애 감지, Broker3 선정
+    C->>C: Broker2 장애→B3 선정
     C->>B3: LeaderAndIsr 요청
     B3->>B3: 리더 역할 시작
     C->>PC: Metadata 갱신
-    PC->>B3: 새 리더로 재연결
+    PC->>B3: 새 리더 재연결
 ```
 
 **KRaft 기반 (Kafka 3.x+)** 은 ZooKeeper 없이 Raft 합의로 처리하므로 ZooKeeper 세션 만료 대기 없이 수십 ms 안에 선출이 완료된다.

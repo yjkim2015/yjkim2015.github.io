@@ -738,11 +738,10 @@ public class DiscountService {
 ```mermaid
 flowchart LR
     A["앱 시작"] --> B["Container 생성"]
-    B --> C["@Configuration 읽기"] --> D["BeanDefinition"]
-    D --> E["빈 생성"] --> F["@Autowired 주입"]
-    F --> G["빈 준비 완료"]
-    G --> H["빈 사용"]
-    H --> I["@PreDestroy"] --> J["빈 소멸"]
+    B --> C["@Config 읽기"] --> D["BeanDefinition"]
+    D --> E["빈 생성"] --> F["@Autowired"]
+    F --> G["빈 준비완료"]
+    G --> H["사용→소멸"]
 ```
 
 ---

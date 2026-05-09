@@ -390,10 +390,9 @@ class ImmutablePoint {
 graph LR
     O1["original"] -->|"arr 필드"| ARR["int[] {1,2,3}"]
     C1["clone"] -->|"같은 참조"| ARR
-    NOTE1["⚠️ 양쪽 영향"]
+    NOTE1["양쪽 영향"]
     O2["original2"] -->|"arr 필드"| ARR2["int[] {1,2,3}"]
-    C2["clone2"] -->|"별도 복사"| ARR3["int[] 독립 사본"]
-    NOTE2["✓ 서로 독립적"]
+    C2["clone2"] -->|"별도 복사"| ARR3["int[] 독립사본"]
 ```
 
 ```java

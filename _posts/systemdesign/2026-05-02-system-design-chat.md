@@ -209,11 +209,9 @@ graph LR
 sequenceDiagram
     participant A as UserA
     participant S as 채팅서버
-    participant K as Kafka
     participant B as UserB
     A->>S: WS 메시지
-    S->>K: 발행
-    K->>B: WS 또는 Push 전달
+    S->>B: WS/Push 전달
 ```
 
 ### 서버 간 메시지 라우팅 문제
@@ -476,16 +474,12 @@ Read-time 팬아웃 (Twitter Timeline 방식):
 ```mermaid
 sequenceDiagram
     participant A as UserA
-    participant UP as Upload
-    participant S3
-    participant S as Chat
-    participant B as UserB
-    A->>UP: POST /upload(이미지)
-    UP->>S3: 검증+썸네일+저장
-    S3-->>A: media_url
-    A->>S: WS 이미지 메시지
-    S->>B: WS 썸네일 URL
-    B->>S3: 원본 lazy load
+    participant UP as Upload/S3
+    participant S as Chat/UserB
+    A->>UP: POST /upload
+    UP-->>A: media_url
+    A->>S: WS 이미지메시지
+    S->>A: WS 썸네일 URL
 ```
 
 ### 미디어 최적화 전략
@@ -663,6 +657,77 @@ Signal의 "사라지는 메시지"처럼 TTL을 설정하면 클라이언트와 
 - **교훈**: 멀티 AZ는 선택이 아닌 기본이다. WebSocket 서버를 단일 AZ에 몰아두면 AZ 장애 시 모든 연결이 끊긴다. 연결 수 기반 오토스케일링 설정도 AZ별로 분산해야 한다
 
 ---
+---
+
+## 실무에서 놓치기 쉬운 케이스
+
+### 오프라인 메시지 — 상대가 꺼져 있을 때 어디에 쌓이는가
+
+수신자가 오프라인이면 WebSocket 연결 자체가 없다. 이 메시지를 어디에 보관하고 재연결 시 어떻게 전달할까?
+
+```
+설계 흐름:
+1. 송신자가 메시지 전송 → 채팅 서버가 수신자 온라인 여부 확인 (Redis TTL 조회)
+2. 수신자 오프라인이면 → HBase에 메시지 저장 + FCM Push 발송 (앱 백그라운드 깨우기)
+3. 수신자가 앱을 열면 → WebSocket 재연결 직후 "마지막 수신 메시지 ID" 이후 미읽음 메시지 일괄 Pull
+4. 클라이언트가 cursor 기반으로 미전달 메시지를 HBase에서 배치 조회해 렌더링
+```
+
+놓치기 쉬운 지점: 오프라인 중 메시지가 1000개 쌓이면 재접속 시 한꺼번에 Pull하면 응답이 느려진다. 페이지네이션(50개씩)으로 점진적 로딩이 필요하다.
+
+### 메시지 순서 역전 — "안녕"보다 "뭐해?"가 먼저 도착하는 문제
+
+모바일 환경에서 패킷이 다른 경로로 도착하면 전송 순서와 수신 순서가 역전된다.
+
+```
+잘못된 설계: 수신 순서대로 렌더링
+  송신: [msg_100: "안녕"] → [msg_101: "뭐해?"]
+  수신: [msg_101: "뭐해?"] → [msg_100: "안녕"]  ← 화면에 순서가 뒤바뀜
+
+올바른 설계: Snowflake ID(타임스탬프 포함)로 정렬
+  클라이언트가 수신된 메시지를 ID 기준으로 정렬 후 렌더링
+  서버도 HBase RowKey(역순 타임스탬프)로 정렬을 보장
+  → 네트워크 지연에 무관하게 항상 올바른 순서 표시
+```
+
+### 그룹채팅 읽음 처리 — 100명 방에서 DB 쓰기 폭발
+
+100명 그룹에서 메시지 1개가 오면 100명 각자의 "읽음 시각"을 DB에 기록해야 한다. 메시지 1000개짜리 대화방에서 100명이 스크롤하면 10만 건의 읽음 이벤트가 발생한다.
+
+```
+비효율적 설계:
+  읽음 이벤트마다 즉시 DB INSERT → DB 포화
+
+효율적 설계:
+  1. 읽음 이벤트를 Redis Hash에 버퍼링
+     HSET read:msg_id  user_id  timestamp
+  2. 5초 배치로 Redis 데이터를 HBase에 flush
+  3. "읽지 않은 수"는 Redis Hash 크기로 실시간 계산
+     unread = 그룹 멤버 수 - HLEN read:msg_id
+  4. 7일 이상 지난 메시지의 읽음 상태는 TTL로 자동 만료
+```
+
+이렇게 하면 DB 쓰기를 최대 90% 줄이면서 읽음 수 표시가 실시간으로 유지된다.
+
+### 메시지 철회 — 이미 상대 기기에 도달한 메시지는 어떻게 지우나
+
+"철회"는 단순 삭제와 다르다. 삭제는 내 화면에서만 없애지만, 철회는 상대방 화면에서도 "삭제된 메시지입니다"로 교체해야 한다.
+
+```
+철회 흐름:
+1. 철회 요청 → 서버가 HBase의 msg:status를 "withdrawn"으로 업데이트 (Append-Only이므로 역분개 레코드 추가)
+2. Kafka에 "메시지 철회" 이벤트 발행
+3. 팬아웃 워커가 그룹 멤버 중 온라인인 사람에게 WebSocket으로 철회 이벤트 전송
+4. 오프라인인 멤버가 재접속하면 해당 메시지 조회 시 status=withdrawn → "삭제된 메시지" 표시
+
+핵심 제약:
+  - 이미 클라이언트 기기에 다운로드된 메시지는 서버에서 강제로 지울 수 없음
+  - 철회는 UI 처리이므로, 앱을 루팅/탈옥한 기기에서는 원본 열람이 이론상 가능
+  - 2분 이내 철회만 허용하는 정책을 서버에서 강제 (카카오톡 방식)
+```
+
+---
+
 ## 11. 핵심 설계 결정 요약
 
 | 설계 항목 | 선택 | 이유 |

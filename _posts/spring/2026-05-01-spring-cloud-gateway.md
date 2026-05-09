@@ -526,3 +526,50 @@ public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
 ### 시나리오 4: 카나리 배포 중 설정 변경
 
 Weight Predicate를 사용한 카나리 배포 중 설정을 동적으로 변경하려면 Actuator의 `/actuator/gateway/refresh`를 호출한다. 단, 설정 변경 중 일시적으로 두 비율의 합이 100%를 벗어날 수 있으므로 주의가 필요하다.
+
+---
+
+## 왜 이 기술인가?
+
+| 방식 | 언어 | 성능 | Spring 통합 | 적합한 상황 |
+|---|---|---|---|---|
+| Spring Cloud Gateway | Java (Reactor Netty) | 높음 (논블로킹) | 완벽 | Spring 기반 마이크로서비스 |
+| Nginx | C | 매우 높음 | 없음 | 정적 라우팅, 인프라 레벨 |
+| Kong | Lua / Go | 높음 | 플러그인 필요 | 플러그인 생태계 중시 |
+| AWS API Gateway | 관리형 | 매우 높음 | 없음 | 서버리스, AWS 종속 허용 |
+| Zuul 1.x | Java (블로킹) | 낮음 | 완벽 | 레거시 (신규 도입 비권장) |
+
+**결론:** Spring 기반 마이크로서비스 환경에서는 Spring Cloud Gateway가 표준이다. Reactor Netty 기반 논블로킹으로 Zuul 대비 처리량이 월등하고, Spring Security·Eureka·Config와 자연스럽게 통합된다.
+
+---
+
+## 실무에서 자주 하는 실수
+
+1. **Gateway에서 블로킹 코드 실행** — Gateway는 Reactor Netty 기반이므로 이벤트 루프 스레드에서 `Thread.sleep()`, JDBC 호출 등 블로킹 작업을 실행하면 전체 처리가 멈춘다. 블로킹 작업은 반드시 `Schedulers.boundedElastic()`으로 오프로드해야 한다.
+
+2. **Route 순서를 잘못 설정** — Gateway는 Route를 위에서 아래로 순서대로 평가한다. 광범위한 패턴(`/api/**`)을 좁은 패턴(`/api/admin/**`)보다 위에 두면 관리자 경로가 일반 라우트로 처리된다.
+
+3. **Circuit Breaker fallbackUri에 존재하지 않는 경로 지정** — `fallbackUri: forward:/fallback`으로 설정했지만 해당 컨트롤러가 없으면 Circuit Breaker 발동 시 500 오류가 반환된다. 폴백 엔드포인트를 반드시 구현해야 한다.
+
+4. **Rate Limiter 키 해석기(KeyResolver) 없이 배포** — `KeyResolver` 빈을 정의하지 않으면 기본값으로 `PrincipalNameKeyResolver`가 사용되어 인증되지 않은 요청에서 오류가 발생한다. IP 기반이든 사용자 기반이든 명시적으로 정의해야 한다.
+
+5. **Gateway 타임아웃을 업스트림 서비스보다 짧게 설정** — `connect-timeout: 1000ms`인데 업스트림 서비스 처리 시간이 2초면 타임아웃이 먼저 발생한다. Gateway 타임아웃은 업스트림 최대 응답 시간보다 넉넉하게 설정하고, Circuit Breaker로 장애를 감지해야 한다.
+
+---
+
+## 면접 포인트
+
+**Q1. Spring Cloud Gateway와 Zuul의 차이는?**
+> Zuul 1.x는 서블릿 기반 동기/블로킹 모델이다. Spring Cloud Gateway는 Reactor Netty 기반 비동기/논블로킹으로 동일한 스레드 수로 훨씬 많은 요청을 처리할 수 있다. Zuul 2는 논블로킹이지만 Spring과의 통합이 부족해 신규 도입 시 Gateway가 표준이다.
+
+**Q2. GlobalFilter와 GatewayFilter의 차이는?**
+> `GlobalFilter`는 모든 Route에 적용되고, `GatewayFilter`는 특정 Route에만 적용된다. 인증·로깅 같은 공통 관심사는 `GlobalFilter`로, 특정 서비스의 헤더 변환이나 Rate Limiting은 `GatewayFilter`로 구현한다.
+
+**Q3. Circuit Breaker를 Gateway에 통합하는 방법은?**
+> `spring-cloud-starter-circuitbreaker-reactor-resilience4j` 의존성 추가 후 Route에 `CircuitBreaker` GatewayFilter를 설정한다. `fallbackUri`로 폴백 응답을 반환하고, Resilience4j 설정으로 OPEN 임계값과 대기 시간을 조정한다.
+
+**Q4. Gateway에서 JWT 인증을 어떻게 구현하는가?**
+> `GlobalFilter`를 구현해 `Authorization` 헤더에서 JWT를 추출하고 검증한다. 검증 성공 시 `exchange.getRequest().mutate().header("X-User-Id", userId)`로 다운스트림에 사용자 정보를 전달한다. Spring Security의 `ReactiveSecurityContextHolder`와 통합하면 더 표준적인 구현이 된다.
+
+**Q5. Predicate와 Filter의 역할 구분은?**
+> `Predicate`는 요청이 Route에 매칭되는지 판단한다(경로, 헤더, 쿼리 파라미터, 시간대 등). `Filter`는 매칭된 요청/응답을 변환한다(헤더 추가/제거, 인증, Rate Limiting, 경로 재작성). Predicate는 라우팅 결정, Filter는 처리 로직이다.
