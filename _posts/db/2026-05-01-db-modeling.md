@@ -17,15 +17,7 @@ DB 모델링도 동일하게 세 단계로 진행됩니다.
 
 ## 모델링 3단계
 
-```mermaid
-graph LR
-    A[개념적 모델링<br>무엇을 저장할까?<br>엔티티 식별] -->
-    B[논리적 모델링<br>어떻게 구조화할까?<br>속성, 관계, 정규화] -->
-    C[물리적 모델링<br>어떻게 구현할까?<br>테이블, 인덱스, 파티션]
-    style A fill:#AED6F1
-    style B fill:#A9DFBF
-    style C fill:#F9E79F
-```
+A[개념적 모델링<br>무엇을 저장할까?<br>엔티티 식별] -->; B[논리적 모델링<br>어떻게 구조화할까?<br>속성, 관계, 정규화] -->; C[물리적 모델링<br>어떻게 구현할까?<br>테이블, 인덱스, 파티션]; style A fill:#AED6F1
 
 ---
 
@@ -59,12 +51,7 @@ graph LR
 
 ### ERD (Entity-Relationship Diagram)
 
-```mermaid
-erDiagram
-    CUSTOMER ||--o{ ORDER : "주문"
-    ORDER ||--|{ ORDER_ITEM : "포함"
-    PRODUCT ||--o{ ORDER_ITEM : "상품"
-```
+erDiagram CUSTOMER ||--o{ ORDER : "주문" ORDER ||--|{ ORDER_ITEM : "포함"
 
 ---
 
@@ -150,11 +137,7 @@ CREATE TABLE enrollments (
 
 > **비유**: **식별 관계**는 호텔 객실 번호와 같습니다. "305호"라는 번호는 "3층"이라는 부모 정보 없이는 의미가 없습니다(3층 + 05호 = 305호). 반면 **비식별 관계**는 택배 송장번호와 주문의 관계입니다. 택배는 자체 송장번호(PK)로 독립적으로 추적되며, 어떤 주문에서 나왔는지는 참조 정보(FK)일 뿐입니다.
 
-```mermaid
-erDiagram
-    ORDER ||--|{ ORDER_ITEM : "식별관계"
-    ORDER ||--o{ DELIVERY : "비식별관계"
-```
+erDiagram ORDER ||--|{ ORDER_ITEM : "식별관계" ORDER ||--o{ DELIVERY : "비식별관계"
 
 ### 식별 관계 (Identifying Relationship)
 

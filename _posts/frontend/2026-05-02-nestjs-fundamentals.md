@@ -337,14 +337,7 @@ export class UsersService {
 ---
 ## 3번 다이어그램 - NestJS 정리
 
-```mermaid
-mindmap
-  root((NestJS))
-    구성: Module, Controller, Service, Provider
-    파이프라인: Middleware, Guard, Interceptor, Pipe
-    데이터: TypeORM, Entity, Repository
-    고급: 동적 모듈, 커스텀 데코레이터, WebSocket
-```
+mindmap root((NestJS)) 구성: Module, Controller, Service, Provider
 
 NestJS는 **Angular에서 영감을 받은 아키텍처**로, 규모가 커져도 유지보수 가능한 백엔드를 만들기 위한 강제적인 구조를 제공합니다. 처음에는 보일러플레이트가 많다고 느낄 수 있습니다. 하지만 팀이 커지고 기능이 복잡해질수록, 이 구조가 있느냐 없느냐의 차이는 엄청납니다. 6개월 후의 자신을 위해 구조를 투자하는 것입니다.
 

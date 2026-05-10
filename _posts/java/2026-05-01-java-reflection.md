@@ -21,12 +21,7 @@ toc_label: 목차
 
 리플렉션은 다릅니다. JVM이 클래스를 로딩할 때 생성하는 `Class` 객체에는 해당 클래스의 모든 메타데이터(필드 목록, 메서드 목록, 접근 제어자, 어노테이션 등)가 담겨 있습니다. 리플렉션은 이 메타데이터를 런타임에 읽어 동적으로 메서드를 찾고 호출합니다.
 
-```mermaid
-graph LR
-    S1[".java"] -->|"컴파일"| B1[".class"] -->|"JVM 로딩"| E1["실행(타입 고정)"]
-    JVM["실행 중 JVM"] -->|"getClass()/forName"| META["Class 메타데이터"]
-    META -->|"invoke()/newInstan"| OP["동적 조회/호출"]
-```
+Class 메타데이터 → invoke
 
 ### 왜 필요한가?
 
@@ -753,9 +748,9 @@ public class SimpleTestRunner {
 ```mermaid
 graph LR
     C["클라이언트"] -->|"findById(1L)"| P["프록시"]
-    P -->|"invoke(method, args)"| H["Handler"]
+    P -->|invoke(method, a..| H["Handler"]
     H -->|"부가 기능 처리"| H
-    H -->|"method.invoke(target)"| P
+    H -->|method.invoke(ta..| P
     P -->|"결과 반환"| H
     H -->|"결과 반환"| C
 ```

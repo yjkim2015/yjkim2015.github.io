@@ -486,14 +486,7 @@ function App() {
 
 ### 테스트 피라미드
 
-```mermaid
-flowchart LR
-    UNIT["단위 테스트"] -->|"통과하면"| INT["통합 테스트"]
-    INT -->|"통과하면"| E2E["E2E 테스트"]
-    style E2E fill:#e74c3c,color:#fff
-    style INT fill:#f39c12,color:#fff
-    style UNIT fill:#2ecc71,color:#fff
-```
+통합 테스트 →(통과하면)→ E2E 테스트
 
 ```tsx
 // ① 단위 테스트: 컴포넌트 렌더링 및 상호작용

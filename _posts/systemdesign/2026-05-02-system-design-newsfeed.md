@@ -116,17 +116,7 @@ DAU 1억명, 평균 팔로잉 200명
 
 게시글을 올리는 순간 모든 팔로워의 피드 캐시에 즉시 복사한다.
 
-```mermaid
-sequenceDiagram
-    participant A as "게시자"
-    participant Worker as "팬아웃 워커"
-    participant Cache as "Redis 피드 캐시"
-    A->>Worker: 게시글 작성
-    Worker->>Cache: LPUSH feed:follower1 post_id
-    Worker->>Cache: LPUSH feed:follower2 post_id
-    Worker->>Cache: LPUSH feed:follower_N post_id
-    Note over Cache: 1000명 팔로워면 1000번 LPUSH
-```
+participant A as "게시자" participant Worker as "팬아웃 워커" participant Cache as "Redis 피드 캐시"
 
 - **장점**: 피드 읽기가 Redis에서 O(1)으로 즉시 반환
 - **단점**: 팔로워 1000만 명인 셀럽이 게시글 올리면 1000만 번 캐시 업데이트 → 쓰기 비용 폭발

@@ -25,11 +25,7 @@ toc_label: 목차
 
 싱글 모드는 Redis 프로세스 한 개가 전부다. 선택적으로 레플리카를 붙일 수 있지만, 마스터가 죽으면 사람이 직접 레플리카를 승격시켜야 한다.
 
-```mermaid
-graph LR
-    C["Client"] --> M["Redis Master"]
-    M -->|"비동기 복제 (선택)"| R["Redis Replica"]
-```
+Redis Master →(비동기 복제 (선택))→ Redis Replica
 
 ### 왜 싱글 모드는 운영에 위험한가
 
@@ -101,16 +97,7 @@ graph LR
 
 ### 페일오버의 5단계
 
-```mermaid
-sequenceDiagram
-    participant S1 as Sentinel1
-    participant R1 as Replica1
-    participant C as Client
-    S1->>S1: SDOWN 선언
-    Note over S1: ODOWN 선언
-    S1->>R1: REPLICAOF NO ONE
-    S1-->>C: 새 마스터 알림
-```
+participant S1 as Sentinel1 participant R1 as Replica1 participant C as Client
 
 **SDOWN vs ODOWN**:
 - **SDOWN (Subjectively Down)**: 내 눈에만 죽어 보임. 네트워크 일시 단절일 수 있음.

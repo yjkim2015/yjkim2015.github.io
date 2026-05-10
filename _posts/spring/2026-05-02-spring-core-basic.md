@@ -130,15 +130,7 @@ graph LR
 
 ### 3.2 ApplicationContext 구현체들 — 무엇을 써야 하나?
 
-```mermaid
-graph LR
-    A[ApplicationContext] --> B[AnnotationConfigApplicationContext]
-    A --> C[ClassPathXmlApplicationContext]
-    A --> F[AnnotationConfigServletWebServerApplicationContext]
-    B -->|"어노테이션 기반 설정\n(Spri"| G["자바 코드"]
-    C -->|"XML 기반 설정\n(레거시)"| H[classpath XML]
-    F -->|"Spring Boot 웹 앱\n내"| I["자동 구성"]
-```
+A → C
 
 Spring Boot를 사용한다면 `AnnotationConfigServletWebServerApplicationContext`가 자동으로 생성됩니다. 개발자가 직접 선택할 일은 거의 없습니다. 이 사실이 중요한 이유는, 테스트 코드에서 `@SpringBootTest`를 쓰면 이 전체 컨텍스트가 뜨기 때문입니다. 무겁고 느린 이유가 여기 있습니다. 단위 테스트에서는 Spring 컨텍스트 없이 직접 `new`로 객체를 생성해서 테스트하는 것이 훨씬 빠릅니다.
 

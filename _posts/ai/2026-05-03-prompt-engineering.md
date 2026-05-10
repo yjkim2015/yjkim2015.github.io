@@ -34,13 +34,7 @@ toc_label: 목차
 
 같은 모델에서 품질 10배 차이가 난다. 모델 성능이 아니라 프롬프트 설계의 문제다.
 
-```mermaid
-graph LR
-    BAD["모호한 프롬프트"] --> LLM["LLM"]
-    LLM --> RES1["평범한 결과"]
-    GOOD["구조화된 프롬프트"] --> LLM
-    LLM --> RES2["정확한 결과"]
-```
+모호한 프롬프트 → LLM → 평범한 결과, 구조화된 프롬프트 → LLM → 정확한 결과
 
 ---
 
@@ -786,9 +780,9 @@ Chain-of-Thought: "단계별로 분석해줘"
 graph LR
     P["프롬프트 작성"] --> RUN["실행"]
     RUN --> EVAL["결과 평가"]
-    EVAL -->|"품질 미달"| IMPROVE["프롬프트 개선"]
-    IMPROVE --> RUN
-    EVAL -->|"품질 OK"| SAVE["라이브러리 저장"]
+    EVAL -->|"미달"| IMP["프롬프트 개선"]
+    IMP --> RUN
+    EVAL -->|"OK"| SAVE["라이브러리 저장"]
 ```
 
 ---

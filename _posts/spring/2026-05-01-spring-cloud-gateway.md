@@ -291,16 +291,7 @@ routes:
 
 ## 요청 처리 전체 흐름
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant GW as Gateway
-    participant SVC as Service
-    C->>GW: HTTP 요청
-    GW->>GW: JWT 검증/Rate Limit
-    GW->>SVC: 서비스 호출
-    SVC-->>C: 응답
-```
+participant C as Client participant GW as Gateway participant SVC as Service
 
 ---
 

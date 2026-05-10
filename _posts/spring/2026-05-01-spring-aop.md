@@ -263,7 +263,7 @@ Spring AOP의 핵심은 **프록시 패턴**이다. 클라이언트가 `OrderSer
 graph LR
     C["클라이언트"] -->|"createOrder(dto)"| P["Proxy Object"]
     P -->|"Before Advice"| P
-    P -->|"joinPoint.proceed()"| R["Real OrderService"]
+    P -->|joinPoint.procee..| R["Real OrderService"]
     R -->|"결과 반환"| P
     P -->|"After Advice"| P
     P -->|"최종 결과"| C
@@ -492,16 +492,7 @@ public class LoggingAspect { ... }
 
 실행 순서는 양파 껍질처럼 쌓인다. 바깥쪽(낮은 Order)이 먼저 감싸고, 실행은 안쪽에서 바깥쪽 순서로 돌아온다.
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant SA as Security
-    participant M as Method
-    C->>SA: 호출
-    SA->>M: 실행
-    M-->>SA: 반환
-    SA-->>C: 반환
-```
+participant C as Client participant SA as Security participant M as Method
 
 ---
 

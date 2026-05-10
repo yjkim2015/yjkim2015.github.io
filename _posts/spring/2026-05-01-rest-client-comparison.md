@@ -702,20 +702,7 @@ OkHttp는 Retrofit과 함께 사용할 때 가장 자연스럽다. Retrofit이 O
 
 ### 7개 라이브러리 포지셔닝 맵
 
-```mermaid
-quadrantChart
-    title HTTP 클라이언트 포지셔닝
-    x-axis "코드많음" --> "코드적음"
-    y-axis "동기" --> "비동기"
-    quadrant-1 선언적+비동기
-    quadrant-2 수동+비동기
-    quadrant-3 수동+동기
-    quadrant-4 선언적+동기
-    RestTemplate: [0.15, 0.2]
-    WebClient: [0.55, 0.85]
-    OpenFeign: [0.85, 0.3]
-    OkHttp: [0.4, 0.55]
-```
+quadrantChart title HTTP 클라이언트 포지셔닝 x-axis "코드많음" --> "코드적음"
 
 ### 기본 특성 비교
 

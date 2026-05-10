@@ -184,12 +184,7 @@ public void updateStock(Long productId, int quantity) {
 
 데이터를 캐시에만 먼저 쓰고 즉시 응답한다. DB 동기화는 나중에 비동기로 처리한다.
 
-```mermaid
-graph LR
-    Client -->|"쓰기 요청"| App
-    App -->|"1️⃣ 즉시 저장 + 즉시 응답"| Cache
-    Cache -.->|"2️⃣ 비동기 배치 (30초마다)"| DB
-```
+Client → App → Cache(즉시 저장 + 즉시 응답) -.-> DB(비동기 배치, 30초마다)
 
 ```java
 @Component

@@ -46,12 +46,7 @@ graph LR
 
 **매핑 모델 3가지:**
 
-```mermaid
-graph LR
-    T1["JavaThread"] -->|1:1| KT1["KernelThread"]
-    U1["UThread1"] & U2["UThread2"] -->|N:1| KU["KernelThread"]
-    VT1["VThread1"] & VT2["VThread2"] -->|M:N| KV["KT1/KT2"]
-```
+JavaThread → KernelThread → UThread1 → UThread2 → KernelThread → VThread1
 
 ### JVM 스레드 모델 (1:1 매핑)
 
@@ -385,14 +380,7 @@ public class ProducerConsumer {
 
 멀티코어 환경에서 각 코어는 **CPU 캐시**를 가집니다. 한 스레드가 변수를 수정해도 다른 코어의 캐시에 즉시 반영되지 않을 수 있습니다.
 
-```mermaid
-graph LR
-  F1["코어1 캐시: flag=true"]
-  F2["코어2 캐시: flag=false"]
-  MM["메인 메모리: flag=true"]
-  F1 <--> MM
-  F2 <--> MM
-```
+코어1 캐시: flag=true / 코어2 캐시: flag=false / 메인 메모리: flag=true
 
 ```java
 // 문제: stop 플래그 변경이 다른 스레드에 보이지 않을 수 있음
@@ -819,16 +807,7 @@ new ThreadPoolExecutor(
 
 **동작 흐름:**
 
-```mermaid
-graph LR
-  SUB([작업 제출 submit/execute]) --> CHK1{현재 스레드 수 &lt; corePoolSize?}
-  CHK1 -->|YES| NEW1[새 스레드 생성]
-  CHK1 -->|NO| CHK2{workQueue 가득 참?}
-  CHK2 -->|NO| ENQUEUE[workQueue에 작업 추가]
-  CHK2 -->|YES| CHK3{현재 스레드 수 &lt; maxPoolSize?}
-  CHK3 -->|YES| NEW2[새 스레드 생성 - 초과 스레드]
-  CHK3 -->|NO| REJ[RejectedExecutionHandler 실행]
-```
+CHK1 → YES, CHK1 → NO, CHK2 → NO, CHK2 → YES, CHK3 → YES, CHK3 → NO
 
 **RejectedExecutionHandler 전략:**
 - `AbortPolicy` (기본): `RejectedExecutionException` 던짐
@@ -878,13 +857,7 @@ ExecutorService bad3 = Executors.newSingleThreadExecutor();
 
 분할 정복(Divide & Conquer) 방식의 병렬 처리에 최적화된 스레드 풀입니다.
 
-```mermaid
-graph LR
-  W1["Worker1: T1,T2,T3"]
-  W2["Worker2: T4,T5"]
-  W3["Worker3: 빈 큐"]
-  W3 -->|"Work-Stealing"| W1
-```
+Worker3: 빈 큐 →(Work-Stealing)→ Worker1: T1,T2,T3
 
 ```java
 import java.util.concurrent.*;
@@ -1075,13 +1048,7 @@ boolean success = stampedRef.compareAndSet(
 
 ### LongAdder vs AtomicLong (고경합 환경)
 
-```mermaid
-graph LR
-    TA["ThreadA"] & TB["ThreadB"] --> CELL["AtomicLong(경합)"]
-    T1["Thread1"] --> C1["Cell:3"]
-    T2["Thread2"] --> C2["Cell:7"]
-    C1 & C2 --> SUM["sum()"]
-```
+Cell:7 → sum()
 
 ```java
 LongAdder adder = new LongAdder();
@@ -1718,13 +1685,7 @@ try {
 
 ThreadLocal의 메모리 누수는 스레드 풀 환경에서 특히 위험합니다. 스레드 풀의 스레드는 재사용되므로 `remove()`를 호출하지 않으면 이전 요청의 데이터가 다음 요청에서 그대로 보입니다. 이는 메모리 누수뿐만 아니라 **보안 취약점**이 됩니다(다른 사용자의 인증 정보가 노출될 수 있음).
 
-```mermaid
-graph LR
-    TL["ThreadLocal=null"] -->|GC 수거| GC["KEY=null"]
-    GC -->|VALUE 잔존| LEAK["메모리 누수"]
-    REQ1["요청1 set()"] --> POOL["스레드 재사용"]
-    POOL -->|remove() 없으면| LEAK2["이전값 노출!"]
-```
+KEY=null →(VALUE 잔존)→ 메모리 누수
 
 스레드 풀에서의 올바른 패턴은 반드시 `try-finally`로 `remove()`를 보장하는 것입니다.
 

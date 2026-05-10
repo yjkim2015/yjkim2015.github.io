@@ -257,8 +257,6 @@ CompletableFuture<User> future = CompletableFuture
 flowchart LR
     A1["fetchUser()"] --> C1["thenCombine"]
     B1["fetchOrders()"] --> C1
-    A2["api1 & api2 & api3"] --> D["allOf 완료대기"]
-    A3["us-east & eu-west"] --> E["anyOf 첫완료"]
 ```
 
 ### thenCombine — 두 Future 결과 합치기

@@ -58,12 +58,7 @@ graph LR
 
 배열이 꽉 차면 새로운 배열을 생성하고 기존 데이터를 복사합니다.
 
-```mermaid
-graph LR
-    OLD["기존 배열 (capacity=10"]
-    NEW["새 배열 생성 (capacity="]
-    OLD -->|"Arrays.copyOf() +"| NEW
-```
+기존 배열 (capacity=10 →(Arrays.copyOf() +)→ 새 배열 생성 (capacity=
 
 Java 소스 코드 (OpenJDK):
 ```java
@@ -252,10 +247,6 @@ HashSet의 중복 판단 과정:
 graph LR
     A["add() 호출"] --> B["hashCode() → 버킷 결정"]
     B --> C{"버킷에 원소?"}
-    C -->|NO| D["저장"]
-    C -->|YES| E{"equals() 같음?"}
-    E -->|true| F["중복 무시"]
-    E -->|false| G["충돌 저장"]
 ```
 
 **계약(Contract)**:
@@ -329,7 +320,6 @@ graph LR
     B2["bucket[2] Banana"]
     B7["bucket[7] Apple"]
     B4["bucket[4] Cherry"]
-    H(["head"]) <--> BN["Banana"] <--> AP["Apple"] <--> CH["Cherry"] <--> T(["tail"])
 ```
 
 ---
@@ -340,14 +330,7 @@ graph LR
 
 #### Red-Black Tree 구조
 
-```mermaid
-graph LR
-    N5["5(B)"] --> N3["3(R)"]
-    N5 --> N7["7(R)"]
-    N3 --> N1["1(B)"]
-    N7 --> N9["9(B)"]
-    RULE["루트=BLACK, RED자식=BLACK"]
-```
+5(B) → 7(R), 3(R) → 1(B)
 
 #### Comparable vs Comparator
 
@@ -438,12 +421,7 @@ Java 컬렉션에서 가장 많이 사용되는 Map 구현체입니다.
 
 #### 내부 해시 버킷 구조
 
-```mermaid
-graph LR
-    B1["버킷[1]"] --> N1["Alice=30"]
-    B3["버킷[3]"] --> N3a["Bob=25"] --> N3b["Carol=28"]
-    PUT["put(Dave,35)→버킷배정"]
-```
+버킷[1] → Alice=30 → 버킷[3] → Bob=25 → Carol=28 → put(Dave,35)→버킷배정
 
 #### 초기 용량(initialCapacity)과 로드 팩터(loadFactor)
 
@@ -641,13 +619,7 @@ long total = map.reduceValues(1, v -> (long) v, Long::sum); // 병렬 집계
 
 Key에 **약한 참조(WeakReference)** 를 사용하는 Map입니다.
 
-```mermaid
-graph LR
-    HM["HashMap: 강한 참조 유지"]
-    WM["WeakHashMap: 약한 참조"]
-    HM -->|"GC 대상 아님"| HM
-    WM -->|"외부 참조 없으면 GC"| WM
-```
+HashMap: 강한 참조 유지 →(GC 대상 아님)→ HashMap: 강한 참조 유지, WeakHashMap: 약한 참조 →(외부 참조 없으면 GC)→ WeakHashMap: 약한 참조
 
 ```java
 import java.util.WeakHashMap;
@@ -684,9 +656,6 @@ System.out.println(cache.size()); // 1 (또는 2, GC 타이밍에 따라)
 graph LR
     N1["1(idx0)"] --> N3["3(idx1)"]
     N1 --> N2["2(idx2)"]
-    N3 --> N7["7(idx3)"]
-    N2 --> N5["5(idx5)"]
-    RULE["부모=(i-1)/2, 자식=2i+1"]
 ```
 
 #### 주요 연산 시간복잡도

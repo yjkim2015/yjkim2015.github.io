@@ -59,19 +59,7 @@ REPLICAOF NO ONE
 
 레플리카가 **최초 연결**되거나 **오랫동안 끊겼다가 재연결**될 때 수행된다. 마스터의 전체 데이터를 RDB 스냅샷으로 받는다.
 
-```mermaid
-sequenceDiagram
-    participant Rep as "Replica"
-    participant M as "Master"
-    Rep->>M: PSYNC ? -1 (처음 연결, 아이디 없음)
-    Note over M: 1. BGSAVE 실행 (RDB 스냅샷 생성 시작)
-    Note over M: 2. 스냅샷 생성 중 들어오는<br>새 쓰기는 replication buffer에 저장
-    M-->>Rep: RDB 파일 전송
-    Note over Rep: 3. RDB 로딩 (기존 데이터 전부 삭제)
-    M-->>Rep: replication buffer 내용 전송
-    Note over Rep: 4. buffer 명령어 적용
-    Note over Rep,M: 동기화 완료!
-```
+participant Rep as "Replica" participant M as "Master" Rep->>M: PSYNC ? -1 (처음 연결, 아이디 없음)
 
 **주의**: Full Sync 중 마스터는 BGSAVE + 버퍼 유지로 메모리를 추가 사용한다. 데이터가 수 GB라면 메모리 사용량이 일시적으로 크게 증가한다. 메모리가 넉넉하지 않은 환경에서 레플리카를 여러 개 붙이면 OOM 위험이 있다.
 
@@ -79,16 +67,7 @@ sequenceDiagram
 
 연결이 **잠시 끊겼다가** 재연결되면, 끊긴 부분부터 이어서 동기화한다. 전체를 다시 받을 필요가 없다.
 
-```mermaid
-sequenceDiagram
-    participant Rep as "Replica"
-    participant M as "Master"
-    Note over M: replication backlog (원형 버퍼)<br>cmd1, cmd2, cmd3, cmd4, cmd5
-    Rep->>M: PSYNC replId 12345 (offset 12345까지 받았음)
-    Note over M: backlog에 12345 이후 데이터 있는지 확인
-    M-->>Rep: cmd4, cmd5 전송 (Partial Sync)
-    Note over Rep,M: Partial Sync 성공!
-```
+participant Rep as "Replica" participant M as "Master" Note over M: replication backlog (원형 버퍼)<br>cmd1, cmd2, cmd3, cmd4, cmd5
 
 **Partial Sync가 실패하는 경우**: 레플리카가 너무 오래 끊겨서 마스터의 backlog에 해당 offset이 없을 때 → Full Sync로 폴백된다.
 
@@ -103,16 +82,7 @@ repl-backlog-ttl 3600   # 레플리카가 없어도 1시간 backlog 유지
 
 동기화 완료 후, 마스터의 모든 쓰기 명령어가 **실시간으로** 레플리카에 전파된다.
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant M as Master
-    participant R1 as Replica
-    C->>M: SET user:1 "Kim"
-    M-->>C: OK
-    M--)R1: SET user:1 "Kim"
-    Note over R1: Replication Lag
-```
+participant C as Client participant M as Master participant R1 as Replica
 
 **비동기**: 마스터는 레플리카의 응답을 기다리지 않는다. 그래서 마스터는 빠르지만, 레플리카는 항상 마스터보다 약간 뒤처진다(Replication Lag).
 
@@ -146,18 +116,7 @@ Replica A가 B에게, B가 C에게 전파. 마스터 부하는 줄지만, 전파
 
 ## 비동기 복제의 한계 — 데이터 유실 시나리오
 
-```mermaid
-sequenceDiagram
-    participant C as "Client"
-    participant M as "Master"
-    participant Rep as "Replica"
-    C->>M: SET important:data "critical"
-    M-->>C: OK (클라이언트는 저장됐다고 믿음)
-    M--)Rep: 전파 시도 (비동기)...
-    Note over M: 💀 크래시 (전파 완료 전)
-    Note over Rep: 승격 → 새 마스터 (important:data 없음!)
-    Note over C,Rep: 클라이언트는 OK를 받았지만 데이터 유실!
-```
+participant C as "Client" participant M as "Master" participant Rep as "Replica"
 
 ### WAIT 명령어 — 동기 복제 흉내
 

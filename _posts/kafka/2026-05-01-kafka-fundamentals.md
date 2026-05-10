@@ -54,12 +54,7 @@ Kafka 클러스터를 구성하는 **개별 서버 노드**다. 각 브로커는
 
 > **비유**: 브로커는 우체국의 지점이다. 편지(메시지)를 보관하고, 발신자와 수신자의 요청을 처리한다. 여러 지점이 모여 하나의 우체국 네트워크(클러스터)를 이룬다.
 
-```mermaid
-graph LR
-    B1["Broker1: P0-Leader"]
-    B2["Broker2: P1-Leader"]
-    B3["Broker3: P2-Leader"]
-```
+Broker1: P0-Leader / Broker2: P1-Leader / Broker3: P2-Leader
 
 브로커의 주요 역할:
 - 프로듀서로부터 메시지 수신 및 디스크 저장
@@ -158,12 +153,7 @@ public class OrderConsumer {
 
 > **비유**: Consumer Group은 팀 프로젝트다. 팀원(컨슈머)이 많을수록 업무(파티션)를 나눠서 빨리 끝낼 수 있다. 단 한 업무를 두 팀원이 동시에 담당하는 일은 없다. 다른 팀(다른 그룹)은 같은 자료(토픽)를 독립적으로 처음부터 읽을 수 있다.
 
-```mermaid
-graph LR
-    P0 & P1 --> A1[Group-A: C1] & B1[Group-B: C1]
-    P2 --> A2[Group-A: C2] & B2[Group-B: C2]
-    P3 --> A3[Group-A: C3] & B2
-```
+P1 → A1, P2 → A2, P3 → A3
 
 파티션 4개, 컨슈머 3개인 Group A에서는 A1이 2개 파티션을 담당하며, Group B는 같은 토픽을 독립적으로 소비한다(브로드캐스트 효과).
 
@@ -427,12 +417,7 @@ graph LR
 
 > **비유**: HW는 댐의 수위 표시선이다. 물(메시지)은 실제로 더 많이 들어왔지만, 하류(컨슈머)에 보내도 안전한 수위까지만 방류한다. 복제가 완료되지 않은 메시지를 컨슈머가 읽었는데 리더가 죽으면, 새 리더에는 그 메시지가 없어 "이미 읽은 메시지가 세상에서 사라지는" 문제가 생긴다. HW가 이것을 막는 안전 수위선이다.
 
-```mermaid
-graph LR
-    O0["off0"] --> O1["off1"] --> O2["off2"] --> O3["off3(HW)"] --> O4["off4"]
-    HW["HW=3"] -.-> O3
-    F1["Follower LEO=4"] -.-> O4
-```
+off0 → off1 → off2 → off3(HW) → off4 → HW=3
 
 > **왜 HW가 필요한가?** 리더가 offset 5까지 썼지만 팔로워가 3까지만 복제했다고 하자. 컨슈머가 4, 5를 읽은 뒤 리더가 죽으면, 새 리더(팔로워)에는 4, 5가 없다. HW는 "모든 ISR이 가진 안전한 범위"만 컨슈머에게 보여줘서 이 문제를 방지한다.
 
@@ -446,14 +431,7 @@ graph LR
 
 ### acks=0 (Fire and Forget)
 
-```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant L as Leader Broker
-    P->>L: 메시지 전송
-    Note over P,L: 응답 없음 — 확인 안 함
-    Note over P: 즉시 다음 메시지로
-```
+participant P as Producer participant L as Leader Broker P->>L: 메시지 전송
 
 - **성능**: 최고 (응답 대기 없음)
 - **안정성**: 최저 (브로커 장애 시 메시지 유실)
@@ -461,16 +439,7 @@ sequenceDiagram
 
 ### acks=1 (Leader Acknowledgment)
 
-```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant L as Leader Broker
-    participant F as Follower
-    P->>L: 메시지 전송
-    Note over L: 디스크에 기록
-    L-->>P: ACK
-    Note over L,F: 팔로워 복제 완료 확인 안 함
-```
+participant P as Producer participant L as Leader Broker participant F as Follower
 
 - **성능**: 중간
 - **안정성**: 중간 (리더 기록 후 팔로워 복제 전 장애 시 유실)
@@ -478,17 +447,7 @@ sequenceDiagram
 
 ### acks=all (또는 acks=-1, ISR Acknowledgment)
 
-```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant L as Leader
-    participant F1 as Follower1
-    P->>L: 메시지 전송
-    Note over L: 디스크에 기록
-    L->>F1: 복제
-    F1-->>L: 완료
-    L-->>P: ACK (ISR 복제 완료)
-```
+participant P as Producer participant L as Leader participant F1 as Follower1
 
 - **성능**: 가장 낮음 (모든 ISR 복제 대기)
 - **안정성**: 최고 (ISR 전체 장애 없으면 유실 없음)

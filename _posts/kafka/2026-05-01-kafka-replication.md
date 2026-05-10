@@ -50,13 +50,7 @@ ISR = {Leader만 남음}  (Follower들이 뒤처진 경우)
 
 ### ISR 판단 기준
 
-```mermaid
-graph LR
-    IN["ISR 포함"]
-    OUT["ISR 제외"]
-    IN -->|"lag.time.max.ms 초과"| OUT
-    OUT -->|"Leader 로그 따라잡음"| IN
-```
+ISR 포함 →(lag.time.max.ms 초과)→ ISR 제외, ISR 제외 →(Leader 로그 따라잡음)→ ISR 포함
 
 `replica.lag.time.max.ms` (기본값: 30000ms = 30초) 이내에 Follower가 Leader의 메시지를 fetch해야 ISR을 유지한다.
 
@@ -179,14 +173,7 @@ kafka-configs.sh --bootstrap-server kafka:9092 \
 
 Producer의 `acks` 설정은 얼마나 많은 브로커의 확인을 기다릴지 결정한다. 이 설정이 내구성과 지연의 균형을 결정하는 핵심이다.
 
-```mermaid
-graph LR
-    Z["acks=0: 확인 없음"]
-    O["acks=1: Leader만 확인"]
-    A["acks=all: ISR 전체 확인"]
-    style Z fill:#e74c3c,color:#fff
-    style A fill:#2ecc71,color:#fff
-```
+acks=0: 확인 없음 / acks=1: Leader만 확인 / acks=all: ISR 전체 확인
 
 ### min.insync.replicas와 조합
 
@@ -212,16 +199,7 @@ ISR = {Leader}:         min.insync=2 미충족 → 쓰기 거부
 
 ISR에 포함되지 않은 Follower(Out-of-Sync)를 Leader로 선출하는 것이다. ISR이 모두 죽고 Out-of-Sync Follower만 살아있을 때 가용성과 내구성 중 하나를 선택해야 한다.
 
-```mermaid
-flowchart LR
-    CRISIS["ISR = Leader만 남음"]
-    F1["false: 리더 없이 대기"]
-    F2["true: Out-of-Sync 선출"]
-    CRISIS --> F1
-    CRISIS --> F2
-    style F1 fill:#3498db,color:#fff
-    style F2 fill:#e74c3c,color:#fff
-```
+ISR = Leader만 남음 → false: 리더 없이 대기, ISR = Leader만 남음 → true: Out-of-Sync 선출
 
 ### 선택 기준
 

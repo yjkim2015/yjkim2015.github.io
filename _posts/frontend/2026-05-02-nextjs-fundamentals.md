@@ -524,20 +524,7 @@ export async function POST(request: NextRequest) {
 
 ## 3번 다이어그램 - Next.js 정리
 
-```mermaid
-mindmap
-  root((Next.js))
-    렌더링
-      SSG/SSR/ISR/CSR
-    App Router
-      서버 컴포넌트
-      use client
-      레이아웃 중첩
-    최적화
-      Image/Font/번들
-    API
-      Routes/Actions/미들웨어
-```
+mindmap root((Next.js)) 렌더링
 
 Next.js는 단순한 React 프레임워크가 아니라 **풀스택 프레임워크**입니다. 렌더링 전략을 페이지별로 다르게 설정할 수 있다는 점이 가장 강력한 기능입니다. "이 페이지가 얼마나 자주 바뀌는가? 사용자별로 다른 데이터가 필요한가?"라는 질문으로 전략을 결정하세요. 대부분의 경우 SSG + ISR 조합이 성능과 신선도의 최선의 균형입니다.
 

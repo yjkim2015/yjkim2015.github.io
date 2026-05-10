@@ -76,12 +76,7 @@ outer();
 
 > 비유: 부모님이 이사를 가셨는데, 당신이 부모님 집 열쇠를 아직 가지고 있는 상황입니다. 부모님(외부 함수)은 이미 그 집에 살지 않지만, 열쇠(참조)를 가진 당신(내부 함수)은 여전히 그 집(변수)에 접근할 수 있습니다.
 
-```mermaid
-flowchart LR
-    A["outer() 호출"] --> B["count=0 생성"] --> C["inner 반환"] --> D["outer 제거"]
-    D --> F["inner가 count 참조중 -"]
-    FN["inner 함수"] -.->|"참조"| ENV["렉시컬 환경 count=0"]
-```
+outer 제거 → inner가 count 참조중 -
 
 ```javascript
 function makeCounter() {
@@ -213,12 +208,7 @@ console.log(TodoModule.getPending());
 // [{ id: 2, text: '클로저 이해', completed: false }]
 ```
 
-```mermaid
-graph LR
-    PRIV["private: todos, ne"]
-    PUB["public API: add(),"]
-    PUB -->|"클로저로 접근"| PRIV
-```
+public API: add(), →(클로저로 접근)→ private: todos, ne
 
 ---
 
@@ -593,19 +583,7 @@ class Counter {
 
 ## 12. 정리: 클로저 체크리스트
 
-```mermaid
-mindmap
-  root((클로저))
-    정의
-      함수+렉시컬환경
-      외부 변수 기억
-    활용
-      데이터 은닉/모듈 패턴
-      메모이제이션/커링
-    주의 및 해결
-      메모리 누수 → null 처리
-      for+var 버그 → let/const
-```
+mindmap root((클로저)) 정의
 
 클로저는 단순히 "외부 변수에 접근하는 함수"가 아닙니다. 자바스크립트의 함수형 프로그래밍, 모듈 시스템, 상태 관리의 근간이 되는 핵심 개념입니다. React Hooks, Redux, 모든 JavaScript 라이브러리가 클로저를 기반으로 동작합니다. 클로저를 이해하면 이 모든 것의 동작 원리가 보이기 시작합니다.
 

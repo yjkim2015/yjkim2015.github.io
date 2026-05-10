@@ -117,12 +117,7 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 
 ### Eager Rebalancing (기존 방식)
 
-```mermaid
-graph LR
-    GC["Coordinator"] -->|리밸런싱 STW| CA["ConsumerA/B"]
-    CA & CC["ConsumerC"] -->|JoinGroup| GC
-    GC -->|SyncGroup 새 할당| CA & CC
-```
+Coordinator →(SyncGroup 새 할당)→ ConsumerA/B
 
 Eager 방식의 문제는 리밸런싱 동안 **전체 그룹이 소비를 중단**한다는 점이다. 대규모 그룹에서 수십 초의 지연이 발생할 수 있다.
 
@@ -277,15 +272,7 @@ kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
 
 Producer가 쓴 최신 오프셋(Log End Offset)과 Consumer가 처리한 오프셋(Committed Offset)의 차이다. Lag이 크면 Consumer가 실시간으로 처리하지 못하고 있다는 신호다.
 
-```mermaid
-graph LR
-    CO["Committed Offset:"]
-    LEO["Log End Offset (LE"]
-    LAG["Consumer Lag: 500"]
-    CO -->|"차이"| LAG
-    LEO -->|"차이"| LAG
-    style LAG fill:#e74c3c,color:#fff
-```
+Committed Offset: →(차이)→ Consumer Lag: 500, Log End Offset (LE →(차이)→ Consumer Lag: 500
 
 ### Consumer Lag 원인과 조치
 

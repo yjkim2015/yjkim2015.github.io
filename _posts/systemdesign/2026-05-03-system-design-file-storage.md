@@ -689,15 +689,7 @@ download_count = 0
 
 ### 권한 모델 (Owner / Editor / Viewer)
 
-```mermaid
-graph LR
-    OWNER["Owner"]
-    EDITOR["Editor"]
-    VIEWER["Viewer"]
-    OWNER -->|"권한 위임"| EDITOR
-    OWNER -->|"권한 위임"| VIEWER
-    EDITOR -->|"제한적 공유"| VIEWER
-```
+Owner →(권한 위임)→ Editor, Owner →(권한 위임)→ Viewer, Editor →(제한적 공유)→ Viewer
 
 | 권한 | 읽기 | 수정 | 삭제 | 공유 | 권한 변경 |
 |------|------|------|------|------|-----------|

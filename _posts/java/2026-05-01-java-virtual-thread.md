@@ -39,18 +39,7 @@ OS 스레드는 생성 비용과 유지 비용이 매우 큽니다.
 
 10,000개의 Thread를 생성하면 최소 10GB 이상의 메모리가 필요합니다. 대부분의 웹 서버는 요청 하나당 스레드 하나를 할당하는 **Thread-per-Request** 모델을 사용하는데, 이 모델은 I/O 대기 중에도 스레드를 점유합니다.
 
-```mermaid
-gantt
-  title Thread I/O 블로킹
-  dateFormat X
-  axisFormat %s
-  section Thread-1
-  처리 : 0, 3
-  DB 대기 : crit, 3, 7
-  section Thread-2
-  처리 : 0, 2
-  HTTP 대기 : crit, 2, 8
-```
+gantt title Thread I/O 블로킹 dateFormat X
 
 ### 비동기 프로그래밍의 복잡성
 
@@ -136,13 +125,7 @@ Carrier Thread는 Virtual Thread를 실제로 실행하는 Platform Thread입니
 
 Virtual Thread 스케줄러는 Work-Stealing 알고리즘을 사용하는 `ForkJoinPool`을 기반으로 합니다.
 
-```mermaid
-graph LR
-  C1["Carrier1: VT-a, VT"]
-  C2["Carrier2: VT-c"]
-  CN["CarrierN: 빈 큐"]
-  CN -->|Work-Stealing| C1
-```
+CarrierN: 빈 큐 →(Work-Stealing)→ Carrier1: VT-a, VT
 
 ### Mount / Unmount 동작
 
@@ -1077,11 +1060,8 @@ public class RateLimitedService {
 
 ```mermaid
 graph LR
-    VT["Virtual Thread(수십만"] -->|"I/O 대기시 반납"| CT["캐리어 스레드(코어수)"]
-    VT --> SEM["Semaphore"]
     SEM --> DB["DB 풀(200)"]
     SEM --> API["외부 API(500)"]
-    VT --> CACHE["Redis(100)"]
 ```
 
 Virtual Thread 자체는 무제한에 가깝게 생성할 수 있지만, 실제 처리량은 가장 느린 하위 서비스의 처리 능력에 의해 결정됩니다. 세마포어로 역압력(back-pressure)을 구현하면 하위 서비스를 보호하면서 최대 처리량을 유지할 수 있습니다.

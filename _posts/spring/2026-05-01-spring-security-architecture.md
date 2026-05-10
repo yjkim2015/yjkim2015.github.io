@@ -97,16 +97,7 @@ public class SecurityConfig {
 5️⃣ **SecurityContext 저장**: 인증 성공 시 ThreadLocal에 Authentication을 저장한다
 6️⃣ **성공 응답 반환**: `AuthenticationSuccessHandler`가 처리한다
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant F as AuthFilter
-    participant SC as SecurityContext
-    C->>F: POST /login
-    F->>F: loadUser+비밀번호검증
-    F->>SC: Authentication 저장
-    F-->>C: 성공 응답
-```
+participant C as Client participant F as AuthFilter participant SC as SecurityContext
 
 ---
 

@@ -16,15 +16,7 @@ toc_label: 목차
 
 Redis Pub/Sub은 **메시지를 채널에 발행(Publish)하면 그 채널을 구독(Subscribe)한 모든 클라이언트에게 실시간으로 전달**하는 메시징 패턴이다.
 
-```mermaid
-sequenceDiagram
-    participant P as Publisher
-    participant R as Redis
-    participant S1 as Subscriber1
-    S1->>R: SUBSCRIBE chat:room1
-    P->>R: PUBLISH chat:room1 "안녕"
-    R-->>S1: "안녕" 전달
-```
+participant P as Publisher participant R as Redis participant S1 as Subscriber1
 
 **핵심 특성**:
 - **Fire and Forget**: 메시지를 저장하지 않는다. 구독자가 없어도, 구독자가 잠깐 다운되어도 메시지는 영원히 사라진다.

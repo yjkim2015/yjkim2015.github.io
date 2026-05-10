@@ -29,12 +29,7 @@ date: 2026-05-03
 
 이 세 가지 문제를 멀티 레이어 캐싱이 해결한다.
 
-```mermaid
-graph LR
-    S["서버"] -->|"Miss"| L1["L1 로컬"]
-    L1 -->|"Miss"| L2["L2 Redis"]
-    L2 -->|"Miss"| DB["DB"]
-```
+서버 → L1 로컬(Miss) → L2 Redis(Miss) → DB
 
 ---
 
@@ -342,15 +337,7 @@ L2(Redis)는 모든 서버가 공유하므로 일관성 문제가 없다. 진짜
 
 ### Redis Pub/Sub 기반 L1 동기화
 
-```mermaid
-sequenceDiagram
-    participant SA as 서버A
-    participant Redis as Redis
-    participant SB as 서버B/C
-    SA->>SA: 데이터 변경 + L1 삭제
-    SA->>Redis: PUBLISH l1:invalidate
-    Redis-->>SB: L1 삭제
-```
+participant SA as 서버A participant Redis as Redis participant SB as 서버B/C
 
 L1 동기화에서 중요한 설계 결정이 있다. "내가 보낸 무효화 메시지를 내가 또 처리할 것인가?" 서버 A가 이미 자신의 L1을 지웠는데, 자신이 보낸 Pub/Sub 메시지를 자기도 수신해서 또 지울 필요는 없다. 하지만 이를 구분하는 로직이 더 복잡하고, 한 번 더 지워도 부작용이 없으므로 보통은 구분 없이 처리한다.
 
@@ -527,12 +514,7 @@ graph LR
 
 ### 계층이 빠지면 어떻게 되나?
 
-```mermaid
-graph LR
-    A1["25K TPS"] -->|"L1 없음"| R1["Redis 25K ops"]
-    A2["25K TPS"] -->|"80% L1 Hit"| L1["L1: 20K 처리"]
-    A2 -->|"20% Miss"| R2["Redis 5K ops"]
-```
+L1 없음: 25K TPS → Redis 25K ops / L1 있음(80% Hit): 25K TPS → L1에서 20K 처리, Redis 5K ops만 전달
 
 L1을 빼면 Redis 부하가 5배로 증가한다. Redis Cluster의 단일 샤드 한계는 보통 100K ops/sec이므로, L1 없이 여러 샤드로 분산해야 같은 성능을 내려면 Redis 비용이 5배 증가한다.
 

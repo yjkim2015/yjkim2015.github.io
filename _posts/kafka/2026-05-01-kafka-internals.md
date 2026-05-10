@@ -15,13 +15,7 @@ toc_label: 목차
 
 ### 전체 아키텍처
 
-```mermaid
-graph LR
-    SEND["send(record)"] --> SER["Serializer"] --> PART["Partitioner"]
-    PART --> ACC["RecordAccumulator("]
-    ACC -->|"ready batches"| SENDER["Sender"]
-    SENDER --> NC["NetworkClient"] --> BROKERS["Brokers"]
-```
+Partitioner → RecordAccumulator(, RecordAccumulator( → ready, Sender → NetworkClient
 
 ### 배치(Batch) 처리
 
@@ -45,12 +39,7 @@ props.put(ProducerConfig.LINGER_MS_CONFIG, 20);         // 20ms 대기
 
 **linger.ms 효과:**
 
-```mermaid
-graph LR
-    A["linger=0: 즉시전송"]
-    B["linger=20: msg1~N"]
-    B --> C["t=20: 배치 전송"]
-```
+linger=20: msg1~N → t=20: 배치 전송
 
 ### 압축(Compression)
 
@@ -102,11 +91,7 @@ public class RegionPartitioner implements Partitioner {
 
 **Sticky Partitioner (Kafka 2.4+, 현재 기본값):**
 
-```mermaid
-graph LR
-    RR["RoundRobin: msg→P0,P1 순환"]
-    ST["Sticky: msg 배치 P0 누적"] --> SW["전송 후 전환"]
-```
+RoundRobin: msg→P0,P1 순환 / Sticky: msg 배치 P0 누적 / 전송 후 전환
 
 ---
 
@@ -173,27 +158,11 @@ max.poll.records=500
 
 **Fetch 동작 시각화:**
 
-```mermaid
-sequenceDiagram
-    participant C as Consumer
-    participant B as Broker
-    C->>B: FetchRequest (min.bytes=1024)
-    Note over B: 현재 데이터: 200 bytes (1024 미만, 대기...)
-    Note over B: 500ms 후 (max.wait.ms 도달)
-    B-->>C: FetchResponse (200 bytes 반환)
-```
+participant C as Consumer participant B as Broker C->>B: FetchRequest (min.bytes=1024)
 
 ### Heartbeat와 세션 관리
 
-```mermaid
-sequenceDiagram
-    participant C as Consumer
-    participant GC as Group Coordinator (Broker)
-    C->>GC: Heartbeat (주기적으로 "나 살아있어" 신호)
-    GC-->>C: HeartbeatResponse
-    Note over C,GC: session.timeout.ms 동안 heartbeat 없으면
-    Note over GC: 컨슈머 사망으로 판단 → 리밸런싱 시작!
-```
+participant C as Consumer participant GC as Group Coordinator (Broker) C->>GC: Heartbeat (주기적으로 "나 살아있어" 신호)
 
 ```properties
 # 하트비트 전송 주기 (session.timeout.ms의 1/3 권장)
@@ -256,11 +225,7 @@ graph LR
 
 ### Cooperative/Incremental Rebalancing (Kafka 2.4+)
 
-```mermaid
-graph LR
-    A["초기: C1=P0+P1, C2=P"] --> B["Round1: C1=P0+P1 유"]
-    B --> C["Round2: C3=P3 신규 할"]
-```
+Round1: C1=P0+P1 유 → Round2: C3=P3 신규 할
 
 **차이점:**
 - 이동이 필요한 파티션만 해제하고 재할당
@@ -414,9 +379,9 @@ graph LR
     P["Producer"] -->|"initTransactions()"| TC["TxCoordinator"]
     TC -->|"PID+epoch"| P
     P -->|"send(uncommitted)"| PL["PartitionLeader"]
-    P -->|"commitTransaction()"| TC
+    P -->|commitTransactio..| TC
     TC -->|"COMMITTED 마커"| PL
-    P -->|"실패시 abortTransaction()"| TC
+    P -->|실패시 abortTransac..| TC
 ```
 
 ### Exactly-Once Semantics (EOS) 전체 그림
@@ -474,24 +439,11 @@ public class ExactlyOnceProcessor {
 
 ### 정상 상태
 
-```mermaid
-graph LR
-    L["Broker 1 (Leader)"] -->|복제| F1["Broker 2 (Follower)"]
-    L -->|복제| F2["Broker 3 (Follower)"]
-```
+Broker 1 (Leader) →(복제)→ Broker 3 (Follower)
 
 ### 리더 장애 시
 
-```mermaid
-sequenceDiagram
-    participant CTL as Controller
-    participant B1 as Broker1(구Leader)
-    participant B2 as Broker2
-    Note over B1: 장애 발생!
-    CTL->>CTL: ISR 확인
-    CTL->>B2: 새 Leader 선출
-    Note over B2: 새 Leader
-```
+participant CTL as Controller participant B1 as Broker1(구Leader) participant B2 as Broker2
 
 ### 컨트롤러(Controller) 역할
 

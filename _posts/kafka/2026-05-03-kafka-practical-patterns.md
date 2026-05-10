@@ -316,12 +316,7 @@ public void processAndPublish(PaymentRequest request) {
 
 ### 왜 "정확히 한 번"이 근본적으로 어려운가
 
-```mermaid
-graph LR
-    C["컨슈머"] -->|"처리 완료"| DB["DB 저장"]
-    DB -->|"오프셋 커밋 전 장애"| F["프로세스 재시작"]
-    F -->|"같은 메시지 재소비"| C
-```
+DB 저장 →(오프셋 커밋 전 장애)→ 프로세스 재시작, 프로세스 재시작 →(같은 메시지 재소비)→ 컨슈머
 
 처리는 성공했는데 오프셋 커밋 전에 프로세스가 죽으면? 재시작 후 같은 메시지를 다시 소비합니다. 네트워크는 본질적으로 `at-least-once`입니다. "정확히 한 번"은 **처리 자체가 멱등**하거나 **Kafka 트랜잭션으로 오프셋 커밋과 발행을 원자화**할 때만 달성됩니다. 외부 API 호출(카드사, 문자 발송)이 포함되면 Kafka 트랜잭션만으로는 부족하고 반드시 비즈니스 레벨 멱등성 설계가 필요합니다.
 
@@ -486,11 +481,7 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
     CooperativeStickyAssignor.class.getName());
 ```
 
-```mermaid
-graph LR
-    BEFORE["C0:P0P1 C1:P2P3"] -->|"C2 합류"| COOP["Cooperative"]
-    COOP -->|"P1만 이동"| AFTER["C0:P0 C1:P2 C2:P1"]
-```
+Cooperative →(P1만 이동)→ C0:P0 C1:P2 C2:P1
 
 기존 할당자는 리밸런싱 중 모든 컨슈머가 멈춥니다. Cooperative는 이동이 필요 없는 파티션은 계속 처리하면서 필요한 것만 재할당합니다.
 

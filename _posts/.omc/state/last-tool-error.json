@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd \\\"C:/Users/Kim/OneDrive/문서/yjkim2015.github.io\\\" && bundle exec jekyll build 2>&1\",\"timeout\":300000,\"description\":\"Jekyll build to verify all changes\"}",
+  "error": "Exit code 127\n/usr/bin/bash: line 1: bundle: command not found",
+  "timestamp": "2026-05-10T14:07:10.964Z",
+  "retry_count": 1
+}

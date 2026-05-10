@@ -292,13 +292,7 @@ Oracle은 Bitmap Index가 핵심 차별점이다. 카디널리티(선택도)가 
 
 ### 5.2 격리 수준별 문제 현상
 
-```mermaid
-graph LR
-    RU["READ UNCOMMITTED"] -->|"허용"| ALL["Dirty/NR/Phantom"]
-    RC["READ COMMITTED"] -->|"방지"| DR["Dirty Read"]
-    RR["REPEATABLE READ"] -->|"방지"| DR & NR["NR/Phantom"]
-    SE["SERIALIZABLE"] -->|"방지"| ALL2["모든 이상현상"]
-```
+READ UNCOMMITTED → Dirty/NR/Phantom → READ COMMITTED → Dirty Read → REPEATABLE READ → NR/Phantom
 
 ### 5.3 MySQL Gap Lock
 

@@ -429,16 +429,7 @@ def search_nearby_shops(lat: float, lon: float,
 
 라이더 앱은 5초마다 GPS 좌표를 서버로 전송합니다. 초당 20,000건의 위치 업데이트를 처리해야 합니다.
 
-```mermaid
-sequenceDiagram
-    participant Rider as 라이더 앱
-    participant WS as 위치 서버
-    participant Redis as Redis
-    Rider->>WS: WS {lat, lon}
-    WS->>Redis: HSET rider 위치
-    WS->>Redis: PUBLISH 위치정보
-    Redis->>Rider: 실시간 푸시
-```
+participant Rider as 라이더 앱 participant WS as 위치 서버 participant Redis as Redis
 
 ### Redis 위치 저장 구조
 

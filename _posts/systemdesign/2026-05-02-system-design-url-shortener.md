@@ -360,8 +360,6 @@ def redirect(short_code: str):
 ```mermaid
 graph LR
     Traffic["순간 초당 50만 요청"] --> CDN["CDN Edge<br>301 캐싱"]
-    Traffic --> LB["Auto Scaling<br>서버"]
-    LB --> LocalCache["각 서버 로컬 캐시<br>(Caf"]
     LB --> Redis["Redis 클러스터<br>캐시 히"]
     Redis --> DB["DB 조회 극소화"]
 ```

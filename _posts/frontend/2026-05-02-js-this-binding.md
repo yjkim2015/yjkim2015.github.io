@@ -242,13 +242,8 @@ console.log(kim.name); // '김민준'
 
 ```mermaid
 flowchart LR
-    A["new Person('김민준',"] --> B["새 빈 객체 {} 생성"]
     B --> C["this = 새 객체로 설정"]
     C --> D["생성자 함수 실행<br>this."]
-    D --> E["명시적 반환값 없으면<br>thi"]
-    E --> F["kim = { name: '김민준"]
-    style C fill:#e74c3c,color:#fff
-    style F fill:#2ecc71,color:#fff
 ```
 
 ### 만약 new를 빠뜨리면?

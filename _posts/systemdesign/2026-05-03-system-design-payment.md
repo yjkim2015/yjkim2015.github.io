@@ -158,16 +158,7 @@ graph LR
 
 > **비유:** 결제 흐름은 레스토랑 계산서 처리와 같습니다. 손님이 카드를 내밀면(결제 요청), 직원이 단말기에 긁고(PG 요청), 카드사가 승인하면(PG 승인), 영수증이 나옵니다(결제 완료). 중간에 통신이 끊기면 재시도해야 하는데, 이때 이중 결제가 발생할 수 있습니다.
 
-```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant PS as 결제서비스
-    participant PG as PG사
-    U->>PS: 결제 요청
-    PS->>PG: 승인 요청
-    PG-->>PS: 승인 응답
-    PS-->>U: 결제 완료
-```
+participant U as 사용자 participant PS as 결제서비스 participant PG as PG사
 
 ### 결제 상태 머신
 
@@ -399,15 +390,7 @@ Saga 패턴은 각 서비스가 로컬 트랜잭션만 수행하고, 실패 시 
 
 ### 결제 Saga 흐름
 
-```mermaid
-graph LR
-    A[주문 생성] --> B[결제 처리]
-    B --> C[재고 차감]
-    C --> D[배송 요청]
-    D --> E[완료]
-    C -- 실패 --> F[결제 취소]
-    F --> G[주문 취소]
-```
+B → C, C → D, D → E, 실패 → F, F → G
 
 ```python
 class PaymentSaga:
@@ -473,16 +456,7 @@ class PaymentSaga:
 
 ### 환불 흐름
 
-```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant RS as 환불서비스
-    participant PG as PG사
-    U->>RS: 환불 요청
-    RS->>PG: PG 취소 요청
-    PG-->>RS: 취소 응답
-    RS-->>U: 환불 완료
-```
+participant U as 사용자 participant RS as 환불서비스 participant PG as PG사
 
 ### PG 취소 실패 시 처리
 

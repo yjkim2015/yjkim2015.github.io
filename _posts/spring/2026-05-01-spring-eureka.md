@@ -164,11 +164,7 @@ Eureka Server의 중요한 특성이다. 네트워크 장애로 인해 Heartbeat
 graph LR
     A["Heartbeat 감소 감지"] --> B{"실제 수신 < 85% 임계치?"}
     B -->|"Yes"| C["자가 보호 모드 진입"]
-    B -->|"No"| D["정상 동작"]
     C --> E["인스턴스 만료 중단"]
-    C --> F["레지스트리 현상 유지"]
-    C --> G["경고 메시지 표시"]
-    E --> H["네트워크 복구 후 자동 해제"]
 ```
 
 이는 Eureka가 AP(Available + Partition-tolerant) 시스템임을 보여준다. 네트워크 파티션 상황에서 일관성보다 가용성을 선택한다.

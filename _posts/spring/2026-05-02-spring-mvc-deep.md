@@ -539,10 +539,6 @@ flowchart LR
     A["예외 발생"] --> B{"@ExceptionHandler"}
     B -->|"있음"| C["처리 완료"]
     B -->|"없음"| D{"@ResponseStatus 있음?"}
-    D -->|"있음"| E["HTTP 상태코드 응답"]
-    D -->|"없음"| F{"Spring MVC 표준 예외?"}
-    F -->|"있음"| G["400·405 등 표준 응답"]
-    F -->|"없음"| H["500 Internal Serve"]
 ```
 
 ### 9.2 전역 예외 처리 — @RestControllerAdvice로 일관된 에러 응답 만들기
@@ -775,12 +771,7 @@ graph LR
 
 전통적 Spring MVC는 두 개의 스프링 컨텍스트를 계층 구조로 관리한다.
 
-```mermaid
-graph LR
-    ROOT_CTX["Root ApplicationCo"]
-    SERVLET_CTX["Servlet Applicatio"]
-    ROOT_CTX -->|"부모 컨텍스트"| SERVLET_CTX
-```
+Root ApplicationCo →(부모 컨텍스트)→ Servlet Applicatio
 
 Servlet Context는 Root Context의 빈을 참조할 수 있지만 반대는 불가능하다(부모→자식 단방향). `@Transactional`이 있는 Service는 반드시 Root Context에 등록해야 트랜잭션 프록시가 올바르게 생성된다. Servlet Context에 Service가 스캔되면 `@Transactional`이 작동하지 않는 경우가 발생한다.
 

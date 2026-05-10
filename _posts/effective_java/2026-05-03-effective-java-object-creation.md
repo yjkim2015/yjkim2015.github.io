@@ -83,9 +83,6 @@ public class Color {
 flowchart LR
     A["NutritionFacts.bui"] --> B["fat(12)"]
     B --> C["sodium(35)"]
-    C --> D["carbohydrate(27)"]
-    D --> E["build()"]
-    E --> F["불변 NutritionFacts"]
 ```
 
 아래 코드에서 `NutritionFacts`는 필수 매개변수 `servingSize`와 `servings`를 빌더 생성자로 받고, 나머지는 선택적으로 메서드 체이닝합니다. `build()` 호출 시점에 유효성 검사를 수행하므로 불완전한 객체가 만들어질 수 없습니다.
@@ -284,8 +281,6 @@ for (long i = 0; i <= Integer.MAX_VALUE; i++) {
 flowchart LR
     A["Stack.push()"] --> B["elements 배열에 저장"]
     B --> C["Stack.pop()"]
-    C -->|"나쁜 코드"| D["size만 줄임 → 참조 유지 →"]
-    C -->|"좋은 코드"| E["elements[size] = n"]
 ```
 
 스택 클래스에서 `pop()` 시 단순히 `size`만 줄이면, 꺼낸 객체의 참조가 배열에 남아 GC가 수거하지 못합니다. 명시적으로 `null` 처리를 해야 합니다.

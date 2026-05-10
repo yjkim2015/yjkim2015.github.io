@@ -481,18 +481,7 @@ useEffect(() => {
 ---
 ## 정리
 
-```mermaid
-mindmap
-  root((React 핵심))
-    Virtual DOM
-      JS 표현/변경 최소화
-    Fiber
-      작업분할/우선순위
-    컴포넌트
-      함수형/Props불변/단방향
-    렌더링
-      불변성/React.memo
-```
+mindmap root((React 핵심)) Virtual DOM
 
 React의 핵심은 **선언적 UI** 패러다임입니다. "어떻게 DOM을 변경할지" 대신 "상태에 따라 UI가 어떻게 보여야 하는지"를 선언하면, React가 효율적으로 DOM을 업데이트합니다. 이 방식이 가능한 이유가 Virtual DOM과 Diffing 알고리즘입니다. 개념이 복잡해 보이지만 결국 "변경된 것만 최소로 업데이트한다"는 단순한 원칙에서 출발합니다.
 

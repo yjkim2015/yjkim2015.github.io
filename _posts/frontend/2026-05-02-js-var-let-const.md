@@ -23,13 +23,7 @@ toc_label: 목차
 
 세 키워드를 나란히 놓으면 이렇습니다.
 
-```mermaid
-graph LR
-    VAR["var: 함수 스코프, 호이스팅+"]
-    LET["let: 블록 스코프, 호이스팅+"]
-    CONST["const: 블록 스코프, 호이스"]
-    VAR --- LET --- CONST
-```
+var: 함수 스코프, 호이스팅+ / let: 블록 스코프, 호이스팅+ / const: 블록 스코프, 호이스
 
 표로도 한 번 정리합니다.
 
@@ -82,13 +76,7 @@ function testLet() {
 
 `{}`로 감싸진 어떤 블록이든, 그 안에서 선언된 let/const는 밖에서 보이지 않습니다. 의도를 코드에 정확히 반영할 수 있는 이유가 바로 이것입니다.
 
-```mermaid
-graph LR
-    F["함수 경계(var)"] --> IF1["if블록"] --> VARX["var x: 함수 전체 접근"]
-    F --> FOR["for블록"]
-    F2["함수 경계(let/const)"] --> IF3["if블록 - let y: 블록 안"]
-    F2 --> FOR2["for블록 - let i: 블록"]
-```
+함수 경계(var) → for블록, 함수 경계(let/const) → for블록 - let i: 블록
 
 ---
 
@@ -224,17 +212,7 @@ obj.age = 25;         // 가능! 새 속성 추가
 // obj = {};           // TypeError — 새 객체로 교체는 불가
 ```
 
-```mermaid
-graph LR
-    OBJ_VAR["const obj (변수)"]
-    OBJ_VAL["주소 0x1234"]
-    OBJ_DATA["name: 홍길동"]
-    OBJ_VAR -->|"고정! 변경 불가"| OBJ_VAL
-    OBJ_VAL -->|"가리킴"| OBJ_DATA
-    OBJ_DATA -->|"변경 가능"| OBJ_DATA
-    style OBJ_VAR fill:#e74c3c,color:#fff
-    style OBJ_DATA fill:#2ecc71,color:#fff
-```
+const obj (변수) →(고정! 변경 불가)→ 주소 0x1234, 주소 0x1234 →(가리킴)→ name: 홍길동, name: 홍길동 →(변경 가능)→ name: 홍길동
 
 ### 완전한 불변을 원한다면 Object.freeze()를 쓰세요
 
@@ -367,14 +345,6 @@ flowchart LR
     A["변수 선언"] --> B{"값이 바뀌나?"}
     B -->|"예"| C{"참조가 바뀌나?<br>vs 내용만 바뀌나?"}
     B -->|"아니오"| D["const 사용"]
-    C -->|"참조 변경 필요"| E["let 사용"]
-    C -->|"내용만 변경"| F["const 사용<br>(객체/배열"]
-    A --> G{"레거시 코드가 아닌가?"}
-    G -->|"맞음"| H["var 절대 사용 금지"]
-    style D fill:#2ecc71,color:#fff
-    style E fill:#3498db,color:#fff
-    style F fill:#2ecc71,color:#fff
-    style H fill:#e74c3c,color:#fff
 ```
 
 규칙은 간단합니다.
@@ -468,18 +438,7 @@ const config = {
 
 ## 정리
 
-```mermaid
-mindmap
-  root((var/let/const))
-    var
-      함수스코프/호이스팅+undefined
-      중복선언OK/레거시
-    let
-      블록스코프/TDZ/재할당가능
-    const
-      블록스코프/TDZ/기본선택
-      객체내용변경가능
-```
+mindmap root((var/let/const)) var
 
 현대 자바스크립트에서는 `var`를 사용할 이유가 없습니다. `const`를 기본으로 사용하고, 재할당이 필요한 경우에만 `let`을 사용하세요. 이 원칙을 따르면 코드가 의도를 명확하게 전달하고, 예측하기 어려운 버그도 사전에 방지할 수 있습니다.
 

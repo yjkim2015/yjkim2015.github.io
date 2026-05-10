@@ -17,18 +17,7 @@ toc_label: 목차
 
 ## 정규화가 필요한 이유
 
-```mermaid
-graph LR
-    UNF[비정규형 UNF<br>모든 데이터가 한 테이블] -->|원자값 분리| NF1[1NF<br>셀에 단일 값만]
-    NF1 -->|부분 종속 제거| NF2[2NF<br>PK 전체에 종속]
-    NF2 -->|이행 종속 제거| NF3[3NF<br>비키 → 비키 종속 없음]
-    NF3 -->|모든 결정자가 후보키| BCNF[BCNF<br>숨은 결정자 없음]
-    style UNF fill:#F5B7B1
-    style NF1 fill:#FADBD8
-    style NF2 fill:#D5F5E3
-    style NF3 fill:#AED6F1
-    style BCNF fill:#A9DFBF
-```
+NF2 → 이행, NF3 → 모든
 
 정규화되지 않은 테이블의 문제점을 먼저 보겠습니다.
 

@@ -68,19 +68,7 @@ console.log(dog.type); // '동물' — 프로토타입에서 찾음
 
 속성을 찾을 때 체인을 따라 올라갑니다. 찾지 못하면 `undefined`를 반환합니다 (에러가 아닙니다). 단, 함수를 찾지 못하면 호출 시 에러가 납니다.
 
-```mermaid
-flowchart LR
-    A["dog.speak() 호출"] --> B{"dog에<br>speak가 있나?"}
-    B -->|"예"| C["dog.speak() 실행"]
-    B -->|"아니오"| D{"Animal.prototype에<br>speak가 있나?"}
-    D -->|"예"| E["Animal.prototype.s"]
-    D -->|"아니오"| F{"Object.prototype에<br>speak가 있나?"}
-    F -->|"예"| G["Object.prototype.s"]
-    F -->|"아니오"| H["null — undefined 반"]
-    style C fill:#2ecc71,color:#fff
-    style E fill:#3498db,color:#fff
-    style H fill:#e74c3c,color:#fff
-```
+dog에<br>speak가 있나? → 예, dog에<br>speak가 있나? → 아니오, Animal.prototype에<br>speak가 있나? → 예, Animal.prototype에<br>speak가 있나? → 아니오, Object.prototype에<br>speak가 있나? → 예, Object.prototype에<br>speak가 있나? → 아니오
 
 ```javascript
 function Animal(name) {
@@ -121,12 +109,7 @@ myDog.toString(); // '[object Object]' — Object.prototype에서 찾음
 
 > 비유: `prototype`은 설계도 창고("이 공장에서 만들어지는 제품은 이 부품들을 갖게 된다"), `__proto__`는 실제 제품이 갖고 있는 "원본 설계도 링크"입니다.
 
-```mermaid
-graph LR
-    F["Dog 함수"] -->|".prototype"| FP["Dog.prototype"]
-    I["myDog 인스턴스"] -->|".__proto__"| FP
-    FP -->|".constructor"| F
-```
+Dog.prototype →(.constructor)→ Dog 함수
 
 ```javascript
 function Dog(name) {
@@ -455,18 +438,7 @@ Array.prototype.first = function() {
 ---
 ## 정리 — 프로토타입 핵심 개념
 
-```mermaid
-mindmap
-  root((프로토타입))
-    기본 개념
-      체인으로 속성 탐색/null이 끝
-    주요 API
-      Object.create/getPrototypeOf/hasOwnProperty
-    클래스 관계
-      class는 문법적설탕/extends상속
-    주의사항
-      오염방지/내장수정금지/체인성능
-```
+mindmap root((프로토타입)) 기본 개념
 
 프로토타입은 자바스크립트의 근본 메커니즘입니다. ES6 클래스 문법을 사용하더라도 내부적으로는 프로토타입이 동작합니다. 이를 이해하면 `instanceof`가 어떻게 동작하는지, 메서드를 prototype에 정의하는 것이 왜 성능상 좋은지, 그리고 보안 취약점을 어떻게 방어하는지까지 모두 연결됩니다.
 
