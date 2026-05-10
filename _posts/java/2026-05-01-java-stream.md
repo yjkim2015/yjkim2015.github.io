@@ -60,7 +60,11 @@ List<String> result2 = names.stream()
 
 스트림 파이프라인은 세 부분으로 구성됩니다.
 
-filter → map →(즉시 실행)→ collect/count
+```mermaid
+graph LR
+  A["Collection/Array"] -->|"Stream 반환"| B["filter → map"]
+  B -->|"즉시 실행"| C["collect/count"]
+```
 
 중간 연산과 최종 연산의 차이는 핵심입니다. 중간 연산은 항상 `Stream<T>`를 반환하므로 계속 체이닝할 수 있고, 최종 연산이 호출되기 전까지는 아무것도 실행되지 않습니다. 반면 최종 연산은 스트림이 아닌 실제 결과(List, int, void 등)를 반환하며, 이 시점에 파이프라인 전체가 실행됩니다. 최종 연산이 없으면 파이프라인에 아무리 많은 중간 연산을 걸어도 실행 자체가 되지 않습니다.
 

@@ -389,7 +389,9 @@ graph LR
 graph LR
     T1["Thread(블로킹)"] -->|DB 요청| W1["대기"]
     W1 --> P1["처리"]
+    T2["Thread(논블로킹)"] -->|DB 요청| IR["즉시 반환"]
     IR --> OW["다른 작업"]
+    OW -->|I/O 완료| CB["콜백 실행"]
 ```
 
 실제 동작 수준에서는 Linux의 `epoll`, macOS의 `kqueue`, Windows의 `IOCP`를 사용하여 커널이 I/O 완료를 통지합니다.
@@ -434,6 +436,9 @@ Flux.range(1, 5)
 graph LR
     PA["소스"] --> PB["map(A)"]
     PB --> PC["publishOn"]
+    PC --> PD["map(B)"]
+    SA["소스"] --> SB["map(A)"]
+    SB --> SD["subscribeOn"]
 ```
 
 ```java
@@ -1283,7 +1288,14 @@ class UserServiceTest {
 
 **메모리 사용량 (동시 1,000명 기준):** Spring MVC ~2GB vs WebFlux ~300MB (**6.7배 절약**)
 
-0 → 3500
+```mermaid
+xychart-beta
+    title "외부 API 호출 시 동시 사용자별 TPS 비교"
+    x-axis ["10명", "100명", "500명", "1K명", "2K명", "5K명", "10K명"]
+    y-axis "TPS (처리량)" 0 --> 3500
+    bar [95, 520, 1200, 700, 500, 300, 0]
+    bar [98, 580, 2800, 3100, 3200, 3100, 2900]
+```
 
 핵심은 **동시 500명을 넘어서는 순간** MVC는 스레드 풀이 포화되어 성능이 급락하지만, WebFlux는 이벤트 루프 기반이라 안정적으로 유지된다는 점이다.
 

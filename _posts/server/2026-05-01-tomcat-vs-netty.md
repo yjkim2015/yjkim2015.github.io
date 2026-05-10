@@ -36,7 +36,10 @@ graph LR
 
 Tomcat 8.5부터 NIO가 기본값이다.
 
-Acceptor 1~2개 / Poller 1~2개 / Worker Pool 200개
+```mermaid
+graph LR
+    Acceptor["Acceptor 1~2개"] --> Poller["Poller 1~2개"] --> Workers["Worker Pool 200개"]
+```
 
 ```yaml
 # Spring Boot application.yml
@@ -77,13 +80,21 @@ Netty는 비동기 이벤트 기반 네트워크 I/O 프레임워크다. Spring 
 
 > 비유: 교환원(Boss)이 전화를 받아 직원(Worker)에게 연결하고, 직원은 여러 통화를 동시에 돌아가며 처리한다. 직원이 통화 중 잠깐 대기하는 동안 다른 통화를 처리한다.
 
-Worker CPU×2개 → Channel
+```mermaid
+graph LR
+    Boss["Boss 1~2개"] -->|연결 전달| Worker["Worker CPU×2개"]
+    Worker --> Channel --> Pipeline
+```
 
 ### EventLoop
 
 하나의 스레드가 하나의 EventLoop를 담당하고, 하나의 EventLoop는 여러 Channel을 처리한다.
 
-EventLoop → select() → processKeys() → runTasks() → Ch A → Ch B
+```mermaid
+graph LR
+    EL["EventLoop"] --> S["select()"] --> P["processKeys()"] --> R["runTasks()"]
+    EL --- A["Ch A"] & B["Ch B"] & C["Ch C"]
+```
 
 **핵심 원칙**: EventLoop 스레드를 절대 블로킹하면 안 된다. 블로킹 작업은 별도 스레드 풀(`Schedulers.boundedElastic()`)로 오프로드해야 한다.
 

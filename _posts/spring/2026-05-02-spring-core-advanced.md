@@ -77,7 +77,19 @@ graph LR
 
 > **비유:** 연예인(RealSubject)에게 직접 연락하려면 매니저(Proxy)를 통해야 한다. 매니저는 불필요한 요청을 걸러내고(접근 제어), 일정 관리나 계약 검토 같은 부가 업무를 처리한다(부가 기능). 외부에서 보면 연예인인지 매니저인지 구별하기 어렵다 — 둘 다 같은 인터페이스를 구현하기 때문이다.
 
-Proxy → RealSubject
+```mermaid
+classDiagram
+    class Subject {
+        <<interface>>
+        +operation() String
+    }
+    class RealSubject { +operation() String }
+    class Proxy { -target: RealSubject
+        +operation() String }
+    Subject <|-- RealSubject
+    Subject <|-- Proxy
+    Proxy --> RealSubject : 위임
+```
 
 클라이언트는 `Subject` 인터페이스만 알고 있습니다. 실제로 `RealSubject`를 받든 `Proxy`를 받든 코드를 바꿀 필요가 없습니다. Spring이 이 원리를 이용해서, 기존 `OrderService` 코드를 건드리지 않고 앞에 프록시를 세워 로그를 추가합니다.
 
@@ -681,7 +693,16 @@ public class InternalService {
 
 ## 13. 전체 흐름 정리
 
-빈 생성 및 의존관계 주입 → postProcessAfterIn
+```mermaid
+flowchart LR
+    A["Spring Boot 시작"] --> B["빈 생성 및 의존관계 주입"]
+    B --> C["postProcessAfterIn"]
+    C --> D{"Pointcut 매칭 Advisor?"}
+    D -->|"있음"| E["ProxyFactory → JDK"]
+    D -->|"없음"| F["원본 빈 등록"]
+    E & F --> G["ApplicationContext"]
+    G --> H["클라이언트 호출"]
+```
 
 ---
 

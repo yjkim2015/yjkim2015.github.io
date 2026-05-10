@@ -272,7 +272,13 @@ element.style.visibility      = 'hidden'; // 레이아웃 그대로
 
 ### 성능 비용 순서
 
-💸💸💸 Reflow / 💸💸 Repaint / 💸 Composite
+```mermaid
+graph LR
+    A["💸💸💸 Reflow"] --> B["💸💸 Repaint"] --> C["💸 Composite"]
+    style A fill:#e74c3c,color:#fff
+    style B fill:#f39c12,color:#fff
+    style C fill:#2ecc71,color:#fff
+```
 
 ---
 
@@ -396,7 +402,18 @@ list.appendChild(fragment);  // Reflow 1번만
 
 이벤트가 DOM 트리를 통해 전파되는 방식입니다.
 
-participant WIN as window participant DOC as document participant BTN as button
+```mermaid
+sequenceDiagram
+    participant WIN as window
+    participant DOC as document
+    participant BTN as button
+    Note over WIN,BTN: 캡처링 (위→아래)
+    WIN->>DOC: 전파
+    DOC->>BTN: 타깃 도착
+    Note over WIN,BTN: 버블링 (아래→위)
+    BTN->>DOC: 버블링
+    DOC->>WIN: 버블링
+```
 
 ```javascript
 // 버블링 (기본): 자식 → 부모 방향

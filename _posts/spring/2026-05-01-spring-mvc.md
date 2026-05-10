@@ -60,8 +60,8 @@ graph LR
     DS -->|"preHandle()"| DS
     DS -->|"컨트롤러 실행"| CM["Controller"]
     CM -->|"ModelAndView"| DS
-    DS -->|postHandle()/Vie..| DS
-    DS -->|afterCompletion(..| C
+    DS -->|"postHandle()/View렌더링"| DS
+    DS -->|"afterCompletion()→응답"| C
 ```
 
 ### HandlerMapping

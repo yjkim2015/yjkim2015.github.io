@@ -46,7 +46,15 @@ date: 2026-05-01
 
 가장 일반적인 방식. 결과를 기다리는 동안 스레드가 멈춘다.
 
-participant T as 호출자 스레드 participant IO as I/O T->>IO: 요청
+```mermaid
+sequenceDiagram
+    participant T as 호출자 스레드
+    participant IO as I/O
+    T->>IO: 요청
+    Note over T: 스레드 블로킹 (대기 중)
+    IO-->>T: 결과 수신
+    Note over T: 다음 작업 진행
+```
 
 ```java
 // Java - 전통적인 블로킹 I/O
@@ -124,7 +132,15 @@ while ((bytesRead = channel.read(buffer)) == 0) {
 
 드문 조합. 비동기로 요청하지만 결과를 받을 때 블로킹한다.
 
-participant T as 호출자 스레드 participant BG as 별도 스레드 T->>BG: 요청 발행 (비동기)
+```mermaid
+sequenceDiagram
+    participant T as 호출자 스레드
+    participant BG as 별도 스레드
+    T->>BG: 요청 발행 (비동기)
+    Note over T: Future.get() — 블로킹 대기
+    BG-->>T: 결과 반환
+    Note over T: 다음 작업 진행
+```
 
 ```java
 // Java Future - 비동기 요청 후 블로킹 대기
@@ -168,7 +184,16 @@ String r3 = f3.get();
 
 가장 효율적인 조합. 요청 후 즉시 반환되고, 완료 시 콜백/이벤트로 통보된다.
 
-participant T as 호출자 스레드 participant IO as I/O / 커널 T->>IO: 요청 발행
+```mermaid
+sequenceDiagram
+    participant T as 호출자 스레드
+    participant IO as I/O / 커널
+    T->>IO: 요청 발행
+    IO-->>T: 즉시 반환
+    Note over T: 다른 작업 A 진행
+    Note over T: 다른 작업 B 진행
+    IO-->>T: 완료 이벤트 → 콜백 실행
+```
 
 ```java
 // Java NIO2 (AsynchronousSocketChannel)
@@ -341,7 +366,17 @@ graph LR
 
 데이터 복사(커널 버퍼 → 유저 버퍼)까지 완료된 후 통보된다. Java의 `AsynchronousSocketChannel`이 이 방식이다.
 
-participant App as Application participant K as Kernel App->>K: aio_read()
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant K as Kernel
+    App->>K: aio_read()
+    K-->>App: 즉시 반환
+    Note over App: 다른 작업 진행
+    Note over K: 데이터 도착\n커널 버퍼 → 유저 버퍼 복사 완료
+    K-->>App: 완료 시그널/콜백
+    Note over App: 데이터 이미 유저 버퍼에 있음
+```
 
 **5가지 모델 비교**
 

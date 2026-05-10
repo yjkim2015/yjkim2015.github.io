@@ -49,7 +49,18 @@ graph LR
 1️⃣ **Phase 1 - Prepare(투표)**: 코디네이터가 모든 참여자에게 "준비됐나?" 질문 → 각 참여자가 로컬 트랜잭션을 준비하고 Yes/No 응답
 2️⃣ **Phase 2 - Commit/Rollback(결정)**: 모든 참여자 Yes → Commit 명령 / 하나라도 No → Rollback 명령
 
-participant CO as Coordinator participant ODB as OrderDB participant IDB as InventoryDB
+```mermaid
+sequenceDiagram
+    participant CO as Coordinator
+    participant ODB as OrderDB
+    participant IDB as InventoryDB
+    Note over CO: Phase 1 - Prepare
+    CO->>ODB: Prepare
+    CO->>IDB: Prepare
+    Note over CO: Phase 2 - Commit
+    CO->>ODB: Commit
+    CO->>IDB: Commit
+```
 
 ### 2PC의 문제점
 
@@ -98,7 +109,16 @@ graph LR
 
 중앙 오케스트레이터 없이 **이벤트를 통해 각 서비스가 자율적으로 참여**한다.
 
-participant OS as Order participant MQ as MQ participant IS as Inventory
+```mermaid
+sequenceDiagram
+    participant OS as Order
+    participant MQ as MQ
+    participant IS as Inventory
+    OS->>MQ: OrderCreated
+    MQ->>IS: 재고 차감
+    IS->>MQ: 실패
+    MQ->>OS: 보상: 주문 취소
+```
 
 **장점**: 느슨한 결합, 단순한 구현, 중앙 실패 지점 없음
 
@@ -110,7 +130,16 @@ participant OS as Order participant MQ as MQ participant IS as Inventory
 
 **중앙 오케스트레이터(Saga Orchestrator)**가 전체 흐름을 명시적으로 제어한다.
 
-participant SO as Orchestrator participant OS as Order participant IS as Inventory
+```mermaid
+sequenceDiagram
+    participant SO as Orchestrator
+    participant OS as Order
+    participant IS as Inventory
+    SO->>OS: 주문 생성
+    SO->>IS: 재고 차감
+    IS-->>SO: 실패
+    SO->>OS: 주문 취소
+```
 
 **장점**: 전체 흐름이 한곳에 집중 → 이해하고 모니터링하기 쉬움
 
@@ -179,7 +208,17 @@ TCC는 각 서비스의 비즈니스 로직을 Try / Confirm / Cancel 3단계로
 | Confirm | 예약 확정 — 실제 처리 |
 | Cancel | 예약 취소 — 원상 복구 |
 
-participant CO as Coordinator participant SVC as 주문/재고/결제 CO->>SVC: Phase1 Try (PENDING, 임시 차감, 금액 잠금)
+```mermaid
+sequenceDiagram
+    participant CO as Coordinator
+    participant SVC as 주문/재고/결제
+    CO->>SVC: Phase1 Try (PENDING, 임시 차감, 금액 잠금)
+    alt 모두 성공
+        CO->>SVC: Phase2 Confirm (확정)
+    else 실패
+        CO->>SVC: Phase2 Cancel (복원)
+    end
+```
 
 ```java
 @Service

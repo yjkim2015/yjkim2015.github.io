@@ -27,7 +27,11 @@ graph LR
 
 Spring Batch는 실행 이력을 DB에 저장합니다.
 
-B →(has)→ C
+```mermaid
+graph LR
+    A[JOB_INSTANCE] -->|has| B[JOB_EXECUTION]
+    B -->|has| C[STEP_EXECUTION]
+```
 
 ---
 

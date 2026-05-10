@@ -343,7 +343,7 @@ graph LR
     C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
     DS -->|"preHandle()"| I1["Interceptor1"]
     DS -->|"핸들러 실행→예외"| DS
-    DS -->|afterCompletion(..| I1
+    DS -->|"afterCompletion(ex)"| I1
     DS -->|"에러 응답"| C
 ```
 
@@ -1310,7 +1310,18 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
 ## 핵심 포인트 정리
 
-mindmap root((Spring Interceptor)) 위치: DispatcherServlet 이후, Bean 접근 가능
+```mermaid
+mindmap
+  root((Spring Interceptor))
+    위치: DispatcherServlet 이후, Bean 접근 가능
+    메서드
+      preHandle - false 시 중단
+      postHandle - 예외 시 미호출
+      afterCompletion - 항상 호출
+    용도: 인증/인가, 로깅, Rate Limiting
+    주의: 싱글톤, 인스턴스 변수 금지
+    vs Filter: 서블릿 vs Spring MVC 레벨
+```
 
 ### 한눈에 보는 핵심 체크리스트
 

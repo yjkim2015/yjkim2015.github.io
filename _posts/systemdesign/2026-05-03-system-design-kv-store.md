@@ -750,7 +750,11 @@ KV 스토어 → 외부: 아웃바운드 최소화
 
 **상황**: BTS 새 앨범 발매 직후 `artist:BTS:info` 키에 초당 100만 건이 집중된다. 해당 파티션 노드 1대가 감당할 수 없다.
 
-artist:BTS:info → 노드 다운
+```mermaid
+graph LR
+    Fan1M["팬 100만명"] --> HotKey["artist:BTS:info"]
+    HotKey --> CRASH["노드 다운"]
+```
 
 **대응**:
 

@@ -200,7 +200,15 @@ eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6Ikp. ← Payload (사용자 정보)
 SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQss ← Signature (위변조 방지)
 ```
 
-A → C
+```mermaid
+graph LR
+    A[JWT] --> B[Header]
+    A --> C[Payload]
+    A --> D[Signature]
+    B --> E["alg: HS256"]
+    C --> F["sub: 사용자 ID"]
+    D --> G["HMACSHA256("]
+```
 
 Signature의 역할이 핵심입니다. Payload를 아무나 base64 디코딩해서 읽을 수 있습니다(암호화가 아님). 하지만 내용을 조작하면 Signature 검증에서 실패합니다. "userId=1"을 "userId=999"로 바꾸면 서버가 즉시 감지합니다. 따라서 JWT에 민감한 정보(비밀번호 등)를 넣으면 안 됩니다.
 
@@ -422,7 +430,7 @@ graph LR
     U["사용자"] -->|"로그인"| B["은행"]
     B -->|"쿠키 발급"| U
     M["악성사이트"] -->|"클릭 유도"| U
-    U -->|POST /transfer(쿠..| B
+    U -->|"POST /transfer(쿠키 자동 포함)"| B
     B -->|"CSRF 토큰 포함 폼"| U
     U -->|"토큰 포함 요청"| B
     B -->|"토큰 검증 통과"| B

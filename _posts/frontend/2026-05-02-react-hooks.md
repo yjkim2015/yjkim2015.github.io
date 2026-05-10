@@ -19,7 +19,17 @@ React 16.8에서 Hooks가 등장하면서 함수형 컴포넌트에서도 상태
 
 ## 1번 다이어그램 - Hooks 전체 지도
 
-mindmap root((React Hooks)) 기본
+```mermaid
+mindmap
+  root((React Hooks))
+    기본
+      useState/useEffect/useContext
+    추가
+      useReducer/useMemo/useCallback
+      useRef/useLayoutEffect
+    커스텀
+      useDebounce/useFetch/useLocalStorage
+```
 
 ---
 
@@ -88,7 +98,14 @@ useEffect(() => {
 
 ### useEffect 실행 순서
 
-participant R as 렌더링 participant E as useEffect R->>E: 첫 렌더링 - effect1 실행
+```mermaid
+sequenceDiagram
+    participant R as 렌더링
+    participant E as useEffect
+    R->>E: 첫 렌더링 - effect1 실행
+    R->>E: 의존성 변경 - cleanup1 후 effect2 실행
+    R->>E: 언마운트 - 마지막 cleanup 실행
+```
 
 ### Stale Closure — 가장 흔한 useEffect 버그
 
@@ -163,7 +180,15 @@ function ExpensiveList({ items, filter }) {
 ```mermaid
 flowchart LR
     A{"계산이<br>비싼가?"}
+    A -->|"예 복잡한 연산"| B["useMemo 사용"]
+    A -->|"아니오 간단한 계산"| C["useMemo 불필요"]
     D{"자식 컴포넌트에<br>전달하는 객체인가?"}
+    D -->|"예"| E["useMemo 사용 — 참조 안정"]
+    D -->|"아니오"| F["불필요"]
+    style B fill:#2ecc71,color:#fff
+    style C fill:#e74c3c,color:#fff
+    style E fill:#2ecc71,color:#fff
+    style F fill:#e74c3c,color:#fff
 ```
 
 ```jsx
@@ -273,7 +298,16 @@ function usePrevious(value) {
 
 useEffect와 거의 같지만, **브라우저가 화면을 그리기 전에** 동기적으로 실행됩니다. DOM을 측정하고 즉시 수정해야 할 때 씁니다.
 
-participant RENDER as React 렌더링 participant LAY as useLayoutEffect participant PAINT as 브라우저 페인팅
+```mermaid
+sequenceDiagram
+    participant RENDER as React 렌더링
+    participant LAY as useLayoutEffect
+    participant PAINT as 브라우저 페인팅
+    RENDER->>LAY: DOM 업데이트 후 동기 실행
+    LAY->>LAY: DOM 읽기/수정
+    LAY->>PAINT: 페인팅 허용
+    PAINT->>PAINT: useEffect 비동기 실행
+```
 
 ```jsx
 // Tooltip 위치 조정 — 화면에 보이기 전에 위치 계산 필요

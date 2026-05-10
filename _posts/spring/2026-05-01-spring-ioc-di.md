@@ -51,7 +51,18 @@ IoC의 핵심은 **"내가 사용할 객체를 내가 만들지 않는다"**는 
 
 Spring IoC 컨테이너는 **Bean Definition**을 읽어서 Bean을 생성하고 관리한다. 컨테이너가 시작할 때 설정 파일(또는 어노테이션)을 파싱하여 "어떤 클래스를 어떤 스코프로, 어떤 의존성과 함께 만들 것인가"라는 메타데이터를 BeanDefinition 객체로 변환한다. 그 후 이 메타데이터를 바탕으로 Bean 인스턴스를 만들고 의존성을 연결한다. 이 과정이 끝나야 비로소 애플리케이션이 요청을 받을 준비가 된다.
 
-2️⃣ BeanDefinition → 3️⃣ Bean 인스턴스 생성<b
+```mermaid
+graph LR
+    A["1️⃣ Configuration"] --> B["2️⃣ BeanDefinition"]
+    B --> C["3️⃣ Bean 인스턴스 생성<b"]
+    C --> D["4️⃣ 의존성 주입<br>생성자/"]
+    D --> E["5️⃣ 초기화 콜백<br>@Pos"]
+    E --> F["6️⃣ Bean 사용"]
+    F --> G["7️⃣ 소멸 콜백<br>@PreD"]
+    style A fill:#e8f4f8
+    style F fill:#e8f8e8
+    style G fill:#f8e8e8
+```
 
 핵심은 3단계와 4단계의 분리다. 생성자 주입의 경우 3단계와 4단계가 동시에 일어나지만, 세터/필드 주입은 인스턴스가 먼저 만들어진 후 별도로 주입된다. 이 차이가 순환 참조 감지 시점에 영향을 준다.
 
@@ -119,7 +130,16 @@ graph LR
 
 Bean의 생명주기를 정확히 이해해야 초기화 콜백을 올바른 시점에 사용할 수 있다. 예를 들어 DB 커넥션 풀을 초기화하려면, 커넥션 풀 Bean이 생성되고 **모든 의존성 주입이 완료된 후**에 초기화가 실행되어야 한다. `@PostConstruct`가 바로 그 시점을 보장한다. 생성자에서 초기화하면 의존성이 아직 주입되지 않은 상태일 수 있다.
 
-1️⃣ Bean 인스턴스 생성<b
+```mermaid
+graph LR
+    S([Spring Container 시작]) --> A
+    A["1️⃣ Bean 인스턴스 생성<b"]
+    A --> B["2️⃣ 의존성 주입 DI<br>생"]
+    B --> C["3️⃣ 초기화 콜백<br>@Pos"]
+    C --> D["4️⃣ Bean 사용 (애플리케이"]
+    D --> E["5️⃣ 소멸 콜백 (Contain"]
+    E --> END([Spring Container 종료])
+```
 
 ### 코드 예제
 
@@ -442,7 +462,15 @@ public class DiscountService {
 
 A가 B를 필요로 하고, B가 C를 필요로 하며, C가 다시 A를 필요로 하는 상황이다. 생성자 주입에서는 A를 만들려면 B가 필요하고, B를 만들려면 C가 필요하고, C를 만들려면 A가 필요한 데드락이 발생한다.
 
-ServiceB<br>@Autow → ServiceC<br>@Autow, ServiceC<br>@Autow → ServiceA<br>@Autow
+```mermaid
+graph LR
+    A["ServiceA<br>@Autow"] --> B["ServiceB<br>@Autow"]
+    B --> C["ServiceC<br>@Autow"]
+    C --> A
+    style A fill:#ffe0e0
+    style B fill:#ffe0e0
+    style C fill:#ffe0e0
+```
 
 ### Spring Boot 2.6+ 기본 동작
 

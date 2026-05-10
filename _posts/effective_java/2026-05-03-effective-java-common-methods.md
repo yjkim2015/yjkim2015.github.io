@@ -106,7 +106,12 @@ public boolean equals(Object o) {
 
 ### hashCode 계약
 
-a.equals(b) == tru → a.hashCode() == b. → a.hashCode() == b. → a.equals(b) 참일 수도 → a.equals(b) == fal → a.hashCode() != b.
+```mermaid
+flowchart LR
+    A["a.equals(b) == tru"] -->|"필수"| B["a.hashCode() == b."]
+    C["a.hashCode() == b."] -->|"필수 아님"| D["a.equals(b) 참일 수도"]
+    E["a.equals(b) == fal"] -->|"권장"| F["a.hashCode() != b."]
+```
 
 핵심 규칙을 정리하면 다음과 같습니다.
 
@@ -245,7 +250,12 @@ public static Yum newInstance(Yum yum) { ... }
 
 `compareTo`의 규약은 `equals`와 유사하며, **반사성, 대칭성, 추이성**을 만족해야 합니다.
 
-x.compareTo(y) > 0 → y.compareTo(x) < 0 → x.compareTo(y) > 0 → x.compareTo(z) > 0 → x.compareTo(y) == → x.equals(y) == tru
+```mermaid
+flowchart LR
+    A["x.compareTo(y) > 0"] -->|"대칭성"| B["y.compareTo(x) < 0"]
+    C["x.compareTo(y) > 0"] -->|"추이성"| D["x.compareTo(z) > 0"]
+    E["x.compareTo(y) =="] -->|"권장"| F["x.equals(y) == tru"]
+```
 
 자바 8부터는 **비교자 생성 메서드(Comparator construction methods)**를 사용하면 `compareTo`를 간결하게 구현할 수 있습니다. 약간의 성능 저하가 있지만, 가독성이 크게 향상됩니다.
 

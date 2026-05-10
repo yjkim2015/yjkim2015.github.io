@@ -39,10 +39,17 @@ graph LR
 
 ```mermaid
 flowchart LR
+    A["컴포넌트 분리 고려"] --> B{"재사용 가능한가?"}
     B -->|"예"| C["분리 — 다른 곳에서도 쓸 수 있"]
     B -->|"아니오"| D{"너무 큰가? 150줄 이상"}
+    D -->|"예"| E["기능 단위로 분리"]
     D -->|"아니오"| F{"여러 책임을 갖는가?"}
+    F -->|"예"| G["SRP에 따라 분리"]
+    F -->|"아니오"| H["현재 크기 유지"]
     style C fill:#2ecc71,color:#fff
+    style E fill:#2ecc71,color:#fff
+    style G fill:#2ecc71,color:#fff
+    style H fill:#3498db,color:#fff
 ```
 
 만약 이걸 안 하면? 한 컴포넌트가 2000줄이 되고, 버그 하나 고치려면 어디서 고쳐야 할지 모르는 상황이 됩니다. 실제 프로젝트에서 가장 흔하게 발생하는 문제입니다.
@@ -450,7 +457,20 @@ async function fetchProduct(id: string): Promise<Product> {
 
 ## 9번 다이어그램 - 좋은 아키텍처의 원칙
 
-mindmap root((좋은 아키텍처)) 관심사분리
+```mermaid
+mindmap
+  root((좋은 아키텍처))
+    관심사분리
+      UI/비즈니스/API레이어
+    단방향의존성
+      순환참조금지
+    테스트용이성
+      순수컴포넌트/DI
+    확장가능성
+      FeatureFlag/플러그인
+    타입안전성
+      TypeScript/런타임검증
+```
 
 ### 레거시 마이그레이션 — Strangler Fig 패턴
 

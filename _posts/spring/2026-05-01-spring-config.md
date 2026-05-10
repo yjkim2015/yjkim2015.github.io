@@ -155,7 +155,16 @@ curl -X POST http://order-service:8080/actuator/refresh
 2️⃣ Config Server가 메시지 브로커에 `RefreshRemoteApplicationEvent`를 발행한다
 3️⃣ 모든 클라이언트가 이벤트를 수신하고 Config Server에서 새 설정을 가져온다
 
-participant DEV as Dev participant CS as ConfigServer participant SVC as Services
+```mermaid
+sequenceDiagram
+    participant DEV as Dev
+    participant CS as ConfigServer
+    participant SVC as Services
+    DEV->>CS: push + bus-refresh
+    CS->>SVC: 이벤트 발행
+    SVC->>CS: 새 설정 fetch
+    Note over SVC: 재배포 없이 적용
+```
 
 ---
 

@@ -67,7 +67,9 @@ public class Thread implements Runnable {
 ```mermaid
 graph LR
     GET["get() 호출"] --> MAP["ThreadLocalMap 접근"]
+    MAP --> ENTRY["getEntry(this)"]
     ENTRY -->|"있음"| VALUE["값 반환"]
+    ENTRY -->|"없음"| INIT["setInitialValue()"] --> VALUE
 ```
 
 ```java
@@ -183,7 +185,13 @@ graph LR
 
 단, **키가 수거되어도 value는 여전히 강참조로 남습니다.** 이것이 메모리 누수의 원인입니다.
 
-Entry → value(강참조)
+```mermaid
+graph LR
+    TL["ThreadLocal(강참조)"] -.->|"WeakRef key"| ENTRY["Entry"]
+    ENTRY --> VAL["value(강참조)"]
+    NULL["tl=null → GC 수거"] --> LEAK["key=null, value 잔존"]
+    REMOVE["remove() 호출"] --> CLEAN["Entry 완전 제거"]
+```
 
 ### 메모리 누수 시나리오 (스레드 풀 + ThreadLocal)
 

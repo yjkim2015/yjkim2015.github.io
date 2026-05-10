@@ -202,7 +202,18 @@ docker run -d -p 9411:9411 openzipkin/zipkin
 
 Zipkin의 Gantt 차트로 각 서비스의 처리 시간과 순서를 한눈에 볼 수 있다.
 
-gantt title TraceId abc123 타임라인 dateFormat x
+```mermaid
+gantt
+    title TraceId abc123 타임라인
+    dateFormat x
+    axisFormat %Lms
+    section Gateway
+    라우팅       :0, 10
+    section Order
+    주문처리     :10, 400
+    section Payment
+    결제처리     :15, 200
+```
 
 ---
 

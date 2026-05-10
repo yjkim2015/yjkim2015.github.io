@@ -57,7 +57,14 @@ Adapter(구현체)가 기술을 다룬다.
 
 ## 핵심 구조
 
-HTTP/CLI/Test →(Inbound Port/Adapt)→ Application Servic, Application Servic →(Outbound Port/Adap)→ DB/MQ/API
+```mermaid
+graph LR
+    HTTP["HTTP/CLI/Test"]
+    AS["Application Servic"]
+    DB["DB/MQ/API"]
+    HTTP -->|"Inbound Port/Adapt"| AS
+    AS -->|"Outbound Port/Adap"| DB
+```
 
 ---
 
@@ -262,7 +269,12 @@ public class OrderPersistenceAdapter implements OrderRepository {
 
 헥사고날 아키텍처의 가장 큰 이점 중 하나는 **테스트 용이성**입니다.
 
-통합 테스트 →(20%)→ E2E 테스트
+```mermaid
+graph LR
+    UT["단위 테스트"] -->|"70%"| IT["통합 테스트"]
+    IT -->|"20%"| E2E["E2E 테스트"]
+    class E2E e2e
+```
 
 ```java
 // Application Service 단위 테스트 — DB, Kafka 불필요

@@ -385,7 +385,11 @@ graph LR
 
 ### 1:1 채팅 메시지 완전 흐름
 
-채팅서버 →(WS/Push 전달)→ UserB
+```mermaid
+graph LR
+    A["UserA"] -->|"WS 메시지"| S["채팅서버"]
+    S -->|"WS/Push 전달"| B["UserB"]
+```
 
 ### 서버 간 메시지 라우팅 문제
 
@@ -411,6 +415,9 @@ graph LR
     Snow --> T["41비트: 타임스탬프(ms)"]
     Snow --> M["10비트: 머신 ID"]
     Snow --> S["12비트: 시퀀스"]
+    T --> Benefit1["시간순 정렬 가능"]
+    M --> Benefit2["전역 유일성 보장"]
+    S --> Benefit3["초당 4096 × 1024 = 4"]
 ```
 
 ```java
@@ -633,7 +640,16 @@ Read-time 팬아웃 (Twitter Timeline 방식):
 
 텍스트 메시지와 달리 미디어 파일은 크기가 수 MB~수 GB입니다. WebSocket으로 직접 보내면 연결이 오래 점유되어 다른 메시지가 지연됩니다.
 
-participant A as UserA participant UP as Upload/S3 participant S as Chat/UserB
+```mermaid
+sequenceDiagram
+    participant A as UserA
+    participant UP as Upload/S3
+    participant S as Chat/UserB
+    A->>UP: POST /upload
+    UP-->>A: media_url
+    A->>S: WS 이미지메시지
+    S->>A: WS 썸네일 URL
+```
 
 ### 미디어 최적화 전략
 

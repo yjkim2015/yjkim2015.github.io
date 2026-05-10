@@ -25,7 +25,13 @@ JavaScript 런타임은 **한 명의 유능한 웨이터가 있는 레스토랑*
 
 JavaScript 코드가 실행될 때, 엔진은 **실행 컨텍스트**를 생성합니다. 실행 컨텍스트는 코드가 실행되는 환경으로, 변수·함수 선언·this 바인딩 정보를 담습니다.
 
-Global Execution C → Function Execution
+```mermaid
+flowchart LR
+    GEC["Global Execution C"]
+    FEC["Function Execution"]
+    CS["Call Stack: printS"]
+    GEC --> FEC --> CS
+```
 
 ```javascript
 // 콜 스택 동작 예시
@@ -153,7 +159,20 @@ async function processInChunks(items, chunkSize = 100) {
 
 `this`는 **함수가 호출되는 방식**에 따라 결정됩니다. 선언 위치가 아닌 호출 시점의 컨텍스트입니다.
 
-함수 호출 방식은? → new
+```mermaid
+flowchart LR
+    Q["함수 호출 방식은?"]
+    Q -->|"new 키워드"| NEW["new 바인딩"]
+    Q -->|"call / apply / bin"| EXPLICIT["명시적 바인딩"]
+    Q -->|"obj.method()"| METHOD["암시적 바인딩"]
+    Q -->|"화살표 함수"| ARROW["렉시컬 바인딩"]
+    Q -->|"그냥 func()"| DEFAULT["기본 바인딩"]
+    style NEW fill:#9b59b6,color:#fff
+    style EXPLICIT fill:#3498db,color:#fff
+    style METHOD fill:#2ecc71,color:#fff
+    style ARROW fill:#f39c12,color:#fff
+    style DEFAULT fill:#e74c3c,color:#fff
+```
 
 ```javascript
 // 1. 기본 바인딩: 일반 함수 호출

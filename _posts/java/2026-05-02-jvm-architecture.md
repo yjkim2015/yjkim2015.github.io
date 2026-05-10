@@ -533,7 +533,11 @@ GC Root가 될 수 있는 것들:
 
 #### Mark → Sweep → Compact 내부 동작
 
-2. Sweep: 미표시 제거 → 3. Compact: 객체 압축
+```mermaid
+flowchart LR
+    A["1. Mark: GC Root부터"] --> B["2. Sweep: 미표시 제거"]
+    B --> C["3. Compact: 객체 압축"]
+```
 
 - **Mark**: GC Root에서 시작해 도달 가능한 객체에 표시. STW(Stop-The-World) 중 수행.
 - **Sweep**: 표시되지 않은 객체의 메모리 해제. 이 과정에서 메모리에 구멍이 생깁니다(단편화).
@@ -771,7 +775,17 @@ ZGC와 비슷하게 STW 최소화가 목표지만 다른 접근 방식입니다.
 
 ### 6.5 GC 선택 가이드
 
-응답시간 최우선? → Yes, 응답시간 최우선? → No
+```mermaid
+flowchart LR
+    A{"응답시간 최우선?"}
+    A -->|Yes| B{"힙 크기?"}
+    B -->|"< 4GB"| C["G1GC"]
+    B -->|"4~16GB"| D["G1GC or ZGC"]
+    B -->|"> 16GB"| E["ZGC / Shenandoah"]
+    A -->|No| F{"처리량 최우선?"}
+    F -->|Yes| G["Parallel GC"]
+    F -->|No| H["G1GC 기본값"]
+```
 
 ### 6.6 GC 튜닝 주요 파라미터
 

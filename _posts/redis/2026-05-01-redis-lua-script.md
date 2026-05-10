@@ -86,7 +86,17 @@ redisTemplate.execute(
 
 `EVAL`은 매 호출마다 스크립트 전문(全文)을 네트워크로 전송한다. 스크립트가 수백 바이트라면 초당 수만 번 호출 시 네트워크 낭비가 크다. `EVALSHA`는 스크립트를 서버에 저장하고 SHA1 해시로만 호출한다.
 
-participant C as "Client" participant R as "Redis Server" Note over C,R: 1단계. 스크립트 등록
+```mermaid
+sequenceDiagram
+    participant C as "Client"
+    participant R as "Redis Server"
+    Note over C,R: 1단계. 스크립트 등록
+    C->>R: SCRIPT LOAD "스크립트 전문..."
+    R-->>C: "abc123..." (SHA1 해시 반환)
+    Note over C,R: 2단계. 이후 호출은 SHA1만 전송
+    C->>R: EVALSHA abc123... 1 mykey
+    R-->>C: 실행 결과
+```
 
 `DefaultRedisScript`는 이 과정을 자동으로 처리한다:
 - 최초 호출: `EVALSHA` 시도 → NOSCRIPT 에러 → 자동으로 `EVAL` 폴백 (스크립트 서버에 캐시됨)

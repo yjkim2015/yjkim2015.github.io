@@ -172,10 +172,10 @@ graph LR
 ```mermaid
 graph LR
     C["클라이언트"] -->|"POST /upload/init"| A["API 서버"]
-    A -->|upload_id, presi..| C
+    A -->|"upload_id, presigned_urls"| C
     C -->|"PUT chunk_1~N"| S["S3"]
-    C -->|POST /upload/com..| A
-    A -->|S3 Multipart Com..| S
+    C -->|"POST /upload/complete"| A
+    A -->|"S3 Multipart Complete"| S
     A -->|"video_id 반환"| C
 ```
 
@@ -388,6 +388,10 @@ master.m3u8 (마스터 플레이리스트)
 flowchart LR
     DL[세그먼트 다운로드] --> M[속도 측정<br/>bytes/ms]
     M --> BUF[버퍼 수준 체크<br/>현재 버퍼: N초]
+    BUF --> ALG[ABR 알고리즘<br/>BOLA / MPC]
+    ALG -->|버퍼 &gt; 15초| UP[화질 업그레이드]
+    ALG -->|버퍼 &lt; 5초| DN[화질 다운그레이드]
+    ALG -->|정상| KP[현재 화질 유지]
 ```
 
 대표 알고리즘:
@@ -559,6 +563,9 @@ flowchart LR
     USER[사용자] --> CAN[1단계 후보 생성<br/>수억 → 수백]
     CAN --> RNK[2단계 랭킹<br/>수백 → Top 10]
     RNK --> RES[결과 반환]
+    CAN --> CF[Collaborative Filtering<br/>유사 사용자 영상]
+    CAN --> CB[Content-Based<br/>시청 이력 기반]
+    RNK --> DNN[Deep Neural Network<br/>CTR + Satisfaction 예측]
 ```
 
 **1단계: 후보 생성 (Candidate Generation)**
@@ -588,7 +595,15 @@ flowchart LR
 
 라이브는 VOD와 근본적으로 다릅니다. 영상이 만들어지는 동시에 수백만 명이 봐야 합니다.
 
-CDN → 2, CH → V1
+```mermaid
+flowchart LR
+    STR[스트리머<br/>OBS] -->|RTMP| IG[인제스트 서버]
+    IG -->|실시간 트랜스코딩| TC[트랜스코딩<br/>GPU 클러스터]
+    TC -->|LL-HLS 세그먼트| CDN[CDN Edge]
+    CDN -->|2~5초 지연| V1[시청자 수백만]
+    IG --> CH[채팅 서버<br/>WebSocket]
+    CH --> V1
+```
 
 **RTMP(Real-Time Messaging Protocol)**: 스트리머 PC의 OBS 소프트웨어가 YouTube 인제스트 서버로 RTMP 스트림을 전송합니다.
 
@@ -705,6 +720,8 @@ YouTube의 Content ID는 저작권자가 사전에 등록한 **핑거프린트**
 flowchart LR
     CAM[중계 카메라] -->|RTMP| IG[인제스트<br/>다중 서버]
     IG --> TC[GPU 트랜스코딩<br/>수백 대]
+    TC -->|LL-HLS| CDN[CDN 엣지<br/>수천 PoP]
+    CDN -->|5000만 시청자 서빙| V[시청자]
 ```
 
 1️⃣ **인제스트 이중화**: RTMP 인제스트 서버를 최소 3대로 운영. Primary 장애 시 자동 Failover

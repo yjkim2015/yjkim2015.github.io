@@ -58,7 +58,12 @@ SET resource_lock <unique_value> NX EX 30
 
 ### 락 획득 ~ 해제 전체 흐름
 
-`SET NX EX` → 임계 영역 처리 → `Lua DEL` 순서로 동작한다.
+```mermaid
+graph LR
+    C["Client"] -->|NX EX| R["Redis"]
+    C -->|UPDATE| DB["DB"]
+    C -->|Lua DEL| R
+```
 
 ### 락 획득 코드
 
@@ -103,8 +108,11 @@ private void releaseLock(String key, String value) {
 
 > **비유**: GET으로 "내 열쇠 맞나 확인" 하고 DEL로 "열쇠 반납" 하는 사이에, 다른 사람이 새 열쇠를 걸어버리면 남의 열쇠를 빼앗게 된다. Lua는 확인과 반납을 하나의 동작으로 묶어준다.
 
-- **비원자(`GET` → `DEL`)**: 사이에 다른 프로세스 개입 → 타인 락 삭제 위험
-- **Lua 원자**: `GET` + 비교 + `DEL`을 한번에 실행 → 안전
+```mermaid
+graph LR
+    A["비원자"] -->|"GET→DEL 사이 위험"| X["타인 락 삭제"]
+    B["Lua 원자"] -->|"GET+비교+DEL 한번에"| O["안전"]
+```
 
 ---
 
@@ -204,7 +212,11 @@ public class OrderService {
 
 ### Lettuce 스핀락의 문제점
 
-`ThreadB: FAIL → sleep → FAIL → sleep → ... → A 해제 후 OK`
+```mermaid
+graph LR
+    B["ThreadB"] -->|FAIL→sleep→FAIL→sleep| R["Redis"]
+    R -->|A해제 후 OK| B
+```
 
 - 불필요한 Redis 명령어 반복 실행 → Redis 부하
 - 락 해제 이벤트를 즉시 감지 못해 최대 100ms 추가 지연
@@ -327,7 +339,12 @@ graph LR
 
 Redisson은 leaseTime을 지정하지 않으면 **Watchdog**을 통해 락 TTL을 자동으로 연장한다.
 
-`App → lock → Redis`, Watchdog이 10초마다 TTL 갱신, `App → unlock → Redis` 시 Watchdog 중단.
+```mermaid
+graph LR
+    App -->|lock| R["Redis"]
+    WD["Watchdog"] -->|10s마다 갱신| R
+    App -->|unlock| R
+```
 
 **Watchdog 동작 원리:**
 - 기본 TTL: 30초 (`lockWatchdogTimeout`)
@@ -683,7 +700,11 @@ try {
 }
 ```
 
-요청 순서: `T1 → T2 → T3` 순서대로 Lock을 획득한다.
+```mermaid
+graph LR
+    T1 --> T2 --> T3
+    T1 -->|순서대로| L["Lock"]
+```
 
 **단점:** 일반 RLock보다 오버헤드가 크고, 처리량이 낮다.
 
@@ -925,7 +946,12 @@ if (ttl != null && ttl < MINIMUM_WORK_TIME_MS) {
 
 **상황**: 락을 저장한 Redis 마스터가 갑자기 죽었다. Sentinel이 레플리카를 마스터로 승격시켰다. 그 사이 서버 B가 새 마스터에서 락을 획득했다.
 
-A가 Master에서 `NX OK` → Master 크래시 → Replica 승격 → B가 새 Master에서 `NX OK` → 이중 락.
+```mermaid
+graph LR
+    A -->|NX OK| M["Master"]
+    M -->|크래시| R["Replica 승격"]
+    B -->|NX OK| R
+```
 
 **원인**: Redis 복제는 **비동기**이므로, 마스터가 죽기 전에 복제되지 않은 데이터는 유실된다.
 
@@ -947,7 +973,12 @@ redisTemplate.execute((RedisCallback<Long>) conn ->
 
 **상황**: 서버 A는 락을 보유하고 작업 중이지만, Redis와 통신이 끊겼다. Watchdog이 TTL을 연장하지 못해 락이 만료됐다. 서버 B가 락을 획득했다.
 
-B →(NX OK)→ Redis, B →(동시접근)→ DB
+```mermaid
+graph LR
+    A["A 단절"] -.->|TTL만료| R["Redis"]
+    B -->|NX OK| R
+    A & B -->|동시접근| DB
+```
 
 **해결: Fencing Token 패턴**
 
@@ -980,7 +1011,12 @@ WHERE id = :id AND last_token < :token  -- 오래된 토큰이면 무시
 
 **상황**: 대용량 트래픽으로 JVM Full GC가 35초간 발생했다. 락 TTL이 30초였다.
 
-A가 GC 35초 → TTL 30초 만료 → B가 `NX OK` → A·B 동시 진입.
+```mermaid
+graph LR
+    A["A: GC 35초"] -->|TTL 30초 만료| R["Redis"]
+    B -->|NX OK| R
+    A & B -->|동시진입| DB
+```
 
 **증상**: GC가 끝난 서버 A가 자신이 여전히 락을 보유하고 있다고 착각하고 작업을 이어간다.
 

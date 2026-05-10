@@ -25,7 +25,7 @@ toc_label: 목차
 자바스크립트 런타임은 여러 구성 요소가 협력하는 시스템입니다. 각 역할을 이해해야 "왜 Promise가 setTimeout보다 먼저 실행되는가"를 설명할 수 있습니다.
 
 ```mermaid
-graph LR
+graph TB
     CS["콜 스택"] -->|"비동기 위임"| WA["Web APIs"]
     WA -->|"Promise"| MQ["마이크로태스크 큐"]
     WA -->|"타이머/이벤트"| TQ["태스크 큐"]
@@ -233,7 +233,20 @@ setTimeout(() => {
 2. 콜스택이 비어야 실행 가능합니다
 3. 마이크로태스크 큐가 먼저 처리됩니다
 
-gantt title 1번 setTimeout(fn, 0) 실제 실행 타임라인 dateFormat X
+```mermaid
+gantt
+    title 1번 setTimeout(fn, 0) 실제 실행 타임라인
+    dateFormat X
+    axisFormat %Lms
+    section 동기 코드
+    console.log('시작') :0, 1
+    Promise 등록 :1, 2
+    console.log('끝') :2, 3
+    section 마이크로태스크
+    Promise 콜백 처리 :3, 5
+    section 태스크
+    setTimeout 콜백 (최소 4ms 후) :7, 9
+```
 
 따라서 `setTimeout(fn, 0)`은 "지금 당장은 아니지만 가능한 빨리 실행해줘"라는 의미입니다. 절대로 동기 코드보다 먼저 실행되지 않습니다.
 
@@ -448,7 +461,19 @@ setImmediate(() => console.log('setImmediate'));
 
 ## 정리: 이벤트 루프 5가지 핵심 원칙
 
-mindmap root((이벤트 루프)) 싱글 스레드
+```mermaid
+mindmap
+  root((이벤트 루프))
+    싱글 스레드
+      콜스택 하나
+    우선순위
+      마이크로태스크 먼저
+      태스크는 나중에
+    비동기
+      Web API 처리 후 큐 등록
+    블로킹 금지
+      Web Worker 활용
+```
 
 1. **자바스크립트는 싱글 스레드** — 콜스택은 하나뿐
 2. **마이크로태스크가 태스크보다 우선** — Promise가 setTimeout보다 먼저
