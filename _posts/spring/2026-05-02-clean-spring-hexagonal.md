@@ -198,19 +198,14 @@ graph LR
 graph LR
     A["Controller"] --> B["Service"]
     B --> C["Repository"]
-    B -->|의존| E["JPA Entity"]
-    B -->|의존| F["@Transactional"]
-    B -->|의존| G["Jackson DTO"]
+    B -->|의존| E["JPA Entity"]..|의존| F["@Transaction..|의존| G["Jackson DTO"]
 ```
 
 ### 3.2 헥사고날 아키텍처 구조
 
 ```mermaid
 graph LR
-    A["REST/Kafka"] -->|인바운드| E["OrderUseCase"]
-    E --> G["OrderService"]
-    G --> H["Order 도메인"]
-    G -->|아웃바운드| J["OrderPort"]
+    A["REST/Kafka"] -->|인바운드| E["OrderUseCase..|아웃바운드| J["OrderPort"]
     J --> M["JPA/Kafka"]
 ```
 

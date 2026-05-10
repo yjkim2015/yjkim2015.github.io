@@ -78,7 +78,6 @@ outer();
 
 ```mermaid
 flowchart LR
-    A["outer() 호출"] --> B["count=0 생성"] --> C["inner 반환"] --> D["outer 제거"]
     D --> F["inner가 count 참조중 -"]
     FN["inner 함수"] -.->|"참조"| ENV["렉시컬 환경 count=0"]
 ```
@@ -105,9 +104,8 @@ console.log(counter()); // 3
 
 ```mermaid
 graph LR
-    R["JS 런타임"] -->|"makeCounter() 호출"| M["makeCounter()"]
-    M -->|"count=0 생성"| H["힙 메모리"]
-    M -->|"inner 함수 반환"| R
+    R["JS 런타임"] -->|"makeCounter() 호출"| M["makeCounter(..|"count=0 생성"| H["힙 메모리"]
+    ..|"inner 함수 반환"| R
     R -->|"counter() 호출"| M
     M -->|"count 읽고 증가"| H
     M -->|"1 반환"| R
@@ -333,7 +331,7 @@ console.timeEnd('두 번째 계산'); // 거의 0ms — 캐시 히트!
 flowchart LR
     A["함수 호출"] --> B{"캐시에 있나?"}
     B -->|"예"| C["캐시에서 반환"]
-    B -->|"아니오"| D["함수 실행"] --> E["캐시 저장"] --> F["결과 반환"]
+  ..|"아니오"| D["함수 실행"] --> E["캐시 저장"] --> F["결과 반환"]
     CACHE["cache Map (클로저)"] -.-> B
     C -.-> CACHE
     E -.-> CACHE
@@ -363,9 +361,7 @@ const getFirst = createHeavyResource();
 
 ```mermaid
 graph LR
-    GF["getFirst 함수"] -->|"클로저 참조"| LD["largeData 4MB"]
-    LD --> WASTE["999,999개 낭비"]
-    GF2["getFirst2 함수"] -->|"클로저 참조"| FIRST["first만 저장"]
+    GF["getFirst 함수"] -->|"클로저 참조"| LD["largeData 4..|"클로저 참조"| FIRST["first만 저장"]
     FIRST --> LD2["largeData GC 가능"]
     style WASTE fill:#e74c3c,color:#fff
     style LD2 fill:#2ecc71,color:#fff
@@ -439,8 +435,8 @@ buttons[1](); // 5
 graph LR
     I["var i = 5 (하나의 변수)"]
     B0["buttons[0]"] -->|"참조"| I
-    B1["buttons[1]"] -->|"참조"| I
-    B2["buttons[2]"] -->|"참조"| I
+    B1["butto..|"참조"| I
+    B2["butto..|"참조"| I
     style I fill:#e74c3c,color:#fff
 ```
 

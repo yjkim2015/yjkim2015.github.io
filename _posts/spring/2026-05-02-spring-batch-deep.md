@@ -29,8 +29,7 @@ Spring Batch는 실행 이력을 DB에 저장합니다.
 
 ```mermaid
 graph LR
-    A[JOB_INSTANCE] -->|has| B[JOB_EXECUTION]
-    B -->|has| C[STEP_EXECUTION]
+    A[JOB_INSTANCE] -->|has| B[JOB_EXECUTION..|has| C[STEP_EXECUTION]
 ```
 
 ---
@@ -77,7 +76,7 @@ public Job conditionalJob(JobRepository jobRepository) {
 ```mermaid
 flowchart LR
     A[Step 1] -->|COMPLETED| B[Step 2]
-    A -->|FAILED| C[Failure Step]
+    A..|FAILED| C[Failure Step]
     B --> D[Step 3]
     C --> E["Job 종료"]
     D --> F["Job 완료"]
@@ -673,7 +672,7 @@ graph LR
     A[JobLauncher] --> B[Step]
     B --> C{Chunk?}
     C -->|Yes| D[Read→Write]
-    C -->|No| E[Tasklet]
+ ..|No| E[Tasklet]
     D & E --> F[완료]
 ```
 

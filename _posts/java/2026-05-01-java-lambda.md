@@ -239,8 +239,7 @@ count++;  // 이 줄이 있으면 위의 람다도 컴파일 에러
 ```mermaid
 graph LR
     S["스택(메서드)"] -->|count=0 복사| L["람다(힙)"]
-    S -->|메서드 종료| GONE["count 소멸"]
-    L -->|복사본 유효| LIVE["0 사용 가능"]
+    ..|메서드 종료| GONE["count 소멸"..|복사본 유효| LIVE["0 사용 가능"]
 ```
 
 ### 우회 방법 — 변경 가능한 컨테이너 사용
@@ -624,9 +623,7 @@ public void scopeExample() {
 ```mermaid
 graph LR
     C["컴파일러"] -->|invokedynamic| JVM["JVM"]
-    JVM -->|최초 호출| LMF["LambdaMetafactory"]
-    LMF --> CS["CallSite 캐시"]
-    CS -->|재호출| JVM
+    ..|최초 호출| LMF["LambdaMeta..|재호출| JVM
 ```
 
 ### 캡처링 람다 vs 비캡처링 람다

@@ -24,8 +24,8 @@ Spring Security는 **Servlet Filter 체인**으로 구현된다. HTTP 요청이 
 graph LR
     A["HTTP 요청"] --> B["Servlet Container"]
     B --> C["DelegatingFilterPr"]
-    C -->|"ApplicationContext"| D["FilterChainProxy<b"]
-    D -->|"요청 URL에 맞는 Securit"| E["SecurityFilterChai"]
+    C -->|"ApplicationCont..| D["FilterChainProxy<b"]
+    D -->|"Req URL에 맞는 Sec..| E["SecurityFilterChai"]
     E --> F["DispatcherServlet"]
     F --> G["Controller"]
 ```
@@ -116,8 +116,7 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    AM["AuthenticationMana"] -->|"구현체"| PM["ProviderManager"]
-    PM -->|"순회"| AP1["DaoAuthenticationP"]
+    AM["AuthenticationMana"] -->|"구현체"| PM["ProviderMan..|"순회"| AP1["DaoAuthenticationP"]
     PM --> AP2["JwtAuthenticationP"]
     PM --> AP3["OAuth2LoginAuthent"]
     PM --> AP4["AnonymousAuthentic"]
@@ -178,9 +177,9 @@ public class CustomUserDetails implements UserDetails {
 
 ```mermaid
 graph LR
-    A1["FilterChainProxy"] -->|"SecurityContext 생성"| B1["ThreadLocal-1"]
+    A1["FilterChainProxy"] -->|"SecurityContext..| B1["ThreadLocal-1"]
     B1 --> C1["Controller-1"]
-    A2["FilterChainProxy"] -->|"SecurityContext 생성"| B2["ThreadLocal-2"]
+    A2["FilterChainProxy"] -->|"SecurityContext..| B2["ThreadLocal-2"]
     B2 --> C2["Controller-2"]
     C1 --- NOTE["Thread 독립 Context"]
     C2 --- NOTE
@@ -234,11 +233,9 @@ Spring Security는 서버가 발급한 CSRF 토큰을 요청에 포함시켜야�
 
 ```mermaid
 graph LR
-    C["Client"] -->|GET /form| CF["CsrfFilter"]
-    CF -->|hidden _csrf 발급| C
+    C["Client"] -->|GET /form| CF["CsrfFilter"..|hidden _csrf 발급| C
     C -->|POST /submit| CF
-    CF -->|토큰 불일치| F["403 Forbidden"]
-    CF -->|토큰 일치| OK["정상 응답"]
+    CF -->|토큰 불일치| F["403 Forbidde..|토큰 일치| OK["정상 응답"]
 ```
 
 REST API + JWT(Stateless 세션)를 사용하면 쿠키 기반 세션이 없으므로 CSRF 공격이 불가능하다. 따라서 `csrf().disable()`을 적용한다.

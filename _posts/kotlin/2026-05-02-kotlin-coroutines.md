@@ -534,10 +534,8 @@ class OrderServiceTest {
 
 ```mermaid
 graph LR
-    Normal["일반 함수"] -->|runBlocking| Scope["코루틴 스코프"]
-    Scope -->|launch| Job["Job"]
-    Scope -->|async| Deferred["Deferred"]
-    Flow["Flow"] -->|emit/collect| Consume["소비"]
+    Normal["일반 함수"] -->|runBlocking| Scope["코루틴 스코프"..|launch| Job["Job"]
+    ..|async| Deferred["Defer..|emit/collect| Consume["소비"]
 ```
 
 ---

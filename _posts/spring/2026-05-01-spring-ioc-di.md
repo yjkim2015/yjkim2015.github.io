@@ -55,7 +55,6 @@ Spring IoC 컨테이너는 **Bean Definition**을 읽어서 Bean을 생성하고
 graph LR
     A["1️⃣ Configuration"] --> B["2️⃣ BeanDefinition"]
     B --> C["3️⃣ Bean 인스턴스 생성<b"]
-    C --> D["4️⃣ 의존성 주입<br>생성자/"]
     D --> E["5️⃣ 초기화 콜백<br>@Pos"]
     E --> F["6️⃣ Bean 사용"]
     F --> G["7️⃣ 소멸 콜백<br>@PreD"]
@@ -134,7 +133,6 @@ Bean의 생명주기를 정확히 이해해야 초기화 콜백을 올바른 시
 graph LR
     S([Spring Container 시작]) --> A
     A["1️⃣ Bean 인스턴스 생성<b"]
-    A --> B["2️⃣ 의존성 주입 DI<br>생"]
     B --> C["3️⃣ 초기화 콜백<br>@Pos"]
     C --> D["4️⃣ Bean 사용 (애플리케이"]
     D --> E["5️⃣ 소멸 콜백 (Contain"]
@@ -382,9 +380,7 @@ class OrderServiceTest {
 ```mermaid
 graph LR
     A["1️⃣ 타입Type으로 매칭 시도"] --> B{"타입 매칭 Bean이 2개 이상?"}
-    B -->|"@Qualifier 있음"| C["2️⃣ @Qualifier 확인<"]
-    B -->|"@Primary 있음"| D["3️⃣ @Primary 확인<br"]
-    B -->|"그 외"| E["4️⃣ 필드명/파라미터명으로 매칭"]
+    B -->|"@Qualifier 있음"| C["2️⃣ @Qualifi..|"@Primary 있음"| D["3️⃣ @Primary..|"그 외"| E["4️⃣ 필드명/파라미터명으로 매칭"]
     C --> F["주입 완료"]
     D --> F
     E --> F

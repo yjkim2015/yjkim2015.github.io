@@ -62,8 +62,8 @@ graph LR
     HTTP["HTTP/CLI/Test"]
     AS["Application Servic"]
     DB["DB/MQ/API"]
-    HTTP -->|"Inbound Port/Adapt"| AS
-    AS -->|"Outbound Port/Adap"| DB
+    HTTP -->|"Inbound Port/Ad..| AS
+    AS -->|"Outbound Port/A..| DB
 ```
 
 ---
@@ -104,7 +104,7 @@ graph LR
     OP["Outbound Port"]
     DA["DB Adapter"]
     WA -->|"1️⃣ depends on"| IP
-    IP -->|"2️⃣ implemented by"| AS
+    IP -->|"2️⃣ implemented..| AS
     AS -->|"3️⃣ depends on"| OP
     DA -->|"4️⃣ implements"| OP
 ```
@@ -272,7 +272,7 @@ public class OrderPersistenceAdapter implements OrderRepository {
 ```mermaid
 graph LR
     UT["단위 테스트"] -->|"70%"| IT["통합 테스트"]
-    IT -->|"20%"| E2E["E2E 테스트"]
+  ..|"20%"| E2E["E2E 테스트"]
     class E2E e2e
 ```
 
@@ -338,12 +338,8 @@ class OrderServiceTest {
 
 ```mermaid
 graph LR
-    WA["Web Adapter"] -->|HTTP 요청| IP["Inbound Port"]
-    IP --> UC["Application Servic"]
-    UC --> E["Domain"]
-    UC --> OP["Outbound Port"]
-    PA["Persistence Adapte"] -->|구현| OP
-    MA["Messaging Adapter\"] -->|구현| OP
+    WA["Web Adapter"] -->|HTTP 요청| IP["Inbound Por..|구현| OP
+    MA["Mess..|구현| OP
 ```
 
 - DDD의 **Domain Layer**가 헥사고날의 **Application Core** 내부에 위치

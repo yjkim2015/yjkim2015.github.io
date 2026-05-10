@@ -24,7 +24,6 @@ graph LR
     KV["Key-Value"] --> R["Redis"]
     DOC["Document"] --> M["MongoDB"]
     CF["Column-Family"] --> C["Cassandra"]
-    GR["Graph"] --> N["Neo4j"]
 ```
 
 ---
@@ -174,7 +173,7 @@ RETURN path, length(path)
 graph LR
     CAP["CAP 정리"] --> CP["CP: 일관성+분할"]
     CAP --> AP["AP: 가용성+분할"]
-    CP --> C1["MongoDB/Redis/Neo4j"]
+    CP --> C1["MongoDB/Redis/Ne.."]
     AP --> C2["Cassandra/DynamoDB"]
     style CP fill:#4A90D9,color:#fff
     style AP fill:#D94A4A,color:#fff
@@ -211,11 +210,9 @@ ALL                | 모든 복제본 응답             | 최고 (비추천)
 ```mermaid
 graph LR
     Q1{"ACID 필수?"} -->|예| RDBMS["RDBMS"]
-    Q1 -->|아니오| Q2{"관계 탐색?"}
-    Q2 -->|예| GRAPH["Graph DB"]
-    Q2 -->|아니오| Q3{"고속 쓰기?"}
-    Q3 -->|예| COLUMN["Cassandra"]
-    Q3 -->|아니오| KV["Redis/Mongo"]
+..|아니오| Q2{"관계 탐색?"}
+  ..|예| GRAPH["Graph DB..|아니오| Q3{"고속 쓰기?"}
+  ..|예| COLUMN["Cassand..|아니오| KV["Redis/Mongo"]
 ```
 
 ### 핵심 판단 기준 비교표
@@ -396,10 +393,10 @@ Cassandra는 파티션 키를 해시 함수에 넣어 0~2^63 범위의 토큰을
 ## 8. 핵심 정리
 
 ```mermaid
-graph TB
+graph LR
     R["Redis"] ---|조합| M["MongoDB"]
-    M ---|조합| C["Cassandra"]
-    C ---|조합| N["Neo4j"]
+  ..|조합| C["Cassandra"]
+..|조합| N["Neo4j"]
 ```
 
 | 구분 | Redis | MongoDB | Cassandra | Neo4j |

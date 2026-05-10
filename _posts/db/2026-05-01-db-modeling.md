@@ -19,7 +19,6 @@ DB 모델링도 동일하게 세 단계로 진행됩니다.
 
 ```mermaid
 graph LR
-    A[개념적 모델링<br>무엇을 저장할까?<br>엔티티 식별] -->
     B[논리적 모델링<br>어떻게 구조화할까?<br>속성, 관계, 정규화] -->
     C[물리적 모델링<br>어떻게 구현할까?<br>테이블, 인덱스, 파티션]
     style A fill:#AED6F1
@@ -61,9 +60,7 @@ graph LR
 
 ```mermaid
 erDiagram
-    CUSTOMER ||--o{ ORDER : "주문"
-    ORDER ||--|{ ORDER_ITEM : "포함"
-    PRODUCT ||--o{ ORDER_ITEM : "상품"
+    CUSTOMER ||--o{ ORDER : "주문..||--|{ ORDER_ITEM : "..||--o{ ORDER_ITEM : "상품"
 ```
 
 ---
@@ -152,8 +149,7 @@ CREATE TABLE enrollments (
 
 ```mermaid
 erDiagram
-    ORDER ||--|{ ORDER_ITEM : "식별관계"
-    ORDER ||--o{ DELIVERY : "비식별관계"
+    ORDER ||--|{ ORDER_ITEM : "..||--o{ DELIVERY : "비식별관계"
 ```
 
 ### 식별 관계 (Identifying Relationship)

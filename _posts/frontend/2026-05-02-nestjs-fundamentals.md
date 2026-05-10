@@ -289,9 +289,9 @@ export class ResponseTransformInterceptor<T> implements NestInterceptor<T> {
 ```mermaid
 graph LR
     C["클라이언트"] -->|"HTTP 요청"| MW["미들웨어/가드"]
-    MW -->|"JWT/DTO 검사"| CTRL["컨트롤러"]
-    CTRL -->|"서비스 위임"| SVC["서비스"]
-    CTRL -->|"응답"| C
+ ..|"JWT/DTO 검사"| CTRL["Ctrl"]
+  ..|"서비스 위임"| SVC["Svc"]
+    ..|"응답"| C
 ```
 
 ---

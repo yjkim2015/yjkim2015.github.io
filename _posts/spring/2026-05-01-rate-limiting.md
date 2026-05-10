@@ -22,10 +22,9 @@ API를 운영하다 보면 특정 클라이언트가 초당 수천 건의 요청
 
 ```mermaid
 graph LR
-    A1["공격자"] -->|10000 req/s| S1["서버 다운"]
-    A2["공격자"] -->|10000 req/s| RL["Rate Limiter"]
-    RL -->|100 req/s| S2["서버 정상"]
-    RL -->|429| A2
+    A1["공격자"] -->|10000 req/s| S1["Svr 다운"]
+  ..|10000 req/s| RL["Rate Limite..|100 req/s| S2["Svr 정상"]
+  ..|429| A2
     style S1 fill:#f88,stroke:#c00,color:#000
     style S2 fill:#8f8,stroke:#080,color:#000
 ```
@@ -179,8 +178,8 @@ graph LR
     GEN["토큰 생성기"]
     GEN --> BKT["버킷 (최대 10 토큰)"]
     BKT --> REQ{"요청 도착"}
-    REQ -->|"토큰 있음"| OK["처리됨"]
-    REQ -->|"토큰 없음"| DENY["429 반환"]
+    REQ -->|"토큰 있음"| OK["됨"]
+    REQ..|"토큰 없음"| DENY["429 반환"]
     NOTE["버스트 허용: 버킷 가득 찼을 때"]
     style OK fill:#8f8,stroke:#080,color:#000
     style DENY fill:#f88,stroke:#c00,color:#000
@@ -690,7 +689,7 @@ graph LR
     LB --> S1["서버1"]
     LB --> S2["서버2"]
     LB --> S3["서버3"]
-    S1 & S2 & S3 -.->|"합산 150 req/min\n한도"| WARN["실제 허용량 초과"]
+    S1 & S2 & S3 -.->|"합산 150 req/min\..| WARN["실제 허용량 초과"]
     style WARN fill:#f88,stroke:#c00,color:#000
 ```
 
@@ -906,7 +905,7 @@ graph LR
     K["rl:popular-endpoin"] --> NB["Redis 노드 B"]
     X1["기타 키들"] --> NA["Redis 노드 A"]
     X2["기타 키들"] --> NC["Redis 노드 C"]
-    NB -.->|"핫 키 집중으로 노드 B 과부하"| WARN["Hot Key 문제"]
+    NB -.->|"핫 키 집중으로 노드 B 과..| WARN["Hot Key 문제"]
     style WARN fill:#f88,stroke:#c00,color:#000
 ```
 
@@ -947,11 +946,7 @@ graph LR
 ```mermaid
 graph LR
     A{"환경"} --> B{"단일 JVM?"}
-    B -->|간단| C["Guava RateLimiter"]
-    B -->|정교| D["Bucket4j InMemory"]
-    A --> E{"분산 환경?"}
-    E -->|범용| F["Bucket4j Redis"]
-    E -->|인프라| H["Nginx limit_req"]
+    B -->|간단| C["Guava RateLi..|정교| D["Bucket4j InM..|범용| F["Bucket4j Red..|인프라| H["Nginx limit_req"]
 ```
 
 Redis 장애 시 **로컬 캐시 폴백**을 기본 전략으로, Hot Key는 **키 샤딩**으로 대응하고, 모든 Rate Limit 응답에는 **표준 헤더(X-RateLimit-*, Retry-After)**를 반드시 포함하는 것이 실무 표준이다.

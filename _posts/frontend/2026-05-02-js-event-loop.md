@@ -25,13 +25,12 @@ toc_label: 목차
 자바스크립트 런타임은 여러 구성 요소가 협력하는 시스템입니다. 각 역할을 이해해야 "왜 Promise가 setTimeout보다 먼저 실행되는가"를 설명할 수 있습니다.
 
 ```mermaid
-graph TB
+graph LR
     CS["콜 스택"] -->|"비동기 위임"| WA["Web APIs"]
-    WA -->|"Promise"| MQ["마이크로태스크 큐"]
-    WA -->|"타이머/이벤트"| TQ["태스크 큐"]
-    EL["이벤트 루프"] -->|"1순위"| MQ
+..|"Promise"| MQ["마이크로태스크 큐"]..|"타이머/이벤트"| TQ["태스크 큐"]
+   ..|"1순위"| MQ
     EL -->|"2순위"| TQ
-    MQ & TQ -->|"실행"| CS
+    MQ & TQ ..|"실행"| CS
 ```
 
 각 구성 요소의 역할을 정리하면 이렇습니다.
@@ -68,9 +67,8 @@ sayHello();
 
 ```mermaid
 graph LR
-    GS["전역 스코프"] -->|"sayHello() 호출"| SH["sayHello()"]
-    SH -->|"greet('World') 호출"| G["greet()"]
-    G -->|"'Hello, World!' 반환"| SH
+    GS["전역 스코프"] -->|"sayHello() 호출"| SH["sayHello()"..|"greet('World') 호출"| G["greet()"]
+  ..|"'Hello, World!' 반환"| SH
     SH -->|"console.log() 호출"| SH
     SH -->|"실행 완료"| GS
 ```
@@ -94,10 +92,8 @@ infinite(); // RangeError: Maximum call stack size exceeded
 
 ```mermaid
 graph LR
-    A{"콜스택 비었나?"} -->|아니오| B["콜스택 실행"] --> A
-    A -->|예| C{"마이크로태스크?"}
-    C -->|예| D["마이크로태스크 실행"] --> A
-    C -->|아니오| E["태스크큐 처리"] --> A
+    A{"콜스택 비었나?"} -->|아니오| B["콜스택 Run"] --..|예| C{"마이크로태스크?"}
+ ..|예| D["마이크로태스크 Run"..|아니오| E["태스크큐 처리"] --> A
 ```
 
 핵심 규칙 4가지를 기억하세요.
@@ -162,10 +158,10 @@ console.log('4. 끝');
 graph LR
     CS["CallStack"] -->|"log(1.시작)"| CS
     CS -->|"setTimeout 등록"| TQ["태스크큐"]
-    CS -->|"Promise.then 등록"| MQ["마이크로태스크"]
-    CS -->|"log(4.끝)"| CS
+    ..|"Promise.then 등록"| MQ["마이크로태스크"]
+ ..|"log(4.끝)"| CS
     MQ -->|"log(3.Promise)"| CS
-    TQ -->|"log(2.setTimeout)"| CS
+    TQ -->|"log(2.setTimeou..| CS
 ```
 
 출력 결과:
@@ -261,9 +257,7 @@ flowchart LR
     A["태스크 실행"] --> B["마이크로태스크 처리"]
     B --> C{"렌더링 필요?"}
     C -->|"예"| D["rAF 콜백"]
-    D --> E["스타일/레이아웃/페인트"]
-    E --> H["다음 태스크"]
-    C -->|"아니오"| H
+   ..|"아니오"| H
     style D fill:#f39c12,color:#fff
     style E fill:#e74c3c,color:#fff
 ```
@@ -320,10 +314,9 @@ console.log('script end');
 ```mermaid
 graph LR
     A["script 실행"] --> B["마이크로태스크 처리"]
-    B --> C["promise1 → async end → promise2"]
+    B --> C["promise1 → async.."]
     C --> D["태스크 큐: setTimeout"]
-    A -->|"등록"| MT["Promise.then/await"]
-    A -->|"등록"| TQ["setTimeout"]
+    A -->|"등록"| MT["Promise.the..|"등록"| TQ["setTimeout"]
 ```
 
 출력 결과:
@@ -420,7 +413,7 @@ infiniteMicrotask();
 ```mermaid
 flowchart LR
     A["마이크로태스크1"] -->|"새 마이크로태스크 생성"| B["마이크로태스크2"]
-    B -->|"새 마이크로태스크 생성"| C["마이크로태스크3"]
+ ..|"새 마이크로태스크 생성"| C["마이크로태스크3"]
     C --> D[...]
     D --> E["태스크 큐 영원히 대기"]
     E --> F["UI 렌더링 불가"]

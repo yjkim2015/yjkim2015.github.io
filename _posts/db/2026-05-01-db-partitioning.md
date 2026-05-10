@@ -71,8 +71,7 @@ graph LR
     Original["원본 테이블"]
     Original --> Hot["핫 테이블 자주 조회"]
     Original --> Cold["콜드 테이블 드물게 조회"]
-    Hot -->|"캐시 효율 높음"| BufferPool["Buffer Pool에 더 많이"]
-    Cold -->|"필요할 때만 로드"| Disk["디스크 접근 최소화"]
+    Hot -->|"캐시 효율 높음"| BufferPool["Buf..|"필요할 때만 로드"| Disk["디스크 접근 최소화"]
 ```
 
 MySQL `PARTITION BY`는 수직 파티셔닝을 지원하지 않는다. 수직 파티셔닝은 스키마 설계 수준에서 테이블을 분리하는 방식으로 구현한다.
@@ -110,8 +109,8 @@ graph LR
     Insert["INSERT order_date="]
     Insert --> Eval["YEAR 평가 = 2023"]
     Eval --> Check{"파티션 경계 확인"}
-    Check -->|"2023 < 2023 = fals"| P2022["p_2022 건너뜀"]
-    Check -->|"2023 < 2024 = true"| P2023["p_2023 저장"]
+    Check -->|"2023 < 2023 = f..| P2022["p_2022 건너뜀"]
+    Check -->|"2023 < 2024 = t..| P2023["p_2023 저장"]
     Check -.->|"이후 파티션 불검토"| P2024["p_2024 건너뜀"]
     style P2023 fill:#90EE90
     style P2022 fill:#FFB6C1

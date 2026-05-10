@@ -92,10 +92,7 @@ graph LR
     S1["Sentinel 1"] --- S2["Sentinel 2"]
     S2 --- S3["Sentinel 3"]
     S3 --- S1
-    S1 & S2 & S3 -->|"PING 감시"| M["Redis Master :6379"]
-    S1 & S2 & S3 -->|"PING 감시"| R1["Replica 1 :6379"]
-    S1 & S2 & S3 -->|"PING 감시"| R2["Replica 2 :6379"]
-    M -->|"비동기 복제"| R1
+    S1 & S2 & S3 -->|"PING 감시"| M["Redis Master..|"PING 감시"| R1["Replica 1 :..|"PING 감시"| R2["Replica 2 :..|"비동기 복제"| R1
     M -->|"비동기 복제"| R2
 ```
 
@@ -198,9 +195,9 @@ Redis Cluster는 **16384개의 해시 슬롯**으로 키를 분산한다.
 ```mermaid
 graph LR
     KEY["user:123"] -->|CRC16| SLOT["슬롯 계산"]
-    SLOT -->|0~5460| MA["마스터 A"]
-    SLOT -->|5461~10922| MB["마스터 B"]
-    SLOT -->|10923~16383| MC["마스터 C"]
+ ..|0~5460| MA["마스터 A"]
+   ..|5461~10922| MB["마스터 B"]
+   ..|10923~16383| MC["마스터 C"]
 ```
 
 클라이언트가 잘못된 노드에 요청하면 `MOVED` 리다이렉션 응답이 온다:
@@ -245,8 +242,8 @@ redis-cli --cluster create \
 ```mermaid
 graph LR
     MB["MasterB"] -->|"MasterA FAIL 선언"| MB
-    MC["MasterC"] -->|"동의"| MC
-    RA["ReplicaA"] -->|"투표 요청"| MB
+    MC["Mast..|"동의"| MC
+    RA["Repl..|"투표 요청"| MB
     RA -->|"투표 요청"| MC
     MB -->|"승인"| RA
     MC -->|"승인"| RA
@@ -374,11 +371,8 @@ public LettuceClientConfigurationBuilderCustomizer lettuceCustomizer() {
 
 ```mermaid
 graph LR
-    START(["요구사항 분석"]) --> Q1{"데이터가 단일 서버<br>메모리에 들어가는가?"}
-    Q1 -->|"NO (TB급)"| CLUSTER["클러스터 모드<br>— 수평 확장"]
-    Q1 -->|"YES"| Q2{"운영 환경인가?<br>(마스터 장애 시 자동 복구 필요)"}
-    Q2 -->|"YES"| SENTINEL["센티넬 모드<br>— 자동 페일오"]
-    Q2 -->|"NO (개발/테스트)"| SINGLE["싱글 모드<br>— 간단, 빠른"]
+    START(["요구사항 분석"]) --> Q1{"데이터가 단일 Svr<br>메.."}
+    Q1 -->|"NO (TB급)"| CLUSTER["클러스터 모..|"YES"| Q2{"운영 환경인가?<br..|"YES"| SENTINEL["센티넬 모..|"NO (개발/테스트)"| SINGLE["싱글 모드<br>— 간단, 빠른"]
     style CLUSTER fill:#88f,stroke:#00c,color:#000
     style SENTINEL fill:#8f8,stroke:#080,color:#000
     style SINGLE fill:#ff8,stroke:#880,color:#000

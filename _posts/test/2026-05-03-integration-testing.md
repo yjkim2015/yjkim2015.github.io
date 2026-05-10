@@ -197,10 +197,7 @@ class OrderIntegrationTest {
 ```mermaid
 flowchart LR
     Q1{"무엇을 테스트?"}
-    Q1 -->|JPA 쿼리| A["@DataJpaTest (빠름)"]
-    Q1 -->|HTTP 요청/응답| B["@WebMvcTest (빠름)"]
-    Q1 -->|여러 계층 협력| C["@SpringBootTest (느"]
-    Q1 -->|단일 클래스| D["@ExtendWith Mockit"]
+    Q1 -->|JPA 쿼리| A["@DataJpaTest..|HTTP 요청/응답| B["@WebMvcTest ..|여러 계층 협력| C["@SpringBootT..|단일 클래스| D["@ExtendWith Mockit"]
 ```
 
 ---
@@ -469,8 +466,7 @@ graph LR
     A[테스트A] --> C[Context1]
     B[테스트B] --> C
     C -->|캐시히트| D[빠름]
-    E[테스트C] --> F[Context2]
-    F -->|새컨텍스트| G[느림]
+    E[테스트..|새컨텍스트| G[느림]
 ```
 
 ### 3️⃣ 테스트 태깅과 프로파일 분리

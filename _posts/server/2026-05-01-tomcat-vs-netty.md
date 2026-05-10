@@ -102,10 +102,7 @@ graph LR
 
 ```mermaid
 graph LR
-    Socket1[소켓 수신] -->|인바운드| D1[ByteToMessage Decoder]
-    D1 --> D2[HTTP 객체 Decoder]
-    D2 --> BL[Business Logic Handler]
-    BL -->|아웃바운드| E1[HTTP 객체 Encoder]
+    Socket1[소켓 수신] -->|인바운드| D1[ByteToMessag..|아웃바운드| E1[HTTP 객체 Encoder]
     E1 --> E2[MessageToByte Encoder]
     E2 --> Socket2[소켓 송신]
 ```
@@ -198,8 +195,7 @@ public class ReactiveController {
 
 ```mermaid
 graph LR
-    T["Tomcat: 200 스레드"] -->|"1000 요청"| TB["800개 큐 대기"]
-    N["Netty: 8 EventLoop"] -->|"1000 연결"| NB["전부 처리"]
+    T["Tomcat: 200 스레드"] -->|"1000 요청"| TB["800개 큐 대기"]..|"1000 연결"| NB["전부 처리"]
 ```
 
 ### I/O 바운드 vs CPU 바운드

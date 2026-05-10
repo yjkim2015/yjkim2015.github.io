@@ -251,8 +251,7 @@ public class OrderController {
 ```mermaid
 graph LR
     A["컨트롤러 메서드"] --> B{"파라미터 순회"}
-    B -->|"지원"| C["resolveArgument()"]
-    B -->|"미지원"| D["다음 Resolver"]
+    B -->|"지원"| C["resolveArgum..|"미지원"| D["다음 Resolver"]
     C --> E["파라미터 준비 완료"]
     D --> B
 ```
@@ -537,12 +536,7 @@ public class WebConfig implements WebMvcConfigurer {
 ```mermaid
 flowchart LR
     A["예외 발생"] --> B{"@ExceptionHandler"}
-    B -->|"있음"| C["처리 완료"]
-    B -->|"없음"| D{"@ResponseStatus 있음?"}
-    D -->|"있음"| E["HTTP 상태코드 응답"]
-    D -->|"없음"| F{"Spring MVC 표준 예외?"}
-    F -->|"있음"| G["400·405 등 표준 응답"]
-    F -->|"없음"| H["500 Internal Serve"]
+    B -->|"있음"| C[" 완료"]
 ```
 
 ### 9.2 전역 예외 처리 — @RestControllerAdvice로 일관된 에러 응답 만들기
@@ -614,9 +608,7 @@ public class GlobalExceptionHandler {
 graph LR
     A[HTTP요청] --> B{canRead?}
     B -->|Yes| C[JSON→Java]
-    C --> D[Java객체]
-    D --> E{canWrite?}
-    E -->|Yes| F[Java→JSON]
+  ..|Yes| F[Java→JSON]
 ```
 
 `MappingJackson2HttpMessageConverter`가 `application/json`과 모든 객체 타입을 처리합니다. 만약 응답 객체에 `@JsonIgnore`가 붙어있으면 해당 필드는 직렬화에서 제외됩니다. 만약 Jackson이 클래스패스에 없으면 `@ResponseBody`에서 JSON 변환이 안 됩니다. Spring Boot는 `spring-boot-starter-web` 의존성에 Jackson을 포함시켜서 이런 일이 없도록 합니다.

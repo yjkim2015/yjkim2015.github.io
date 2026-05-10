@@ -146,7 +146,7 @@ WebSocket 연결 수: DAU의 30% 동시 접속 = 1억 5천만 연결
 ```mermaid
 graph LR
     C["Client"] -->|"Short Poll"| S["Server"]
-    S -->|"empty"| C
+   ..|"empty"| C
     C -->|"Long Poll"| S
     S -->|"메시지 도착"| C
     C -->|"HTTP Upgrade(WS)"| S
@@ -387,8 +387,8 @@ graph LR
 
 ```mermaid
 graph LR
-    A["UserA"] -->|"WS 메시지"| S["채팅서버"]
-    S -->|"WS/Push 전달"| B["UserB"]
+    A["UserA"] -->|"WS 메시지"| S["채팅Svr"]
+    ..|"WS/Push 전달"| B["UserB"]
 ```
 
 ### 서버 간 메시지 라우팅 문제
@@ -398,9 +398,9 @@ A가 서버1에, B가 서버2에 연결되어 있을 때 어떻게 메시지를 
 ```mermaid
 graph LR
     A[서버1-A] --> B{라우팅}
-    B -->|P2P| C[서버2-B]
-    B -->|PubSub| D[Redis]
-    B -->|MQ| E[Kafka]
+    B -->|P2P| C[Svr2-B]
+    B..|PubSub| D[Redis]
+    B ..|MQ| E[Kafka]
 ```
 
 ---
@@ -412,7 +412,6 @@ graph LR
 ```mermaid
 graph LR
     Snow["Snowflake ID"]
-    Snow --> T["41비트: 타임스탬프(ms)"]
     Snow --> M["10비트: 머신 ID"]
     Snow --> S["12비트: 시퀀스"]
     T --> Benefit1["시간순 정렬 가능"]
@@ -493,8 +492,7 @@ Snowflake ID는 **각 서버(Worker)가 독립적으로 생성**하므로 워커
 ```mermaid
 graph LR
     A["채팅 메시지 저장소 선택"] --> B{"DB 선택"}
-    B -->|"Write 최적화·수평 확장"| C["HBase/Cassandra"]
-    B -->|"복잡 JOIN·강한 일관성"| D["MySQL"]
+    B -->|"Write 최적화·수평 확장"| C["HBase/Cassan..|"복잡 JOIN·강한 일관성"| D["MySQL"]
 ```
 
 ### HBase 스키마 설계
@@ -561,8 +559,7 @@ graph LR
     A[앱연결] --> B[WS서버]
     B --> C[Redis SET TTL]
     A -->|ping| B
-    B --> D[EXPIRE갱신]
-    A -->|close| E[DEL]
+    B --> D[E..|close| E[DEL]
 ```
 
 ### Presence 최적화 — 대규모에서의 팬아웃 문제

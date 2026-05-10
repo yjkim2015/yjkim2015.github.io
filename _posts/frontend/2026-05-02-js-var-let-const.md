@@ -84,7 +84,6 @@ function testLet() {
 
 ```mermaid
 graph LR
-    F["함수 경계(var)"] --> IF1["if블록"] --> VARX["var x: 함수 전체 접근"]
     F --> FOR["for블록"]
     F2["함수 경계(let/const)"] --> IF3["if블록 - let y: 블록 안"]
     F2 --> FOR2["for블록 - let i: 블록"]
@@ -119,9 +118,9 @@ console.log(name); // '홍길동'
 
 ```mermaid
 graph LR
-    CODE["코드"] -->|"console.log(name)"| ENGINE["JS 엔진"]
-    ENGINE -->|"var name 호이스팅"| EXEC["실행"]
-    EXEC -->|"undefined 출력"| EXEC
+    CODE["코드"] -->|"console.log(nam..| ENGINE["JS 엔진"]
+    ENGINE -->|"var name 호이스팅"| EXEC["Run"]
+   ..|"undefined 출력"| EXEC
     EXEC -->|"name='홍길동' 할당"| EXEC
     EXEC -->|"홍길동 출력"| EXEC
 ```
@@ -230,8 +229,8 @@ graph LR
     OBJ_VAL["주소 0x1234"]
     OBJ_DATA["name: 홍길동"]
     OBJ_VAR -->|"고정! 변경 불가"| OBJ_VAL
-    OBJ_VAL -->|"가리킴"| OBJ_DATA
-    OBJ_DATA -->|"변경 가능"| OBJ_DATA
+    OBJ..|"가리킴"| OBJ_DATA
+    OB..|"변경 가능"| OBJ_DATA
     style OBJ_VAR fill:#e74c3c,color:#fff
     style OBJ_DATA fill:#2ecc71,color:#fff
 ```
@@ -281,8 +280,8 @@ console.log(funcs[2]()); // 3 — 예상: 2
 ```mermaid
 graph LR
     FOR["for 루프"] -->|"i=0,1,2,3(공유)"| VAR_I["var i"]
-    VAR_I -->|"실행시 최종값 3"| FOR
-    FOR -->|"j_0=0,j_1=1,j_2=2"| LET_J["let j(반복별)"]
+..|"실행시 최종값 3"| FOR
+    FOR -->|"j_0=0,j_1=1,j_2..| LET_J["let j(반복별)"]
     LET_J -->|"각각 0, 1, 2"| FOR
 ```
 
@@ -351,7 +350,7 @@ const sayHi = function() {
 ```mermaid
 flowchart LR
     A["function foo(){}"] --> A1["전체 함수 호이스팅"]
-    B["var foo = function"] --> B1["var만 호이스팅 undefined"]
+    B["var foo = function"] --> B1["var만 호이스팅 undefi.."]
     C["let/const foo=()=>"] --> C1["TDZ 적용"]
     style A1 fill:#2ecc71,color:#fff
     style B1 fill:#f39c12,color:#fff
@@ -365,12 +364,9 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["변수 선언"] --> B{"값이 바뀌나?"}
-    B -->|"예"| C{"참조가 바뀌나?<br>vs 내용만 바뀌나?"}
-    B -->|"아니오"| D["const 사용"]
-    C -->|"참조 변경 필요"| E["let 사용"]
-    C -->|"내용만 변경"| F["const 사용<br>(객체/배열"]
-    A --> G{"레거시 코드가 아닌가?"}
-    G -->|"맞음"| H["var 절대 사용 금지"]
+    B -->|"예"| C{"참조가 바뀌나?<br>..|"아니오"| D["const 사용"]
+ ..|"참조 변경 필요"| E["let 사용"]
+   ..|"내용만 변경"| F["const 사용<br>..|"맞음"| H["var 절대 사용 금지"]
     style D fill:#2ecc71,color:#fff
     style E fill:#3498db,color:#fff
     style F fill:#2ecc71,color:#fff

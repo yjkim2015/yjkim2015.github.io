@@ -41,14 +41,13 @@ Spring Boot 2.x+의 기본 커넥션 풀. "빠른 커넥션 풀" 표방.
 ```mermaid
 graph LR
     POOL["HikariCP 커넥션 풀"]
-    POOL --- C1["Connection 1 (대기)"]
     POOL --- C2["Connection 2 (대기)"]
     POOL --- C3["Connection 3 (사용중)"]
     POOL --- C4["Connection 4 (대기)"]
     T1["스레드 1"] -->|getConnection| POOL
     POOL -->|대여| T1
     T1 -->|close(반납)| POOL
-    T2["스레드 2"] -->|대기중| POOL
+    T2["Th..|대기중| POOL
 ```
 
 ### 커넥션 생명주기
@@ -71,7 +70,7 @@ graph LR
     폐기["폐기"]
     대기 -->|"getConnection()"| 사용중
     사용중 -->|"close() 반납"| 대기
-    대기 -->|"idleTimeout/헬스체크 실패"| 폐기
+    대기 -->|"idleTimeout/헬스체..| 폐기
     사용중 -->|"maxLifetime 초과"| 폐기
     폐기 -->|"minimumIdle 미달"| 대기
 ```

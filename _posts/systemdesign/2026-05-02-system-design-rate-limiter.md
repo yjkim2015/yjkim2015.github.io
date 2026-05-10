@@ -365,7 +365,7 @@ graph LR
     Refill["매초 2개 토큰 보충"] --> Bucket["버킷"]
     Request["요청 도착"] --> Check{"토큰 있나?"}
     Check -->|"Yes: 1개 소비"| Allow["허용"]
-    Check -->|"No: 0개"| Deny["429 Too Many Reque"]
+   ..|"No: 0개"| Deny["429 Too Many Reque"]
     Bucket --> Check
 ```
 
@@ -523,8 +523,8 @@ return 1  -- 허용
 graph LR
     Client["클라이언트"] --> MW["Rate Limiter 미들웨어"]
     MW --> Redis["Redis 클러스터"]
-    MW -->|"허용"| API["API 서버"]
-    MW -->|"거부"| Resp["429 Too Many Reque"]
+    MW -->|"허용"| API["API Svr"]
+..|"거부"| Resp["429 Too Many Reque"]
 ```
 
 429 응답 헤더에 제한 정보를 담아야 클라이언트가 올바르게 재시도할 수 있다:

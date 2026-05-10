@@ -87,7 +87,7 @@ classDiagram
     class Proxy { -target: RealSubject
         +operation() String }
     Subject <|-- RealSubject
-    Subject <|-- Proxy
+ ..|-- Proxy
     Proxy --> RealSubject : 위임
 ```
 
@@ -244,8 +244,8 @@ CGLIB은 서브클래스를 만들어 메서드를 오버라이드하는 방식�
 ```mermaid
 flowchart LR
     A["ProxyFactory 생성"] --> B{"인터페이스 있음?"}
-    B -->|"있음 + proxyTargetCl"| C["JDK 동적 프록시 생성"]
-    B -->|"없음 또는 proxyTargetC"| D["CGLIB 생성"]
+    B -->|"있음 + proxyTarge..| C["JDK 동적 프록시 생성"]
+    B -->|"없음 또는 proxyTarg..| D["CGLIB 생성"]
     E["Advice 추가"] --> A
     F["Pointcut 설정"] --> A
 ```
@@ -501,8 +501,7 @@ sequenceDiagram
 flowchart LR
     A["빈 생성 완료"] --> B["AnnotationAwareAsp"]
     B --> C{"등록된 Advisor의"}
-    C -->|"매칭 (하나 이상)"| D["ProxyFactory로 프록시"]
-    C -->|"미매칭"| E["원본 빈 그대로 등록"]
+    C -->|"매칭 (하나 이상)"| D["ProxyFactory..|"미매칭"| E["원본 빈 그대로 등록"]
     D --> F["프록시 빈을 컨테이너에 등록"]
     E --> F
 ```
@@ -697,11 +696,9 @@ public class InternalService {
 flowchart LR
     A["Spring Boot 시작"] --> B["빈 생성 및 의존관계 주입"]
     B --> C["postProcessAfterIn"]
-    C --> D{"Pointcut 매칭 Advisor?"}
-    D -->|"있음"| E["ProxyFactory → JDK"]
-    D -->|"없음"| F["원본 빈 등록"]
+    C --> D{"Pointcut 매칭 Advi.."}
+    D -->|"있음"| E["ProxyFactory..|"없음"| F["원본 빈 등록"]
     E & F --> G["ApplicationContext"]
-    G --> H["클라이언트 호출"]
 ```
 
 ---

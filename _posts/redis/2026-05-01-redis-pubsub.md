@@ -186,13 +186,12 @@ public class ChatMessageListener implements MessageListener {
 
 ```mermaid
 graph LR
-    U1["사용자 A"] -->|"WebSocket"| SA["서버 1"]
-    U2["사용자 B"] -->|"WebSocket"| SB["서버 2"]
-    SA -->|"PUBLISH chat:room1"| R[("Redis")]
-    R -->|"브로드캐스트"| SA
+    U1["사용자 A"] -->|"WebSocket"| SA["Svr 1"]
+   ..|"WebSocket"| SB["Svr 2"]
+   ..|"PUBLISH chat:room1"| R[("Redis")]
+  ..|"브로드캐스트"| SA
     R -->|"브로드캐스트"| SB
-    SA -->|"WebSocket"| U3["같은 방 사용자 C"]
-    SB -->|"WebSocket"| U2
+    SA -->|"WebSocket"| U3["같은 방 사용자 C"..|"WebSocket"| U2
 ```
 
 사용자 A가 메시지를 보내면:

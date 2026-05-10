@@ -79,10 +79,9 @@ public class UserDao {
 
 ```mermaid
 graph LR
-    A[UserDao] -->|"의존"| B["ConnectionMaker 인터"]
-    C[DConnectionMaker] -->|"구현"| B
-    D[NConnectionMaker] -->|"구현"| B
-    E[UserDaoTest] -->|DI| A
+    A[UserDao] -->|"의존"| B["ConnectionMa..|"구현"| B
+    D[NConnec..|"구현"| B
+    E[UserDao..|DI| A
     E -->|"선택"| C
 ```
 
@@ -92,10 +91,7 @@ graph LR
 graph LR
     A["OCP: 확장에 열려있고, 변경에"] --> B[UserDao]
     A --> C["ConnectionMaker 인터"]
-    B -->|"변경 없이"| D["새 DB로 전환 가능"]
-    C -->|"새 구현체 추가"| E[NConnectionMaker]
-    C -->|"새 구현체 추가"| F[TestConnectionMaker]
-    B -->|"코드 수정 불필요"| G["UserDao는 그대로"]
+    B -->|"변경 없이"| D["새 DB로 전환 가능"..|"새 구현체 추가"| E[NConnectionMa..|"새 구현체 추가"| F[TestConnectio..|"코드 수정 불필요"| G["UserDao는 그대로"]
 ```
 
 ---
@@ -242,11 +238,10 @@ public class UserService {
 
 ```mermaid
 graph LR
-    A[UserService] -->|"의존"| B["PlatformTransactio"]
-    C[DataSourceTransactionManager] -->|"구현"| B
-    D[JpaTransactionManager] -->|"구현"| B
-    E[HibernateTransactionManager] -->|"구현"| B
-    F[JtaTransactionManager] -->|"구현"| B
+    A[UserService] -->|"의존"| B["PlatformTran..|"구현"| B
+    D[JpaTran..|"구현"| B
+    E[Hiberna..|"구현"| B
+    F[JtaTran..|"구현"| B
     A -->|"코드 변경 없이"| G["DB 기술 교체 가능"]
 ```
 
@@ -454,8 +449,7 @@ graph LR
     A --> C[RestTemplate]
     A --> D[TransactionTemplate]
     B -->|"콜백"| H[RowMapper]
-    C -->|"콜백"| I[RequestCallback]
-    D -->|"콜백"| J[TransactionCallback]
+  ..|"콜백"| I[RequestCallba..|"콜백"| J[TransactionCallback]
 ```
 
 ```java

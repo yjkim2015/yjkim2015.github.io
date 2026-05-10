@@ -51,8 +51,7 @@ String result = future.get(); // 블로킹
 flowchart LR
     A["supplyAsync()"] --> B["작업 실행 중"]
     B --> C{"완료?"}
-    C -->|"성공"| D["thenApply/thenComp"]
-    C -->|"실패"| E["exceptionally/hand"]
+    C -->|"성공"| D["thenApply/th..|"실패"| E["exceptionally/hand"]
     D --> F["최종 결과"]
     E --> F
 ```
@@ -256,9 +255,7 @@ CompletableFuture<User> future = CompletableFuture
 ```mermaid
 flowchart LR
     A1["fetchUser()"] --> C1["thenCombine"]
-    B1["fetchOrders()"] --> C1
     A2["api1 & api2 & api3"] --> D["allOf 완료대기"]
-    A3["us-east & eu-west"] --> E["anyOf 첫완료"]
 ```
 
 ### thenCombine — 두 Future 결과 합치기
@@ -476,9 +473,8 @@ String result = future.join(); // try-catch 불필요 (하지만 예외는 발�
 
 ```mermaid
 graph LR
-    A["ForkJoinPool 공용"] -->|"I/O 블로킹"| B["스레드 고갈"]
-    B --> C["JVM 전체 성능 저하"]
-    D["커스텀 Executor"] -->|"I/O 격리"| E["안정적인 성능"]
+    A["ForkJoinPool 공용"] -->|"I/O 블로킹"| B["Thread 고갈"]
+..|"I/O 격리"| E["안정적인 성능"]
 ```
 
 ```java

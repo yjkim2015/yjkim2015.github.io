@@ -22,7 +22,7 @@ graph LR
     A["중첩 클래스"] --> B["Static Nested"]
     A --> C["Inner Class"]
     B --> B1["외부 참조 없음"]
-    C --> D["Member/Local/Anonymous"]
+    C --> D["Member/Local/Ano.."]
 ```
 
 | 종류 | static | 외부 인스턴스 참조 | 선언 위치 |
@@ -688,10 +688,8 @@ public class Outer {
 ```mermaid
 graph LR
     A["중첩 클래스 선택"] --> B{"외부 인스턴스?"}
-    B -->|"불필요"| C["Static Nested"]
-    B -->|"필요"| D{"이름 필요?"}
-    D -->|"Yes"| G["Member Inner"]
-    D -->|"No"| I["람다/Anonymous"]
+    B -->|"불필요"| C["Static Neste..|"필요"| D{"이름 필요?"}
+   ..|"Yes"| G["Member Inner..|"No"| I["람다/Anonymous"]
 ```
 
 **핵심 규칙:**

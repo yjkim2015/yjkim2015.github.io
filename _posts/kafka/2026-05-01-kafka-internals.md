@@ -17,10 +17,8 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    SEND["send(record)"] --> SER["Serializer"] --> PART["Partitioner"]
     PART --> ACC["RecordAccumulator("]
     ACC -->|"ready batches"| SENDER["Sender"]
-    SENDER --> NC["NetworkClient"] --> BROKERS["Brokers"]
 ```
 
 ### 배치(Batch) 처리
@@ -104,8 +102,8 @@ public class RegionPartitioner implements Partitioner {
 
 ```mermaid
 graph LR
-    RR["RoundRobin: msg→P0,P1 순환"]
-    ST["Sticky: msg 배치 P0 누적"] --> SW["전송 후 전환"]
+    RR["RoundRobin: msg→.."]
+    ST["Sticky: msg 배치 P.."] --> SW["전송 후 전환"]
 ```
 
 ---
@@ -277,8 +275,7 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 
 ```mermaid
 graph LR
-    C1["Consumer(Leader)"] -->|"JoinGroup"| GC["GroupCoordinator"]
-    C2["Consumer"] -->|"JoinGroup"| GC
+    C1["Consumer(Leader)"] -->|"JoinGroup"| GC["GroupCoordi..|"JoinGroup"| GC
     GC -->|"Leader 선정"| C1
     C1 -->|"SyncGroup(할당계획)"| GC
     GC -->|"파티션 할당"| C1
@@ -294,9 +291,9 @@ graph LR
 ```mermaid
 graph LR
     C["Consumer"] -->|"poll() 수신"| K["Kafka"]
-    C -->|"Offset 커밋(먼저)"| K
-    C -->|"처리 중 장애!"| DB["처리 대상"]
-    K -->|"재시작→메시지 유실"| C
+    ..|"Offset 커밋(먼저)"| K
+    C -->|"처리 중 장애!"| DB[" 대상"]
+    K..|"재시작→메시지 유실"| C
 ```
 
 ```java
@@ -315,8 +312,8 @@ for (ConsumerRecord<String, String> record : records) {
 ```mermaid
 graph LR
     C["Consumer"] -->|"poll() 수신"| K["Kafka"]
-    C -->|"처리 완료"| DB["처리 대상"]
-    C -->|"커밋 전 장애!"| C
+    ..|"처리 완료"| DB[" 대상"]
+    C..|"커밋 전 장애!"| C
     K -->|"재시작→중복 처리"| C
 ```
 
@@ -335,10 +332,10 @@ consumer.commitSync();  // 커밋 (장애 시 재처리 발생)
 
 ```mermaid
 graph LR
-    P["Producer"] -->|"begin→쓰기→offset커밋"| K["Kafka"]
+    P["Producer"] -->|"begin→쓰기→offset..| K["Kafka"]
     P -->|"commit"| K
     K -->|"커밋된 메시지"| C["Consumer"]
-    P -->|"실패시 rollback→재시도"| K
+ ..|"실패시 rollback→재시도"| K
 ```
 
 ---
@@ -351,11 +348,9 @@ graph LR
 
 ```mermaid
 graph LR
-    P["Producer"] -->|"msg(seq=1)"| B1["Broker(멱등성 없음)"]
-    B1 -->|"ACK 손실→재전송"| P
+    P["Producer"] -->|"msg(seq=1)"| B1["Broker(멱등성 ..|"ACK 손실→재전송"| P
     P -->|"중복 저장!"| B1
-    P2["Producer"] -->|"msg(PID=100,seq=1)"| B2["Broker(멱등성 있음)"]
-    B2 -->|"ACK 손실→재전송"| P2
+    P2["Prod..|"msg(PID=100,seq=1)"| B2["Broker(멱등성 ..|"ACK 손실→재전송"| P2
     B2 -->|"seq=1 중복 무시→ACK"| P2
 ```
 
@@ -411,12 +406,12 @@ public class OrderTransactionalService {
 
 ```mermaid
 graph LR
-    P["Producer"] -->|"initTransactions()"| TC["TxCoordinator"]
+    P["Producer"] -->|"initTransaction..| TC["TxCoordinator"]
     TC -->|"PID+epoch"| P
-    P -->|"send(uncommitted)"| PL["PartitionLeader"]
-    P -->|"commitTransaction()"| TC
+    P -->|"send(uncommitte..| PL["PartitionLeader"]
+    P -->|"commitTransacti..| TC
     TC -->|"COMMITTED 마커"| PL
-    P -->|"실패시 abortTransaction()"| TC
+    P -->|"실패시 abortTransa..| TC
 ```
 
 ### Exactly-Once Semantics (EOS) 전체 그림
@@ -476,8 +471,7 @@ public class ExactlyOnceProcessor {
 
 ```mermaid
 graph LR
-    L["Broker 1 (Leader)"] -->|복제| F1["Broker 2 (Follower)"]
-    L -->|복제| F2["Broker 3 (Follower)"]
+    L["Broker 1 (Leader)"] -->|복제| F1["Broker 2 (F..|복제| F2["Broker 3 (Follow.."]
 ```
 
 ### 리더 장애 시

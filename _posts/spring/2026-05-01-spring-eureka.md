@@ -27,9 +27,8 @@ date: 2026-05-01
 
 ```mermaid
 graph LR
-    S["Service"] -->|Register| E["EurekaServer"]
-    S -->|Heartbeat 10초| E
-    C["Client"] -->|목록 조회| E
+    S["Service"] -->|Register| E["EurekaServer..|Heartbeat 10초| E
+    C["Client..|목록 조회| E
     C -->|HTTP 호출| S
     S -->|Deregister| E
 ```
@@ -40,10 +39,9 @@ graph LR
 
 ```mermaid
 graph LR
-    ES1["Eureka Server 1"] <-->|Peer Replication| ES2["Eureka Server 2"]
-    OS["Order Service"] -->|Register/Heartbeat| ES1
-    US["User Service"] -->|Register/Heartbeat| ES2
-    PS["Product Service"] -->|Register/Heartbeat| ES1
+    ES1["Eureka Server 1"] <-->|Peer Replication| ES2["Eureka Ser..|Register/Heartbeat| ES1
+    US["Use..|Register/Heartbeat| ES2
+    PS["Pro..|Register/Heartbeat| ES1
     OS -->|Discover| ES1
     ES1 -->|인스턴스 목록| OS
     OS -->|HTTP 직접 호출| US
@@ -163,10 +161,8 @@ Eureka Server의 중요한 특성이다. 네트워크 장애로 인해 Heartbeat
 ```mermaid
 graph LR
     A["Heartbeat 감소 감지"] --> B{"실제 수신 < 85% 임계치?"}
-    B -->|"Yes"| C["자가 보호 모드 진입"]
-    B -->|"No"| D["정상 동작"]
+    B -->|"Yes"| C["자가 보호 모드 진입"..|"No"| D["정상 동작"]
     C --> E["인스턴스 만료 중단"]
-    C --> F["레지스트리 현상 유지"]
     C --> G["경고 메시지 표시"]
     E --> H["네트워크 복구 후 자동 해제"]
 ```
@@ -209,9 +205,8 @@ eureka:
 
 ```mermaid
 graph LR
-    ES1["Eureka 1"] <-->|Peer Replication| ES2["Eureka 2"]
-    MS1["Order"] -->|Register| ES1
-    MS2["User"] -->|Register| ES2
+    ES1["Eureka 1"] <-->|Peer Replication| ES2["Eureka 2"]..|Register| ES1
+    MS2["Us..|Register| ES2
     MS1 -->|Discovery| ES1
     MS1 -.->|Fallback| ES2
 ```

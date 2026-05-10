@@ -19,10 +19,7 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    UNF[비정규형 UNF<br>모든 데이터가 한 테이블] -->|원자값 분리| NF1[1NF<br>셀에 단일 값만]
-    NF1 -->|부분 종속 제거| NF2[2NF<br>PK 전체에 종속]
-    NF2 -->|이행 종속 제거| NF3[3NF<br>비키 → 비키 종속 없음]
-    NF3 -->|모든 결정자가 후보키| BCNF[BCNF<br>숨은 결정자 없음]
+    UNF[비정규형 UNF<br>모든 데이터가 한 테이블] -->|원자값 분리| NF1[1NF<br>셀에 단..|부분 종속 제거| NF2[2NF<br>PK 전..|이행 종속 제거| NF3[3NF<br>비키 →..|모든 결정자가 후보키| BCNF[BCNF<br>숨은 결정자 없음]
     style UNF fill:#F5B7B1
     style NF1 fill:#FADBD8
     style NF2 fill:#D5F5E3
@@ -290,10 +287,9 @@ WHERE date BETWEEN '2026-01-01' AND '2026-01-31';
 
 ```mermaid
 graph LR
-    NORM["정규화"] -->|"중복 없음"| CONSIST["정합성↑"]
-    NORM -->|"JOIN 증가"| SLOW["읽기 느림"]
-    DENORM["반정규화"] -->|"JOIN 감소"| FAST["읽기 빠름"]
-    DENORM -->|"중복"| INCONSIST["정합성 관리"]
+    NORM["정규화"] -->|"중복 없음"| CONSIST["정합성↑"]..|"JOIN 증가"| SLOW["읽기 느림"]
+ ..|"JOIN 감소"| FAST["읽기 빠름"]
+ ..|"중복"| INCONSIST["정합성 관리"]
 ```
 
 ---
@@ -303,10 +299,7 @@ graph LR
 ```mermaid
 flowchart LR
     START["성능 문제"] --> INDEX{"인덱스로 해결?"}
-    INDEX -->|"예"| ADD_IDX["인덱스 추가"]
-    INDEX -->|"아니오"| CACHE{"캐시로 해결?"}
-    CACHE -->|"예"| ADD_CACHE["Redis 캐시"]
-    CACHE -->|"아니오"| APPLY["반정규화 적용"]
+    INDEX -->|"예"| ADD_IDX["인덱스 추가..|"아니오"| CACHE{"캐시로 해결?"..|"예"| ADD_CACHE["Redi..|"아니오"| APPLY["반정규화 적용"]
 ```
 
 ```

@@ -26,7 +26,7 @@ Spring Framework는 원래 Java를 위해 설계됐다. 그런데 JetBrains가 K
 ```mermaid
 flowchart LR
   K["Kotlin 소스"] -->|컴파일| B["JVM 바이트코드"]
-  B -->|Spring이 리플렉션으로 처리| S["Spring Container"]
+..|Spring이 리플렉션으로 처리| S["Spring Container"]
   S --> C["Bean / AOP / DI"]
 ```
 
@@ -345,8 +345,7 @@ interface UserRepository : CoroutineCrudRepository<UserEntity, Long> {
 
 ```mermaid
 flowchart LR
-  A["suspend fun"] -->|Spring 감지| B["Mono 변환"]
-  C["Flow<T>"] -->|Spring 감지| D["Flux<T> 변환"]
+  A["suspend fun"] -->|Spring 감지| B["Mono Convert..|Spring 감지| D["Flux<T> 변환"]
   B --> E["Netty 이벤트 루프"]
   D --> E
 ```

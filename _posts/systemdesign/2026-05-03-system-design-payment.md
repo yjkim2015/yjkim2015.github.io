@@ -404,7 +404,6 @@ graph LR
     A[주문 생성] --> B[결제 처리]
     B --> C[재고 차감]
     C --> D[배송 요청]
-    D --> E[완료]
     C -- 실패 --> F[결제 취소]
     F --> G[주문 취소]
 ```
@@ -782,9 +781,9 @@ PCI DSS(Payment Card Industry Data Security Standard)는 카드 데이터를 다
 ```mermaid
 graph LR
     A[사용자] -->|카드입력| B[PG SDK]
-    B -->|토큰반환| A
-    A -->|토큰+결제요청| C[결제서비스]
-    C -->|승인요청| B
+    B..|토큰반환| A
+    A -->|토큰+결제요청| C[결제Svc]
+    C ..|승인요청| B
     B -->|승인결과| C
 ```
 

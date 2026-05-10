@@ -108,9 +108,7 @@ public boolean equals(Object o) {
 
 ```mermaid
 flowchart LR
-    A["a.equals(b) == tru"] -->|"필수"| B["a.hashCode() == b."]
-    C["a.hashCode() == b."] -->|"필수 아님"| D["a.equals(b) 참일 수도"]
-    E["a.equals(b) == fal"] -->|"권장"| F["a.hashCode() != b."]
+    A["a.equals(b) == tru"] -->|"필수"| B["a.hashCode()..|"필수 아님"| D["a.equals(b) ..|"권장"| F["a.hashCode() != b."]
 ```
 
 핵심 규칙을 정리하면 다음과 같습니다.
@@ -202,8 +200,7 @@ public String toString() {
 flowchart LR
     A["Cloneable 구현"] --> B["clone() 재정의"]
     B --> C{"가변 상태가 있는가?"}
-    C -->|"없음 (불변)"| D["super.clone() 반환"]
-    C -->|"있음"| E["super.clone() + 가변"]
+    C -->|"없음 (불변)"| D["super.clone(..|"있음"| E["super.clone() + 가변"]
     E --> F["배열은 clone(), 나머지는"]
 ```
 
@@ -252,9 +249,7 @@ public static Yum newInstance(Yum yum) { ... }
 
 ```mermaid
 flowchart LR
-    A["x.compareTo(y) > 0"] -->|"대칭성"| B["y.compareTo(x) < 0"]
-    C["x.compareTo(y) > 0"] -->|"추이성"| D["x.compareTo(z) > 0"]
-    E["x.compareTo(y) =="] -->|"권장"| F["x.equals(y) == tru"]
+    A["x.compareTo(y) > 0"] -->|"대칭성"| B["y.compareTo(..|"추이성"| D["x.compareTo(..|"권장"| F["x.equals(y) == tru"]
 ```
 
 자바 8부터는 **비교자 생성 메서드(Comparator construction methods)**를 사용하면 `compareTo`를 간결하게 구현할 수 있습니다. 약간의 성능 저하가 있지만, 가독성이 크게 향상됩니다.

@@ -200,10 +200,7 @@ AIMD 규칙:
 
 ```mermaid
 graph LR
-    A["Slow Start"] -->|"cwnd≥ssthresh"| B["Congestion Avoidan"]
-    B -->|3 Dup ACK| C["Fast Recovery"]
-    C --> B
-    B & A & C -->|Timeout| D["재시작 cwnd=1"]
+    A["Slow Start"] -->|"cwnd≥ssthresh"| B["Congestion A..|3 Dup ACK| C["Fast Recover..|Timeout| D["재시작 cwnd=1"]
 ```
 
 ### Fast Retransmit — 타임아웃 전 재전송

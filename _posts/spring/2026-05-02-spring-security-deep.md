@@ -205,7 +205,6 @@ graph LR
     A[JWT] --> B[Header]
     A --> C[Payload]
     A --> D[Signature]
-    B --> E["alg: HS256"]
     C --> F["sub: 사용자 ID"]
     D --> G["HMACSHA256("]
 ```
@@ -333,7 +332,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 ```mermaid
 graph LR
     A[Client] -->|유효토큰| B[Server]
-    B -->|200| A
+    B..|200| A
     A -->|만료→401| B
     A -->|refresh요청| B
     B -->|신규토큰| A
@@ -429,8 +428,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 graph LR
     U["사용자"] -->|"로그인"| B["은행"]
     B -->|"쿠키 발급"| U
-    M["악성사이트"] -->|"클릭 유도"| U
-    U -->|"POST /transfer(쿠키 자동 포함)"| B
+    M["악성사이트"..|"클릭 유도"| U
+    U -->|"POST /transfer(..| B
     B -->|"CSRF 토큰 포함 폼"| U
     U -->|"토큰 포함 요청"| B
     B -->|"토큰 검증 통과"| B
@@ -660,9 +659,7 @@ flowchart LR
     A["HTTP 요청"] --> B["SecurityContextPer"]
     B --> C["JwtAuthenticationF"]
     C --> D["AuthorizationFilte"]
-    D -->|"미인증"| E["401 Authentication"]
-    D -->|"권한 없음"| F["403 AccessDeniedHa"]
-    D -->|"통과"| G["Controller → 응답"]
+    D -->|"미인증"| E["401 Authenti..|"권한 없음"| F["403 AccessDe..|"통과"| G["Controller → 응답"]
 ```
 
 ---

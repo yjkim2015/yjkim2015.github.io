@@ -23,9 +23,7 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    S1[".java"] -->|"컴파일"| B1[".class"] -->|"JVM 로딩"| E1["실행(타입 고정)"]
-    JVM["실행 중 JVM"] -->|"getClass()/forName"| META["Class 메타데이터"]
-    META -->|"invoke()/newInstan"| OP["동적 조회/호출"]
+    S1[".java"] -->|"컴파일"| B1[".class"] -->|"JVM 로딩"| E1["Run(타입 고정)"..|"getClass()/forName"| META["Class 메타데..|"invoke()/newInstan"| OP["동적 조회/호출"]
 ```
 
 ### 왜 필요한가?
@@ -752,10 +750,10 @@ public class SimpleTestRunner {
 
 ```mermaid
 graph LR
-    C["클라이언트"] -->|"findById(1L)"| P["프록시"]
-    P -->|"invoke(method, args)"| H["Handler"]
-    H -->|"부가 기능 처리"| H
-    H -->|"method.invoke(target)"| P
+    C["클라이언트"] -->|"findById(1L)"| P["Proxy"]
+    ..|"invoke(method, args)"| H["Handler"]
+  ..|"부가 기능 처리"| H
+    H -->|"method.invoke(t..| P
     P -->|"결과 반환"| H
     H -->|"결과 반환"| C
 ```

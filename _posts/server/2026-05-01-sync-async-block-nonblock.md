@@ -90,7 +90,7 @@ I/O 시스템 콜은 즉시 반환하지만, 호출자가 직접 반복 폴링(p
 ```mermaid
 graph LR
     T["호출자 스레드"] -->|"I/O 요청"| IO["I/O"]
-    IO -->|"EAGAIN(즉시 반환)"| T
+    I..|"EAGAIN(즉시 반환)"| T
     T -->|"폴링"| IO
     IO -->|"EAGAIN"| T
     T -->|"폴링"| IO
@@ -272,7 +272,7 @@ Unix/Linux 시스템에서 I/O는 5가지 모델로 분류된다. (W. Richard St
 ```mermaid
 graph LR
     App["Application"] -->|"recvfrom() 호출"| K["Kernel"]
-    K -->|"블로킹 대기"| K
+   ..|"블로킹 대기"| K
     K -->|"데이터 도착→복사"| K
     K -->|"OK, 데이터 반환"| App
 ```
@@ -282,7 +282,7 @@ graph LR
 ```mermaid
 graph LR
     App["Application"] -->|"recvfrom()"| K["Kernel"]
-    K -->|"EAGAIN(데이터 없음)"| App
+   ..|"EAGAIN(데이터 없음)"| App
     App -->|"폴링"| K
     K -->|"EAGAIN"| App
     App -->|"폴링"| K
@@ -295,7 +295,7 @@ graph LR
 
 ```mermaid
 graph LR
-    App["Application"] -->|"select() 여러 소켓 감시"| K["Kernel"]
+    App["Application"] -->|"select() 여러 소켓 ..| K["Kernel"]
     K -->|"블로킹 감시 중"| K
     K -->|"소켓 준비→반환"| App
     App -->|"recvfrom()"| K
@@ -356,7 +356,7 @@ while (true) {
 ```mermaid
 graph LR
     App["Application"] -->|sigaction 등록| K["Kernel"]
-    K -->|즉시 반환| App
+   ..|즉시 반환| App
     App -->|다른 작업| App
     K -->|SIGIO 시그널| App
     App -->|recvfrom| K

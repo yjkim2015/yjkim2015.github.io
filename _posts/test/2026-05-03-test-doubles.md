@@ -359,10 +359,7 @@ void BDD_스타일로_작성한_테스트() {
 ```mermaid
 flowchart LR
     Q1{"의존 객체가"}
-    Q1 -->|"예\n(결제 API, SMS)"|  MOCK["Mock 사용"]
-    Q1 -->|"아니오"| Q2{"의존 객체의 상태가"}
-    Q2 -->|"예\n(저장 후 조회)"| FAKE["Fake 사용"]
-    Q2 -->|"아니오\n(반환값만 필요)"| STUB["Stub 사용"]
+    Q1 -->|"예\n(결제 API, SMS)"|  MOCK["Mock 사용"..|"아니오"| Q2{"의존 객체의 상태가"..|"예\n(저장 후 조회)"| FAKE["Fake 사용"]..|"아니오\n(반환값만 필요)"| STUB["Stub 사용"]
     style MOCK fill:#f88,stroke:#c00,color:#000
     style FAKE fill:#8bf,stroke:#08c,color:#000
     style STUB fill:#8f8,stroke:#080,color:#000
