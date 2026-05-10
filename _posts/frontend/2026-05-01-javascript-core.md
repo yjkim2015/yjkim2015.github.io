@@ -91,8 +91,9 @@ JavaScript는 싱글 스레드이지만 이벤트 루프 덕분에 비동기 처
 ```mermaid
 flowchart LR
     CS["콜 스택"] -->|"비동기"| WA["Web APIs"]
-..|"Promise"| MQ["마이크로태스크 큐"]..|"타이머/이벤트"| TQ["태스크 큐"]
-   ..|"1순위"| MQ
+    WA -->|"Promise"| MQ["마이크로태스크 큐"]
+    WA -->|"타이머/이벤트"| TQ["태스크 큐"]
+    EL["이벤트 루프"] -->|"1순위"| MQ
     EL -->|"2순위"| TQ
     MQ & TQ --> CS
 ```
@@ -162,6 +163,10 @@ async function processInChunks(items, chunkSize = 100) {
 flowchart LR
     Q["함수 호출 방식은?"]
     Q -->|"new 키워드"| NEW["new 바인딩"]
+    Q -->|"call / apply / bin"| EXPLICIT["명시적 바인딩"]
+    Q -->|"obj.method()"| METHOD["암시적 바인딩"]
+    Q -->|"화살표 함수"| ARROW["렉시컬 바인딩"]
+    Q -->|"그냥 func()"| DEFAULT["기본 바인딩"]
     style NEW fill:#9b59b6,color:#fff
     style EXPLICIT fill:#3498db,color:#fff
     style METHOD fill:#2ecc71,color:#fff
@@ -420,9 +425,9 @@ graph LR
     Fulfilled["Fulfilled"]
     Rejected["Rejected"]
     Pending -->|"resolve() 호출"| Fulfilled
-    P..|"reject() 호출"| Rejected
-    Fu..|".then() 체이닝"| Fulfilled
-    R..|".catch()에서 복구"| Fulfilled
+    Pending -->|"reject() 호출"| Rejected
+    Fulfilled -->|".then() 체이닝"| Fulfilled
+    Rejected -->|".catch()에서 복구"| Fulfilled
 ```
 
 ```javascript

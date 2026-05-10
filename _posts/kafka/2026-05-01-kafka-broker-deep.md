@@ -49,6 +49,7 @@ flowchart LR
     CLIENT["Client(Producer/Co"] --> NET["Network Layer"]
     NET --> API["KafkaApis"] --> POOL["Request Handler Po"]
     POOL --> RM["ReplicaManager"]
+    POOL --> GC["GroupCoordinator"]
     POOL --> LM["LogManager"]
 ```
 
@@ -152,7 +153,9 @@ log.retention.minutes=1440       # 최소 1일 보존 후 compaction
 
 ```mermaid
 graph LR
-    C["Controller"] -->|장애 감지| B3["Broker3 신규 ..|Metadata 갱신| PC["Producer/Co..|재연결| B3
+    C["Controller"] -->|장애 감지| B3["Broker3 신규 리더"]
+    C -->|Metadata 갱신| PC["Producer/Consumer"]
+    PC -->|재연결| B3
 ```
 
 **KRaft 기반 (Kafka 3.x+)** 은 ZooKeeper 없이 Raft 합의로 처리하므로 ZooKeeper 세션 만료 대기 없이 수십 ms 안에 선출이 완료된다.
@@ -327,8 +330,10 @@ kafka-topics.sh --bootstrap-server kafka:9092 \
 ```mermaid
 flowchart LR
     A["파티션 증가 필요"] --> B{"순서 의존?"}
-    B -->|예| C["소비 완료 후 증가"]..|아니오| G["완료"]
-    E -->|예| F["마이그레이션"] -->..|아니오| G
+    B -->|예| C["소비 완료 후 증가"] --> E{"마이그레이션?"}
+    B -->|아니오| G["완료"]
+    E -->|예| F["마이그레이션"] --> G
+    E -->|아니오| G
 ```
 
 ### 파티션 재할당 (Partition Reassignment)

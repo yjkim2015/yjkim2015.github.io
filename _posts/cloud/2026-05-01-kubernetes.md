@@ -22,7 +22,8 @@ K8s 클러스터는 Control Plane(마스터)과 Worker Node로 구성된다. Con
 graph LR
     API["API Server"] --> ETCD[("etcd")]
     API --> SCHED["스케줄러"]
-    API -->|"명령"| KL1["Node1 kube..|"명령"| KL2["Node2 kubelet"]
+    API -->|"명령"| KL1["Node1 kubelet"]
+    API -->|"명령"| KL2["Node2 kubelet"]
     KL1 --> POD1["Pod들"]
 ```
 

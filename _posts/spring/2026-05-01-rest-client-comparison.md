@@ -750,8 +750,10 @@ quadrantChart
 ```mermaid
 graph LR
     A{"Boot 3.x?"} -->|Yes+비동기| C["WebClient"]
-..|Yes+MSA| E["OpenFeign"]
-..|Yes+동기| F["RestClient"]..|레거시+동기| H["RestTemplate..|레거시+비동기| C
+    A -->|Yes+MSA| E["OpenFeign"]
+    A -->|Yes+동기| F["RestClient"]
+    A -->|레거시+동기| H["RestTemplate"]
+    A -->|레거시+비동기| C
 ```
 
 ### 시나리오별 추천 코드

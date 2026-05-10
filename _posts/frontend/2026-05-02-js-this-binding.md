@@ -22,9 +22,9 @@ toc_label: 목차
 ```mermaid
 graph LR
     A["함수 호출"] -->|"new"| B["새 객체"]
-    A..|"call/bind"| C["명시적 값"]
-    ..|"obj.method"| D["obj"]
-    A ..|"기본"| E["전역/undefined"]
+    A -->|"call/bind"| C["명시적 값"]
+    A -->|"obj.method"| D["obj"]
+    A -->|"기본"| E["전역/undefined"]
 ```
 
 이 다이어그램이 `this`의 모든 진실입니다. 복잡해 보이지만, **위에서 아래로 순서대로 적용**하는 단순한 규칙입니다. `this`가 헷갈릴 때마다 이 순서도를 따라가면 반드시 답을 찾을 수 있습니다.
@@ -131,7 +131,7 @@ greetFn(); // '안녕하세요, undefined입니다' — window가 this
 ```mermaid
 graph LR
     A["person.greet()"] -->|"this=person"| B["'이영희' 출력"]
- ..|"this=전역"| D["undefined 출력"]
+    C["greetFn()"] -->|"this=전역"| D["undefined 출력"]
 ```
 
 ### 콜백으로 전달할 때의 함정
@@ -242,6 +242,7 @@ console.log(kim.name); // '김민준'
 
 ```mermaid
 flowchart LR
+    A["new Person('김민준',"] --> B["새 빈 객체 {} 생성"]
     B --> C["this = 새 객체로 설정"]
     C --> D["생성자 함수 실행<br>this."]
     D --> E["명시적 반환값 없으면<br>thi"]
@@ -460,7 +461,7 @@ class MyComponent extends React.Component {
 ```mermaid
 graph LR
     PROBLEM["this 손실"] --> P1["클로저: self=this"]
-    PROBLEM --> P2["bind: fn.bind(th.."]
+    PROBLEM --> P2["bind: fn.bind(this)"]
     PROBLEM --> P3["화살표 함수 (권장)"]
     style P3 fill:#9b59b6,color:#fff
 ```
@@ -563,9 +564,9 @@ console.log(calculator.addToValue(3)); // ??
 ```mermaid
 graph LR
     A["this 결정"] -->|"화살표"| B["렉시컬 고정"]
-   ..|"new"| C["새 객체"]
-    A..|"call/bind"| D["지정 값"]
-    A..|"obj.method"| E["obj"]
+    A -->|"new"| C["새 객체"]
+    A -->|"call/bind"| D["지정 값"]
+    A -->|"obj.method"| E["obj"]
 ```
 
 이 5단계 체크리스트만 있으면 어떤 `this` 문제도 해결할 수 있습니다.

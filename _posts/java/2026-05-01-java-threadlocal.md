@@ -66,9 +66,10 @@ public class Thread implements Runnable {
 
 ```mermaid
 graph LR
+    GET["get() 호출"] --> MAP["ThreadLocalMap 접근"]
     MAP --> ENTRY["getEntry(this)"]
     ENTRY -->|"있음"| VALUE["값 반환"]
- ..|"없음"| INIT["setInitialValue()"] --> VALUE
+    ENTRY -->|"없음"| INIT["setInitialValue()"] --> VALUE
 ```
 
 ```java
@@ -186,8 +187,10 @@ graph LR
 
 ```mermaid
 graph LR
+    TL["ThreadLocal(강참조)"] -.->|"WeakRef key"| ENTRY["Entry"]
     ENTRY --> VAL["value(강참조)"]
     NULL["tl=null → GC 수거"] --> LEAK["key=null, value 잔존"]
+    REMOVE["remove() 호출"] --> CLEAN["Entry 완전 제거"]
 ```
 
 ### 메모리 누수 시나리오 (스레드 풀 + ThreadLocal)

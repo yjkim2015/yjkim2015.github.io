@@ -146,6 +146,12 @@ public class AsyncConfig implements AsyncConfigurer {
 ```mermaid
 graph LR
     REQ["요청 도착"] --> C1{"corePoolSize 미만?"}
+    C1 -->|"YES"| T1["새 스레드 생성해 즉시 처리"]
+    C1 -->|"NO"| C2{"queueCapacity 여유?"}
+    C2 -->|"YES"| Q["큐에 추가 (기다림)"]
+    C2 -->|"NO"| C3{"maxPoolSize 미만?"}
+    C3 -->|"YES"| T2["임시 스레드 추가 생성"]
+    C3 -->|"NO"| REJ["RejectedExecutionH"]
     style REJ fill:#f88,stroke:#c00,color:#000
     style T1 fill:#8f8,stroke:#080,color:#000
     style T2 fill:#8f8,stroke:#080,color:#000

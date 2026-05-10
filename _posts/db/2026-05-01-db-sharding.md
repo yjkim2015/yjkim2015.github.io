@@ -58,7 +58,7 @@ graph LR
     A["성능 문제"] --> B{"튜닝/캐싱"}
     B -->|"해결"| Z["완료"]
     B -->|"미해결"| C{"파티셔닝"}
-    C..|"해결"| Z
+    C -->|"해결"| Z
     C -->|"미해결"| F["샤딩 도입"]
 ```
 
@@ -88,8 +88,8 @@ graph LR
 ```mermaid
 graph LR
     K["user_id"] -->|"hash % N"| SH0["Shard 0"]
-..|"hash % N"| SH1["Shard 1"]
-..|"hash % N"| SH2["Shard 2~N"]
+    K -->|"hash % N"| SH1["Shard 1"]
+    K -->|"hash % N"| SH2["Shard 2~N"]
 ```
 
 **단점 — 노드 추가/제거 시 대규모 재분배**
@@ -104,6 +104,11 @@ Consistent Hashing은 노드(샤드) 추가/제거 시 최소한의 데이터만
 
 ```mermaid
 graph LR
+    N0["Node 0(50)"] --- N1["Node 1(150)"]
+    N1 --- N2["Node 2(250)"]
+    N3["Node 3(120)"] --- N1
+    K0["Key A(70)"] --> N0
+    K1["Key B(130)"] --> N3
     K2["Key C(200)"] --> N2
 ```
 
@@ -215,8 +220,8 @@ public class UserStatsService {
 ```mermaid
 graph LR
     TC["TC"] -->|"PREPARE"| SA["Shard A"]
- ..|"PREPARE"| SB["Shard B"]
- ..|"OK"| TC
+    TC -->|"PREPARE"| SB["Shard B"]
+    SA -->|"OK"| TC
     SB -->|"OK"| TC
     TC -->|"COMMIT"| SA
     TC -->|"COMMIT"| SB
@@ -491,11 +496,12 @@ public class SnowflakeIdGenerator {
 ```mermaid
 graph LR
     A["성능 문제"] --> B{"읽기 과부하?"}
-    B -->|"YES"| C["캐싱 → Read Re..|"여전히 부족"| F["샤딩"]
+    B -->|"YES"| C["캐싱 → Read Replica"]
+    C -->|"여전히 부족"| F["샤딩"]
     B -->|"NO"| D{"쓰기 과부하?"}
-  ..|"TB 수준"| F
+    D -->|"TB 수준"| F
     D -->|"그 이하"| G["파티셔닝"]
-    D..|"NO"| I["인덱스 최적화"]
+    D -->|"NO"| I["인덱스 최적화"]
 ```
 
 ### 각 전략의 적합한 상황
@@ -626,7 +632,8 @@ public class UserService {
 graph LR
     A["핫 샤드 감지"] --> B{"원인 분석"}
     B -->|"샤드 키 선택 오류"| C["재샤딩 검토"]
-   ..|"Celebrity Problem"| D["해당 사용자 전용 샤드..|"일시적 부하 집중"| E["Read Replica 추가"]
+    B -->|"Celebrity Problem"| D["해당 사용자 전용 샤드 격리"]
+    B -->|"일시적 부하 집중"| E["Read Replica 추가"]
     E --> F["핫 샤드 분할"]
 ```
 

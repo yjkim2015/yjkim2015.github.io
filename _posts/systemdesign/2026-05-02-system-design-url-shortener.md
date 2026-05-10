@@ -178,8 +178,9 @@ graph LR
 ```mermaid
 graph LR
     A[Client] -->|POST /shorten| B[API]
-    B --..|존재| D[기존코드반환]
-    C..|신규| E[Base62+INSERT]
+    B --> C{중복?}
+    C -->|존재| D[기존코드반환]
+    C -->|신규| E[Base62+INSERT]
     D & E --> F[shortUrl]
 ```
 
@@ -192,7 +193,9 @@ graph LR
 ```mermaid
 graph LR
     A[Browser] -->|GET /W7e| B[API]
-    B --..|Yes| D[302 Redirect]..|No| E[DB조회]
+    B --> C{Redis hit?}
+    C -->|Yes| D[302 Redirect]
+    C -->|No| E[DB조회]
     E --> D
 ```
 
@@ -255,9 +258,9 @@ URL 하나 캐시 크기 = 7B + 100B = 107B
 graph LR
     API["API 서버"] --> CH["Consistent Hashing"]
     CH -->|"구간 A"| S1["샤드 1"]
-    ..|"구간 B"| S2["샤드 2"]
-    ..|"구간 C"| S3["샤드 3"]
-    ..|"전체의 1/N만 재배치"| CH
+    CH -->|"구간 B"| S2["샤드 2"]
+    CH -->|"구간 C"| S3["샤드 3"]
+    S4["샤드 4 추가"] -.->|"전체의 1/N만 재배치"| CH
 ```
 
 **가상 노드(Virtual Nodes)**: 샤드 1대를 링 위에 100개의 가상 노드로 분산 배치한다. 샤드 간 데이터 불균형(핫스팟)을 방지하고, 샤드 추가·제거 시 부하가 여러 샤드에 고르게 분산된다.
@@ -356,7 +359,9 @@ def redirect(short_code: str):
 
 ```mermaid
 graph LR
+    Traffic["순간 초당 50만 요청"] --> CDN["CDN Edge<br>301 캐싱"]
     Traffic --> LB["Auto Scaling<br>서버"]
+    LB --> LocalCache["각 서버 로컬 캐시<br>(Caf"]
     LB --> Redis["Redis 클러스터<br>캐시 히"]
     Redis --> DB["DB 조회 극소화"]
 ```

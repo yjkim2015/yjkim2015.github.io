@@ -40,7 +40,12 @@ graph LR
 ```mermaid
 flowchart LR
     A["컴포넌트 분리 고려"] --> B{"재사용 가능한가?"}
-    B -->|"예"| C["분리 — 다른 곳에서도..|"아니오"| D{"너무 큰가? 150줄 ..|"예"| E["기능 단위로 분리"]
+    B -->|"예"| C["분리 — 다른 곳에서도 쓸 수 있"]
+    B -->|"아니오"| D{"너무 큰가? 150줄 이상"}
+    D -->|"예"| E["기능 단위로 분리"]
+    D -->|"아니오"| F{"여러 책임을 갖는가?"}
+    F -->|"예"| G["SRP에 따라 분리"]
+    F -->|"아니오"| H["현재 크기 유지"]
     style C fill:#2ecc71,color:#fff
     style E fill:#2ecc71,color:#fff
     style G fill:#2ecc71,color:#fff
@@ -106,7 +111,10 @@ src/
 ```mermaid
 graph LR
     COMPONENT["컴포넌트"] -->|"훅 사용"| HOOKS["커스텀 훅"]
-..|"데이터 요청"| REACT_QUERY["Re..|"API 호출"| API_LAYER["API ..|"HTTP 요청"| HTTP_CLIENT["HT..|"네트워크"| SERVER["백엔드 서버"]
+    HOOKS -->|"데이터 요청"| REACT_QUERY["React Query / SWR"]
+    REACT_QUERY -->|"API 호출"| API_LAYER["API Layer"]
+    API_LAYER -->|"HTTP 요청"| HTTP_CLIENT["HTTP 클라이언트 axios/f"]
+    HTTP_CLIENT -->|"네트워크"| SERVER["백엔드 서버"]
     style API_LAYER fill:#3498db,color:#fff
     style HTTP_CLIENT fill:#f39c12,color:#fff
 ```
@@ -388,8 +396,8 @@ graph LR
     SHELL --> PRODUCTS["Products MFE 팀B"]
     SHELL --> CART["Cart MFE 팀C"]
     AUTH -.->|"독립 배포"| AUTH
-    PRODUC..|"독립 배포"| PRODUCTS
-    CA..|"독립 배포"| CART
+    PRODUCTS -.->|"독립 배포"| PRODUCTS
+    CART -.->|"독립 배포"| CART
     style SHELL fill:#e74c3c,color:#fff
     style AUTH fill:#3498db,color:#fff
     style PRODUCTS fill:#2ecc71,color:#fff

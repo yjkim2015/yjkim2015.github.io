@@ -21,7 +21,8 @@ Java는 성능과 객체지향이라는 두 가지 목표를 동시에 추구했
 
 ```mermaid
 graph LR
-    P1["int/long"] <-->|박싱/언박싱| W1["Integer/Lon..|박싱/언박싱| W2["Double/Boolean"]
+    P1["int/long"] <-->|박싱/언박싱| W1["Integer/Long"]
+    P2["double/boolean"] <-->|박싱/언박싱| W2["Double/Boolean"]
     W1 & W2 --> OBJ["Object"]
 ```
 
@@ -201,7 +202,7 @@ graph LR
     NEW["new Integer(n)"]
     VALUEOF --> CHECK
     CHECK -->|"예"| CACHE
-    CHECK..|"아니오"| NEW
+    CHECK -->|"아니오"| NEW
 ```
 
 ```java

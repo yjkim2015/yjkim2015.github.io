@@ -214,8 +214,8 @@ catch (Exception e) { }              // 가장 상위
 ```mermaid
 graph LR
     T["try 블록"] -->|예외A 발생| C["close()"]
-  ..|예외B 발생| E["예외A 전파(주)"]
-..|getSuppressed| B["예외B 첨부"]
+    C -->|예외B 발생| E["예외A 전파(주)"]
+    E -->|getSuppressed| B["예외B 첨부"]
 ```
 
 ### 기본 동작

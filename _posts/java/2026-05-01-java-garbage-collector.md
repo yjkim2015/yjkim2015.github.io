@@ -79,6 +79,7 @@ GC의 가장 기본적인 알고리즘입니다. 두 단계로 동작합니다.
 ```mermaid
 graph LR
     ROOT["GC Root (Stack/sta"] --> A --> B --> C
+    ROOT -.미도달.-> D & E & F
     A["A (Mark)"] --> B["B (Mark)"] --> C["C (Mark)"]
     D["D (Sweep)"] & E["E (Sweep)"] & F["F (Sweep)"]
 ```
@@ -152,14 +153,16 @@ graph LR
 
 ```mermaid
 graph LR
-    MinorGC["Minor GC Young"] -->|"STW 짧음"| MajorGC["Major ..|"STW 더 김"| FullGC["Full GC"]
+    MinorGC["Minor GC Young"] -->|"STW 짧음"| MajorGC["Major GC Old"]
+    MajorGC -->|"STW 더 김"| FullGC["Full GC"]
 ```
 
 ### 객체 승격(Promotion) 과정
 
 ```mermaid
 graph LR
-    Eden -->|Minor GC 생존| S0["Survivor S0..|age>=15| Old["Old Gen"]
+    Eden -->|Minor GC 생존| S0["Survivor S0(age=1)"]
+    S0 -->|age>=15| Old["Old Gen"]
 ```
 
 ---
@@ -289,7 +292,7 @@ byte[] hugeArray = new byte[2 * 1024 * 1024]; // 2MB → Humongous
 
 ```mermaid
 graph LR
-    CT["Old Region CardT.."] -->|"참조 기록"| RS["Young Region Rem.."]
+    CT["Old Region CardTable"] -->|"참조 기록"| RS["Young Region RemSet"]
     NOTE["Young GC: RS만 확인"]
     RS --> NOTE
 ```
@@ -495,6 +498,7 @@ graph LR
 
 ```mermaid
 graph LR
+    ZLC["GC(10) 2048M(100%)"]
     Z1["Pause Mark Start:"]
     Z2["Concurrent Mark: 2"]
     Z3["Pause Mark End: 0."]
@@ -763,8 +767,12 @@ graph LR
     Q2{"처리량 최우선?"}
     Q3{"STW < 100ms?"}
     S --> Q1
-    Q1 -->|YES| A1["Serial/G1"]..|NO| Q2
-    Q2 -->|YES| A2["Parallel GC..|NO| Q3
+    Q1 -->|YES| A1["Serial/G1"]
+    Q1 -->|NO| Q2
+    Q2 -->|YES| A2["Parallel GC"]
+    Q2 -->|NO| Q3
+    Q3 -->|YES| A3["ZGC/Shenandoah"]
+    Q3 -->|NO| A4["G1 GC"]
 ```
 
 ### 컨테이너 환경 필수 설정

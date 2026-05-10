@@ -162,6 +162,7 @@ public class OrderConsumer {
 graph LR
     P0 & P1 --> A1[Group-A: C1] & B1[Group-B: C1]
     P2 --> A2[Group-A: C2] & B2[Group-B: C2]
+    P3 --> A3[Group-A: C3] & B2
 ```
 
 파티션 4개, 컨슈머 3개인 Group A에서는 A1이 2개 파티션을 담당하며, Group B는 같은 토픽을 독립적으로 소비한다(브로드캐스트 효과).
@@ -291,8 +292,8 @@ Kafka 2.8에서 Early Access, 3.3에서 Production Ready로 발표된 **ZooKeepe
 
 ```mermaid
 graph LR
-    C1["Controller1(Acti.."] <--> C2["Controller2(Stan.."]
-    C2 <--> C3["Controller3(Stan.."]
+    C1["Controller1(Active)"] <--> C2["Controller2(Standby)"]
+    C2 <--> C3["Controller3(Standby)"]
     C1 <--> C3
     C1 & C2 & C3 --- META["__cluster_metadata"]
 ```
@@ -342,7 +343,7 @@ Kafka의 저장 구조는 **append-only log**를 기반으로 한다. 이것이 
 
 ```mermaid
 graph LR
-    S1LOG[".log: msg0~msg99.."] --- S1IDX[".index: offset→pos"]
+    S1LOG[".log: msg0~msg999999"] --- S1IDX[".index: offset→pos"]
     S2LOG[".log: msg1000000~"] --- S2IDX[".index: offset→pos"]
     S1IDX --> S2LOG
 ```
@@ -411,7 +412,8 @@ ISR은 리더 파티션과 **동기화 상태가 최신인 팔로워 집합**이
 
 ```mermaid
 graph LR
-    L["Leader — Broker 1"] -->|복제| F1["Follower — ..|복제| F2["Follower — Broke.."]
+    L["Leader — Broker 1"] -->|복제| F1["Follower — Broker 2"]
+    L -->|복제| F2["Follower — Broker 3"]
     ISR["ISR = Broker1,2,3"]
 ```
 
@@ -427,6 +429,7 @@ graph LR
 
 ```mermaid
 graph LR
+    O0["off0"] --> O1["off1"] --> O2["off2"] --> O3["off3(HW)"] --> O4["off4"]
     HW["HW=3"] -.-> O3
     F1["Follower LEO=4"] -.-> O4
 ```

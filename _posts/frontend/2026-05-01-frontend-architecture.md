@@ -30,7 +30,7 @@ flowchart LR
     API["API 레이어: 커스텀 훅 → A"]
     DOMAIN["도메인 레이어: 타입 정의 / 유"]
     UI -->|"데이터 요청"| STATE
-    STATE..|"서버 상태"| API
+    STATE -->|"서버 상태"| API
     API -->|"타입 사용"| DOMAIN
 ```
 
@@ -66,7 +66,7 @@ flowchart LR
     PV["프레젠테이션: ProductCar"]
     HK["Hooks: useProduct,"]
     API["productApi, cartAp"]
-    PC -->|"name,price,isLo..| PV
+    PC -->|"name,price,isLoadi"| PV
     PC --> HK --> API
 ```
 
@@ -213,7 +213,7 @@ flowchart LR
     CL["HTTP 클라이언트: 인터셉터/토"]
     NET["백엔드 서버 API"]
     C -->|"useProductList()"| H
-    H -->|"productApi.getL..| S
+    H -->|"productApi.getList"| S
     S -->|"httpClient.get()"| CL
     CL --> NET
 ```
@@ -303,9 +303,11 @@ export function useCreateProduct() {
 ```mermaid
 flowchart LR
     Q1{"이 데이터는 어디서 왔는가?"}
-    Q1 -->|"서버 API에서 왔다"| SERVER["Svr 상태"..|"URL에서 왔다"| URL["URL 상태"]
- ..|"클라이언트에서 생성"| Q2{"여러 Comp가"}
-..|"예"| GLOBAL["전역 상태"]..|"아니오"| LOCAL["로컬 상태"]
+    Q1 -->|"서버 API에서 왔다"| SERVER["서버 상태"]
+    Q1 -->|"URL에서 왔다"| URL["URL 상태"]
+    Q1 -->|"클라이언트에서 생성"| Q2{"여러 컴포넌트가"}
+    Q2 -->|"예"| GLOBAL["전역 상태"]
+    Q2 -->|"아니오"| LOCAL["로컬 상태"]
     style SERVER fill:#e74c3c,color:#fff
     style URL fill:#9b59b6,color:#fff
     style GLOBAL fill:#3498db,color:#fff
@@ -487,7 +489,7 @@ function App() {
 ```mermaid
 flowchart LR
     UNIT["단위 테스트"] -->|"통과하면"| INT["통합 테스트"]
- ..|"통과하면"| E2E["E2E 테스트"]
+    INT -->|"통과하면"| E2E["E2E 테스트"]
     style E2E fill:#e74c3c,color:#fff
     style INT fill:#f39c12,color:#fff
     style UNIT fill:#2ecc71,color:#fff
@@ -650,7 +652,9 @@ worker.onmessage = (e) => setResult(e.data);
 
 ```mermaid
 graph LR
-    PC["ProductCard"] -->|"ADD_TO_CART"| STORE["Cart Sto..|"구독"| CH["CartHeader"..|"구독"| CL["CartList"]
+    PC["ProductCard"] -->|"ADD_TO_CART"| STORE["Cart Store"]
+    STORE -->|"구독"| CH["CartHeader"]
+    STORE -->|"구독"| CL["CartList"]
 ```
 
 ```typescript

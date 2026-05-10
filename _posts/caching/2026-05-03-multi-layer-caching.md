@@ -32,8 +32,8 @@ date: 2026-05-03
 ```mermaid
 graph LR
     S["서버"] -->|"Miss"| L1["L1 로컬"]
-   ..|"Miss"| L2["L2 Redis"]
-..|"Miss"| DB["DB"]
+    L1 -->|"Miss"| L2["L2 Redis"]
+    L2 -->|"Miss"| DB["DB"]
 ```
 
 ---
@@ -44,8 +44,11 @@ graph LR
 
 ```mermaid
 graph LR
-    Client["클라이언트"] -->|"1️⃣ CDN Hit: 5~..| CDN["CDN"]
-    CDN -->|"Miss"| GW["2️⃣ API Gat..|"Miss"| L1["3️⃣ L1 Loca..|"Miss"| L2["4️⃣ L2 Remo..|"Miss"| DB["5️⃣ Database"]
+    Client["클라이언트"] -->|"1️⃣ CDN Hit: 5~50m"| CDN["CDN"]
+    CDN -->|"Miss"| GW["2️⃣ API Gateway"]
+    GW -->|"Miss"| L1["3️⃣ L1 Local Cache"]
+    L1 -->|"Miss"| L2["4️⃣ L2 Remote Cach"]
+    L2 -->|"Miss"| DB["5️⃣ Database"]
 ```
 
 ### 계층별 특성 비교
@@ -74,8 +77,11 @@ Caffeine은 Google Guava Cache의 후속작으로, W-TinyLFU 알고리즘을 사
 
 ```mermaid
 graph LR
-    New["새 항목"] -->|"1️⃣ Window Cach..| WC["Window"]
-    WC -->|"2️⃣ 빈도 비교"| Filter{"TinyLFU..|"신규가 더 자주 사용"| Main["Main Cach..|"기존이 더 자주 사용"| Evict["신규 항목 폐기..|"Probation → Protec"| Main
+    New["새 항목"] -->|"1️⃣ Window Cache\n"| WC["Window"]
+    WC -->|"2️⃣ 빈도 비교"| Filter{"TinyLFU"}
+    Filter -->|"신규가 더 자주 사용"| Main["Main Cache"]
+    Filter -->|"기존이 더 자주 사용"| Evict["신규 항목 폐기"]
+    Main -->|"Probation → Protec"| Main
 ```
 
 새로 들어온 항목은 먼저 Window 영역(1%)에 들어간다. Window에서 밀려날 때 TinyLFU 필터가 "이 신규 항목의 접근 빈도"와 "Main 영역에서 쫓겨날 후보의 접근 빈도"를 비교한다. 신규가 더 자주 사용될 것으로 예측되면 Main에 입성하고, 아니면 바로 폐기된다. 이 메커니즘 덕분에 한 번만 접근되는 데이터가 자주 접근되는 데이터를 밀어내는 "cache pollution"을 방지한다.
@@ -504,7 +510,7 @@ graph LR
     T --> GW["Gateway 5%"]
     T --> L1["L1 80%"]
     L1 -->|"Miss"| L2["L2 90%"]
-  ..|"Miss"| DB["DB"]
+    L2 -->|"Miss"| DB["DB"]
 ```
 
 ### 계층별 부하 분석
@@ -523,8 +529,9 @@ graph LR
 
 ```mermaid
 graph LR
-    A1["25K TPS"] -->|"L1 없음"| R1["Redis 25K o..|"80% L1 Hit"| L1["L1: 20K "]
-..|"20% Miss"| R2["Redis 5K ops"]
+    A1["25K TPS"] -->|"L1 없음"| R1["Redis 25K ops"]
+    A2["25K TPS"] -->|"80% L1 Hit"| L1["L1: 20K 처리"]
+    A2 -->|"20% Miss"| R2["Redis 5K ops"]
 ```
 
 L1을 빼면 Redis 부하가 5배로 증가한다. Redis Cluster의 단일 샤드 한계는 보통 100K ops/sec이므로, L1 없이 여러 샤드로 분산해야 같은 성능을 내려면 Redis 비용이 5배 증가한다.

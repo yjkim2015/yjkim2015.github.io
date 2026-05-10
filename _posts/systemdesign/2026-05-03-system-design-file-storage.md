@@ -209,7 +209,8 @@ S3 내구성 복제:        3 AZ 동기 복제 — 추가 100~200ms
 ```mermaid
 graph LR
     A[Client] -->|init| B[API]
-    B --..|필요블록| A
+    B --> C[메타DB조회]
+    C -->|필요블록| A
     A -->|PUT block| B
     A -->|complete| B
 ```
@@ -512,8 +513,8 @@ v2: [hash_A, hash_B, hash_E, hash_D]  ← hash_C만 hash_E로 교체
 ```mermaid
 graph LR
     A[ShortPolling] -->|낭비| E[비추천]
-    B[Lo..|부하| F[보통]
-    C[Web..|과스펙| E
+    B[LongPolling] -->|부하| F[보통]
+    C[WebSocket] -->|과스펙| E
     D[SSE] -->|최적| G[추천]
 ```
 
@@ -552,8 +553,8 @@ graph LR
     NOTIF["알림 서비스"]
     CLIENT["각 디바이스"]
     API -->|"파일 변경 이벤트 발행"| KAFKA
-    KAFKA..|"구독"| NOTIF
-    NOTIF..|"SSE 스트림"| CLIENT
+    KAFKA -->|"구독"| NOTIF
+    NOTIF -->|"SSE 스트림"| CLIENT
 ```
 
 Kafka를 중간에 두면 API 서버와 알림 서비스가 분리되어, 트래픽 급증 시 알림 서비스만 독립적으로 스케일 아웃할 수 있습니다.
@@ -694,8 +695,8 @@ graph LR
     EDITOR["Editor"]
     VIEWER["Viewer"]
     OWNER -->|"권한 위임"| EDITOR
-    OWNE..|"권한 위임"| VIEWER
-    EDIT..|"제한적 공유"| VIEWER
+    OWNER -->|"권한 위임"| VIEWER
+    EDITOR -->|"제한적 공유"| VIEWER
 ```
 
 | 권한 | 읽기 | 수정 | 삭제 | 공유 | 권한 변경 |

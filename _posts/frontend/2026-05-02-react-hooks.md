@@ -180,7 +180,11 @@ function ExpensiveList({ items, filter }) {
 ```mermaid
 flowchart LR
     A{"계산이<br>비싼가?"}
-    A -->|"예 복잡한 연산"| B["useMemo 사용"]..|"아니오 간단한 계산"| C["useMemo 불필요"..|"예"| E["useMemo 사용 —..|"아니오"| F["불필요"]
+    A -->|"예 복잡한 연산"| B["useMemo 사용"]
+    A -->|"아니오 간단한 계산"| C["useMemo 불필요"]
+    D{"자식 컴포넌트에<br>전달하는 객체인가?"}
+    D -->|"예"| E["useMemo 사용 — 참조 안정"]
+    D -->|"아니오"| F["불필요"]
     style B fill:#2ecc71,color:#fff
     style C fill:#e74c3c,color:#fff
     style E fill:#2ecc71,color:#fff

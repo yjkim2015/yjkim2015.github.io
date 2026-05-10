@@ -25,8 +25,9 @@ date: 2026-05-01
 ```mermaid
 graph LR
     OS["Order"] -->|"결제 요청"| PS["Payment"]
- ..|"타임아웃"| OS
-    OS -.->|"주문 실패"| IS["Inventory"]..|"실행 안됨"| NS["Notify"]
+    PS -.->|"타임아웃"| OS
+    OS -.->|"주문 실패"| IS["Inventory"]
+    OS -.->|"실행 안됨"| NS["Notify"]
 ```
 
 ```
@@ -41,7 +42,11 @@ graph LR
 
 ```mermaid
 graph LR
-    OS["Order Service"] -->|"OrderCreated"| EB["Event Bus (..|"소비"| PS["Payment Ser..|"소비"| IS["Inventory S..|"소비"| NS["Notificatio..|"소비"| AN["Analytics Service"]
+    OS["Order Service"] -->|"OrderCreated"| EB["Event Bus (Kafka)"]
+    EB -->|"소비"| PS["Payment Service"]
+    EB -->|"소비"| IS["Inventory Service"]
+    EB -->|"소비"| NS["Notification Servi"]
+    EB -->|"소비"| AN["Analytics Service"]
 ```
 
 ```
@@ -133,7 +138,9 @@ public record OrderCreatedEventV2(
 ```mermaid
 graph LR
     DB1[("orders 테이블")] -->|"상태만 저장"| CURR["현재 상태"]
- ..|"이벤트 재생"| STATE["status=SHIPPED"]
+    E1["OrderCreated"] --> E2["PaymentCharged"]
+    E2 --> E3["OrderShipped"]
+    E3 -->|"이벤트 재생"| STATE["status=SHIPPED"]
 ```
 
 ```

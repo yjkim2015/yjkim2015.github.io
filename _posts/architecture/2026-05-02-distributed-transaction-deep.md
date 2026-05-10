@@ -40,8 +40,8 @@ graph LR
 ```mermaid
 graph LR
     C["코디네이터"] -->|"PREPARE"| A["DB-A"]
-    C..|"PREPARE"| B["DB-B"]
-    A..|"YES"| C
+    C -->|"PREPARE"| B["DB-B"]
+    A -->|"YES"| C
     B -->|"YES"| C
     C -->|"COMMIT"| A
     C -->|"COMMIT"| B
@@ -74,10 +74,10 @@ PREPARE 단계에서 DB_A가 잠금을 획득하고 코디네이터의 COMMIT/RO
 ```mermaid
 graph LR
     C["코디네이터"] -->|"CanCommit?"| P1["참여자1"]
-    ..|"CanCommit?"| P2["참여자2"]
-    ..|"Yes"| C
-    C -->|"PreCommit→DoCom..| P1
-    C -->|"PreCommit→DoCom..| P2
+    C -->|"CanCommit?"| P2["참여자2"]
+    P1 -->|"Yes"| C
+    C -->|"PreCommit→DoCommit"| P1
+    C -->|"PreCommit→DoCommit"| P2
 ```
 
 PreCommit 단계가 추가되어 코디네이터 장애 시 참여자가 타임아웃 후 자율적으로 커밋할 수 있습니다. 하지만 **네트워크 분할 시 여전히 문제가 남습니다.** 일부 참여자는 PreCommit을 받았고 일부는 못 받은 상황에서 코디네이터가 죽으면, 받은 쪽은 커밋하고 못 받은 쪽은 롤백합니다. 데이터 불일치가 생깁니다. 이론상으로는 개선이지만 실제로는 거의 사용하지 않습니다.
@@ -104,8 +104,8 @@ graph LR
 ```mermaid
 graph LR
     OS["주문"] -->|"OrderCreated"| K["Kafka"]
-    ..|"결제 처리"| PS["결제"]
-    PS..|"성공→Completed"| K
+    K -->|"결제 처리"| PS["결제"]
+    PS -->|"성공→Completed"| K
     K -->|"실패→주문취소"| OS
 ```
 
@@ -167,9 +167,9 @@ public class PaymentService {
 ```mermaid
 graph LR
     Orch["Orch"] -->|"결제 요청"| PS["결제"]
-    PS..|"결제 완료"| Orch
+    PS -->|"결제 완료"| Orch
     Orch -->|"재고 차감"| IS["재고"]
-    IS..|"재고 부족"| Orch
+    IS -->|"재고 부족"| Orch
     Orch -->|"결제 취소"| PS
 ```
 
@@ -455,7 +455,7 @@ graph LR
     ES --> Proj["프로젝터"]
     Read["Query (읽기)"] --> RDB["ReadDB (ES/Redis)"]
     Client -->|"명령"| Write
-    Clien..|"조회"| Read
+    Client -->|"조회"| Read
     Proj --> RDB
 ```
 
@@ -523,9 +523,11 @@ public class OrderProjector {
 
 ```mermaid
 graph LR
-    User["사용자"] -->|"즉시 응답"| Order["주문 PENDI..|"실패"| C1["보상"]
-    Pa..|"성공"| Inv{"재고"}
-    I..|"성공"| Done["완료+알림"]
+    User["사용자"] -->|"즉시 응답"| Order["주문 PENDING"]
+    Order --> Pay{"결제"}
+    Pay -->|"실패"| C1["보상"]
+    Pay -->|"성공"| Inv{"재고"}
+    Inv -->|"성공"| Done["완료+알림"]
 ```
 
 이 흐름에서 사용자는 즉시 응답을 받습니다. 실제 처리는 Kafka를 통해 비동기로 이루어집니다. 각 단계가 독립적으로 실패하고 보상할 수 있습니다. 어떤 서비스가 잠깐 다운돼도 Kafka에 메시지가 쌓여 있다가 복구 후 처리됩니다.
@@ -593,8 +595,11 @@ graph LR
 graph LR
     Q1{"서비스 수"}
     Q1 -->|"2~3개"| TwoPC["2PC"]
-  ..|"4개 이상"| Q2{"흐름 복잡도"}
-  ..|"단순"| Chore["Choreogr..|"복잡"| Orches["Orchest..|"이벤트 유실 우려"| Outbox["+ Outbo..|"감사 로그 필요"| ES["+ Event Sourcing /"]
+    Q1 -->|"4개 이상"| Q2{"흐름 복잡도"}
+    Q2 -->|"단순"| Chore["Choreography Saga"]
+    Q2 -->|"복잡"| Orches["Orchestration Saga"]
+    Chore & Orches -->|"이벤트 유실 우려"| Outbox["+ Outbox 패턴"]
+    Orches -->|"감사 로그 필요"| ES["+ Event Sourcing /"]
 ```
 
 | 패턴 | 일관성 | 가용성 | 복잡도 | 추천 상황 |

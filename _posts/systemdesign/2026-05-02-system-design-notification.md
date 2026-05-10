@@ -194,7 +194,10 @@ class DeduplicationService:
 ```mermaid
 graph LR
     Notif["알림 요청"] --> Classify{"우선순위 분류"}
-    Classify -->|"P0: 보안/결제"| P0["Kafka: crit..|"P1: 주문/배송"| P1["Kafka: high..|"P2: 소셜/댓글"| P2["Kafka: norm..|"P3: 마케팅"| P3["Kafka: low<br>공유 워"]
+    Classify -->|"P0: 보안/결제"| P0["Kafka: critical<br"]
+    Classify -->|"P1: 주문/배송"| P1["Kafka: high<br>전용"]
+    Classify -->|"P2: 소셜/댓글"| P2["Kafka: normal<br>공"]
+    Classify -->|"P3: 마케팅"| P3["Kafka: low<br>공유 워"]
 ```
 
 왜 같은 큐를 쓰면 안 되는가? 블랙프라이데이에 P3(마케팅) 알림 수천만 건이 쌓이면, 그 뒤에 들어온 P0(결제 완료) 알림이 수십 분 후에야 전달된다. **토픽 분리 + 전용 워커**로 P0는 항상 10초 이내를 보장한다.
@@ -209,7 +212,8 @@ APNs가 일시적으로 느려졌을 때 모든 워커가 즉시 재시도하면
 graph LR
     A[전송] --> B{실패?}
     B -->|재시도| C[지수백오프]
-    C ..|초과| D[DLQ]
+    C --> A
+    B -->|초과| D[DLQ]
     D --> E[알림]
 ```
 

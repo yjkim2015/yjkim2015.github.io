@@ -96,7 +96,8 @@ graph LR
 
 ```mermaid
 graph LR
-    S["주문"] -->|TX| DB["DB+Outbox"]..|CDC| D["Debezium"]
+    S["주문"] -->|TX| DB["DB+Outbox"]
+    DB -->|CDC| D["Debezium"]
     D --> A["결제"] & B["재고"] & C["알림"]
 ```
 
@@ -317,9 +318,9 @@ public void processAndPublish(PaymentRequest request) {
 
 ```mermaid
 graph LR
-    C["컨슈머"] -->|"처리 완료"| DB["DB Save"]
- ..|"오프셋 커밋 전 장애"| F["Proc 재시작"]
- ..|"같은 메시지 재소비"| C
+    C["컨슈머"] -->|"처리 완료"| DB["DB 저장"]
+    DB -->|"오프셋 커밋 전 장애"| F["프로세스 재시작"]
+    F -->|"같은 메시지 재소비"| C
 ```
 
 처리는 성공했는데 오프셋 커밋 전에 프로세스가 죽으면? 재시작 후 같은 메시지를 다시 소비합니다. 네트워크는 본질적으로 `at-least-once`입니다. "정확히 한 번"은 **처리 자체가 멱등**하거나 **Kafka 트랜잭션으로 오프셋 커밋과 발행을 원자화**할 때만 달성됩니다. 외부 API 호출(카드사, 문자 발송)이 포함되면 Kafka 트랜잭션만으로는 부족하고 반드시 비즈니스 레벨 멱등성 설계가 필요합니다.
@@ -351,7 +352,7 @@ max.partition.fetch.bytes=10485760
 graph LR
     P["Producer"] -->|파일| S3
     P -->|URL만| K["Kafka"]
-    ..|다운로드| S3
+    K --> C["Consumer"] -->|다운로드| S3
 ```
 
 ```java
@@ -439,7 +440,7 @@ DLQ로 이동된 메시지에는 실패 원인, 원본 토픽, 파티션, 오프
 ```mermaid
 graph LR
     M["소비"] -->|실패| R["재시도 3회"]
-   ..|실패| D["DLQ"]
+    R -->|실패| D["DLQ"]
     D --> A["수동 검토 → 재처리"]
 ```
 
@@ -487,7 +488,8 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 
 ```mermaid
 graph LR
-    BEFORE["C0:P0P1 C1:P2P3"] -->|"C2 합류"| COOP["Cooperati..|"P1만 이동"| AFTER["C0:P0 C1:P2 C2:P1"]
+    BEFORE["C0:P0P1 C1:P2P3"] -->|"C2 합류"| COOP["Cooperative"]
+    COOP -->|"P1만 이동"| AFTER["C0:P0 C1:P2 C2:P1"]
 ```
 
 기존 할당자는 리밸런싱 중 모든 컨슈머가 멈춥니다. Cooperative는 이동이 필요 없는 파티션은 계속 처리하면서 필요한 것만 재할당합니다.
@@ -768,8 +770,8 @@ Burrow(LinkedIn 오픈소스)는 Lag을 단순 숫자가 아닌 **추세(증가 
 graph LR
     L["Lag 급증"] --> Q{"원인?"}
     Q -->|다운| A["재시작"]
-    Q ..|느림| B["병렬도 증가"]
-   ..|외부지연| C["서킷브레이커"]
+    Q -->|느림| B["병렬도 증가"]
+    Q -->|외부지연| C["서킷브레이커"]
 ```
 
 ---
@@ -893,7 +895,8 @@ POST /connectors
 
 ```mermaid
 graph LR
-    Q{"데이터 이동 목적?"} -->|"DB/시스템 연동"| CONN["Kafka Con..|"비즈니스 로직 처리"| CONS["직접 Consumer 구현"]
+    Q{"데이터 이동 목적?"} -->|"DB/시스템 연동"| CONN["Kafka Connect 커넥터"]
+    Q -->|"비즈니스 로직 처리"| CONS["직접 Consumer 구현"]
     CONN --> EX["DB→Kafka/ES/S3"]
     CONS --> EX2["결제·재고·알림 처리"]
 ```

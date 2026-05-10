@@ -786,7 +786,9 @@ Chain-of-Thought: "단계별로 분석해줘"
 graph LR
     P["프롬프트 작성"] --> RUN["실행"]
     RUN --> EVAL["결과 평가"]
-    EVAL -->|"품질 미달"| IMPROVE["프롬프트 개..|"품질 OK"| SAVE["라이브러리 저장"]
+    EVAL -->|"품질 미달"| IMPROVE["프롬프트 개선"]
+    IMPROVE --> RUN
+    EVAL -->|"품질 OK"| SAVE["라이브러리 저장"]
 ```
 
 ---

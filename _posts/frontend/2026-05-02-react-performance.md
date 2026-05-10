@@ -131,7 +131,7 @@ function ProductList({ products, category, onPurchase }) {
 
 ```mermaid
 graph LR
-    A["category 변경"] --> B["filteredProducts.."]
+    A["category 변경"] --> B["filteredProducts 재계산"]
     C["다른 상태 변경"] --> D["useMemo: 재계산 스킵"]
     C --> E["useCallback: 참조 유지"]
     E --> F["자식 리렌더링 스킵"]
@@ -148,7 +148,7 @@ graph LR
     BUNDLE["app.js 5MB 전부"]
     MAIN["main.js 500KB"]
     ROUTE1["route-home.js 100K"]
-    ROUTE2["route-admin.js 2.."]
+    ROUTE2["route-admin.js 200K"]
     BUNDLE -->|"스플리팅 후"| MAIN
     MAIN --> ROUTE1 & ROUTE2
     style BUNDLE fill:#e74c3c,color:#fff

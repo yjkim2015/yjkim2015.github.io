@@ -206,7 +206,7 @@ graph LR
     A[DataSource평가] --> B{JDBC있음?}
     B -->|No| C[스킵]
     B -->|Yes| D{빈 존재?}
-    D ..|Yes| C
+    D -->|Yes| C
     D -->|No| E[자동생성]
 ```
 

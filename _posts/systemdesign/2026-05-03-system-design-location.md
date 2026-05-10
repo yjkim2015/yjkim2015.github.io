@@ -303,8 +303,10 @@ graph LR
 
 ```mermaid
 graph LR
-    A[App] -->|lat,lon| B[검색Svc]
-    B ..|miss| E[DB쿼리]
+    A[App] -->|lat,lon| B[검색서비스]
+    B --> C[Geohash변환]
+    C --> D{Redis캐시}
+    D -->|miss| E[DB쿼리]
     D & E --> F[결과반환]
 ```
 
@@ -793,7 +795,8 @@ async def check_delivery_geofence(rider_id: str, lat: float, lon: float):
 graph LR
     Request["가게 검색 요청"]
     Request --> L1["L1: 로컬 캐시 (Caffein"]
-    L1 -->|미스| L2["L2: Redis 클..|미스| DB["MySQL + Spatial In"]
+    L1 -->|미스| L2["L2: Redis 클러스터"]
+    L2 -->|미스| DB["MySQL + Spatial In"]
     DB --> L2Write["L2 캐시 기록"]
     L2Write --> L1Write["L1 캐시 기록"]
 ```

@@ -25,7 +25,7 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    E2E["E2E 테스트<br>느림, 비.."]
+    E2E["E2E 테스트<br>느림, 비용 높"]
     INT["통합 테스트<br>중간 속도"]
     UNIT["단위 테스트<br>빠름, 저비용"]
     UNIT --> INT
@@ -399,8 +399,9 @@ it('증가 버튼 클릭 시 카운트 증가', async () => {
 
 ```mermaid
 graph LR
-    U["사용자"] -->|"사과 입력"| C["SearchInput"..|"요청1 사과"| API["API Svr"]
-..|"바나나로 변경"| C
+    U["사용자"] -->|"사과 입력"| C["SearchInput"]
+    C -->|"요청1 사과"| API["API 서버"]
+    U -->|"바나나로 변경"| C
     C -->|"요청2 바나나"| API
     API -->|"바나나 먼저 반환"| C
     API -->|"사과로 덮어씌워짐!"| C

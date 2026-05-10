@@ -351,10 +351,10 @@ class VectorClock:
 ```mermaid
 graph LR
     N1["노드1"] -->|"소문 전파"| N3["노드3"]
-    N..|"소문 전파"| N4["노드4"]
-    N..|"재전파"| N5["노드5"]
-    N..|"재전파"| N2["노드2"]
-    N..|"확인"| ALL["전체 클러스터"]
+    N1 -->|"소문 전파"| N4["노드4"]
+    N3 -->|"재전파"| N5["노드5"]
+    N4 -->|"재전파"| N2["노드2"]
+    N5 -->|"확인"| ALL["전체 클러스터"]
 ```
 
 매 초마다 각 노드는 랜덤으로 `fanout=3` 개의 이웃 노드에게 자신의 상태 테이블을 전송한다. 수신자는 자신의 테이블과 병합한다. `O(log N)` 라운드 만에 전체 클러스터에 정보가 퍼진다.
@@ -462,7 +462,9 @@ graph LR
 graph LR
     W["쓰기 요청"] --> WAL["WAL"]
     WAL --> MEM["MemTable"]
-    MEM -->|"임계값 초과"| L0["L0 SSTable"..|"Compaction"| L1["L1 SSTables..|"Compaction"| L2["L2 SSTables"]
+    MEM -->|"임계값 초과"| L0["L0 SSTable"]
+    L0 -->|"Compaction"| L1["L1 SSTables"]
+    L1 -->|"Compaction"| L2["L2 SSTables"]
 ```
 
 **쓰기 경로**:

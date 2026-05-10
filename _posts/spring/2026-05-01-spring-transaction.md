@@ -77,10 +77,10 @@ public void someMethod() { ... }
 ```mermaid
 graph LR
     C["Client"] -->|createOrder| P["TxProxy"]
-  ..|getTransaction| P
+    P -->|getTransaction| P
     P -->|실행| S["Service"]
-  ..|정상| OK["commit"]
-  ..|예외| RB["rollback"]
+    S -->|정상| OK["commit"]
+    S -->|예외| RB["rollback"]
 ```
 
 ### PlatformTransactionManager
@@ -103,8 +103,10 @@ Spring Boot는 JPA 사용 시 자동으로 `JpaTransactionManager`를 등록한�
 graph LR
     TLA["Thread A: ThreadLo"] --> OSA["OrderService.save("]
     TLA --> LSA["LogService.save()"]
-    OSA -->|"같은 TX"| C1[("Connection..|"같은 TX"| C1
-    TLB["Thr..|"독립 TX"| C2[("Connection2")]
+    OSA -->|"같은 TX"| C1[("Connection1")]
+    LSA -->|"같은 TX"| C1
+    TLB["Thread B: ThreadLo"] --> OSB["OrderService.save("]
+    OSB -->|"독립 TX"| C2[("Connection2")]
 ```
 
 ---

@@ -152,7 +152,7 @@ graph LR
 graph LR
     A[게시글작성] --> B{팔로워수}
     B -->|일반| C[쓰기팬아웃]
-    B ..|셀럽| D[읽기시조합]
+    B -->|셀럽| D[읽기시조합]
     C & D --> E[최종피드]
 ```
 
@@ -178,8 +178,8 @@ graph LR
 
 ```mermaid
 graph LR
-    A[App] -->|POST /posts| B[게시글Svc]
-    B..|201| A
+    A[App] -->|POST /posts| B[게시글서비스]
+    B -->|201| A
     B --> C[Kafka]
     C --> D[Redis LPUSH]
 ```

@@ -139,9 +139,9 @@ graph LR
 graph LR
     A[횡단관심사] --> B{Bean접근?}
     B -->|No| C[Filter]
-    B..|Yes| D{URL제어?}
-    D..|Yes| E[Interceptor]
-..|No| F[AOP]
+    B -->|Yes| D{URL제어?}
+    D -->|Yes| E[Interceptor]
+    D -->|No| F[AOP]
 ```
 
 ---
@@ -319,8 +319,10 @@ public void afterCompletion(HttpServletRequest request,
 
 ```mermaid
 graph LR
-    C["Client"] -->|"HTTP 요청"| DS["DispatcherS..|"preHandle()"| DS
-    DS -->|"핸들러 실행"| CT["Controller"..|"ModelAndView"| DS
+    C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
+    DS -->|"preHandle()"| DS
+    DS -->|"핸들러 실행"| CT["Controller"]
+    CT -->|"ModelAndView"| DS
     DS -->|"postHandle()→응답"| C
 ```
 
@@ -328,7 +330,9 @@ graph LR
 
 ```mermaid
 graph LR
-    C["Client"] -->|"HTTP 요청"| DS["DispatcherS..|"preHandle()→false"| I1["Interceptor..|"afterCompletion()"| I1
+    C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
+    DS -->|"preHandle()→false"| I1["Interceptor1"]
+    DS -->|"afterCompletion()"| I1
     DS -->|"401 응답"| C
 ```
 
@@ -336,8 +340,10 @@ graph LR
 
 ```mermaid
 graph LR
-    C["Client"] -->|"HTTP 요청"| DS["DispatcherS..|"preHandle()"| I1["Interceptor..|"핸들러 실행→예외"| DS
-    DS -->|"afterCompletion..| I1
+    C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
+    DS -->|"preHandle()"| I1["Interceptor1"]
+    DS -->|"핸들러 실행→예외"| DS
+    DS -->|"afterCompletion(ex)"| I1
     DS -->|"에러 응답"| C
 ```
 
@@ -1041,8 +1047,8 @@ public class UltraOptimizedInterceptor implements HandlerInterceptor {
 graph LR
     A["요청"] --> G{"경로 분기"}
     G -->|"/public"| H["성능만"]
-    G ..|"/api"| I["로깅+인증+RL"]
- ..|"/internal"| J["인증만"]
+    G -->|"/api"| I["로깅+인증+RL"]
+    G -->|"/internal"| J["인증만"]
 ```
 
 **100,000 TPS 최적화 기법 목록:**

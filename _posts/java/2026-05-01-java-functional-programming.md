@@ -20,6 +20,10 @@ Java는 본래 순수 객체지향 언어지만, Java 8부터 람다와 Stream A
 ```mermaid
 graph LR
     A["for 루프"] --> B["if 조건"]
+    B --> C["result.add()"]
+    D["stream()"] --> E[".filter()"]
+    E --> F[".map()"]
+    F --> G[".collect()"]
 ```
 
 ```java

@@ -32,8 +32,8 @@ graph LR
     OBJ_PROTO["Object.prototype<b"]
     NULL[null]
     DOG -->|"[[Prototype]]"| ANIMAL_PROTO
-  ..|"[[Prototype]]"| OBJ_PROTO
-    O..|"[[Prototype]]"| NULL
+    ANIMAL_PROTO -->|"[[Prototype]]"| OBJ_PROTO
+    OBJ_PROTO -->|"[[Prototype]]"| NULL
     style DOG fill:#e74c3c,color:#fff
     style ANIMAL_PROTO fill:#3498db,color:#fff
     style OBJ_PROTO fill:#2ecc71,color:#fff
@@ -71,7 +71,12 @@ console.log(dog.type); // '동물' — 프로토타입에서 찾음
 ```mermaid
 flowchart LR
     A["dog.speak() 호출"] --> B{"dog에<br>speak가 있나?"}
-    B -->|"예"| C["dog.speak() ..|"아니오"| D{"Animal.proto..|"예"| E["Animal.proto..|"아니오"| F{"Object.proto..|"예"| G["Object.proto..|"아니오"| H["null — undefined 반"]
+    B -->|"예"| C["dog.speak() 실행"]
+    B -->|"아니오"| D{"Animal.prototype에<br>speak가 있나?"}
+    D -->|"예"| E["Animal.prototype.s"]
+    D -->|"아니오"| F{"Object.prototype에<br>speak가 있나?"}
+    F -->|"예"| G["Object.prototype.s"]
+    F -->|"아니오"| H["null — undefined 반"]
     style C fill:#2ecc71,color:#fff
     style E fill:#3498db,color:#fff
     style H fill:#e74c3c,color:#fff
@@ -118,7 +123,8 @@ myDog.toString(); // '[object Object]' — Object.prototype에서 찾음
 
 ```mermaid
 graph LR
-    F["Dog 함수"] -->|".prototype"| FP["Dog.prototy..|".__proto__"| FP
+    F["Dog 함수"] -->|".prototype"| FP["Dog.prototype"]
+    I["myDog 인스턴스"] -->|".__proto__"| FP
     FP -->|".constructor"| F
 ```
 

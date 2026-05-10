@@ -55,8 +55,8 @@ stamps.add(new Coin()); // 컴파일 에러! 즉시 발견
 ```mermaid
 flowchart LR
     A["List (raw)"] -->|"아무거나 넣기 가능"| B["타입 안전성 없음"]
-..|"아무거나 넣기 가능"| D["타입 안전성 있음"]
-..|"null만 넣기 가능"| F["읽기 전용 타입 안전"]
+    C["List<Object>"] -->|"아무거나 넣기 가능"| D["타입 안전성 있음"]
+    E["List<?>"] -->|"null만 넣기 가능"| F["읽기 전용 타입 안전"]
 ```
 
 ---
@@ -171,7 +171,8 @@ public class Stack<E> {
 
 ```mermaid
 flowchart LR
-    A["Producer (데이터를 제공)"] -->|"extends"| B["<? extends T..|"super"| D["<? super T>"]
+    A["Producer (데이터를 제공)"] -->|"extends"| B["<? extends T>"]
+    C["Consumer (데이터를 소비)"] -->|"super"| D["<? super T>"]
     E["PECS 공식"] --> A
     E --> C
 ```
@@ -236,6 +237,7 @@ flowchart LR
     A["Favorites 컨테이너"] --> B["put(String.class,"]
     A --> C["put(Integer.class,"]
     A --> D["put(Class.class, F"]
+    B --> E["키: Class<String>,"]
     C --> F["키: Class<Integer>,"]
     D --> G["키: Class<Class>, 값"]
 ```
@@ -383,8 +385,9 @@ public void applyStyles(Set<Style> styles) {
 
 ```mermaid
 flowchart LR
-    A["ordinal 인덱싱"] -->|"배열[plant.lifeCy..| B["타입 안전 없음"]
-    C["EnumMap"] -->|"map.get(LifeCyc..| D["타입 안전 + 성능"]
+    A["ordinal 인덱싱"] -->|"배열[plant.lifeCycle"| B["타입 안전 없음"]
+    C["EnumMap"] -->|"map.get(LifeCycle."| D["타입 안전 + 성능"]
+    D --> E["내부적으로 배열 사용 → O(1)"]
 ```
 
 `EnumMap`은 내부적으로 배열을 사용하므로 `HashMap`보다 빠르고, 키가 열거 타입임이 보장되므로 타입 안전합니다. `ordinal()` 인덱싱은 배열과 열거 타입의 관계를 프로그래머가 직접 관리해야 하므로 오류가 발생하기 쉽습니다.

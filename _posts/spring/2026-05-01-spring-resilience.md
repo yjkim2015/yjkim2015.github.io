@@ -52,8 +52,8 @@ graph LR
     HALF_OPEN["HALF_OPEN(테스트)"]
     CLOSED -->|"실패율 임계치 초과"| OPEN
     OPEN -->|"대기 시간 경과"| HALF_OPEN
-    H..|"시험 요청 성공"| CLOSED
-    HALF..|"시험 요청 실패"| OPEN
+    HALF_OPEN -->|"시험 요청 성공"| CLOSED
+    HALF_OPEN -->|"시험 요청 실패"| OPEN
 ```
 
 ### 설정
