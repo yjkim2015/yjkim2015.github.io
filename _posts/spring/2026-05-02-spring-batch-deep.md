@@ -94,8 +94,8 @@ sequenceDiagram
     participant S as Step
     participant R as Reader/Processor
     participant W as Writer
-    S->>R: read()+process()
-    S->>W: write(chunk)
+    S->>R: read_+process_
+    S->>W: write_chunk
     W-->>S: 완료/커밋
 ```
 
@@ -670,11 +670,11 @@ public class LargeScaleBatchConfig {
 
 ```mermaid
 sequenceDiagram
-    B->>C:
+    B->>C: 호출
     C->>D: Yes
     C->>E: No
-    D->>F:
-    E->>F:
+    D->>F: 호출
+    E->>F: 호출
 ```
 
 ---

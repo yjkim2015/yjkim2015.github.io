@@ -26,7 +26,7 @@ sequenceDiagram
     participant T as 요청 스레드
     participant RT as RestTemplate
     participant S as 외부 서버
-    T->>RT: getForObject() 호출
+    T->>RT: getForObject_ 호출
     RT->>S: HTTP 요청 전송
     Note over T: 블로킹 대기 (응답 수신까지)
     S-->>RT: HTTP 응답

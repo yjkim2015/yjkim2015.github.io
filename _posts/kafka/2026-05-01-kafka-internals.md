@@ -177,10 +177,10 @@ max.poll.records=500
 sequenceDiagram
     participant C as Consumer
     participant B as Broker
-    C->>B: FetchRequest (min.bytes=1024)
+    C->>B: FetchRequest min.bytes=1024
     Note over B: 현재 데이터: 200 bytes (1024 미만, 대기...)
     Note over B: 500ms 후 (max.wait.ms 도달)
-    B-->>C: FetchResponse (200 bytes 반환)
+    B-->>C: FetchResponse 200 bytes 반환
 ```
 
 ### Heartbeat와 세션 관리
@@ -189,7 +189,7 @@ sequenceDiagram
 sequenceDiagram
     participant C as Consumer
     participant GC as Group Coordinator (Broker)
-    C->>GC: Heartbeat (주기적으로 나 살아있어 신호)
+    C->>GC: Heartbeat 주기적으로 나 살아있어 신호
     GC-->>C: HeartbeatResponse
     Note over C,GC: session.timeout.ms 동안 heartbeat 없으면
     Note over GC: 컨슈머 사망으로 판단 → 리밸런싱 시작!
@@ -277,9 +277,9 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 
 ```mermaid
 sequenceDiagram
-    GroupCoordinator->>Consumer(Leader): Leader 선정
-    Consumer(Leader)->>GroupCoordinator: SyncGroup(할당계획)
-    GroupCoordinator->>Consumer(Leader): 파티션 할당
+    GroupCoordinator->>Consumer_Leader: Leader 선정
+    Consumer_Leader->>GroupCoordinator: SyncGroup_할당계획
+    GroupCoordinator->>Consumer_Leader: 파티션 할당
     GroupCoordinator->>Consumer: 파티션 할당
 ```
 
@@ -291,7 +291,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    Consumer->>Kafka: Offset 커밋(먼저)
+    Consumer->>Kafka: Offset 커밋_먼저
     Consumer->>처리_대상: 처리 중 장애!
     Kafka->>Consumer: 재시작→메시지 유실
 ```
@@ -347,10 +347,10 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    Broker(멱등성_없음)->>Producer: ACK 손실→재전송
-    Producer->>Broker(멱등성_없음): 중복 저장!
-    Broker(멱등성_있음)->>Producer: ACK 손실→재전송
-    Broker(멱등성_있음)->>Producer: seq=1 중복 무시→ACK
+    Broker_멱등성_없음->>Producer: ACK 손실→재전송
+    Producer->>Broker_멱등성_없음: 중복 저장!
+    Broker_멱등성_있음->>Producer: ACK 손실→재전송
+    Broker_멱등성_있음->>Producer: seq=1 중복 무시→ACK
 ```
 
 Broker는 각 프로듀서(PID)마다 최근 5개의 시퀀스 번호를 기억한다.
@@ -406,10 +406,10 @@ public class OrderTransactionalService {
 ```mermaid
 sequenceDiagram
     TxCoordinator->>Producer: PID+epoch
-    Producer->>PartitionLeader: send(uncommitted)
-    Producer->>TxCoordinator: commitTransaction()
+    Producer->>PartitionLeader: send_uncommitted
+    Producer->>TxCoordinator: commitTransaction_
     TxCoordinator->>PartitionLeader: COMMITTED 마커
-    Producer->>TxCoordinator: 실패시 abortTransaction()
+    Producer->>TxCoordinator: 실패시 abortTransaction_
 ```
 
 ### Exactly-Once Semantics (EOS) 전체 그림
@@ -492,8 +492,8 @@ ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러
 
 ```mermaid
 sequenceDiagram
-    먼저_생성_=_컨트롤러->>역할:_리더선출·ISR·토픽:
-    quorum_투표_→_Active->>역할:_리더선출·ISR·토픽:
+    먼저_생성_=_컨트롤러->>역할:_리더선출·ISR·토픽: 호출
+    quorum_투표_→_Active->>역할:_리더선출·ISR·토픽: 호출
 ```
 
 ---

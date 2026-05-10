@@ -164,9 +164,9 @@ export async function generateStaticParams() {
 
 ```mermaid
 sequenceDiagram
-    app/layout.tsx_(루트->>blog/layout.tsx:
-    blog/layout.tsx->>blog/page.tsx_/blo:
-    app/layout.tsx_(루트->>loading.tsx_/_erro:
+    app/layout.tsx_루트->>blog/layout.tsx: 호출
+    blog/layout.tsx->>blog/page.tsx_/blo: 호출
+    app/layout.tsx_루트->>loading.tsx_/_erro: 호출
 ```
 
 ```

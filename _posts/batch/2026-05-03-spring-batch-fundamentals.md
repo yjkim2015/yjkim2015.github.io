@@ -227,7 +227,7 @@ public class BatchController {
 
 ```mermaid
 sequenceDiagram
-    JobLauncher->>Step:
+    JobLauncher->>Step: 호출
     Step->>Step: read→process→write 반복
     Step->>JobLauncher: 완료
 ```

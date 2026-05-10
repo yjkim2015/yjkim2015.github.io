@@ -41,7 +41,7 @@ Spring Boot 2.x+의 기본 커넥션 풀. "빠른 커넥션 풀" 표방.
 ```mermaid
 sequenceDiagram
     HikariCP_커넥션_풀->>스레드_1: 대여
-    스레드_1->>HikariCP_커넥션_풀: close(반납)
+    스레드_1->>HikariCP_커넥션_풀: close_반납
 ```
 
 ### 커넥션 생명주기
@@ -59,8 +59,8 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    대기->>사용중: getConnection()
-    사용중->>대기: close() 반납
+    대기->>사용중: getConnection_
+    사용중->>대기: close_ 반납
     대기->>폐기: idleTimeout/헬스체크 실패
     사용중->>폐기: maxLifetime 초과
     폐기->>대기: minimumIdle 미달
@@ -159,12 +159,12 @@ sequenceDiagram
     participant T1 as 스레드1~10
     participant Pool as HikariCP
     participant API as 외부API
-    T1->>Pool: getConnection() x10
+    T1->>Pool: getConnection_ x10
     Note over Pool: 풀 소진
-    T1->>API: HTTP 블로킹(3초)
+    T1->>API: HTTP 블로킹_3초
     Note over Pool: 스레드11~ 대기
     API-->>T1: 3초 후 응답
-    T1->>Pool: close() 반납
+    T1->>Pool: close_ 반납
 ```
 
 ```
@@ -261,11 +261,11 @@ sequenceDiagram
     participant TA as 스레드A
     participant Pool as HikariCP
     participant TB as 스레드B
-    TA->>Pool: getConnection() 획득
+    TA->>Pool: getConnection_ 획득
     TA->>TB: auditService 호출
-    TB->>Pool: getConnection() 요청
+    TB->>Pool: getConnection_ 요청
     Note over Pool: 커넥션 0개
-    TB-->>TB: 대기(timeout)
+    TB-->>TB: 대기_timeout
     Note over TA,TB: 데드락 발생
 ```
 

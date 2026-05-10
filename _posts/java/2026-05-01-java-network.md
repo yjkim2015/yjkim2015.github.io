@@ -36,7 +36,7 @@ graph LR
 sequenceDiagram
     ServerSocket->>클라이언트: SYN-ACK
     클라이언트->>ServerSocket: ACK
-    ServerSocket->>Socket(전용): accept
+    ServerSocket->>Socket_전용: accept
 ```
 
 ### 1.3 TCP vs UDP
@@ -881,9 +881,9 @@ String data = StandardCharsets.UTF_8.decode(buffer).toString();  // 정상 데�
 
 ```mermaid
 sequenceDiagram
-    Java_네트워크->>java.net:
-    java.net->>소규모_TCP:
-    java.nio->>대규모_NIO:
+    Java_네트워크->>java.net: 호출
+    java.net->>소규모_TCP: 호출
+    java.nio->>대규모_NIO: 호출
 ```
 
 ---

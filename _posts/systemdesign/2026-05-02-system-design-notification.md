@@ -112,9 +112,9 @@ SMS:          100만 건/일 →  11 QPS
 
 ```mermaid
 sequenceDiagram
-    B->>C:
-    C->>D:
-    C->>E:
+    B->>C: 호출
+    C->>D: 호출
+    C->>E: 호출
     D->>F: 실패
     E->>F: 실패
 ```
@@ -132,7 +132,7 @@ sequenceDiagram
     participant API as 알림API
     participant K as Kafka
     participant W as 워커
-    API->>K: 발행(비동기)
+    API->>K: 발행_비동기
     K->>W: 소비
     alt iOS
     W->>APNs: HTTP/2 → 200 OK

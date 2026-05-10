@@ -126,7 +126,7 @@ sequenceDiagram
     participant CO as createOrder
     C->>TX1: TX1 시작
     TX1->>CO: 실행
-    CO->>TX1: saveLog(참여)
+    CO->>TX1: saveLog_참여
     TX1-->>C: TX1 커밋
 ```
 

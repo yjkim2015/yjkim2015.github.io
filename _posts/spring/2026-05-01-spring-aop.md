@@ -262,7 +262,7 @@ Spring AOP의 핵심은 **프록시 패턴**이다. 클라이언트가 `OrderSer
 ```mermaid
 sequenceDiagram
     Proxy_Object->>Proxy_Object: Before Advice
-    Proxy_Object->>Real_OrderService: joinPoint.proceed()
+    Proxy_Object->>Real_OrderService: joinPoint.proceed_
     Real_OrderService->>Proxy_Object: 결과 반환
     Proxy_Object->>Proxy_Object: After Advice
     Proxy_Object->>클라이언트: 최종 결과

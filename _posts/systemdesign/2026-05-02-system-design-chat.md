@@ -148,7 +148,7 @@ sequenceDiagram
     Server->>Client: empty
     Client->>Server: Long Poll
     Server->>Client: 메시지 도착
-    Client->>Server: HTTP Upgrade(WS)
+    Client->>Server: HTTP Upgrade_WS
     Server->>Client: 101 Switching
 ```
 
@@ -591,7 +591,7 @@ sequenceDiagram
     participant K as Kafka
     A->>S1: WS 그룹 메시지
     S1->>K: 발행
-    K->>K: 팬아웃(WS/FCM)
+    K->>K: 팬아웃_WS/FCM
 ```
 
 ### 팬아웃 전략: Write-time vs Read-time

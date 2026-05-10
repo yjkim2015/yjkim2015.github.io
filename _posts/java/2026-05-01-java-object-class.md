@@ -571,9 +571,9 @@ try (Resource r = new Resource()) {
 
 ```mermaid
 sequenceDiagram
-    생산자->>모니터: 버퍼 가득→wait()
+    생산자->>모니터: 버퍼 가득→wait_
     모니터->>생산자: 락 반납 WAITING
-    소비자->>모니터: 소비 후 notifyAll()
+    소비자->>모니터: 소비 후 notifyAll_
     모니터->>생산자: 생산자 깨움→재개
 ```
 

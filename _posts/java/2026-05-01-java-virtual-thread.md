@@ -113,9 +113,9 @@ Virtual Thread 스위칭:
 
 ```mermaid
 sequenceDiagram
-    VThread1->>Carrier:
-    VThread2->>Carrier:
-    Carrier->>OS_Thread:
+    VThread1->>Carrier: 호출
+    VThread2->>Carrier: 호출
+    Carrier->>OS_Thread: 호출
 ```
 
 ---

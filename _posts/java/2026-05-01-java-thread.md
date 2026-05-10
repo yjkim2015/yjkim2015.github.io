@@ -63,8 +63,8 @@ sequenceDiagram
     JT1->>OS: JNI
     JT2->>OS: JNI
     JT3->>OS: JNI
-    OS->>CPU1:
-    OS->>CPU2:
+    OS->>CPU1: 호출
+    OS->>CPU2: 호출
 ```
 
 이 모델의 한계는 커널 스레드 생성 비용(약 1MB 스택 메모리)과 컨텍스트 스위칭 오버헤드입니다. 수만 개의 스레드를 동시에 만들기 어렵습니다.
@@ -824,7 +824,7 @@ new ThreadPoolExecutor(
 
 ```mermaid
 sequenceDiagram
-    SUB->>CHK1:
+    SUB->>CHK1: 호출
     CHK1->>NEW1: YES
     CHK1->>CHK2: NO
     CHK2->>ENQUEUE: NO
@@ -1080,10 +1080,10 @@ boolean success = stampedRef.compareAndSet(
 
 ```mermaid
 sequenceDiagram
-    ThreadA->>AtomicLong(경합):
-    ThreadB->>AtomicLong(경합):
-    Cell:3->>sum():
-    Cell:7->>sum():
+    ThreadA->>AtomicLong_경합: 호출
+    ThreadB->>AtomicLong_경합: 호출
+    Cell:3->>sum_: 호출
+    Cell:7->>sum_: 호출
 ```
 
 ```java

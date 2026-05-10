@@ -34,7 +34,7 @@ sequenceDiagram
     participant P as Producer
     participant B1 as Broker1(Leader)
     participant B2 as Broker2
-    P->>B1: offset 99,100 전송(acks=1)
+    P->>B1: offset 99,100 전송_acks=1
     B1-->>P: ACK 수신
     Note over B1: 장애! 팔로워 미복제
     Note over B2: 최신 offset=98
@@ -48,7 +48,7 @@ sequenceDiagram
     participant P as Producer
     participant B1 as Broker1(Leader)
     participant B2 as Broker2
-    P->>B1: 전송(acks=all, min.insync=2)
+    P->>B1: 전송_acks=all, min.insync=2
     B1->>B2: 복제
     B2-->>B1: 완료
     B1-->>P: ACK
@@ -90,12 +90,12 @@ sequenceDiagram
     participant CA as Consumer A
     participant K as Kafka
     participant CB as Consumer C
-    CA->>K: poll() off50~52
+    CA->>K: poll_ off50~52
     Note over CA: off50,51 처리완료
     Note over CA,K: 리밸런싱(C 합류)
     CA->>K: offset=51 커밋
     K->>CB: P0 할당
-    CB->>K: poll() off52~
+    CB->>K: poll_ off52~
     Note over CB: off52 중복 처리!
 ```
 
@@ -528,11 +528,11 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    Broker1(epoch_5)->>Controller: 리더 확인
-    Controller->>Broker1(epoch_5): epoch 5 구 리더
-    Broker1(epoch_5)->>Producer: NotLeaderException
+    Broker1_epoch_5->>Controller: 리더 확인
+    Controller->>Broker1_epoch_5: epoch 5 구 리더
+    Broker1_epoch_5->>Producer: NotLeaderException
     Producer->>Controller: 새 리더 조회
-    Controller->>Producer: Broker2(epoch 6)
+    Controller->>Producer: Broker2_epoch 6
 ```
 
 ### 네트워크 파티션 시나리오별 영향
@@ -577,12 +577,12 @@ props.put(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, 1000);
 sequenceDiagram
     participant P as Producer (멱등성 없음)
     participant B as Broker
-    P->>B: msg(A) 전송
+    P->>B: msg_A 전송
     Note over B: 메시지 저장 완료
     B-->>P: ACK 전송
     Note over P: 네트워크 지연으로 ACK 손실!
     Note over P: 타임아웃 → msg(A) 재전송
-    P->>B: msg(A) 재전송
+    P->>B: msg_A 재전송
     Note over B: msg(A) 또 저장 → 중복! Partition: A, B, A_dup, C
 ```
 
@@ -607,7 +607,7 @@ sequenceDiagram
     participant P as Producer
     participant B as Broker
     Note over P,B: IN_FLIGHT=5, 멱등성 없음
-    P->>B: msg1(실패)→msg2(성공)→msg1 재시도
+    P->>B: msg1_실패→msg2_성공→msg1 재시도
     Note over B: [msg2,msg1] 순서역전!
     Note over P,B: IN_FLIGHT=1
     P->>B: msg1→msg2 순서대로

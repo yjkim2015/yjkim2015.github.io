@@ -47,7 +47,7 @@ sequenceDiagram
     participant T1
     participant DB
     participant T2
-    T1->>DB: UPDATE 잔액 1000→2000 (미커밋)
+    T1->>DB: UPDATE 잔액 1000→2000 미커밋
     T2->>DB: SELECT 잔액 → 2000 읽음
     T1->>DB: ROLLBACK
     Note over T2: T2는 존재하지 않는 2000을 읽었다
@@ -86,9 +86,9 @@ sequenceDiagram
     participant T1
     participant DB
     participant T2
-    T1->>DB: SELECT COUNT(*) WHERE 나이>20 → 3건
+    T1->>DB: SELECT COUNT_* WHERE 나이>20 → 3건
     T2->>DB: INSERT 나이=25인 신규 회원, COMMIT
-    T1->>DB: SELECT COUNT(*) WHERE 나이>20 → 4건
+    T1->>DB: SELECT COUNT_* WHERE 나이>20 → 4건
     Note over T1: 유령(Phantom)처럼 행이 나타남
 ```
 
@@ -134,7 +134,7 @@ sequenceDiagram
     participant T2
     T1->>DB: SELECT 잔액 → 1000
     T2->>DB: UPDATE 잔액→2000, COMMIT
-    T1->>DB: SELECT 잔액 → 2000 (달라짐)
+    T1->>DB: SELECT 잔액 → 2000 달라짐
     Note over T1: Non-Repeatable Read 발생
 ```
 
@@ -151,10 +151,10 @@ sequenceDiagram
     participant T1
     participant DB
     participant T2
-    T1->>DB: BEGIN (스냅샷 생성)
+    T1->>DB: BEGIN 스냅샷 생성
     T1->>DB: SELECT 잔액 → 1000
     T2->>DB: UPDATE 잔액→2000, COMMIT
-    T1->>DB: SELECT 잔액 → 1000 (스냅샷 유지)
+    T1->>DB: SELECT 잔액 → 1000 스냅샷 유지
     Note over T1: 스냅샷 덕분에 같은 값 반환
 ```
 

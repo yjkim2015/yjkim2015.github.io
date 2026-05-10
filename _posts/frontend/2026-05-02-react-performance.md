@@ -146,7 +146,7 @@ graph LR
 ```mermaid
 sequenceDiagram
     app.js_5MB_전부->>main.js_500KB: 스플리팅 후
-    main.js_500KB->>route-home.js_100K: 
+    main.js_500KB->>route-home.js_100K: 호출
 ```
 
 ```jsx

@@ -27,7 +27,7 @@ sequenceDiagram
     participant C as 호출자
     participant P as Proxy
     participant M as 실제메서드
-    C->>P: sendWelcomeEmail()
+    C->>P: sendWelcomeEmail_
     P-->>C: 즉시 반환
     P->>M: 별도 스레드 실행
 ```

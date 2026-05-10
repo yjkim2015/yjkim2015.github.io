@@ -198,7 +198,7 @@ sequenceDiagram
     L1-->>App: 100ns
     else Miss
     App->>L2: GET key
-    L2-->>App: Hit(1ms)/Miss→DB
+    L2-->>App: Hit_1ms/Miss→DB
     end
 ```
 

@@ -89,7 +89,7 @@ I/O 시스템 콜은 즉시 반환하지만, 호출자가 직접 반복 폴링(p
 
 ```mermaid
 sequenceDiagram
-    I/O->>호출자_스레드: EAGAIN(즉시 반환)
+    I/O->>호출자_스레드: EAGAIN_즉시 반환
     호출자_스레드->>I/O: 폴링
     I/O->>호출자_스레드: EAGAIN
     호출자_스레드->>I/O: 폴링
@@ -135,7 +135,7 @@ while ((bytesRead = channel.read(buffer)) == 0) {
 sequenceDiagram
     participant T as 호출자 스레드
     participant BG as 별도 스레드
-    T->>BG: 요청 발행 (비동기)
+    T->>BG: 요청 발행 비동기
     Note over T: Future.get() — 블로킹 대기
     BG-->>T: 결과 반환
     Note over T: 다음 작업 진행
@@ -279,7 +279,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    Kernel->>Application: EAGAIN(데이터 없음)
+    Kernel->>Application: EAGAIN_데이터 없음
     Application->>Kernel: 폴링
     Kernel->>Application: EAGAIN
     Application->>Kernel: 폴링
@@ -294,7 +294,7 @@ sequenceDiagram
 sequenceDiagram
     Kernel->>Kernel: 블로킹 감시 중
     Kernel->>Application: 소켓 준비→반환
-    Application->>Kernel: recvfrom()
+    Application->>Kernel: recvfrom_
     Kernel->>Application: 데이터 반환
 ```
 
@@ -365,7 +365,7 @@ sequenceDiagram
 sequenceDiagram
     participant App as Application
     participant K as Kernel
-    App->>K: aio_read()
+    App->>K: aio_read_
     K-->>App: 즉시 반환
     Note over App: 다른 작업 진행
     Note over K: 데이터 도착 커널 버퍼 → 유저 버퍼 복사 완료

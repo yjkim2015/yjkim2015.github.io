@@ -175,10 +175,10 @@ OpenTelemetry(OTel)는 CNCF 프로젝트로, Traces/Metrics/Logs를 수집하는
 
 ```mermaid
 sequenceDiagram
-    자동계측->>OTel_SDK:
-    수동계측->>OTel_SDK:
+    자동계측->>OTel_SDK: 호출
+    수동계측->>OTel_SDK: 호출
     OTel_SDK->>Exporter: OTLP
-    Exporter->>Jaeger:
+    Exporter->>Jaeger: 호출
 ```
 
 OTel의 핵심 구성요소는 세 가지다.

@@ -160,10 +160,10 @@ public class OrderConsumer {
 
 ```mermaid
 sequenceDiagram
-    P0->>A1:
-    P1->>A1:
-    P2->>A2:
-    P3->>A3:
+    P0->>A1: 호출
+    P1->>A1: 호출
+    P2->>A2: 호출
+    P3->>A3: 호출
 ```
 
 파티션 4개, 컨슈머 3개인 Group A에서는 A1이 2개 파티션을 담당하며, Group B는 같은 토픽을 독립적으로 소비한다(브로드캐스트 효과).
@@ -175,8 +175,8 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    P0->>C1:
-    P2->>C3:
+    P0->>C1: 호출
+    P2->>C3: 호출
 ```
 
 ---
@@ -487,7 +487,7 @@ sequenceDiagram
     Note over L: 디스크에 기록
     L->>F1: 복제
     F1-->>L: 완료
-    L-->>P: ACK (ISR 복제 완료)
+    L-->>P: ACK ISR 복제 완료
 ```
 
 - **성능**: 가장 낮음 (모든 ISR 복제 대기)

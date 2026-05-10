@@ -319,18 +319,18 @@ public void afterCompletion(HttpServletRequest request,
 
 ```mermaid
 sequenceDiagram
-    DispatcherServlet->>DispatcherServlet: preHandle()
+    DispatcherServlet->>DispatcherServlet: preHandle_
     DispatcherServlet->>Controller: 핸들러 실행
     Controller->>DispatcherServlet: ModelAndView
-    DispatcherServlet->>Client: postHandle()→응답
+    DispatcherServlet->>Client: postHandle_→응답
 ```
 
 ### preHandle에서 false 반환 시 흐름
 
 ```mermaid
 sequenceDiagram
-    DispatcherServlet->>Interceptor1: preHandle()→false
-    DispatcherServlet->>Interceptor1: afterCompletion()
+    DispatcherServlet->>Interceptor1: preHandle_→false
+    DispatcherServlet->>Interceptor1: afterCompletion_
     DispatcherServlet->>Client: 401 응답
 ```
 
@@ -338,9 +338,9 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    DispatcherServlet->>Interceptor1: preHandle()
+    DispatcherServlet->>Interceptor1: preHandle_
     DispatcherServlet->>DispatcherServlet: 핸들러 실행→예외
-    DispatcherServlet->>Interceptor1: afterCompletion(ex)
+    DispatcherServlet->>Interceptor1: afterCompletion_ex
     DispatcherServlet->>Client: 에러 응답
 ```
 

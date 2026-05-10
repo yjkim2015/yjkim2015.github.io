@@ -247,9 +247,9 @@ function App() {
 
 ```mermaid
 sequenceDiagram
-    root/->>packages/:
-    apps/->>web:
-    packages/->>ui/types/utils:
+    root/->>packages/: 호출
+    apps/->>web: 호출
+    packages/->>ui/types/utils: 호출
 ```
 
 > 비유: 한 회사의 여러 부서가 같은 복지 제도, 같은 업무 시스템을 공유하는 것과 같습니다. 각 팀은 독립적으로 일하지만, 공통 인프라는 함께 씁니다.

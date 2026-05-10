@@ -426,7 +426,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 ```mermaid
 sequenceDiagram
     은행->>사용자: 쿠키 발급
-    사용자->>은행: POST /transfer(쿠키 자동 포함)
+    사용자->>은행: POST /transfer_쿠키 자동 포함
     은행->>사용자: CSRF 토큰 포함 폼
     사용자->>은행: 토큰 포함 요청
     은행->>은행: 토큰 검증 통과

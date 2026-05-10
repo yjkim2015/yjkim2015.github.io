@@ -752,9 +752,9 @@ public class SimpleTestRunner {
 
 ```mermaid
 sequenceDiagram
-    프록시->>Handler: invoke(method, args)
+    프록시->>Handler: invoke_method, args
     Handler->>Handler: 부가 기능 처리
-    Handler->>프록시: method.invoke(target)
+    Handler->>프록시: method.invoke_target
     프록시->>Handler: 결과 반환
     Handler->>클라이언트: 결과 반환
 ```

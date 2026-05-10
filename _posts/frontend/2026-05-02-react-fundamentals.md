@@ -80,11 +80,11 @@ const element = React.createElement(
 
 ```mermaid
 sequenceDiagram
-    새_Virtual_DOM->>같은_타입?:
+    새_Virtual_DOM->>같은_타입?: 호출
     같은_타입?->>속성만_업데이트: 예
     같은_타입?->>노드_교체: 아니오
-    속성만_업데이트->>실제_DOM_최소_반영:
-    노드_교체->>실제_DOM_최소_반영:
+    속성만_업데이트->>실제_DOM_최소_반영: 호출
+    노드_교체->>실제_DOM_최소_반영: 호출
 ```
 
 ### Diffing 규칙 1 — 타입이 다르면 전체 교체

@@ -119,9 +119,9 @@ MyISAM은 데이터와 인덱스가 분리 → 인덱스에서 데이터 위치(
 
 ```mermaid
 sequenceDiagram
-    Root->>Internal:
-    Internal->>Leaf:
-    Internal->>Leaf:
+    Root->>Internal: 호출
+    Internal->>Leaf: 호출
+    Internal->>Leaf: 호출
 ```
 
 **핵심 특징:**

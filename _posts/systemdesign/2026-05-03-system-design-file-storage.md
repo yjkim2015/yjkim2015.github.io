@@ -208,7 +208,7 @@ S3 내구성 복제:        3 AZ 동기 복제 — 추가 100~200ms
 
 ```mermaid
 sequenceDiagram
-    B->>C:
+    B->>C: 호출
     C->>A: 필요블록
     A->>B: PUT block
     A->>B: complete
@@ -289,9 +289,9 @@ sequenceDiagram
     participant C as Client
     participant API
     participant CDN
-    C->>API: GET /file/(id)/metadata
+    C->>API: GET /file/id/metadata
     API-->>C: 블록목록+CDN URL
-    C->>CDN: GET hash(캐시히트)
+    C->>CDN: GET hash_캐시히트
     CDN-->>C: 블록 반환 후 재조립
 ```
 

@@ -230,10 +230,10 @@ sequenceDiagram
     participant C as Client
     participant N1 as 노드1
     participant N2 as 노드2
-    C->>N1: put(key, val)
-    C->>N2: put(key, val)
+    C->>N1: put_key, val
+    C->>N2: put_key, val
     N1-->>C: OK
-    N2-->>C: OK(W=2 달성)
+    N2-->>C: OK_W=2 달성
 ```
 
 ### Quorum — W + R > N

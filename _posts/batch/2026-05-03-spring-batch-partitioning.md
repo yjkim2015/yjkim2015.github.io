@@ -115,11 +115,11 @@ public TaskExecutor taskExecutor() {
 
 ```mermaid
 sequenceDiagram
-    검증->>재고:
-    검증->>알림:
-    정산->>리포트:
-    재고->>리포트:
-    알림->>리포트:
+    검증->>재고: 호출
+    검증->>알림: 호출
+    정산->>리포트: 호출
+    재고->>리포트: 호출
+    알림->>리포트: 호출
 ```
 
 Flow를 사용하여 Step 2a/2b/2c를 병렬로 실행하고, 모두 완료된 후 Step 3이 실행됩니다.
@@ -170,9 +170,9 @@ public Job parallelJob(JobRepository jobRepository,
 sequenceDiagram
     Master->>Slave_2: ID 25~50만
     Master->>Slave_3~4: ID 50~100만
-    Slave_1->>독립_처리:
-    Slave_2->>독립_처리:
-    Slave_3~4->>독립_처리:
+    Slave_1->>독립_처리: 호출
+    Slave_2->>독립_처리: 호출
+    Slave_3~4->>독립_처리: 호출
 ```
 
 ### 4.2 Partitioner 구현
@@ -293,12 +293,12 @@ Master가 파티션 정보만 **메시지 큐(Kafka, RabbitMQ)를 통해 원격 
 
 ```mermaid
 sequenceDiagram
-    MessageChannel(Kaf->>Worker1:_R→P→W: 파티션1
-    MessageChannel(Kaf->>Worker2:_R→P→W: 파티션2
-    MessageChannel(Kaf->>Worker3:_R→P→W: 파티션3
-    Worker1:_R→P→W->>MessageChannel(Kaf: 완료 응답
-    Worker2:_R→P→W->>MessageChannel(Kaf: 완료 응답
-    Worker3:_R→P→W->>MessageChannel(Kaf: 완료 응답
+    MessageChannelKaf->>Worker1:_R→P→W: 파티션1
+    MessageChannelKaf->>Worker2:_R→P→W: 파티션2
+    MessageChannelKaf->>Worker3:_R→P→W: 파티션3
+    Worker1:_R→P→W->>MessageChannelKaf: 완료 응답
+    Worker2:_R→P→W->>MessageChannelKaf: 완료 응답
+    Worker3:_R→P→W->>MessageChannelKaf: 완료 응답
 ```
 
 ### 5.3 언제 Remote를 선택하는가

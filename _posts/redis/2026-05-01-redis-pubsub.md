@@ -262,7 +262,7 @@ sequenceDiagram
     participant S as Subscriber (잠깐 다운)
     P->>R: PUBLISH news 중요한 소식
     Note over S:  잠깐 다운
-    R-->>S: 전달 실패 (아무도 없음)
+    R-->>S: 전달 실패 아무도 없음
     Note over R: 메시지 영구 소멸
     Note over S: 재시작 후 구독 재개
     Note over S: 다운 중 메시지는<br>영원히 받을 수 없음

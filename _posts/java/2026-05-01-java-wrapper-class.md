@@ -21,8 +21,8 @@ Java는 성능과 객체지향이라는 두 가지 목표를 동시에 추구했
 
 ```mermaid
 sequenceDiagram
-    Integer/Long->>Object:
-    Double/Boolean->>Object:
+    Integer/Long->>Object: 호출
+    Double/Boolean->>Object: 호출
 ```
 
 ### 메모리 저장 방식 비교
@@ -124,9 +124,9 @@ sequenceDiagram
     participant 컴파일러
     participant 바이트코드
     소스코드->>컴파일러: Integer n = 42;
-    컴파일러->>바이트코드: Integer n = Integer.valueOf(42);
+    컴파일러->>바이트코드: Integer n = Integer.valueOf_42;
     소스코드->>컴파일러: int i = n;
-    컴파일러->>바이트코드: int i = n.intValue();
+    컴파일러->>바이트코드: int i = n.intValue_;
 ```
 
 ```java

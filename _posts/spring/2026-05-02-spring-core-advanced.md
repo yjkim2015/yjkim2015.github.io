@@ -133,10 +133,10 @@ sequenceDiagram
     participant C as Client
     participant T as TimeDecorator
     participant R as RealSubject
-    C->>T: operation()
-    T->>R: operation()
+    C->>T: operation_
+    T->>R: operation_
     R-->>T: 결과
-    T-->>C: 결과(시간 로그)
+    T-->>C: 결과_시간 로그
 ```
 
 시간 측정 → 캐시 → 실제 로직 순서로 연결됩니다. 순서를 바꾸고 싶거나 새 기능을 추가하고 싶으면 체인에 하나만 추가하면 됩니다. `RealSubject`는 전혀 건드리지 않습니다.
@@ -361,7 +361,7 @@ sequenceDiagram
     participant AR as Around
     participant T as Target
     C->>AR: 호출
-    AR->>T: proceed()
+    AR->>T: proceed_
     T-->>AR: 결과
     AR-->>C: 최종 반환
 ```
@@ -487,7 +487,7 @@ sequenceDiagram
     participant O as 원본 빈
     participant BPP as BeanPostProcessor
     C->>O: new + 의존주입
-    C->>BPP: postProcessAfter()
+    C->>BPP: postProcessAfter_
     BPP->>C: 프록시 빈 등록
 ```
 
@@ -634,9 +634,9 @@ sequenceDiagram
     participant C as Client
     participant P as CallService Proxy
     participant T as CallService (원본)
-    C->>P: external() 호출
-    P->>T: external() 위임 (AOP 없음, external은 @Transactional 없음)
-    T->>T: this.internal() 직접 호출
+    C->>P: external_ 호출
+    P->>T: external_ 위임 AOP 없음, external은 @Transactional 없음
+    T->>T: this.internal_ 직접 호출
     Note over T: 프록시를 거치지 않음!
     Note over T: @Transactional 완전히 무시됨!
     Note over T: DB 오류 발생 시 롤백 안 됨
@@ -695,13 +695,13 @@ public class InternalService {
 
 ```mermaid
 sequenceDiagram
-    빈_생성_및_의존관계_주입->>postProcessAfterIn:
-    postProcessAfterIn->>Pointcut_매칭_Advisor?:
+    빈_생성_및_의존관계_주입->>postProcessAfterIn: 호출
+    postProcessAfterIn->>Pointcut_매칭_Advisor?: 호출
     Pointcut_매칭_Advisor?->>ProxyFactory_→_JDK: 있음
     Pointcut_매칭_Advisor?->>원본_빈_등록: 없음
-    ProxyFactory_→_JDK->>ApplicationContext:
-    원본_빈_등록->>ApplicationContext:
-    ApplicationContext->>클라이언트_호출:
+    ProxyFactory_→_JDK->>ApplicationContext: 호출
+    원본_빈_등록->>ApplicationContext: 호출
+    ApplicationContext->>클라이언트_호출: 호출
 ```
 
 ---

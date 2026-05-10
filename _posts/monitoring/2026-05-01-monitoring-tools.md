@@ -50,7 +50,7 @@ sequenceDiagram
     participant APP as SpringApp
     participant PROM as Prometheus
     participant GRAF as Grafana
-    PROM->>APP: Scrape(15초마다)
+    PROM->>APP: Scrape_15초마다
     APP-->>PROM: 메트릭 반환
     GRAF->>PROM: PromQL 쿼리
     PROM-->>GRAF: 데이터 반환

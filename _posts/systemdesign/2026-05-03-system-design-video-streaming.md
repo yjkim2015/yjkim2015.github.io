@@ -189,7 +189,7 @@ sequenceDiagram
     API_서버->>AWS_S3: Presigned URL 요청
     AWS_S3->>API_서버: 15분 유효 URL
     API_서버->>클라이언트: Presigned URL
-    클라이언트->>AWS_S3: 직접 업로드(API 우회)
+    클라이언트->>AWS_S3: 직접 업로드_API 우회
     AWS_S3->>API_서버: 완료 이벤트
 ```
 
@@ -281,12 +281,12 @@ GPU 비용: g5.xlarge 기준 시간당 $1.006
 
 ```mermaid
 sequenceDiagram
-    GOP_단위_분할->>코덱_변환:
-    GOP_단위_분할->>오디오_추출:
-    코덱_변환->>360p·720p·1080p·4K:
-    360p·720p·1080p·4K->>세그먼트_병합:
-    오디오_추출->>세그먼트_병합:
-    세그먼트_병합->>S3_저장:
+    GOP_단위_분할->>코덱_변환: 호출
+    GOP_단위_분할->>오디오_추출: 호출
+    코덱_변환->>360p·720p·1080p·4K: 호출
+    360p·720p·1080p·4K->>세그먼트_병합: 호출
+    오디오_추출->>세그먼트_병합: 호출
+    세그먼트_병합->>S3_저장: 호출
 ```
 
 ### 4-2. GOP(Group of Pictures) 분할의 이유
@@ -384,8 +384,8 @@ master.m3u8 (마스터 플레이리스트)
 
 ```mermaid
 sequenceDiagram
-    M->>BUF:
-    BUF->>ALG:
+    M->>BUF: 호출
+    BUF->>ALG: 호출
     ALG->>UP: 버퍼 &gt; 15초
     ALG->>DN: 버퍼 &lt; 5초
     ALG->>KP: 정상

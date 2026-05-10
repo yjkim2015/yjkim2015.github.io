@@ -105,11 +105,11 @@ console.log(counter()); // 3
 
 ```mermaid
 sequenceDiagram
-    makeCounter()->>힙_메모리: count=0 생성
-    makeCounter()->>JS_런타임: inner 함수 반환
-    JS_런타임->>makeCounter(): counter() 호출
-    makeCounter()->>힙_메모리: count 읽고 증가
-    makeCounter()->>JS_런타임: 1 반환
+    makeCounter_->>힙_메모리: count=0 생성
+    makeCounter_->>JS_런타임: inner 함수 반환
+    JS_런타임->>makeCounter_: counter_ 호출
+    makeCounter_->>힙_메모리: count 읽고 증가
+    makeCounter_->>JS_런타임: 1 반환
 ```
 
 ---

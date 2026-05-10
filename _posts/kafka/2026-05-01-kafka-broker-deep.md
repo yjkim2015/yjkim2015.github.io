@@ -25,11 +25,11 @@ Kafka 클러스터를 구성하는 개별 서버 노드다. 각 브로커는 파
 
 ```mermaid
 sequenceDiagram
-    Broker1(Controller-->>Broker2:_P1-Leader: P0 복제
-    Broker1(Controller-->>Broker3:_P2-Leader: P0 복제
-    Broker2:_P1-Leader-->>Broker1(Controller: P1 복제
+    Broker1Controller-->>Broker2:_P1-Leader: P0 복제
+    Broker1Controller-->>Broker3:_P2-Leader: P0 복제
+    Broker2:_P1-Leader-->>Broker1Controller: P1 복제
     Broker2:_P1-Leader-->>Broker3:_P2-Leader: P1 복제
-    Broker3:_P2-Leader-->>Broker1(Controller: P2 복제
+    Broker3:_P2-Leader-->>Broker1Controller: P2 복제
     Broker3:_P2-Leader-->>Broker2:_P1-Leader: P2 복제
 ```
 

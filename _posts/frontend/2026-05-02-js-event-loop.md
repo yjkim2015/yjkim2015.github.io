@@ -67,10 +67,10 @@ sayHello();
 
 ```mermaid
 sequenceDiagram
-    sayHello()->>greet(): greet('World') 호출
-    greet()->>sayHello(): 'Hello, World!' 반환
-    sayHello()->>sayHello(): console.log() 호출
-    sayHello()->>전역_스코프: 실행 완료
+    sayHello_->>greet_: greet_'World' 호출
+    greet_->>sayHello_: 'Hello, World!' 반환
+    sayHello_->>sayHello_: console.log_ 호출
+    sayHello_->>전역_스코프: 실행 완료
 ```
 
 만약 이 스택이 꽉 차면 어떻게 될까요? **스택 오버플로우**가 발생합니다.
@@ -160,9 +160,9 @@ console.log('4. 끝');
 sequenceDiagram
     CallStack->>태스크큐: setTimeout 등록
     CallStack->>마이크로태스크: Promise.then 등록
-    CallStack->>CallStack: log(4.끝)
-    마이크로태스크->>CallStack: log(3.Promise)
-    태스크큐->>CallStack: log(2.setTimeout)
+    CallStack->>CallStack: log_4.끝
+    마이크로태스크->>CallStack: log_3.Promise
+    태스크큐->>CallStack: log_2.setTimeout
 ```
 
 출력 결과:

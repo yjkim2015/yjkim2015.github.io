@@ -102,9 +102,9 @@ public interface Processor<T, R> extends Subscriber<T>, Publisher<R> {
 
 ```mermaid
 sequenceDiagram
-    Publisher->>Subscriber: onSubscribe(sub)
-    Subscriber->>Publisher: request(N)
-    Publisher->>Subscriber: onNext(item1~N)
+    Publisher->>Subscriber: onSubscribe_sub
+    Subscriber->>Publisher: request_N
+    Publisher->>Subscriber: onNext_item1~N
     Publisher->>Subscriber: onComplete/onError
 ```
 

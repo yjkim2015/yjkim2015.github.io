@@ -37,7 +37,7 @@ sequenceDiagram
     Q->>R: EVAL script 시작
     Note over R: 스크립트 실행 중<br>다른 명령어 블로킹
     Note over R: 스크립트 내부에서<br>GET → 비교 → SET 완료
-    Q->>R: SET b 실행 (이제 차례)
+    Q->>R: SET b 실행 이제 차례
 ```
 
 스크립트 전체가 **인터럽트 없이 실행**된다. Race condition이 발생할 틈이 없다.
@@ -92,7 +92,7 @@ sequenceDiagram
     participant R as Redis Server
     Note over C,R: 1단계. 스크립트 등록
     C->>R: SCRIPT LOAD 스크립트 전문...
-    R-->>C: abc123... (SHA1 해시 반환)
+    R-->>C: abc123... SHA1 해시 반환
     Note over C,R: 2단계. 이후 호출은 SHA1만 전송
     C->>R: EVALSHA abc123... 1 mykey
     R-->>C: 실행 결과
