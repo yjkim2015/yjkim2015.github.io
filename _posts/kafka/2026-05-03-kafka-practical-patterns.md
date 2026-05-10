@@ -102,8 +102,12 @@ graph LR
 
 ```mermaid
 graph LR
-    Svc["주문서비스"] -->|"TX 커밋"| DB["DB + Outbox"]
-    DB -->|"CDC"| Kafka --> Consumer
+    Svc["주문서비스"] -->|"TX 커밋"| DB["DB + Outbox 4건"]
+    DB -->|"CDC"| D["Debezium"]
+    D --> T1["결제 토픽"]
+    D --> T2["재고 토픽"]
+    D --> T3["알림 토픽"]
+    D --> T4["분석 토픽"]
 ```
 
 방법 B와 C 모두 DB와 Kafka 사이의 불일치를 해결하지 못합니다. Outbox 패턴은 **DB 트랜잭션 안에서 이벤트를 Outbox 테이블에 함께 저장**하고, CDC(Debezium)가 감지해서 Kafka로 발행합니다. 멀티 토픽 시나리오에서는 **하나의 비즈니스 액션에 여러 이벤트 타입을 Outbox에 넣고, Debezium EventRouter가 토픽별로 라우팅**합니다.
