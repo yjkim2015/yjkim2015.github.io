@@ -346,17 +346,20 @@ config.setLockWatchdogTimeout(60000); // 60초
 
 **주의:** leaseTime을 명시적으로 설정하면 Watchdog이 비활성화된다.
 
-### Watchdog의 단점과 위험성
+### 분산 락 자체의 한계 — Watchdog 유무와 무관
 
-Watchdog이 편리하지만 **맹목적으로 신뢰하면 안 되는 이유**:
+아래 문제들은 **Watchdog의 단점이 아니라 분산 락 자체의 한계**입니다. leaseTime을 명시해도 동일하게 발생하며, 오히려 leaseTime 방식이 더 위험한 경우도 있습니다.
 
-| 위험 시나리오 | 상황 | 결과 |
-|-------------|------|------|
-| GC STW | Full GC 30초 동안 Watchdog이 TTL 갱신, 실제 작업은 멈춤 | 다른 프로세스 영원히 대기 |
-| 네트워크 파티션 | 앱↔Redis는 정상, 앱↔DB는 끊김 | 락은 잡고 있지만 작업 불가 (교착) |
-| 마스터 장애 | 마스터에서 Watchdog 갱신 중 마스터 죽음 → 레플리카 승격 | 레플리카에 락 없음 → 이중 락 |
-| unlock() 누락 | 예외 처리 빠뜨려서 unlock() 안 호출 | Watchdog이 영원히 갱신 → 영구 락 |
-| 리소스 낭비 | 동시 락 1000개 × 10초마다 PEXPIRE | 초당 100건 Redis 명령 추가 |
+| 시나리오 | Watchdog 사용 시 | leaseTime 명시 시 | 더 위험한 쪽 |
+|---------|----------------|-----------------|------------|
+| GC STW 30초 | 다른 프로세스 30초 대기 | **락 만료 → 이중 진입** | leaseTime |
+| 네트워크 파티션 | 교착 (대기) | **락 만료 → 이중 진입** | leaseTime |
+| 마스터 장애 | 이중 락 | 이중 락 | **동일** |
+| 프로세스 죽음 | 30초 후 해제 | 10초 후 해제 | Watchdog (느림) |
+| 프로세스 느림 (15초) | **안전 (TTL 연장)** | 이중 진입 | leaseTime |
+| unlock() 누락 | **영구 락** | TTL 후 해제 | Watchdog |
+
+**Watchdog만의 고유 위험은 "unlock() 누락 시 영구 락" 하나**뿐입니다. 나머지는 분산 락 자체의 한계이며, Watchdog이 오히려 "프로세스 느림" 시나리오에서 이중 진입을 방지합니다.
 
 **시나리오 1: GC STW — 락 보유자가 멈춰도 Watchdog은 갱신**
 
@@ -1295,33 +1298,34 @@ private boolean isProcessAlive(String processId) {
 }
 ```
 
-**3단계: 운영 도구 — 수동 강제 해제 (최후의 수단)**
+**3단계: 수동 해제는 가능하면 쓰지 마라**
 
-> **경고**: 수동 강제 해제는 **매우 위험**합니다. 락 보유자가 느리게 살아있을 수 있습니다. 강제 해제 → 원래 프로세스 + 새 프로세스 동시 실행 → 데이터 불일치. 반드시 **락 보유 프로세스가 죽었음을 확인한 후**에만 실행하세요.
+수동 해제는 **락 보유자가 느리게 살아있을 때 이중 진입**을 만드므로, 안 쓰는 게 최선이다.
+
+**수동 해제가 필요 없는 이유**:
+- leaseTime 명시 → TTL 만료로 자동 해제
+- Watchdog → 프로세스 죽으면 Watchdog도 죽음 → 30초 후 자동 해제
+- **영구 락이 되는 유일한 케이스**: Watchdog + unlock() 누락 → **코드 리뷰와 try-finally로 원천 차단**
+
+그래도 만약을 위해 **비상용 도구는 만들어두되, 일상적으로 쓰면 안 된다**:
 
 ```java
+// 비상용 — 프로세스 사망 확인 후에만 사용
 @DeleteMapping("/admin/locks/{key}")
 @PreAuthorize("hasRole('ADMIN')")
-public ResponseEntity<String> forceUnlock(@PathVariable String key) {
-    String value = redis.opsForValue().get("lock:" + key);
-    if (value == null) return ResponseEntity.ok("키 없음");
-
-    String holder = extractProcessId(value);
-
-    // 안전장치: 프로세스 생존 확인
-    if (isProcessAlive(holder)) {
+public ResponseEntity<String> emergencyUnlock(@PathVariable String key) {
+    String holder = extractProcessId(redis.opsForValue().get("lock:" + key));
+    if (holder != null && isProcessAlive(holder)) {
         return ResponseEntity.status(409)
-            .body("프로세스 " + holder + " 아직 살아있음. 강제 해제 불가.");
+            .body("프로세스 살아있음. 강제 해제 불가.");
     }
-
-    // 프로세스 죽음 확인 후에만 삭제
     redis.delete("lock:" + key);
-    auditLog.log("FORCE_UNLOCK", key, getCurrentAdmin(), holder);
-    return ResponseEntity.ok("해제됨 (죽은 프로세스: " + holder + ")");
+    auditLog.log("EMERGENCY_UNLOCK", key, getCurrentAdmin());
+    return ResponseEntity.ok("해제됨");
 }
 ```
 
-> **핵심**: "try-finally를 잘 쓰면 영구 락 안 생긴다"는 착각이다. kill -9, OOM Kill, 하드웨어 장애는 finally를 실행하지 않는다. **모니터링 + 자동 복구** 2단계가 있어야 하고, 수동 해제는 프로세스 사망 확인 후 최후의 수단으로만 사용한다.
+> **핵심**: 1~2단계(모니터링 + 자동 복구)만 잘 구축하면 **수동 해제는 1년에 한 번도 안 쓸 수 있다.** 수동 해제에 의존하는 운영은 설계가 잘못된 것이다.
 
 ### Named Lock도 답이 아니다
 
