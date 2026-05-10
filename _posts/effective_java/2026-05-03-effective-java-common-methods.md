@@ -30,6 +30,7 @@ date: 2026-05-03
 `equals` 메서드는 **동치 관계(equivalence relation)**를 구현해야 하며, 다섯 가지 속성을 만족해야 합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["반사성: x.equals(x) ="] --> B["대칭성: x.equals(y) ="]
     B --> C["추이성: x=y, y=z → x="]
@@ -107,6 +108,7 @@ public boolean equals(Object o) {
 ### hashCode 계약
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["a.equals(b) == tru"] -->|"필수"| B["a.hashCode() == b."]
     C["a.hashCode() == b."] -->|"필수 아님"| D["a.equals(b) 참일 수도"]
@@ -199,6 +201,7 @@ public String toString() {
 `clone` 메서드를 올바르게 구현하려면 다음 규칙을 따라야 합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["Cloneable 구현"] --> B["clone() 재정의"]
     B --> C{"가변 상태가 있는가?"}
@@ -251,6 +254,7 @@ public static Yum newInstance(Yum yum) { ... }
 `compareTo`의 규약은 `equals`와 유사하며, **반사성, 대칭성, 추이성**을 만족해야 합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["x.compareTo(y) > 0"] -->|"대칭성"| B["y.compareTo(x) < 0"]
     C["x.compareTo(y) > 0"] -->|"추이성"| D["x.compareTo(z) > 0"]

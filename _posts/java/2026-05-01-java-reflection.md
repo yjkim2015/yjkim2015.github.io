@@ -22,6 +22,7 @@ toc_label: 목차
 리플렉션은 다릅니다. JVM이 클래스를 로딩할 때 생성하는 `Class` 객체에는 해당 클래스의 모든 메타데이터(필드 목록, 메서드 목록, 접근 제어자, 어노테이션 등)가 담겨 있습니다. 리플렉션은 이 메타데이터를 런타임에 읽어 동적으로 메서드를 찾고 호출합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S1[".java"] -->|"컴파일"| B1[".class"] -->|"JVM 로딩"| E1["실행(타입 고정)"]
     JVM["실행 중 JVM"] -->|"getClass()/forName"| META["Class 메타데이터"]
@@ -551,6 +552,7 @@ public class Validator {
 첫째, **접근 제어 검사**: `setAccessible(false)` 상태에서는 호출마다 접근 권한을 확인합니다. 둘째, **가변인수 배열**: `Object... args`로 인수를 전달하므로 배열 생성이 매번 발생합니다. 셋째, **오토박싱**: 기본형 인수를 Object로 포장해야 합니다. 넷째, **JIT 인라이닝 불가**: 동적 디스패치 구조라 컴파일러가 메서드 호출을 인라이닝하지 못합니다. 다섯째, **예외 래핑**: 실제 예외가 `InvocationTargetException`으로 감싸져 반환됩니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     INVOKE["Method.invoke(obj,"]
     CHECK["1. 접근 제어 검사"]
@@ -751,6 +753,7 @@ public class SimpleTestRunner {
 클라이언트는 실제 객체 대신 프록시 객체를 받습니다. 프록시는 동일한 인터페이스를 구현하지만, 모든 메서드 호출이 `InvocationHandler.invoke()`를 거칩니다. 여기에 로깅, 트랜잭션, 캐싱 등의 부가 기능을 삽입합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["클라이언트"] -->|"findById(1L)"| P["프록시"]
     P -->|"invoke(method, args)"| H["Handler"]
@@ -1028,6 +1031,7 @@ try {
 ## 15. 전체 구조 요약
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     REFLECT["java.lang.reflect"] --> CLASS["Class&lt;T&gt; (fo"]
     CLASS --> FIELD["Field (get/set, se"]

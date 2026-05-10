@@ -25,7 +25,8 @@ toc_label: 목차
 자바스크립트 런타임은 여러 구성 요소가 협력하는 시스템입니다. 각 역할을 이해해야 "왜 Promise가 setTimeout보다 먼저 실행되는가"를 설명할 수 있습니다.
 
 ```mermaid
-graph TB
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
+graph LR
     CS["콜 스택"] -->|"비동기 위임"| WA["Web APIs"]
     WA -->|"Promise"| MQ["마이크로태스크 큐"]
     WA -->|"타이머/이벤트"| TQ["태스크 큐"]
@@ -67,6 +68,7 @@ sayHello();
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     GS["전역 스코프"] -->|"sayHello() 호출"| SH["sayHello()"]
     SH -->|"greet('World') 호출"| G["greet()"]
@@ -93,6 +95,7 @@ infinite(); // RangeError: Maximum call stack size exceeded
 이벤트 루프가 하는 일을 정확히 표현하면 이렇습니다. 이 알고리즘을 외워두면 어떤 비동기 코드든 실행 순서를 예측할 수 있습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A{"콜스택 비었나?"} -->|아니오| B["콜스택 실행"] --> A
     A -->|예| C{"마이크로태스크?"}
@@ -118,6 +121,7 @@ graph LR
 ### 마이크로태스크 생성원 (높은 우선순위)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     P["Promise.then/catch"] --> MQ["Microtask Queue"]
     QM["queueMicrotask"] --> MQ
@@ -128,6 +132,7 @@ graph LR
 ### 태스크 생성원 (낮은 우선순위)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ST[setTimeout] --> TQ["Task Queue"]
     SI[setInterval] --> TQ
@@ -159,6 +164,7 @@ console.log('4. 끝');
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     CS["CallStack"] -->|"log(1.시작)"| CS
     CS -->|"setTimeout 등록"| TQ["태스크큐"]
@@ -196,6 +202,7 @@ console.log('2: 후');
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["log(1)"] --> B["await 만남"]
     B -->|"중단"| C["log(2) 실행"]
@@ -234,6 +241,7 @@ setTimeout(() => {
 3. 마이크로태스크 큐가 먼저 처리됩니다
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 gantt
     title 1번 setTimeout(fn, 0) 실제 실행 타임라인
     dateFormat X
@@ -257,6 +265,7 @@ gantt
 브라우저는 렌더링도 이벤트 루프와 함께 동작합니다. 이것을 모르면 애니메이션 코드에서 깜빡임이 왜 생기는지 이해하기 어렵습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["태스크 실행"] --> B["마이크로태스크 처리"]
     B --> C{"렌더링 필요?"}
@@ -318,6 +327,7 @@ console.log('script end');
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["script 실행"] --> B["마이크로태스크 처리"]
     B --> C["promise1 → async end → promise2"]
@@ -418,6 +428,7 @@ infiniteMicrotask();
 마이크로태스크가 새 마이크로태스크를 계속 생성하면, 이벤트 루프는 태스크 큐로 넘어갈 수 없습니다. 렌더링도, 이벤트도, setTimeout도 실행되지 않습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["마이크로태스크1"] -->|"새 마이크로태스크 생성"| B["마이크로태스크2"]
     B -->|"새 마이크로태스크 생성"| C["마이크로태스크3"]
@@ -436,6 +447,7 @@ flowchart LR
 Node.js는 libuv를 사용하며 이벤트 루프 단계가 더 세분화됩니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["timers"] --> B["pending callbacks"] --> C["poll"] --> D["check/setImmediate"] --> E["close callbacks"] --> A
     MQ["마이크로태스크(Promise+ne"] -.->|"페이즈 전환마다"| A
@@ -462,6 +474,7 @@ setImmediate(() => console.log('setImmediate'));
 ## 정리: 이벤트 루프 5가지 핵심 원칙
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((이벤트 루프))
     싱글 스레드

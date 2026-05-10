@@ -56,6 +56,7 @@ toc_label: 목차
 **왜 복잡한가**: 서버가 여러 대가 되는 순간 "상태(State) 공유" 문제가 생깁니다. 로컬 메모리에 세션을 저장하던 애플리케이션은 서버가 2대가 되는 순간, 로그인한 서버가 아닌 서버로 요청이 가면 세션을 잃어버립니다. **Redis 같은 분산 세션 저장소로 전환이 필수**입니다. 이걸 간과하고 수평 확장을 하면 사용자가 갑자기 로그아웃되는 장애가 납니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[트래픽증가] --> B{확장전략}
     B --> C[수직확장]
@@ -110,6 +111,7 @@ MTTR (Mean Time To Recovery): 평균 복구 시간
 MTBF = 100시간, MTTR = 1시간이면 가용성 99.01%입니다. MTTR을 0.1시간으로 줄이면 가용성 99.9%가 됩니다. **가용성을 높이는 방법은 두 가지입니다. 장애 자체를 덜 나게(MTBF 증가), 장애가 나도 빨리 복구되게(MTTR 감소).** 자동화된 롤백, 헬스체크, Auto Scaling이 모두 MTTR 감소를 위한 것입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["고가용성 목표"] --> B["이중화"]
     A --> C["장애 감지"]
@@ -131,6 +133,7 @@ graph LR
 왜 항상 강한 일관성을 쓰지 않을까요? 서울 서버에서 데이터를 썼을 때 뉴욕 서버에도 즉시 반영되려면, 서울이 뉴욕에게 "확인했어?"를 기다려야 합니다. 서울-뉴욕 왕복 지연은 150ms입니다. 모든 쓰기가 150ms씩 느려집니다. SNS 좋아요처럼 초당 수백만 건이 발생하는 연산에 강한 일관성을 적용하면 성능이 수십 배 저하됩니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["강한 일관성"] --> B["순차적 일관성"]
     B --> C["인과적 일관성"]
@@ -161,6 +164,7 @@ graph LR
 - **P (Partition Tolerance)**: 네트워크 분리가 발생해도 동작
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     CAP(("CAP: 2개만 가능"))
     CAP --> C["Consistency"]
@@ -228,6 +232,7 @@ E → L 또는 C 선택 (평상시)
 CAP만 알면 장애 시 선택만 이해하지만, 실무에서는 **정상 운영 중 일관성과 속도 사이의 선택**이 훨씬 더 자주 발생합니다. DynamoDB에서 강한 일관성 읽기를 사용하면 지연이 2배 증가합니다. 왜냐하면 강한 일관성은 다수의 복제본에서 확인해야 하기 때문입니다. PACELC는 이 현실적 트레이드오프를 포착합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["네트워크 분할?"] -->|"Partition"| B{"가용성 vs 일관성"}
     A -->|"정상 운영"| C{"지연 vs 일관성"}
@@ -253,6 +258,7 @@ graph LR
 대형 마트의 계산대 안내원을 생각해 보세요. 손님들이 스스로 줄을 서는 대신, 안내원이 각 계산대의 대기 상황을 보고 "3번 계산대가 비었어요"라고 안내합니다. 서버가 1대일 때는 필요 없지만, 서버가 10대가 되는 순간 "어디로 보낼지"를 결정하는 로드밸런서가 필요합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     U["사용자 1~N"] --> LB["LB (Nginx/ALB)"]
     LB --> S1["서버1 CPU30%"]
@@ -309,6 +315,7 @@ WebSocket 같은 장기 연결에서 라운드 로빈은 비효율적입니다.
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[로드밸런싱] --> B[RoundRobin]
     A --> C[WeightedRR]
@@ -410,6 +417,7 @@ server {
 대부분의 웹 서비스는 읽기:쓰기 비율이 **80:20 또는 90:10**입니다. 쓰기는 마스터에, 읽기는 레플리카에 분산하면 DB 부하를 크게 줄입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     W["1️⃣ 쓰기 요청"] --> M[("2️⃣ 마스터 DB")]
     M -->|"3️⃣ 비동기 복제"| R1[("레플리카 1")]
@@ -502,6 +510,7 @@ public class ProductService {
 도서관 책을 이름순으로 A-G는 1층, H-N은 2층, O-Z는 3층에 배치하는 것과 같습니다. 특정 책을 찾을 때 해당 층만 가면 됩니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     App["1️⃣ 애플리케이션"] --> SR["2️⃣ 샤드 라우터"]
     SR --> S1[("3️⃣ 샤드 1")]
@@ -529,6 +538,7 @@ graph LR
 자주 가는 편의점을 생각해보세요. 매번 창고에서 물건을 꺼내오는 것보다 진열대(캐시)에 미리 꺼내두면 훨씬 빠릅니다. DB 조회는 수십 ms, Redis 캐시 조회는 수십 µs로 **100~1000배 빠릅니다**.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["1️⃣ 사용자 요청"] --> B{"2️⃣ 캐시 확인"}
     B -->|"Cache Hit\n캐시 명중"| C["3️⃣ 캐시에서 즉시 반환"]
@@ -697,6 +707,7 @@ public class CacheService {
 원본 서버(서울)에서 모든 요청을 처리하면 미국 사용자는 150ms, 유럽 사용자는 200ms의 지연이 발생합니다. 빛의 속도 때문에 소프트웨어로 해결할 수 없는 한계입니다. CDN은 전 세계에 엣지 서버를 두고 콘텐츠를 캐싱해 **지리적 지연을 10~30ms로 줄입니다**.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Origin["Origin 서울"]
     U_US["미국 사용자"] -->|요청| NY["CDN 뉴욕 10ms"]
@@ -731,6 +742,7 @@ graph LR
 식당에서 홀 직원이 주문을 받아 주방 주문통에 넣는 방식입니다. 주방이 아무리 바빠도 홀 직원은 주문을 계속 받을 수 있습니다. **생산자(Producer)와 소비자(Consumer)를 비동기로 분리**하는 것이 핵심입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     P1["주문 서비스"] --> MQ["Kafka/RabbitMQ"]
     P2["결제 서비스"] --> MQ
@@ -768,6 +780,7 @@ graph LR
 ### 모놀리스 vs 마이크로서비스
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     M["모놀리스 JAR/WAR"]
     US["사용자 서비스"] -->|"HTTP/gRPC"| OS["주문 서비스"]
@@ -791,6 +804,7 @@ graph LR
 ## 12. 통합 아키텍처 — 실제 대규모 시스템
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     User["사용자"] --> DNS["DNS"]
     DNS --> CDN["CDN (정적 95%)"]
@@ -805,6 +819,7 @@ graph LR
 ## 13. 시스템 설계 면접 4단계 프레임워크
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[요구사항] --> B[규모추정]
     B --> C[고수준설계]
@@ -872,6 +887,7 @@ users 테이블을 user_id 기준으로 샤드 A·B·C에, orders 테이블을 o
 넷플릭스는 피크 시간에 인터넷 전체 트래픽의 15%를 차지합니다. 초당 수 TB의 데이터를 전 세계에 전달합니다. 일반 CDN으로는 비용이 천문학적이고 성능도 부족합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     User["1.5억 구독자"] --> OCA["OCA (ISP 직접 설치)"]
     OCA -->|캐시 미스| AWS["AWS 백엔드"]

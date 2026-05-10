@@ -27,6 +27,7 @@ NestJS는 Angular에서 영감을 받아 **모듈-컨트롤러-서비스**라는
 ## 1번 다이어그램 - NestJS 요청 처리 파이프라인
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     CLIENT --> MW["미들웨어/가드/파이프"]
     MW --> CTRL["컨트롤러"]
@@ -58,6 +59,7 @@ export class UsersModule {}
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     AM["AppModule"] --> UM["UsersModule"]
     AM --> EM["EmailModule"]
@@ -287,6 +289,7 @@ export class ResponseTransformInterceptor<T> implements NestInterceptor<T> {
 ## 2번 다이어그램 - 전체 요청 흐름 시퀀스
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["클라이언트"] -->|"HTTP 요청"| MW["미들웨어/가드"]
     MW -->|"JWT/DTO 검사"| CTRL["컨트롤러"]
@@ -338,6 +341,7 @@ export class UsersService {
 ## 3번 다이어그램 - NestJS 정리
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((NestJS))
     구성: Module, Controller, Service, Provider

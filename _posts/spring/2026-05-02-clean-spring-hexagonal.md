@@ -182,6 +182,7 @@ public class OrderService {
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["빈약한 OrderService"] --> B["모든 비즈니스 로직"]
     C["풍부한 OrderService"] --> D["오케스트레이션"]
@@ -195,6 +196,7 @@ graph LR
 ### 3.1 전통적인 계층형 아키텍처의 문제
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["Controller"] --> B["Service"]
     B --> C["Repository"]
@@ -206,6 +208,7 @@ graph LR
 ### 3.2 헥사고날 아키텍처 구조
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["REST/Kafka"] -->|인바운드| E["OrderUseCase"]
     E --> G["OrderService"]

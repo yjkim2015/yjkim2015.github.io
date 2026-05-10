@@ -81,6 +81,7 @@ public class OrderService {
 ### 2.2 IoC 컨테이너가 하는 일 — 5단계
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["@Configuration 설정"] --> B["BeanDefinition 읽기"]
     B --> C["빈 생성 new"]
@@ -109,6 +110,7 @@ service.doSomething(); // @Transactional이 적용되지 않습니다!
 > **비유:** BeanFactory는 냉장고다. 음식(빈)을 저장하고 꺼낼 수 있다. ApplicationContext는 주방 전체다. 냉장고뿐만 아니라 조리 도구, 레시피북, 알람 시스템까지 갖추고 있다. 실제 요리를 하려면 당연히 주방 전체가 필요하다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["BeanFactory (inter"]
     B["ApplicationContext"]
@@ -131,6 +133,7 @@ graph LR
 ### 3.2 ApplicationContext 구현체들 — 무엇을 써야 하나?
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[ApplicationContext] --> B[AnnotationConfigApplicationContext]
     A --> C[ClassPathXmlApplicationContext]
@@ -199,6 +202,7 @@ public class MemberServiceImpl implements MemberService {
 `@Controller`, `@Service`, `@Repository`, `@Configuration`은 모두 내부에 `@Component`를 포함합니다. 그런데 왜 구분해서 쓸까요?
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Component] --> B[Controller]
     A --> C[Service]
@@ -302,6 +306,7 @@ public class OrderServiceImpl implements OrderService {
 ### 5.4 주입 방법 결정 흐름
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["DI 방법 선택"] --> B{"필수 의존관계?"}
     B -->|"예 — 없으면 동작 불가"| C["1️⃣ 생성자 주입"]
@@ -359,6 +364,7 @@ public class RateDiscountPolicy implements DiscountPolicy { ... }
 ### 6.2 @Autowired 매칭 규칙 흐름
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Autowired] --> B{빈 개수}
     B -->|1개| C[주입 성공]
@@ -407,6 +413,7 @@ public class NetworkClient {
 ### 7.2 전체 생명주기 — 한 번에 보기
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[생성+주입] --> B[BeforeInit]
     B --> C[PostConstruct]
@@ -517,6 +524,7 @@ public class ShoppingCart {
 ### 8.3 싱글톤 빈에서 프로토타입 빈 사용 — 흔히 빠지는 함정
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant Client
     participant Singleton
@@ -584,6 +592,7 @@ public class MyLogger {
 CGLIB 프록시를 사용하면 진짜 `MyLogger` 대신 껍데기 프록시를 주입합니다. `log()` 메서드가 호출되는 순간, 프록시가 "현재 HTTP 요청에 해당하는 진짜 `MyLogger`"를 찾아서 실제 메서드를 위임합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant C as Controller (singleton)
     participant P as MyLogger Proxy (singleton 가짜)
@@ -605,6 +614,7 @@ sequenceDiagram
 > **비유:** XML, 자바 코드, 어노테이션 스캔은 각각 다른 언어로 작성된 이력서와 같다. Spring은 이 다양한 형식의 이력서를 내부적으로 표준 양식(BeanDefinition)으로 변환해서 처리한다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["XML 설정"] --> C["BeanDefinitionReader"]
     B["@Configuration"] --> C
@@ -724,6 +734,7 @@ public class DiscountService {
 ## 12. 전체 흐름 정리
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[앱시작] --> B[Config읽기]
     B --> C[빈생성]
@@ -755,6 +766,7 @@ Spring IoC/DI의 핵심은 "객체가 스스로 의존관계를 만들지 않고
 IoC는 여러 곳에서 이미 사용되고 있는 범용적인 원리이다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     IOC["IoC 제어의 역전"]
     IOC --> SERVLET["서블릿"]
@@ -770,6 +782,7 @@ graph LR
 DI의 핵심은 컴파일 타임에는 구체 클래스를 모르고, 런타임에 컨테이너가 연결해 준다는 것이다. 두 클래스 A, B가 있을 때 A가 B를 사용한다면 A는 B에 의존한다. B가 변하면 A에 영향을 미치지만, A가 변해도 B는 영향을 받지 않는다. 이 **방향성**을 이해하는 것이 DI 설계의 출발점이다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     SVC1["UserService"] -->|컴파일타임 의존| IFACE["UserRepository 인터페"]
     CTX["스프링 컨테이너"] -->|런타임 생성| IMPL["MySQLUserRepositor"]

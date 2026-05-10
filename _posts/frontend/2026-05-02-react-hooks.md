@@ -20,6 +20,7 @@ React 16.8에서 Hooks가 등장하면서 함수형 컴포넌트에서도 상태
 ## 1번 다이어그램 - Hooks 전체 지도
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((React Hooks))
     기본
@@ -99,6 +100,7 @@ useEffect(() => {
 ### useEffect 실행 순서
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant R as 렌더링
     participant E as useEffect
@@ -178,6 +180,7 @@ function ExpensiveList({ items, filter }) {
 ### useMemo를 쓸 때와 쓰지 말 때
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A{"계산이<br>비싼가?"}
     A -->|"예 복잡한 연산"| B["useMemo 사용"]
@@ -299,6 +302,7 @@ function usePrevious(value) {
 useEffect와 거의 같지만, **브라우저가 화면을 그리기 전에** 동기적으로 실행됩니다. DOM을 측정하고 즉시 수정해야 할 때 씁니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant RENDER as React 렌더링
     participant LAY as useLayoutEffect
@@ -601,6 +605,7 @@ function AnimatedSection({ children }: { children: React.ReactNode }) {
 ## 9. Hooks 규칙
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["Hooks 규칙"] --> B["최상위에서만"]
     A --> C["React 함수에서만"]
@@ -626,6 +631,7 @@ function BadComponent({ isAdmin }) {
 ## 2번 다이어그램 - Hooks 선택 가이드
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ROOT["Hooks 선택"] --> S["상태: useState / use"]
     ROOT --> E["부작용: useEffect / u"]

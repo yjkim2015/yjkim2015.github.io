@@ -35,6 +35,7 @@ toc_label: 목차
 같은 모델에서 품질 10배 차이가 난다. 모델 성능이 아니라 프롬프트 설계의 문제다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     BAD["모호한 프롬프트"] --> LLM["LLM"]
     LLM --> RES1["평범한 결과"]
@@ -783,6 +784,7 @@ Chain-of-Thought: "단계별로 분석해줘"
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     P["프롬프트 작성"] --> RUN["실행"]
     RUN --> EVAL["결과 평가"]

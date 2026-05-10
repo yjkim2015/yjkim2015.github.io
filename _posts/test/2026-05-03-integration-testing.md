@@ -18,6 +18,7 @@ date: 2026-05-03
 > **비유:** 자동차를 만들 때를 생각해보자. 단위 테스트는 엔진, 브레이크, 에어백을 각각 따로 검사하는 것이다. 통합 테스트는 엔진을 차체에 장착하고 브레이크를 밟았을 때 실제로 차가 멈추는지 확인하는 것이다. E2E 테스트는 완성된 차를 도로에 올려 출발부터 도착까지 달려보는 것이다. 엔진이 단독으로 잘 돌아도 변속기와 연결했을 때 안 맞물리면 차는 움직이지 않는다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     E2E["E2E 테스트"] --> INT["통합 테스트"]
     INT --> UNIT["단위 테스트"]
@@ -39,6 +40,7 @@ Spring Boot는 테스트 범위에 따라 다른 어노테이션을 제공한다
 > **비유:** 레스토랑 검사를 생각해보자. `@SpringBootTest`는 주방, 홀, 결제 시스템까지 전부 가동하고 실제 손님을 받아보는 것이다. `@DataJpaTest`는 주방만 열어서 요리가 제대로 나오는지 확인하는 것이다. `@WebMvcTest`는 홀만 열어서 주문을 받고 메뉴판을 보여주는 과정만 테스트하는 것이다. 모든 검사에 레스토랑 전체를 가동할 필요는 없다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["@SpringBootTest"]
     B["@WebMvcTest"]
@@ -195,6 +197,7 @@ class OrderIntegrationTest {
 ### 어노테이션 선택 가이드
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     Q1{"무엇을 테스트?"}
     Q1 -->|JPA 쿼리| A["@DataJpaTest (빠름)"]
@@ -465,6 +468,7 @@ Spring Boot는 동일한 설정의 ApplicationContext를 캐싱한다. `@MockBea
 컨텍스트 수를 줄이는 것이 속도 최적화의 핵심이다. 모든 통합 테스트가 같은 부모 클래스를 상속받아 동일한 설정을 공유하면, 컨텍스트가 한 번만 생성된다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[테스트A] --> C[Context1]
     B[테스트B] --> C

@@ -111,6 +111,7 @@ SMS:          100만 건/일 →  11 QPS
 ## 전체 아키텍처
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[서비스] --> B[API GW]
     B --> C[Kafka]
@@ -128,6 +129,7 @@ graph LR
 APNs(Apple)와 FCM(Google)은 각각 다른 프로토콜과 토큰 형식을 사용한다. 푸시 워커는 기기 타입을 보고 분기한다:
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant API as 알림API
     participant K as Kafka
@@ -148,6 +150,7 @@ sequenceDiagram
 Twilio가 장애나면 SMS가 전혀 안 간다. 주문 완료 SMS가 안 오면 고객 불안이 폭증한다. **공급자 이중화**:
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant W as Worker
     participant T as Twilio
@@ -192,6 +195,7 @@ class DeduplicationService:
 ## 우선순위 큐 — 긴급 알림이 마케팅 알림에 막히지 않게
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Notif["알림 요청"] --> Classify{"우선순위 분류"}
     Classify -->|"P0: 보안/결제"| P0["Kafka: critical<br"]
@@ -209,6 +213,7 @@ graph LR
 APNs가 일시적으로 느려졌을 때 모든 워커가 즉시 재시도하면? 수천 개의 요청이 동시에 몰려 APNs를 더 힘들게 만든다(Thundering Herd). **지수 백오프 + 지터(Jitter)**:
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[전송] --> B{실패?}
     B -->|재시도| C[지수백오프]
@@ -290,6 +295,7 @@ def should_send_now(user_id: str, priority: str) -> bool:
 ## 극한 시나리오
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[캠페인] --> B[세그먼트]
     B --> C[배치분할]

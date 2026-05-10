@@ -34,6 +34,7 @@ public void completeOrder(Order order) {
 3번째 발행에서 Kafka 브로커가 잠깐 불안정해서 실패했다고 가정합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S["주문"] --> A["결제 ✅"] & B["재고 ✅"]
     S --> C["알림 ❌"] & D["분석 ❌"]
@@ -74,6 +75,7 @@ public void completeOrder(Order order) {
 단, Kafka 트랜잭션은 **Kafka 내부만 보장**합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S["주문"] --> TX --> T1["결제"] & T2["재고"] & T3["알림"]
 ```
@@ -83,6 +85,7 @@ DB 저장과 Kafka 발행을 하나의 원자 단위로 묶지는 못합니다. 
 ### 방법 C: 팬아웃 패턴 — 단일 이벤트 + 하류 구독
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S["주문"] -->|completed| T["토픽"]
     T --> A["결제"] & B["재고"] & C["알림"]
@@ -95,6 +98,7 @@ graph LR
 ### 방법 D: Outbox 패턴 — DB와 이벤트의 완전한 일관성
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S["주문"] -->|TX| DB["DB+Outbox"]
     DB -->|CDC| D["Debezium"]
@@ -218,6 +222,7 @@ kafkaTemplate.send("order.events", order.getId(), event);
 파티셔너는 `hash(key) % partitionCount`로 파티션을 결정합니다. orderId가 `"order-12345"`이면 항상 같은 파티션 번호로 매핑됩니다. 브로커가 재시작되어도, 파티션 수가 변경되지 않는 한 같은 파티션입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["order-123"] --> P0["P0"] --> C0["C0"]
     B["order-456"] --> P1["P1"] --> C1["C1"]
@@ -317,6 +322,7 @@ public void processAndPublish(PaymentRequest request) {
 ### 왜 "정확히 한 번"이 근본적으로 어려운가
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["컨슈머"] -->|"처리 완료"| DB["DB 저장"]
     DB -->|"오프셋 커밋 전 장애"| F["프로세스 재시작"]
@@ -349,6 +355,7 @@ max.partition.fetch.bytes=10485760
 ### 방법 B: Claim Check 패턴 — 현업 표준
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     P["Producer"] -->|파일| S3
     P -->|URL만| K["Kafka"]
@@ -438,6 +445,7 @@ DLQ로 이동된 메시지에는 실패 원인, 원본 토픽, 파티션, 오프
 ### DLQ 처리 흐름
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     M["소비"] -->|실패| R["재시도 3회"]
     R -->|실패| D["DLQ"]
@@ -487,6 +495,7 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     BEFORE["C0:P0P1 C1:P2P3"] -->|"C2 합류"| COOP["Cooperative"]
     COOP -->|"P1만 이동"| AFTER["C0:P0 C1:P2 C2:P1"]
@@ -623,6 +632,7 @@ MirrorMaker 2는 오프셋까지 복제합니다. 서울이 다운됐을 때 부
 ### Active-Active vs Active-Passive
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     SL["서울 클러스터"] <-->|"양방향 복제"| BS["부산 클러스터"]
     SC["서울 서비스"] --> SL
@@ -767,6 +777,7 @@ Burrow(LinkedIn 오픈소스)는 Lag을 단순 숫자가 아닌 **추세(증가 
 ### Lag 급증 시 대응 플로우
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     L["Lag 급증"] --> Q{"원인?"}
     Q -->|다운| A["재시작"]
@@ -894,6 +905,7 @@ POST /connectors
 ### 커넥터 vs 직접 Consumer: 언제 무엇을 쓰나
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Q{"데이터 이동 목적?"} -->|"DB/시스템 연동"| CONN["Kafka Connect 커넥터"]
     Q -->|"비즈니스 로직 처리"| CONS["직접 Consumer 구현"]

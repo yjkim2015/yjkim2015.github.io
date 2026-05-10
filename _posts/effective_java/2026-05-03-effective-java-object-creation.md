@@ -34,6 +34,7 @@ date: 2026-05-03
 5. **정적 팩터리 메서드를 작성하는 시점에는 반환할 객체의 클래스가 존재하지 않아도 된다** — SPI(Service Provider Interface) 프레임워크의 핵심입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["클라이언트"] -->|"of() / from() / va"| B["정적 팩터리 메서드"]
     B -->|"캐시 히트"| C["기존 인스턴스 반환"]
@@ -80,6 +81,7 @@ public class Color {
 빌더 패턴의 핵심은 **불변 객체를 단계적으로 조립**할 수 있다는 점입니다. 필수 매개변수는 빌더 생성자에서, 선택 매개변수는 메서드 체이닝으로 설정합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["NutritionFacts.bui"] --> B["fat(12)"]
     B --> C["sodium(35)"]
@@ -199,6 +201,7 @@ public class UtilityClass {
 > **비유:** 레스토랑 셰프가 매번 농장에 가서 직접 재료를 가져오면 비효율적입니다. **식자재 공급업체(외부)**가 재료를 배달해 주면 셰프는 요리에만 집중할 수 있습니다. 의존 객체 주입은 이 **배달 시스템**입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["클라이언트"] -->|"사전 주입"| B["SpellChecker"]
     C["EnglishDictionary"] -->|"구현체"| B
@@ -281,6 +284,7 @@ for (long i = 0; i <= Integer.MAX_VALUE; i++) {
 > **비유:** 냉장고에 음식을 넣고 잊어버리면 유통기한이 지나도 공간을 차지합니다. **안 먹을 음식은 꺼내서 버려야** 냉장고(메모리)에 공간이 생깁니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["Stack.push()"] --> B["elements 배열에 저장"]
     B --> C["Stack.pop()"]
@@ -335,6 +339,7 @@ public Object pop() {
 > **비유:** 호텔 체크아웃 시 프론트에서 **자동으로 방 청소 요청**이 가는 시스템과, 손님이 **직접 전화해서 청소를 부탁**하는 시스템의 차이입니다. 자동 시스템(`try-with-resources`)이 훨씬 신뢰할 수 있습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["try-with-resources"] --> B["자원 획득"]
     B --> C["비즈니스 로직 실행"]

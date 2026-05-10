@@ -30,6 +30,7 @@ Spring Security를 처음 보면 복잡해 보입니다. 하지만 핵심은 단
 > **비유:** Spring Security 필터는 Spring 컨테이너에서 관리되는 빈이다. 그런데 서블릿 필터는 서블릿 컨테이너(Tomcat)가 관리한다. 서로 다른 세계다. `DelegatingFilterProxy`는 Tomcat 세계에 있지만, 실제 일은 Spring 세계의 `FilterChainProxy` 빈에게 위임한다. 두 세계 사이의 다리 역할이다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[요청] --> B[FilterProxy]
     B --> C{인증·권한?}
@@ -121,6 +122,7 @@ public class SecurityConfig {
 > 7. 사원증을 금고(SecurityContext)에 보관
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[로그인요청] --> B[AuthFilter]
     B --> C[UserDetailsService]
@@ -201,6 +203,7 @@ SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQss ← Signature (위변조 방지)
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[JWT] --> B[Header]
     A --> C[Payload]
@@ -331,6 +334,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 ### 5.4 액세스/리프레시 토큰 갱신 전략 — RTR (Refresh Token Rotation)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Client] -->|유효토큰| B[Server]
     B -->|200| A
@@ -352,6 +356,7 @@ graph LR
 > 왜 이렇게 복잡한가? 사용자의 비밀번호를 우리 서버에서 직접 보지 않기 위해서다. 카카오 비밀번호는 카카오만 안다. 우리는 카카오가 "이 사람 인증됐어요"라는 확인서(토큰)만 받는다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[사용자] -->|로그인| B[카카오]
     B -->|AuthCode| A
@@ -426,6 +431,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 > **비유:** 사용자가 은행 사이트에 로그인한 상태에서 악성 사이트를 방문했다. 악성 사이트가 몰래 은행 사이트에 "10만원 송금" 요청을 보낸다. 브라우저는 은행 쿠키를 자동으로 포함시키기 때문에, 은행 서버는 정상 요청처럼 처리한다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     U["사용자"] -->|"로그인"| B["은행"]
     B -->|"쿠키 발급"| U
@@ -656,6 +662,7 @@ public class MultiSecurityConfig {
 ## 12. 전체 인증 흐름 정리
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["HTTP 요청"] --> B["SecurityContextPer"]
     B --> C["JwtAuthenticationF"]

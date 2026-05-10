@@ -117,6 +117,7 @@ DAU 1억명, 평균 팔로잉 200명
 게시글을 올리는 순간 모든 팔로워의 피드 캐시에 즉시 복사한다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant A as "게시자"
     participant Worker as "팬아웃 워커"
@@ -136,6 +137,7 @@ sequenceDiagram
 피드를 열 때마다 팔로잉 목록을 조회하고 각각의 최신 게시글을 수집한다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ReadReq["피드 읽기 요청"] --> Fetch["팔로잉 200명 조회"]
     Fetch --> Gather["각각의 최신 게시글 수집"]
@@ -149,6 +151,7 @@ graph LR
 ### 방법 3: 하이브리드 (실제 인스타그램/트위터 방식)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[게시글작성] --> B{팔로워수}
     B -->|일반| C[쓰기팬아웃]
@@ -163,6 +166,7 @@ graph LR
 ## 전체 아키텍처
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Client] --> B[로드밸런서]
     B --> C[게시글서비스]
@@ -177,6 +181,7 @@ graph LR
 ## 게시글 작성 흐름
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[App] -->|POST /posts| B[게시글서비스]
     B -->|201| A
@@ -191,6 +196,7 @@ graph LR
 ## 피드 조회 흐름
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant App
     participant C as Redis

@@ -65,6 +65,7 @@ public class Thread implements Runnable {
 `ThreadLocal.get()`을 호출하면 다음 순서로 동작합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     GET["get() 호출"] --> MAP["ThreadLocalMap 접근"]
     MAP --> ENTRY["getEntry(this)"]
@@ -96,6 +97,7 @@ ThreadLocalMap getMap(Thread t) {
 각 Thread는 자신만의 `ThreadLocalMap`을 가지고, 동일한 `ThreadLocal` 키에 대해 서로 다른 값을 독립적으로 저장합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     T1["Thread-1"] --> E1A["TL-A: Val1"]
     T1 --> E1B["TL-B: Val2"]
@@ -166,6 +168,7 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 초기 상태(배열 크기 8)에서 ThreadLocal-A와 ThreadLocal-B가 모두 인덱스 3에 해시되면, B는 4번 슬롯으로 밀립니다. 이후 A가 GC로 수거되면 인덱스 3의 키(WeakRef)는 null이 되지만 value는 남아 만료 엔트리(stale entry)가 됩니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S1["A 삽입(hash→3): [_]["]
     S2["B 삽입(hash→3, 충돌→Li"]
@@ -186,6 +189,7 @@ graph LR
 단, **키가 수거되어도 value는 여전히 강참조로 남습니다.** 이것이 메모리 누수의 원인입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     TL["ThreadLocal(강참조)"] -.->|"WeakRef key"| ENTRY["Entry"]
     ENTRY --> VAL["value(강참조)"]
@@ -825,6 +829,7 @@ HTTP 요청-응답 주기 동안 인증된 사용자 정보(`Authentication`)를
 ## 전체 구조 요약
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     TL["ThreadLocal 핵심 정리"]
     TL --> STORAGE["저장: Thread.threadL"]

@@ -78,6 +78,7 @@ public class UserDao {
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[UserDao] -->|"의존"| B["ConnectionMaker 인터"]
     C[DConnectionMaker] -->|"구현"| B
@@ -89,6 +90,7 @@ graph LR
 ### 2.2 개방-폐쇄 원칙 (OCP)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["OCP: 확장에 열려있고, 변경에"] --> B[UserDao]
     A --> C["ConnectionMaker 인터"]
@@ -241,6 +243,7 @@ public class UserService {
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[UserService] -->|"의존"| B["PlatformTransactio"]
     C[DataSourceTransactionManager] -->|"구현"| B
@@ -294,6 +297,7 @@ public interface UserDao {
 ### 5.3 Spring의 DataAccessException 계층
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["DataAccessExceptio"] --> B["NonTransient"]
     A --> C["Transient"]
@@ -342,6 +346,7 @@ public record Failure<T>(String error) implements Result<T> {}
 ### 6.3 AOT (Ahead-of-Time) 처리
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[GraalVM] --> B[AOT]
     B --> C[NativeImage]
@@ -438,6 +443,7 @@ public class OrderService {
 ### 7.1 SOLID 원칙 적용
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[SOLID] --> B["SRP: 레이어 분리"]
     A --> C["OCP: 인터페이스+DI"]
@@ -449,6 +455,7 @@ graph LR
 ### 7.2 템플릿 콜백 패턴 — Spring 전반에서 사용
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["템플릿 콜백 패턴"] --> B[JdbcTemplate]
     A --> C[RestTemplate]

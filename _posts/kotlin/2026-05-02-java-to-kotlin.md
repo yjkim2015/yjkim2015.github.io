@@ -97,6 +97,7 @@ val confirmedOrder = pendingOrder.copy(status = OrderStatus.CONFIRMED)
 ## Null Safety — 컴파일러가 NPE를 막는 원리
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Java["Java"] --> Problem["NullPointerExcepti"]
     Kotlin["Kotlin"] --> Compile["컴파일 타임 체크"]
@@ -234,6 +235,7 @@ val member = memberRepository.findByIdOrThrow(1L)  // null이면 즉시 예외
 스코프 함수(let, run, apply, also, with)는 처음 보면 "이게 왜 필요하지?" 싶지만, 각각 명확한 용도가 있다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     SF["스코프 함수"] --> LR["람다 결과 반환"]
     SF --> RR["수신 객체 반환"]
@@ -348,6 +350,7 @@ JPA 엔티티는 `data class`로 만들면 안 된다. `equals`와 `hashCode`가
 ## 점진적 마이그레이션 전략
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["Java 프로젝트"] --> B["1단계: 새 파일은 Kotlin으"]
     B --> C["2단계: DTO, Value Ob"]

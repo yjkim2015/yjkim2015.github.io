@@ -21,6 +21,7 @@ date: 2026-05-01
 Spring Cloud Config를 사용하면 Git 하나에서 모든 설정을 관리하고, 변경 이력을 추적하며, 재배포 없이 런타임에 반영할 수 있다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     GIT["Git Repository(/co"] -->|"설정 읽기"| CS["Config Server:8888"]
     CS -->|"설정 제공"| OS["Order Service"]
@@ -156,6 +157,7 @@ curl -X POST http://order-service:8080/actuator/refresh
 3️⃣ 모든 클라이언트가 이벤트를 수신하고 Config Server에서 새 설정을 가져온다
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant DEV as Dev
     participant CS as ConfigServer

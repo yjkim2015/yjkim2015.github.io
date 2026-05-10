@@ -25,6 +25,7 @@ React 성능 최적화도 같은 논리입니다. 그리고 가장 중요한 것
 ## 1번 다이어그램 - 성능 문제 진단 순서
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["성능 문제 발생"] --> B["Chrome DevTools Pr"]
     B --> C["어느 컴포넌트가 자주 렌더링되는지"]
@@ -130,6 +131,7 @@ function ProductList({ products, category, onPurchase }) {
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["category 변경"] --> B["filteredProducts 재계산"]
     C["다른 상태 변경"] --> D["useMemo: 재계산 스킵"]
@@ -144,6 +146,7 @@ graph LR
 번들 전체를 한 번에 다운로드하면 첫 페이지 로딩이 느립니다. 코드 스플리팅은 번들을 여러 청크로 나누어 현재 페이지에 필요한 것만 다운로드합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     BUNDLE["app.js 5MB 전부"]
     MAIN["main.js 500KB"]
@@ -234,6 +237,7 @@ function VirtualizedList({ items }) {
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     DOM1["일반: DOM 10000개 노드"]
     MEM1["메모리 수백 MB, 느림"]
@@ -413,6 +417,7 @@ const StockRow = React.memo(
 ## 3번 다이어그램 - 성능 최적화 우선순위
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["측정/Profiler"] --> B["번들 크기 축소"]
     B --> C["이미지/네트워크 최적화"]

@@ -26,6 +26,7 @@ toc_label: 목차
 자바스크립트의 모든 객체는 `[[Prototype]]`이라는 숨겨진 속성을 통해 다른 객체를 가리킵니다. 속성을 찾을 때 자신에게 없으면, 이 체인을 따라 올라가며 찾습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     DOG["dog 객체<br>name: '멍"]
     ANIMAL_PROTO["Animal.prototype<b"]
@@ -69,6 +70,7 @@ console.log(dog.type); // '동물' — 프로토타입에서 찾음
 속성을 찾을 때 체인을 따라 올라갑니다. 찾지 못하면 `undefined`를 반환합니다 (에러가 아닙니다). 단, 함수를 찾지 못하면 호출 시 에러가 납니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["dog.speak() 호출"] --> B{"dog에<br>speak가 있나?"}
     B -->|"예"| C["dog.speak() 실행"]
@@ -122,6 +124,7 @@ myDog.toString(); // '[object Object]' — Object.prototype에서 찾음
 > 비유: `prototype`은 설계도 창고("이 공장에서 만들어지는 제품은 이 부품들을 갖게 된다"), `__proto__`는 실제 제품이 갖고 있는 "원본 설계도 링크"입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     F["Dog 함수"] -->|".prototype"| FP["Dog.prototype"]
     I["myDog 인스턴스"] -->|".__proto__"| FP
@@ -189,6 +192,7 @@ pureObject.key = 'value';
 > 비유: 아파트 설계도를 손으로 그리는 것(ES5 프로토타입)과 CAD 프로그램으로 그리는 것(ES6 class)의 차이입니다. 결과물인 아파트(객체)는 같습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     PF["function Animal()"]
     PP["prototype.speak"]
@@ -282,6 +286,7 @@ console.log(buddy instanceof Animal);          // true
 ### 프로토타입 체인 시각화
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph BT
     BUDDY["buddy"]
     GR["GoldenRetriever.pr"]
@@ -456,6 +461,7 @@ Array.prototype.first = function() {
 ## 정리 — 프로토타입 핵심 개념
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((프로토타입))
     기본 개념

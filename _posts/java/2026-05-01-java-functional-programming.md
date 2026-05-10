@@ -18,6 +18,7 @@ Java는 본래 순수 객체지향 언어지만, Java 8부터 람다와 Stream A
 프로그래밍 패러다임의 두 축은 **명령형(Imperative)** 과 **선언적(Declarative)** 입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["for 루프"] --> B["if 조건"]
     B --> C["result.add()"]
@@ -1040,6 +1041,7 @@ Function<String, String> timedAndLogged  = withTiming.apply(withLogging.apply(ba
 ### 두 패러다임의 특성
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     OOP --> O1["객체=데이터+동작"]
     OOP --> O2["상태변경 허용"]

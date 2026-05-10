@@ -260,6 +260,7 @@ Spring AOP의 핵심은 **프록시 패턴**이다. 클라이언트가 `OrderSer
 4️⃣ **결과 반환**: After Advice, Around Advice의 뒷부분이 실행된 후 결과를 반환한다
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["클라이언트"] -->|"createOrder(dto)"| P["Proxy Object"]
     P -->|"Before Advice"| P
@@ -331,6 +332,7 @@ public class PaymentService$$EnhancerBySpringCGLIB extends PaymentService {
 Spring Boot 2.0+부터 `spring.aop.proxy-target-class=true`가 기본값이므로 CGLIB을 먼저 사용한다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["AOP 적용 대상 Bean"] --> B{"proxy-target-class=true?<br>(Spring Boot 기본값)"}
     B -->|"YES"| E["CGLIB 프록시 생성<br>(서"]
@@ -350,6 +352,7 @@ graph LR
 메서드 호출 전에 트랜잭션을 시작하고, 정상 반환이면 커밋, 예외 발생이면 롤백하는 코드가 자동으로 삽입된다. 개발자는 트랜잭션 관리 코드를 전혀 작성하지 않아도 된다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["Client"] -->|createOrder| P["Proxy"]
     P -->|proceed| S["Service"]
@@ -401,6 +404,7 @@ public class OrderService {
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["클라이언트"] --> P["Proxy"]
     P --> R["실제 OrderService.cr"]
@@ -493,6 +497,7 @@ public class LoggingAspect { ... }
 실행 순서는 양파 껍질처럼 쌓인다. 바깥쪽(낮은 Order)이 먼저 감싸고, 실행은 안쪽에서 바깥쪽 순서로 돌아온다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant C as Client
     participant SA as Security

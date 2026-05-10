@@ -17,6 +17,7 @@ toc_label: 목차
 Redis Pub/Sub은 **메시지를 채널에 발행(Publish)하면 그 채널을 구독(Subscribe)한 모든 클라이언트에게 실시간으로 전달**하는 메시징 패턴이다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant P as Publisher
     participant R as Redis
@@ -185,6 +186,7 @@ public class ChatMessageListener implements MessageListener {
 서버가 여러 대일 때 각 서버의 WebSocket 사용자들에게 메시지를 전달하는 문제를 해결한다:
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     U1["사용자 A"] -->|"WebSocket"| SA["서버 1"]
     U2["사용자 B"] -->|"WebSocket"| SB["서버 2"]
@@ -258,6 +260,7 @@ redisTemplate.convertAndSend(
 Redis Pub/Sub은 **At-most-once** 전달 보장이다. 메시지가 한 번도 안 가거나 한 번 가거나, "최소 한 번"은 보장하지 않는다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant P as "Publisher"
     participant R as "Redis"

@@ -53,6 +53,7 @@ stamps.add(new Coin()); // 컴파일 에러! 즉시 발견
 | `List<?>` | 어떤 타입인지 모르지만 타입 안전하게 | 안전 (원소 추가 불가) |
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["List (raw)"] -->|"아무거나 넣기 가능"| B["타입 안전성 없음"]
     C["List<Object>"] -->|"아무거나 넣기 가능"| D["타입 안전성 있음"]
@@ -121,6 +122,7 @@ ol.add("문자열");
 > **비유:** 만능 리모컨(제네릭)은 TV든 에어컨이든 **어떤 기기와도 페어링**됩니다. 기기별 전용 리모컨(형변환)을 따로 들고 다닐 필요가 없습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["제네릭"] --> B["컴파일 타임 검사"]
     B --> C["형변환 불필요"]
@@ -170,6 +172,7 @@ public class Stack<E> {
 핵심 공식은 **PECS: Producer-Extends, Consumer-Super**입니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["Producer (데이터를 제공)"] -->|"extends"| B["<? extends T>"]
     C["Consumer (데이터를 소비)"] -->|"super"| D["<? super T>"]
@@ -233,6 +236,7 @@ static <T> List<T> flatten(List<? extends T>... lists) {
 > **비유:** 일반 사물함은 한 종류의 물건만 넣지만, **스마트 사물함**은 칸마다 "신발칸", "책칸", "노트북칸"이라고 적혀 있어서, 넣고 꺼낼 때 올바른 물건인지 자동으로 확인합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["Favorites 컨테이너"] --> B["put(String.class,"]
     A --> C["put(Integer.class,"]
@@ -279,6 +283,7 @@ Integer i = f.getFavorite(Integer.class); // 42
 > **비유:** 정수 상수는 **번호표** — 3번이 "오렌지"인지 "행성 수성"인지 구분할 수 없습니다. 열거 타입은 **이름표** — "ORANGE"는 과일이고 "MERCURY"는 행성임이 명확합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["int 상수"] --> B["타입 안전 없음"]
     A --> C["디버깅 어려움"]
@@ -384,6 +389,7 @@ public void applyStyles(Set<Style> styles) {
 > **비유:** 옷장에서 "0번 칸"(ordinal)이 아니라 **"봄옷 칸"**(EnumMap)으로 찾는 것이 자연스럽고 안전합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["ordinal 인덱싱"] -->|"배열[plant.lifeCycle"| B["타입 안전 없음"]
     C["EnumMap"] -->|"map.get(LifeCycle."| D["타입 안전 + 성능"]

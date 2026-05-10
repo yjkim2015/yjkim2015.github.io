@@ -237,6 +237,7 @@ count++;  // 이 줄이 있으면 위의 람다도 컴파일 에러
 스택 변수는 메서드가 끝나면 사라지지만, 람다 인스턴스는 힙에서 더 오래 살 수 있습니다. 람다가 스택 변수를 직접 참조하면 메서드 종료 후 댕글링 참조가 발생합니다. 해결책은 **람다 생성 시점의 값을 복사(copy-by-value)** 하는 것입니다. 복사 후 원본이 바뀌면 복사본과 불일치가 생겨 혼란이 발생하므로, Java는 변경 자체를 금지합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S["스택(메서드)"] -->|count=0 복사| L["람다(힙)"]
     S -->|메서드 종료| GONE["count 소멸"]
@@ -360,6 +361,7 @@ String[] nameArr = names.stream().toArray(String[]::new);
 ### 메서드 레퍼런스 4종 요약
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["메서드 레퍼런스 4종"] --> B["1️⃣ Class::staticM"]
     A --> C["2️⃣ instance::meth"]
@@ -622,6 +624,7 @@ public void scopeExample() {
 람다는 익명 클래스처럼 별도의 `.class` 파일을 생성하지 않습니다. 대신 Java 7에서 도입된 `invokedynamic` JVM 명령어를 사용합니다. 첫 번째 호출 시 `LambdaMetafactory`가 런타임에 함수형 인터페이스 구현 클래스를 동적으로 생성하고 캐싱합니다. 이후 호출에서는 캐시된 구현을 재사용하므로 클래스 로딩 비용이 없습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["컴파일러"] -->|invokedynamic| JVM["JVM"]
     JVM -->|최초 호출| LMF["LambdaMetafactory"]
@@ -791,6 +794,7 @@ list.forEach(System.out::println);
 ## 정리 요약
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["람다"] --> B["함수형 인터페이스"]
     A --> C["타입 추론"]

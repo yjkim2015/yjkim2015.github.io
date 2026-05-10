@@ -29,6 +29,7 @@ Redis의 **개별 명령어**는 원자적이다. `INCR`은 GET → 증가 → S
 Redis는 **싱글 스레드**로 명령어 큐를 처리한다. Lua 스크립트가 실행되는 동안 다른 모든 명령어는 큐에서 대기한다:
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant Q as "명령어 큐"
     participant R as "Redis (싱글 스레드)"
@@ -87,6 +88,7 @@ redisTemplate.execute(
 `EVAL`은 매 호출마다 스크립트 전문(全文)을 네트워크로 전송한다. 스크립트가 수백 바이트라면 초당 수만 번 호출 시 네트워크 낭비가 크다. `EVALSHA`는 스크립트를 서버에 저장하고 SHA1 해시로만 호출한다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant C as "Client"
     participant R as "Redis Server"

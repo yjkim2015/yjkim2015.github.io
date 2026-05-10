@@ -41,6 +41,7 @@ console.log(vault.check('wrongpass')); // false
 > 비유: 학교 교칙을 생각해보세요. 학생은 어느 학교에 소속됐느냐에 따라 그 학교 규칙을 따릅니다. 외출해서 다른 학교 앞에 서 있어도, 본인 학교 규칙이 적용됩니다. 함수도 마찬가지입니다. 어디서 호출되든, 정의된 곳의 스코프 규칙을 따릅니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     G["전역: x=1"] --> O["outer: y=2"] --> I["inner: z=3"]
     I --> IA["x,y,z 접근 가능"]
@@ -77,6 +78,7 @@ outer();
 > 비유: 부모님이 이사를 가셨는데, 당신이 부모님 집 열쇠를 아직 가지고 있는 상황입니다. 부모님(외부 함수)은 이미 그 집에 살지 않지만, 열쇠(참조)를 가진 당신(내부 함수)은 여전히 그 집(변수)에 접근할 수 있습니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["outer() 호출"] --> B["count=0 생성"] --> C["inner 반환"] --> D["outer 제거"]
     D --> F["inner가 count 참조중 -"]
@@ -104,6 +106,7 @@ console.log(counter()); // 3
 ### 클로저가 생성되는 순간
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     R["JS 런타임"] -->|"makeCounter() 호출"| M["makeCounter()"]
     M -->|"count=0 생성"| H["힙 메모리"]
@@ -214,6 +217,7 @@ console.log(TodoModule.getPending());
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     PRIV["private: todos, ne"]
     PUB["public API: add(),"]
@@ -330,6 +334,7 @@ console.timeEnd('두 번째 계산'); // 거의 0ms — 캐시 히트!
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["함수 호출"] --> B{"캐시에 있나?"}
     B -->|"예"| C["캐시에서 반환"]
@@ -362,6 +367,7 @@ const getFirst = createHeavyResource();
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     GF["getFirst 함수"] -->|"클로저 참조"| LD["largeData 4MB"]
     LD --> WASTE["999,999개 낭비"]
@@ -436,6 +442,7 @@ buttons[1](); // 5
 왜 이럴까요? `var i`는 함수 스코프이기 때문에 루프 전체에서 **단 하나의 i**만 존재합니다. 루프가 끝나면 `i = 5`가 됩니다. 모든 함수가 같은 `i`를 참조하기 때문에 모두 5를 출력합니다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     I["var i = 5 (하나의 변수)"]
     B0["buttons[0]"] -->|"참조"| I
@@ -594,6 +601,7 @@ class Counter {
 ## 12. 정리: 클로저 체크리스트
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((클로저))
     정의

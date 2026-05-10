@@ -16,6 +16,7 @@ toc_label: 목차
 ### 전체 아키텍처
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     SEND["send(record)"] --> SER["Serializer"] --> PART["Partitioner"]
     PART --> ACC["RecordAccumulator("]
@@ -28,6 +29,7 @@ graph LR
 프로듀서는 메시지를 하나씩 보내지 않는다. 성능을 위해 **RecordAccumulator**에 배치로 모아서 전송한다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     B1["ProducerBatch1(꽉참)"] --> B2["ProducerBatch2(현재)"]
 ```
@@ -46,6 +48,7 @@ props.put(ProducerConfig.LINGER_MS_CONFIG, 20);         // 20ms 대기
 **linger.ms 효과:**
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["linger=0: 즉시전송"]
     B["linger=20: msg1~N"]
@@ -103,6 +106,7 @@ public class RegionPartitioner implements Partitioner {
 **Sticky Partitioner (Kafka 2.4+, 현재 기본값):**
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     RR["RoundRobin: msg→P0,P1 순환"]
     ST["Sticky: msg 배치 P0 누적"] --> SW["전송 후 전환"]
@@ -145,6 +149,7 @@ public class OrderConsumerService {
 **poll() 동작 세부 과정:**
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["1. poll(timeout) 호"]
     B["2. Fetcher가 각 파티션"]
@@ -174,6 +179,7 @@ max.poll.records=500
 **Fetch 동작 시각화:**
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant C as Consumer
     participant B as Broker
@@ -186,6 +192,7 @@ sequenceDiagram
 ### Heartbeat와 세션 관리
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant C as Consumer
     participant GC as Group Coordinator (Broker)
@@ -237,6 +244,7 @@ max.poll.interval.ms:
 ### Eager Rebalancing (기존 방식)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["초기: C1=P0,P1 / C2="]
     B["Phase1 Stop-the-Wo"]
@@ -257,6 +265,7 @@ graph LR
 ### Cooperative/Incremental Rebalancing (Kafka 2.4+)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["초기: C1=P0+P1, C2=P"] --> B["Round1: C1=P0+P1 유"]
     B --> C["Round2: C3=P3 신규 할"]
@@ -276,6 +285,7 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 ### Group Coordinator와 리밸런싱 프로토콜
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C1["Consumer(Leader)"] -->|"JoinGroup"| GC["GroupCoordinator"]
     C2["Consumer"] -->|"JoinGroup"| GC
@@ -292,6 +302,7 @@ graph LR
 ### At-Most-Once (최대 한 번)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["Consumer"] -->|"poll() 수신"| K["Kafka"]
     C -->|"Offset 커밋(먼저)"| K
@@ -313,6 +324,7 @@ for (ConsumerRecord<String, String> record : records) {
 ### At-Least-Once (최소 한 번)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["Consumer"] -->|"poll() 수신"| K["Kafka"]
     C -->|"처리 완료"| DB["처리 대상"]
@@ -334,6 +346,7 @@ consumer.commitSync();  // 커밋 (장애 시 재처리 발생)
 ### Exactly-Once (정확히 한 번)
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     P["Producer"] -->|"begin→쓰기→offset커밋"| K["Kafka"]
     P -->|"commit"| K
@@ -350,6 +363,7 @@ graph LR
 동일 메시지를 여러 번 보내도 한 번만 저장되도록 보장한다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     P["Producer"] -->|"msg(seq=1)"| B1["Broker(멱등성 없음)"]
     B1 -->|"ACK 손실→재전송"| P
@@ -410,6 +424,7 @@ public class OrderTransactionalService {
 **트랜잭션 내부 동작:**
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     P["Producer"] -->|"initTransactions()"| TC["TxCoordinator"]
     TC -->|"PID+epoch"| P
@@ -475,6 +490,7 @@ public class ExactlyOnceProcessor {
 ### 정상 상태
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     L["Broker 1 (Leader)"] -->|복제| F1["Broker 2 (Follower)"]
     L -->|복제| F2["Broker 3 (Follower)"]
@@ -483,6 +499,7 @@ graph LR
 ### 리더 장애 시
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant CTL as Controller
     participant B1 as Broker1(구Leader)
@@ -498,6 +515,7 @@ sequenceDiagram
 ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러**로 선출된다.
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ZKA["ZK: /controller 선점"] --> ZKB["먼저 생성 = 컨트롤러"]
     KRA["KRaft: Raft 합의"] --> KRB["quorum 투표 → Active"]
@@ -527,6 +545,7 @@ key="user-2" → {"name":"이영희", "email":"c@c.com"}  (유일값)
 ### 컴팩션 동작 과정
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     CLEAN["Clean 영역 (컴팩션됨)"] --> DIRTY["Dirty 영역 (대상)"]
     DIRTY --> SCAN["1. Dirty 영역 스캔"]
@@ -535,6 +554,7 @@ graph LR
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     B0["0:k1v1"] --> B2["2:k1v2"] --> B4["4:k2v2"] --> B6["6:k3v2"]
     B6 -->|컴팩션| A4["4:k2v2"] --> A5["5:k1v3"] --> A6["6:k3v2"]
@@ -552,6 +572,7 @@ producer.send(new ProducerRecord<>("user-profile", "user-1", null));
 ```
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     T1["k1:v1"] --> T2["k1:v2"] --> T3["k1:null (tombstone"]
     T3 -->|컴팩션| GONE["k1 관련 모든 레코드 삭제"]
