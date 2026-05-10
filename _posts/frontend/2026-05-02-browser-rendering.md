@@ -89,17 +89,11 @@ graph LR
 브라우저는 HTML을 위에서 아래로 순서대로 파싱합니다. 그러다 `<script>` 태그를 만나면 파싱을 **완전히 멈춥니다.** 왜냐하면 자바스크립트가 DOM을 수정할 수 있기 때문에, 스크립트를 실행하기 전에는 "다음 HTML이 어떻게 바뀔지 모른다"는 불확실성 때문입니다.
 
 ```mermaid
-sequenceDiagram
-    participant PARSER as HTML 파서
-    participant SCRIPT as script 태그
-    participant NETWORK as 네트워크
-    PARSER->>PARSER: HTML 파싱 진행
-    PARSER->>SCRIPT: script 태그 발견!
-    PARSER->>NETWORK: JS 파일 요청
-    Note over PARSER: 파싱 일시 중단! (파서 블로킹)
-    NETWORK-->>PARSER: JS 파일 수신
-    PARSER->>PARSER: JS 실행 완료
-    PARSER->>PARSER: HTML 파싱 재개
+graph LR
+    PARSER["HTML 파서"] -->|"script 태그 발견"| BLOCK["파싱 중단"]
+    BLOCK -->|"JS 요청"| NETWORK["네트워크"]
+    NETWORK -->|"JS 수신"| EXEC["JS 실행"]
+    EXEC -->|"파싱 재개"| PARSER
 ```
 
 만약 이걸 안 하면? `<head>` 안에 큰 스크립트를 넣으면 페이지가 **하얗게 빈 채로 오래 기다리는** 현상이 생깁니다. 사용자 입장에서는 페이지가 멈춘 것처럼 보입니다.

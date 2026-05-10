@@ -162,6 +162,188 @@ sequenceDiagram
 | WebSocket | 수십ms | 낮음 (연결당 메모리만) | 높음 | 채팅, 게임, 실시간 |
 | SSE | 수십ms | 낮음 | 서버→클라이언트만 | 알림, 피드 업데이트 |
 
+**실전 구현 — WebSocket 핸들러 (Spring Boot):**
+
+```java
+// WebSocket 설정
+@Configuration
+@EnableWebSocket
+public class WebSocketConfig implements WebSocketConfigurer {
+
+    private final ChatWebSocketHandler chatHandler;
+
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        registry.addHandler(chatHandler, "/ws/chat")
+                .setAllowedOrigins("*")
+                // Handshake 인터셉터로 JWT 토큰 검증
+                .addInterceptors(new JwtHandshakeInterceptor());
+    }
+}
+
+// JWT Handshake 인터셉터 — 연결 전 인증
+@Component
+public class JwtHandshakeInterceptor implements HandshakeInterceptor {
+
+    private final JwtTokenProvider jwtTokenProvider;
+
+    @Override
+    public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                                   WebSocketHandler wsHandler, Map<String, Object> attributes) {
+        String token = extractToken(request);
+        if (token == null || !jwtTokenProvider.validateToken(token)) {
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;  // 연결 거부
+        }
+        Long userId = jwtTokenProvider.getUserId(token);
+        attributes.put("userId", userId);  // 세션에 userId 저장
+        return true;
+    }
+
+    private String extractToken(ServerHttpRequest request) {
+        List<String> authHeaders = request.getHeaders().get("Authorization");
+        if (authHeaders != null && !authHeaders.isEmpty()) {
+            String header = authHeaders.get(0);
+            if (header.startsWith("Bearer ")) return header.substring(7);
+        }
+        // WebSocket은 헤더 커스텀이 어려워 쿼리 파라미터로도 수신
+        URI uri = request.getURI();
+        String query = uri.getQuery();
+        if (query != null && query.contains("token=")) {
+            return query.split("token=")[1].split("&")[0];
+        }
+        return null;
+    }
+
+    @Override
+    public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                               WebSocketHandler wsHandler, Exception exception) {}
+}
+
+// WebSocket 핸들러 — 메시지 수신·발송 처리
+@Component
+@RequiredArgsConstructor
+public class ChatWebSocketHandler extends TextWebSocketHandler {
+
+    private final MessageService messageService;
+    private final PresenceService presenceService;
+    private final ObjectMapper objectMapper;
+
+    // 연결된 세션 관리: userId → WebSocketSession
+    // ConcurrentHashMap으로 스레드 안전하게 관리
+    private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
+
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) {
+        Long userId = (Long) session.getAttributes().get("userId");
+        sessions.put(userId, session);
+
+        // Redis에 온라인 상태 등록 (TTL 30초)
+        presenceService.setOnline(userId);
+        System.out.println("User " + userId + " connected. Total: " + sessions.size());
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        Long senderId = (Long) session.getAttributes().get("userId");
+        ChatMessage chatMessage = objectMapper.readValue(message.getPayload(), ChatMessage.class);
+        chatMessage.setSenderId(senderId);
+
+        switch (chatMessage.getType()) {
+            case CHAT -> handleChatMessage(chatMessage);
+            case PING -> handlePing(session, senderId);
+            case READ -> handleReadReceipt(chatMessage, senderId);
+        }
+    }
+
+    private void handleChatMessage(ChatMessage msg) throws Exception {
+        // 1. 메시지 저장 (Kafka → HBase)
+        SavedMessage saved = messageService.saveMessage(msg);
+
+        // 2. 수신자가 같은 서버에 연결되어 있으면 직접 전달
+        WebSocketSession receiverSession = sessions.get(msg.getReceiverId());
+        if (receiverSession != null && receiverSession.isOpen()) {
+            String payload = objectMapper.writeValueAsString(saved);
+            receiverSession.sendMessage(new TextMessage(payload));
+        } else {
+            // 3. 다른 서버에 있거나 오프라인이면 Kafka로 발행 → 해당 서버가 라우팅 or FCM Push
+            messageService.publishToKafka(saved);
+        }
+    }
+
+    private void handlePing(WebSocketSession session, Long userId) throws Exception {
+        // Heartbeat: Redis TTL 갱신으로 온라인 상태 유지
+        presenceService.refreshTtl(userId);
+        session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+    }
+
+    private void handleReadReceipt(ChatMessage msg, Long userId) {
+        messageService.markAsRead(msg.getMessageId(), userId);
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        Long userId = (Long) session.getAttributes().get("userId");
+        sessions.remove(userId);
+        presenceService.setOffline(userId);
+        System.out.println("User " + userId + " disconnected: " + status);
+    }
+
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception) {
+        Long userId = (Long) session.getAttributes().get("userId");
+        sessions.remove(userId);
+        presenceService.setOffline(userId);
+    }
+}
+
+// Kafka 메시지 저장 서비스
+@Service
+@RequiredArgsConstructor
+public class MessageService {
+
+    private final KafkaTemplate<String, SavedMessage> kafkaTemplate;
+    private final SnowflakeIdGenerator idGenerator;
+    private static final String TOPIC = "chat-messages";
+
+    public SavedMessage saveMessage(ChatMessage msg) {
+        SavedMessage saved = SavedMessage.builder()
+                .id(idGenerator.nextId())          // Snowflake ID
+                .senderId(msg.getSenderId())
+                .receiverId(msg.getReceiverId())
+                .content(msg.getContent())
+                .type(msg.getType())
+                .sentAt(Instant.now())
+                .build();
+        return saved;
+    }
+
+    // Kafka로 발행 → Consumer가 HBase에 영구 저장
+    public void publishToKafka(SavedMessage message) {
+        // Partition Key = conversationId → 같은 대화방 메시지는 같은 파티션에 순서 보장
+        String partitionKey = message.getConversationId().toString();
+        kafkaTemplate.send(TOPIC, partitionKey, message);
+    }
+}
+
+// Kafka Consumer — HBase 영구 저장
+@Component
+@RequiredArgsConstructor
+public class MessageStorageConsumer {
+
+    private final HBaseMessageRepository hbaseRepository;
+
+    @KafkaListener(topics = "chat-messages", groupId = "message-storage",
+                   concurrency = "10")  // 10개 스레드로 병렬 처리
+    public void consume(ConsumerRecord<String, SavedMessage> record) {
+        SavedMessage message = record.value();
+        // HBase RowKey: {conversationId}_{Long.MAX_VALUE - messageId}
+        // → 역순 정렬로 최신 메시지가 앞에 위치
+        hbaseRepository.save(message);
+    }
+}
+```
+
 ### WebSocket 핸드셰이크 상세
 
 ```http

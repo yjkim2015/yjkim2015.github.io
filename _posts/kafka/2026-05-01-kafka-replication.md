@@ -51,10 +51,11 @@ ISR = {Leader만 남음}  (Follower들이 뒤처진 경우)
 ### ISR 판단 기준
 
 ```mermaid
-stateDiagram-v2
-    [*] --> "ISR 포함"
-    "ISR 포함" --> "ISR 제외 (Out-of-Sync)": "replica.lag.time.max.ms 내\nfetch 요청 없거나 너무 뒤처짐"
-    "ISR 제외 (Out-of-Sync)" --> "ISR 포함": "Leader의 로그를 따라잡음"
+graph LR
+    IN["ISR 포함"]
+    OUT["ISR 제외"]
+    IN -->|"lag.time.max.ms 초과"| OUT
+    OUT -->|"Leader 로그 따라잡음"| IN
 ```
 
 `replica.lag.time.max.ms` (기본값: 30000ms = 30초) 이내에 Follower가 Leader의 메시지를 fetch해야 ISR을 유지한다.

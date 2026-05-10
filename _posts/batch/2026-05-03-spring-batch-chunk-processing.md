@@ -79,18 +79,12 @@ chunk-size가 크면 한 트랜잭션에서 더 많은 데이터를 처리하므
 중요한 포인트입니다. **JdbcCursorItemReader는 트랜잭션에 참여**하지만, **JdbcPagingItemReader는 자체 트랜잭션으로 읽습니다**. Paging Reader는 read가 chunk 트랜잭션 밖에서 실행될 수 있으므로, 롤백 시 이미 읽은 데이터는 되돌아가지 않습니다. 이것이 재시작 시 ExecutionContext에 저장된 page 위치가 중요한 이유입니다.
 
 ```mermaid
-sequenceDiagram
-    participant TX as TX
-    participant CR as Reader
-    participant PW as Processor/Writer
-    Note over TX,CR: Cursor 방식
-    TX->>CR: read() 커서이동
-    TX->>PW: process/write
-    TX->>TX: COMMIT
-    Note over TX,CR: Paging 방식
-    CR->>CR: 별도 SELECT
-    TX->>PW: process/write
-    TX->>TX: COMMIT
+graph LR
+    TX["TX"] -->|"read() 커서이동"| CR["Reader(Cursor)"]
+    TX -->|"process/write"| PW["Processor/Writer"]
+    TX -->|"COMMIT"| TX
+    CR2["Reader(Paging)"] -->|"별도 SELECT"| CR2
+    TX2["TX"] -->|"process/write"| PW2["Processor/Writer"]
 ```
 
 ---

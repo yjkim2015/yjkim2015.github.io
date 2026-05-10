@@ -104,16 +104,13 @@ console.log(counter()); // 3
 ### 클로저가 생성되는 순간
 
 ```mermaid
-sequenceDiagram
-    participant R as JS 런타임
-    participant M as makeCounter()
-    participant H as 힙 메모리
-    R->>M: makeCounter() 호출
-    M->>H: count=0 생성
-    M-->>R: inner 함수 반환
-    R->>M: counter() 호출
-    M->>H: count 읽고 증가
-    M-->>R: 1 반환
+graph LR
+    R["JS 런타임"] -->|"makeCounter() 호출"| M["makeCounter()"]
+    M -->|"count=0 생성"| H["힙 메모리"]
+    M -->|"inner 함수 반환"| R
+    R -->|"counter() 호출"| M
+    M -->|"count 읽고 증가"| H
+    M -->|"1 반환"| R
 ```
 
 ---

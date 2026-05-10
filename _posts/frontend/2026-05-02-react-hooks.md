@@ -425,6 +425,179 @@ function SearchInput() {
 
 ---
 
+### useLocalStorage — localStorage와 상태 동기화
+
+```typescript
+// localStorage 읽기/쓰기를 useState처럼 사용
+function useLocalStorage<T>(key: string, initialValue: T) {
+    // 초기값: localStorage에서 읽되, 실패 시 initialValue 사용
+    const [storedValue, setStoredValue] = useState<T>(() => {
+        try {
+            const item = window.localStorage.getItem(key);
+            return item ? (JSON.parse(item) as T) : initialValue;
+        } catch {
+            return initialValue;
+        }
+    });
+
+    const setValue = (value: T | ((prev: T) => T)) => {
+        try {
+            // 함수형 업데이트 지원
+            const valueToStore = value instanceof Function ? value(storedValue) : value;
+            setStoredValue(valueToStore);
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        } catch (error) {
+            console.error('useLocalStorage setValue error:', error);
+        }
+    };
+
+    const removeValue = () => {
+        setStoredValue(initialValue);
+        window.localStorage.removeItem(key);
+    };
+
+    return [storedValue, setValue, removeValue] as const;
+}
+
+// 사용 예 — 사용자 설정 영구 저장
+function ThemeSettings() {
+    const [theme, setTheme, resetTheme] = useLocalStorage<'light' | 'dark'>(
+        'user-theme',
+        'light'
+    );
+
+    return (
+        <div>
+            <p>현재 테마: {theme}</p>
+            <button onClick={() => setTheme('dark')}>다크 모드</button>
+            <button onClick={() => setTheme('light')}>라이트 모드</button>
+            <button onClick={resetTheme}>초기화</button>
+        </div>
+    );
+}
+```
+
+### useIntersectionObserver — 뷰포트 진입 감지 (무한 스크롤/지연 로딩)
+
+```typescript
+interface UseIntersectionObserverOptions {
+    threshold?: number;       // 0~1: 요소가 얼마나 보여야 트리거
+    rootMargin?: string;      // 뷰포트 확장 (예: "200px"이면 200px 전에 미리 트리거)
+    once?: boolean;           // true면 한 번만 감지 후 해제
+}
+
+function useIntersectionObserver(
+    options: UseIntersectionObserverOptions = {}
+) {
+    const { threshold = 0, rootMargin = '0px', once = false } = options;
+    const [isIntersecting, setIsIntersecting] = useState(false);
+    const targetRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => {
+        const element = targetRef.current;
+        if (!element) return;
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                setIsIntersecting(entry.isIntersecting);
+                // once 옵션: 한 번 보이면 관찰 해제
+                if (entry.isIntersecting && once) {
+                    observer.unobserve(element);
+                }
+            },
+            { threshold, rootMargin }
+        );
+
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [threshold, rootMargin, once]);
+
+    return { targetRef, isIntersecting };
+}
+
+// 사용 예 1: 이미지 지연 로딩 (Lazy Loading)
+function LazyImage({ src, alt }: { src: string; alt: string }) {
+    const { targetRef, isIntersecting } = useIntersectionObserver({
+        rootMargin: '200px',  // 200px 전에 미리 로드
+        once: true,           // 한 번만 감지
+    });
+
+    return (
+        <img
+            ref={targetRef as React.RefObject<HTMLImageElement>}
+            src={isIntersecting ? src : undefined}  // 뷰포트 진입 시 src 설정
+            data-src={src}
+            alt={alt}
+            style={{ minHeight: '200px', background: '#f0f0f0' }}
+        />
+    );
+}
+
+// 사용 예 2: 무한 스크롤 — 목록 끝에 도달하면 다음 페이지 로드
+function InfiniteProductList() {
+    const [products, setProducts] = useState<Product[]>([]);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loading, setLoading] = useState(false);
+
+    // 목록 끝 감지 센서
+    const { targetRef: sentinelRef, isIntersecting } = useIntersectionObserver({
+        rootMargin: '100px',
+    });
+
+    // 센서가 보이면 다음 페이지 로드
+    useEffect(() => {
+        if (isIntersecting && hasMore && !loading) {
+            setLoading(true);
+            fetch(`/api/products?page=${page}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.length === 0) {
+                        setHasMore(false);
+                    } else {
+                        setProducts(prev => [...prev, ...data]);
+                        setPage(p => p + 1);
+                    }
+                })
+                .finally(() => setLoading(false));
+        }
+    }, [isIntersecting, hasMore, loading, page]);
+
+    return (
+        <div>
+            {products.map(p => <ProductCard key={p.id} product={p} />)}
+            {/* 센티넬: 이 요소가 보이면 다음 페이지 로드 */}
+            <div ref={sentinelRef as React.RefObject<HTMLDivElement>}>
+                {loading && <Spinner />}
+                {!hasMore && <p>모든 상품을 불러왔습니다.</p>}
+            </div>
+        </div>
+    );
+}
+
+// 사용 예 3: 스크롤 애니메이션 트리거
+function AnimatedSection({ children }: { children: React.ReactNode }) {
+    const { targetRef, isIntersecting } = useIntersectionObserver({
+        threshold: 0.2,  // 20% 보일 때 트리거
+    });
+
+    return (
+        <section
+            ref={targetRef as React.RefObject<HTMLElement>}
+            style={{
+                opacity: isIntersecting ? 1 : 0,
+                transform: isIntersecting ? 'translateY(0)' : 'translateY(40px)',
+                transition: 'opacity 0.6s ease, transform 0.6s ease',
+            }}
+        >
+            {children}
+        </section>
+    );
+}
+```
+
+---
+
 ## 9. Hooks 규칙
 
 ```mermaid

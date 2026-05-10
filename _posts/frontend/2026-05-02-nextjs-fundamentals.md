@@ -257,16 +257,12 @@ export const config = {
 SSR/SSG 페이지는 서버에서 완성된 HTML을 보내지만, 클릭이나 입력 같은 인터랙션은 자바스크립트가 붙어야 가능합니다. 이 과정을 Hydration이라고 합니다.
 
 ```mermaid
-sequenceDiagram
-    participant CLIENT as 브라우저
-    participant SERVER as Next.js 서버
-    CLIENT->>SERVER: 페이지 요청
-    SERVER->>SERVER: 서버 컴포넌트 실행
-    SERVER-->>CLIENT: HTML + JS 번들 전달
-    CLIENT->>CLIENT: HTML 즉시 표시
-    CLIENT->>CLIENT: JS 파싱 및 실행
-    CLIENT->>CLIENT: Hydration 완료
-    Note over CLIENT: 인터랙션 가능
+graph LR
+    C["브라우저"] -->|"페이지 요청"| S["Next.js 서버"]
+    S -->|"서버 컴포넌트 실행"| S
+    S -->|"HTML+JS 번들"| C
+    C -->|"HTML 즉시 표시"| C
+    C -->|"Hydration 완료"| C
 ```
 
 ### Hydration 불일치 문제
@@ -334,6 +330,198 @@ function CreatePostForm() {
 ```
 
 ---
+
+**실전 구현 — SSG/SSR/ISR/CSR 완전한 페이지 컴포넌트:**
+
+```typescript
+// 1. SSG — 블로그 포스트 목록 (빌드 시 생성, 변경 거의 없음)
+// app/blog/page.tsx
+export const dynamic = 'force-static'; // 명시적 SSG 선언
+
+async function getBlogPosts(): Promise<Post[]> {
+    const res = await fetch('https://api.example.com/posts', {
+        cache: 'force-cache',  // 빌드 시 캐시, 이후 캐시 재사용
+    });
+    if (!res.ok) throw new Error('Failed to fetch posts');
+    return res.json();
+}
+
+export default async function BlogListPage() {
+    const posts = await getBlogPosts();
+
+    return (
+        <main>
+            <h1>블로그</h1>
+            <ul>
+                {posts.map(post => (
+                    <li key={post.id}>
+                        <a href={`/blog/${post.slug}`}>{post.title}</a>
+                        <time>{new Date(post.createdAt).toLocaleDateString('ko-KR')}</time>
+                    </li>
+                ))}
+            </ul>
+        </main>
+    );
+}
+
+// 2. ISR — 상품 목록 (1시간마다 재검증, 자주 바뀌지만 실시간 불필요)
+// app/products/page.tsx
+async function getProducts(): Promise<Product[]> {
+    const res = await fetch('https://api.example.com/products', {
+        next: { revalidate: 3600 },  // 1시간마다 백그라운드 재검증
+    });
+    return res.json();
+}
+
+export default async function ProductsPage() {
+    const products = await getProducts();
+    return (
+        <section>
+            <h1>상품 목록</h1>
+            <div className="grid">
+                {products.map(p => (
+                    <ProductCard key={p.id} product={p} />
+                ))}
+            </div>
+        </section>
+    );
+}
+
+// 동적 경로 SSG — 인기 상품 200개만 빌드 시 생성
+// app/products/[id]/page.tsx
+export async function generateStaticParams() {
+    const products = await fetch('https://api.example.com/products/popular?limit=200')
+        .then(r => r.json());
+    return products.map((p: Product) => ({ id: String(p.id) }));
+}
+
+export default async function ProductDetailPage({ params }: { params: { id: string } }) {
+    const product = await fetch(`https://api.example.com/products/${params.id}`, {
+        next: { revalidate: 3600 },
+    }).then(r => r.json());
+
+    return (
+        <article>
+            <h1>{product.name}</h1>
+            <p>₩{product.price.toLocaleString()}</p>
+            <p>재고: {product.stock}개</p>
+        </article>
+    );
+}
+
+// 3. SSR — 사용자별 대시보드 (매 요청마다 최신 데이터)
+// app/dashboard/page.tsx
+import { cookies } from 'next/headers';
+
+export const dynamic = 'force-dynamic'; // 명시적 SSR 선언 (캐시 없음)
+
+async function getUserDashboard(userId: string) {
+    const res = await fetch(`https://api.example.com/users/${userId}/dashboard`, {
+        cache: 'no-store',  // 캐시 완전 비활성화 → 매 요청마다 서버 실행
+        headers: { 'X-User-Id': userId },
+    });
+    return res.json();
+}
+
+export default async function DashboardPage() {
+    const cookieStore = cookies();
+    const userId = cookieStore.get('userId')?.value;
+
+    if (!userId) {
+        redirect('/login');
+    }
+
+    const dashboard = await getUserDashboard(userId);
+
+    return (
+        <div>
+            <h1>안녕하세요, {dashboard.userName}님</h1>
+            <p>미읽은 알림: {dashboard.unreadCount}개</p>
+            <p>오늘 주문: {dashboard.todayOrders}건</p>
+        </div>
+    );
+}
+
+// 4. CSR — 실시간 장바구니 (클라이언트에서만 관리)
+// components/CartPanel.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+
+export function CartPanel() {
+    const [cartItems, setCartItems] = useState<CartItem[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        // 클라이언트에서만 실행: localStorage + 서버 동기화
+        const localCart = JSON.parse(localStorage.getItem('cart') ?? '[]');
+        setCartItems(localCart);
+        setIsLoading(false);
+    }, []);
+
+    const removeItem = (id: string) => {
+        const updated = cartItems.filter(item => item.id !== id);
+        setCartItems(updated);
+        localStorage.setItem('cart', JSON.stringify(updated));
+    };
+
+    if (isLoading) return <CartSkeleton />;
+
+    return (
+        <aside>
+            <h2>장바구니 ({cartItems.length})</h2>
+            {cartItems.map(item => (
+                <div key={item.id}>
+                    <span>{item.name}</span>
+                    <span>₩{item.price.toLocaleString()}</span>
+                    <button onClick={() => removeItem(item.id)}>삭제</button>
+                </div>
+            ))}
+            <p>합계: ₩{cartItems.reduce((s, i) => s + i.price, 0).toLocaleString()}</p>
+        </aside>
+    );
+}
+
+// 5. API Route — /api/products (GET, POST)
+// app/api/products/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get('category') ?? 'all';
+    const page = Number(searchParams.get('page') ?? '1');
+
+    const products = await productService.findAll({ category, page, limit: 20 });
+    const total = await productService.count({ category });
+
+    return NextResponse.json({
+        data: products,
+        pagination: { page, total, totalPages: Math.ceil(total / 20) }
+    });
+}
+
+export async function POST(request: NextRequest) {
+    // 인증 확인
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+    const user = await verifyToken(token);
+    if (!user || user.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { name, price, stock } = body;
+
+    if (!name || price == null || stock == null) {
+        return NextResponse.json(
+            { error: '필수 필드 누락: name, price, stock' },
+            { status: 400 }
+        );
+    }
+
+    const product = await productService.create({ name, price, stock });
+    return NextResponse.json(product, { status: 201 });
+}
+```
 
 ## 3번 다이어그램 - Next.js 정리
 

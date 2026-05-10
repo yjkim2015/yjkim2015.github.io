@@ -684,7 +684,7 @@ min.insync.replicas=2  # ISR이 2개 미만이면 쓰기 거부
 
 ## 왜 Kafka인가? (vs RabbitMQ vs AWS SQS)
 
-| | **Kafka** | **RabbitMQ** | **AWS SQS** |
+| 구분 | **Kafka** | **RabbitMQ** | **AWS SQS** |
 |--|-----------|--------------|-------------|
 | **메시지 보존** | 설정 기간(기본 7일) | 소비 후 즉시 삭제 | 최대 14일 |
 | **순서 보장** | 파티션 내 보장 | 큐 단위 보장 | FIFO 큐만 보장 |

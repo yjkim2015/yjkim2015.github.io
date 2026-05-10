@@ -409,7 +409,7 @@ graph TB
     C ---|조합| N["Neo4j"]
 ```
 
-| | Redis | MongoDB | Cassandra | Neo4j |
+| 구분 | Redis | MongoDB | Cassandra | Neo4j |
 |---|-------|---------|-----------|-------|
 | 데이터 모델 | Key-Value | Document (JSON) | Wide Column | Graph |
 | CAP | CP | CP | AP (Tunable) | CP |

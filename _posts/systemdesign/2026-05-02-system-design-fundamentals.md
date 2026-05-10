@@ -327,6 +327,91 @@ graph LR
 
 ---
 
+**실전 구현 — Nginx 로드밸런서 설정:**
+
+```nginx
+# /etc/nginx/nginx.conf
+
+upstream app_servers {
+    # 기본: 라운드 로빈
+    server app1.internal:8080 weight=5;  # 가중치 5 (고사양)
+    server app2.internal:8080 weight=3;  # 가중치 3
+    server app3.internal:8080 weight=2;  # 가중치 2 (저사양)
+
+    # 최소 연결 방식 (WebSocket, 파일 업로드 등 장기 연결)
+    # least_conn;
+
+    # IP 해시 (세션 유지 필요 시)
+    # ip_hash;
+
+    # 헬스체크: 3번 실패 시 30초 제외
+    server app1.internal:8080 max_fails=3 fail_timeout=30s;
+    server app2.internal:8080 max_fails=3 fail_timeout=30s;
+
+    # keepalive: upstream과 연결 재사용 (TCP handshake 비용 절감)
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name api.example.com;
+
+    # HTTP → HTTPS 리다이렉트
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+
+    ssl_certificate     /etc/ssl/certs/api.crt;
+    ssl_certificate_key /etc/ssl/private/api.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    # 요청 크기 제한 (파일 업로드 최대 10MB)
+    client_max_body_size 10m;
+
+    # 타임아웃 설정
+    proxy_connect_timeout 5s;
+    proxy_read_timeout    60s;
+
+    location /api/ {
+        proxy_pass http://app_servers;
+        proxy_http_version 1.1;
+
+        # keepalive 연결 재사용
+        proxy_set_header Connection "";
+
+        # 실제 클라이언트 IP 전달
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+
+        # Rate Limiting: IP당 초당 10건
+        limit_req zone=api_limit burst=20 nodelay;
+    }
+
+    # WebSocket 프록시
+    location /ws/ {
+        proxy_pass http://app_servers;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;  # WebSocket 장기 연결
+    }
+
+    # 정적 파일은 직접 서빙 (upstream 불필요)
+    location /static/ {
+        alias /var/www/static/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+
+# Rate Limiting 존 선언 (http 블록)
+# limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+```
+
 ## 7. 데이터베이스 확장
 
 ### 읽기 복제 (Read Replica) — 읽기 부하를 분산하는 가장 쉬운 방법
@@ -345,6 +430,81 @@ graph LR
 ```
 
 **복제 지연(Replication Lag)을 반드시 고려해야 합니다.** 비동기 복제 시 마스터에 쓴 데이터가 레플리카에 반영되는 데 수백 ms ~ 수 초가 걸릴 수 있습니다. 회원가입 직후 프로필을 조회하면 레플리카에 아직 없을 수 있습니다. 이 경우 마스터에서 읽어야 합니다. 이 패턴을 "Read-your-writes Consistency"라고 합니다. 코드에서 이를 명시적으로 처리하지 않으면, 회원가입 직후 "존재하지 않는 사용자"라는 에러가 납니다.
+
+**실전 구현 — Spring Boot 읽기/쓰기 DataSource 분리:**
+
+```java
+// application.yml
+// datasource:
+//   master:
+//     url: jdbc:mysql://master.db.internal:3306/myapp
+//     username: app_user
+//     password: ${DB_PASSWORD}
+//   replica:
+//     url: jdbc:mysql://replica.db.internal:3306/myapp
+//     username: app_readonly
+//     password: ${DB_READONLY_PASSWORD}
+
+@Configuration
+public class DataSourceConfig {
+
+    @Bean
+    @ConfigurationProperties("datasource.master")
+    public DataSource masterDataSource() {
+        return DataSourceBuilder.create().build();
+    }
+
+    @Bean
+    @ConfigurationProperties("datasource.replica")
+    public DataSource replicaDataSource() {
+        return DataSourceBuilder.create().build();
+    }
+
+    @Bean
+    @Primary
+    public DataSource routingDataSource(
+            @Qualifier("masterDataSource") DataSource master,
+            @Qualifier("replicaDataSource") DataSource replica) {
+
+        Map<Object, Object> sources = new HashMap<>();
+        sources.put("master", master);
+        sources.put("replica", replica);
+
+        AbstractRoutingDataSource routing = new AbstractRoutingDataSource() {
+            @Override
+            protected Object determineCurrentLookupKey() {
+                // @Transactional(readOnly = true)면 replica, 아니면 master
+                boolean isReadOnly = TransactionSynchronizationManager.isCurrentTransactionReadOnly();
+                return isReadOnly ? "replica" : "master";
+            }
+        };
+        routing.setTargetDataSources(sources);
+        routing.setDefaultTargetDataSource(master);
+        routing.afterPropertiesSet();
+        return routing;
+    }
+}
+
+// 서비스 계층에서 readOnly 트랜잭션으로 replica 자동 사용
+@Service
+@RequiredArgsConstructor
+public class ProductService {
+
+    private final ProductRepository productRepository;
+
+    // readOnly=true → replica DataSource 자동 선택
+    @Transactional(readOnly = true)
+    public List<Product> findAll() {
+        return productRepository.findAll();
+    }
+
+    // readOnly=false (기본) → master DataSource 선택
+    @Transactional
+    public Product create(CreateProductRequest req) {
+        return productRepository.save(req.toEntity());
+    }
+}
+```
 
 ### 샤딩 (Sharding) — DB를 수평으로 나누기
 
@@ -425,6 +585,111 @@ redisTemplate.opsForValue().set("user:" + userId, userData, Duration.ofHours(1))
 public void updateUser(Long userId, UserRequest req) {
     userRepository.save(req.toEntity(userId));
     redisTemplate.delete("user:" + userId);  // 캐시 즉시 무효화
+}
+```
+
+**실전 구현 — Redis 캐시 전략 (Spring Boot):**
+
+```java
+// application.yml
+// spring:
+//   data:
+//     redis:
+//       host: redis.internal
+//       port: 6379
+//       timeout: 2000ms
+//       lettuce:
+//         pool:
+//           max-active: 20
+//           max-idle: 10
+
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(factory);
+
+        // Key: String 직렬화
+        template.setKeySerializer(new StringRedisSerializer());
+        // Value: JSON 직렬화 (ObjectMapper 재사용 불필요)
+        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+        return template;
+    }
+}
+
+@Service
+@RequiredArgsConstructor
+public class CacheService {
+
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final ProductRepository productRepository;
+
+    // 1. Cache-Aside 패턴
+    public Product getProduct(Long id) {
+        String key = "product:" + id;
+        Product cached = (Product) redisTemplate.opsForValue().get(key);
+        if (cached != null) return cached;
+
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ProductNotFoundException(id));
+        redisTemplate.opsForValue().set(key, product, Duration.ofMinutes(30));
+        return product;
+    }
+
+    // 2. 캐시 스탬피드 방지 — Mutex Lock (Redisson)
+    public Product getProductWithLock(Long id) {
+        String key = "product:" + id;
+        Product cached = (Product) redisTemplate.opsForValue().get(key);
+        if (cached != null) return cached;
+
+        // 분산 락: 첫 번째 요청만 DB 조회, 나머지는 대기
+        String lockKey = "lock:product:" + id;
+        Boolean locked = redisTemplate.opsForValue()
+                .setIfAbsent(lockKey, "1", Duration.ofSeconds(5));
+
+        if (Boolean.TRUE.equals(locked)) {
+            try {
+                Product product = productRepository.findById(id).orElseThrow();
+                redisTemplate.opsForValue().set(key, product, Duration.ofMinutes(30));
+                return product;
+            } finally {
+                redisTemplate.delete(lockKey);
+            }
+        } else {
+            // 락 획득 실패 → 짧게 대기 후 캐시 재조회
+            try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return getProductWithLock(id);
+        }
+    }
+
+    // 3. Write-Through — 쓰기 시 캐시도 동시 업데이트
+    @Transactional
+    public Product updateProduct(Long id, UpdateProductRequest req) {
+        Product product = productRepository.findById(id).orElseThrow();
+        product.update(req.getName(), req.getPrice());
+        productRepository.save(product);
+
+        // DB와 캐시 동시 업데이트
+        redisTemplate.opsForValue().set("product:" + id, product, Duration.ofMinutes(30));
+        return product;
+    }
+
+    // 4. 랭킹/카운터 — Redis ZSet (Sorted Set)
+    public void incrementViewCount(Long productId) {
+        // ZINCRBY products:views 1 {productId}
+        redisTemplate.opsForZSet().incrementScore("products:views", productId.toString(), 1);
+    }
+
+    public List<String> getTopProducts(int count) {
+        // 조회수 높은 순으로 상위 N개 반환
+        Set<Object> top = redisTemplate.opsForZSet()
+                .reverseRange("products:views", 0, count - 1);
+        return top == null ? List.of() : top.stream().map(Object::toString).toList();
+    }
 }
 ```
 

@@ -420,14 +420,14 @@ console.log(dog instanceof Animal); // true (프로토타입 체인)
 ### Promise 상태 다이어그램
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Pending : new Promise() 생성
-    Pending --> Fulfilled : resolve() 호출
-    Pending --> Rejected : reject() 호출
-    Fulfilled --> [*] : .then() 처리
-    Rejected --> [*] : .catch() 처리
-    Fulfilled --> Fulfilled : .then() 체이닝
-    Rejected --> Fulfilled : .catch()에서 복구
+graph LR
+    Pending["Pending"]
+    Fulfilled["Fulfilled"]
+    Rejected["Rejected"]
+    Pending -->|"resolve() 호출"| Fulfilled
+    Pending -->|"reject() 호출"| Rejected
+    Fulfilled -->|".then() 체이닝"| Fulfilled
+    Rejected -->|".catch()에서 복구"| Fulfilled
 ```
 
 ```javascript

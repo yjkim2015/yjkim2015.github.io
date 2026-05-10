@@ -38,18 +38,13 @@ graph LR
 2PC는 "투표하고 결정한다"는 방식입니다. 선거 관리위원회(코디네이터)가 모든 참여자에게 "지금 커밋 가능한가?" 물어보고, 모두 YES면 커밋, 하나라도 NO면 전부 롤백합니다.
 
 ```mermaid
-sequenceDiagram
-    participant C as 코디네이터
-    participant A as DB-A
-    participant B as DB-B
-    Note over C,B: Phase 1 - Prepare
-    C->>A: PREPARE
-    C->>B: PREPARE
-    A-->>C: YES
-    B-->>C: YES
-    Note over C,B: Phase 2 - Commit
-    C->>A: COMMIT
-    C->>B: COMMIT
+graph LR
+    C["코디네이터"] -->|"PREPARE"| A["DB-A"]
+    C -->|"PREPARE"| B["DB-B"]
+    A -->|"YES"| C
+    B -->|"YES"| C
+    C -->|"COMMIT"| A
+    C -->|"COMMIT"| B
 ```
 
 ### 2PC의 문제점 — 왜 잘 안 쓰이나
@@ -77,18 +72,12 @@ PREPARE 단계에서 DB_A가 잠금을 획득하고 코디네이터의 COMMIT/RO
 2PC의 블로킹 문제를 해결하기 위한 개선안입니다. CanCommit → PreCommit → DoCommit 세 단계로 나눠 타임아웃을 추가합니다.
 
 ```mermaid
-sequenceDiagram
-    participant C as 코디네이터
-    participant P1 as 참여자1
-    participant P2 as 참여자2
-    C->>P1: CanCommit?
-    C->>P2: CanCommit?
-    P1-->>C: Yes
-    P2-->>C: Yes
-    C->>P1: PreCommit
-    C->>P2: PreCommit
-    C->>P1: DoCommit
-    C->>P2: DoCommit
+graph LR
+    C["코디네이터"] -->|"CanCommit?"| P1["참여자1"]
+    C -->|"CanCommit?"| P2["참여자2"]
+    P1 -->|"Yes"| C
+    C -->|"PreCommit→DoCommit"| P1
+    C -->|"PreCommit→DoCommit"| P2
 ```
 
 PreCommit 단계가 추가되어 코디네이터 장애 시 참여자가 타임아웃 후 자율적으로 커밋할 수 있습니다. 하지만 **네트워크 분할 시 여전히 문제가 남습니다.** 일부 참여자는 PreCommit을 받았고 일부는 못 받은 상황에서 코디네이터가 죽으면, 받은 쪽은 커밋하고 못 받은 쪽은 롤백합니다. 데이터 불일치가 생깁니다. 이론상으로는 개선이지만 실제로는 거의 사용하지 않습니다.

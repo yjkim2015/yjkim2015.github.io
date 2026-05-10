@@ -220,18 +220,12 @@ public User build() {
 ## 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as "클라이언트"
-    participant B as "User.Builder"
-    participant U as "User"
-    C->>B: "1. new Builder(name, age) — 필수값 설정"
-    C->>B: "2. .address(...) — 선택값 설정"
-    C->>B: "3. .email(...) — 선택값 설정"
-    C->>B: "4. .newsletter(true) — 선택값 설정"
-    C->>B: "5. .build() 호출"
-    B->>B: "6. 유효성 검사"
-    B->>U: "7. new User(this) — 객체 생성"
-    U-->>C: "8. 완성된 User 반환"
+graph LR
+    C["클라이언트"] -->|"new Builder(필수값)"| B["User.Builder"]
+    C -->|".address().email().build()"| B
+    B -->|"유효성 검사"| B
+    B -->|"new User(this)"| U["User"]
+    U -->|"완성된 User"| C
 ```
 
 ---

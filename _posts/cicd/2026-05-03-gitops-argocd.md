@@ -193,15 +193,18 @@ flowchart LR
 ArgoCD는 Kubernetes 리소스의 **Health Status**를 자체적으로 판단한다. 단순히 리소스가 존재하는지가 아니라, 실제로 정상 동작하는지를 확인한다.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Progressing : "Sync 시작"
-    Progressing --> Healthy : "모든 Pod Ready"
-    Progressing --> Degraded : "일부 Pod CrashLoopBackOff"
-    Progressing --> Suspended : "HPA/PDB로 일시 중단"
-    Degraded --> Progressing : "Pod 재시작 성공"
-    Healthy --> Missing : "리소스 삭제됨"
-    Missing --> Progressing : "재생성"
-    Degraded --> [*] : "타임아웃 → 알림"
+graph LR
+    Progressing["Progressing"]
+    Healthy["Healthy"]
+    Degraded["Degraded"]
+    Suspended["Suspended"]
+    Missing["Missing"]
+    Progressing -->|"모든 Pod Ready"| Healthy
+    Progressing -->|"CrashLoopBackOff"| Degraded
+    Progressing -->|"HPA/PDB 중단"| Suspended
+    Degraded -->|"재시작 성공"| Progressing
+    Healthy -->|"리소스 삭제됨"| Missing
+    Missing -->|"재생성"| Progressing
 ```
 
 | 상태 | 의미 | 예시 |

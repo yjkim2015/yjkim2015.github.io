@@ -277,6 +277,178 @@ const ExpensiveComponent = React.memo(function({ data, onClick }) {
 ---
 
 
+## 고급 컴포넌트 패턴
+
+### Compound 컴포넌트 패턴
+
+Compound 패턴은 여러 컴포넌트가 내부 상태를 공유하면서 유연한 조합이 가능하도록 설계하는 패턴입니다.
+
+```tsx
+// Select 컴포넌트 — Compound 패턴
+import { createContext, useContext, useState, ReactNode } from 'react';
+
+interface SelectContextType {
+    value: string;
+    onChange: (value: string) => void;
+    isOpen: boolean;
+    setIsOpen: (open: boolean) => void;
+}
+
+const SelectContext = createContext<SelectContextType | null>(null);
+
+function useSelectContext() {
+    const ctx = useContext(SelectContext);
+    if (!ctx) throw new Error('Select 컴포넌트 안에서만 사용 가능합니다');
+    return ctx;
+}
+
+// 루트 컴포넌트 — 상태를 소유
+function Select({ children, defaultValue = '' }: { children: ReactNode; defaultValue?: string }) {
+    const [value, setValue] = useState(defaultValue);
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <SelectContext.Provider value={{ value, onChange: setValue, isOpen, setIsOpen }}>
+            <div className="select-container">{children}</div>
+        </SelectContext.Provider>
+    );
+}
+
+// Trigger — 드롭다운 열기/닫기
+function SelectTrigger({ children }: { children: ReactNode }) {
+    const { isOpen, setIsOpen, value } = useSelectContext();
+    return (
+        <button onClick={() => setIsOpen(!isOpen)} className="select-trigger">
+            {value || children}
+            <span>{isOpen ? '▲' : '▼'}</span>
+        </button>
+    );
+}
+
+// Options 컨테이너
+function SelectContent({ children }: { children: ReactNode }) {
+    const { isOpen } = useSelectContext();
+    if (!isOpen) return null;
+    return <ul className="select-content">{children}</ul>;
+}
+
+// 개별 옵션
+function SelectItem({ value, children }: { value: string; children: ReactNode }) {
+    const { onChange, setIsOpen } = useSelectContext();
+    return (
+        <li
+            className="select-item"
+            onClick={() => { onChange(value); setIsOpen(false); }}
+        >
+            {children}
+        </li>
+    );
+}
+
+// 서브 컴포넌트를 루트에 연결
+Select.Trigger = SelectTrigger;
+Select.Content = SelectContent;
+Select.Item = SelectItem;
+
+// 사용 예 — 유연한 조합 가능
+function CategoryFilter() {
+    return (
+        <Select defaultValue="all">
+            <Select.Trigger>카테고리 선택</Select.Trigger>
+            <Select.Content>
+                <Select.Item value="all">전체</Select.Item>
+                <Select.Item value="electronics">전자기기</Select.Item>
+                <Select.Item value="clothing">의류</Select.Item>
+                <Select.Item value="food">식품</Select.Item>
+            </Select.Content>
+        </Select>
+    );
+}
+```
+
+### Render Props 패턴
+
+Render Props 패턴은 로직을 컴포넌트에 캡슐화하면서, 렌더링 결과를 호출자가 결정할 수 있도록 하는 패턴입니다.
+
+```tsx
+// 마우스 위치 추적 로직을 캡슐화
+interface MousePosition { x: number; y: number; }
+
+interface MouseTrackerProps {
+    render: (position: MousePosition) => ReactNode;
+}
+
+function MouseTracker({ render }: MouseTrackerProps) {
+    const [position, setPosition] = useState<MousePosition>({ x: 0, y: 0 });
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        setPosition({ x: e.clientX, y: e.clientY });
+    };
+
+    return (
+        <div onMouseMove={handleMouseMove} style={{ height: '300px', border: '1px solid #ccc' }}>
+            {render(position)}  {/* 렌더링 결과는 호출자가 결정 */}
+        </div>
+    );
+}
+
+// 다양한 방식으로 재사용
+function App() {
+    return (
+        <>
+            {/* 좌표 텍스트로 표시 */}
+            <MouseTracker
+                render={({ x, y }) => <p>마우스 위치: ({x}, {y})</p>}
+            />
+
+            {/* 팔로우 아이콘으로 표시 */}
+            <MouseTracker
+                render={({ x, y }) => (
+                    <div style={{ position: 'fixed', left: x, top: y, pointerEvents: 'none' }}>
+                        🎯
+                    </div>
+                )}
+            />
+        </>
+    );
+}
+
+// children as function — Render Props의 또 다른 형태
+interface DataFetcherProps<T> {
+    url: string;
+    children: (data: T | null, loading: boolean, error: Error | null) => ReactNode;
+}
+
+function DataFetcher<T>({ url, children }: DataFetcherProps<T>) {
+    const [data, setData] = useState<T | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        fetch(url)
+            .then(r => r.json())
+            .then(setData)
+            .catch(setError)
+            .finally(() => setLoading(false));
+    }, [url]);
+
+    return <>{children(data, loading, error)}</>;
+}
+
+// 사용 예
+function ProductPage() {
+    return (
+        <DataFetcher<Product[]> url="/api/products">
+            {(products, loading, error) => {
+                if (loading) return <Skeleton />;
+                if (error) return <ErrorMessage error={error} />;
+                return <ProductGrid products={products!} />;
+            }}
+        </DataFetcher>
+    );
+}
+```
+
 ## 극한 시나리오
 
 ```jsx

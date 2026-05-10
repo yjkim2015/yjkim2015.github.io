@@ -134,19 +134,48 @@ Chain-of-Thought 프롬프트:
 → 각 단계를 명시하며 분석 → 실수 감소, 정확도 향상
 ```
 
-```java
-// 실제 코드 분석 CoT 예시
-"다음 코드의 성능 문제를 단계별로 분석해줘:
-1단계: 코드가 하는 일을 한 줄로 요약
-2단계: DB 쿼리가 몇 번 실행되는지 계산 (N이 10000일 때)
-3단계: 병목 지점 식별
-4단계: 최적화 방법 제시 (구체적인 코드로)
+**실전 구현 — CoT로 N+1 문제를 분석·수정하는 프롬프트 + 결과**
 
-[코드]
-for (Order order : orders) {
-    User user = userRepository.findById(order.getUserId()).get();
+아래는 Claude에게 CoT 프롬프트를 던졌을 때 실제로 받을 수 있는 분석과 수정 코드의 예시다.
+
+```java
+// [프롬프트]
+// "다음 코드의 성능 문제를 단계별로 분석하고 수정해줘:
+// 1단계: 코드가 하는 일을 한 줄로 요약
+// 2단계: DB 쿼리가 몇 번 실행되는지 계산 (N이 10000일 때)
+// 3단계: 병목 지점 식별
+// 4단계: 최적화 방법 제시 (구체적인 코드로)"
+
+// --- 분석 대상 코드 ---
+// 1단계: 모든 주문의 사용자에게 이메일을 보내는 코드
+for (Order order : orders) {                          // 루프 N번
+    User user = userRepository.findById(order.getUserId()).get(); // 쿼리 N번
     sendEmail(user.getEmail(), order);
 }
+// 2단계: N = 10000이면 DB 쿼리가 10001번 실행됨 (SELECT orders 1번 + SELECT user N번)
+// 3단계: userRepository.findById가 루프 안에서 매번 호출 → N+1 문제
+
+// --- 4단계: 수정 코드 ---
+// 방법 1: 사용자 ID를 모아 한 번에 조회 (IN 쿼리)
+List<Long> userIds = orders.stream()
+        .map(Order::getUserId)
+        .distinct()
+        .collect(Collectors.toList());
+
+Map<Long, User> userMap = userRepository.findAllById(userIds).stream()
+        .collect(Collectors.toMap(User::getId, u -> u));
+
+for (Order order : orders) {
+    User user = userMap.get(order.getUserId()); // 쿼리 0번 (Map 조회)
+    sendEmail(user.getEmail(), order);
+}
+// 결과: 쿼리 10001번 → 2번으로 감소 (orders 조회 1 + users IN 조회 1)
+
+// 방법 2: JPA @EntityGraph로 fetch join (Spring Data JPA)
+// OrderRepository에 추가
+@EntityGraph(attributePaths = {"user"})
+List<Order> findAllWithUser();
+// 자동으로 LEFT JOIN FETCH user를 실행하여 1번 쿼리로 해결
 ```
 
 ### Tree-of-Thought (ToT)
@@ -170,6 +199,62 @@ for (Order order : orders) {
 마지막으로 우리 상황(Spring Boot, AWS, MAU 1만)에 최적인 방법과 이유를 결론 내줘."
 ```
 
+**실전 구현 — ToT 결과로 선택된 S3 Presigned URL 업로드 코드**
+
+```java
+// ToT 분석 결과: 접근 2(S3 Presigned URL) 선택
+// 이유: 서버 부하 없음, 10GB 파일도 브라우저가 직접 S3에 업로드
+
+@RestController
+@RequiredArgsConstructor
+public class FileUploadController {
+
+    private final S3Client s3Client;
+
+    @Value("${cloud.aws.s3.bucket}")
+    private String bucket;
+
+    // 1단계: 프론트엔드에 Presigned URL 발급
+    @PostMapping("/api/upload/presigned-url")
+    public PresignedUrlResponse getPresignedUrl(@RequestBody UploadRequest request) {
+        String objectKey = "uploads/" + UUID.randomUUID() + "/" + request.getFileName();
+
+        PutObjectRequest putRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(objectKey)
+                .contentType(request.getContentType())
+                .build();
+
+        PresignedPutObjectRequest presignedRequest = s3Client.presignPutObject(
+                r -> r.putObjectRequest(putRequest)
+                        .signatureDuration(Duration.ofMinutes(15)) // 15분간 유효
+        );
+
+        return PresignedUrlResponse.builder()
+                .uploadUrl(presignedRequest.url().toString())  // 브라우저가 직접 PUT
+                .objectKey(objectKey)
+                .expiresAt(Instant.now().plus(Duration.ofMinutes(15)))
+                .build();
+    }
+
+    // 2단계: 업로드 완료 후 프론트엔드가 완료 신호 전송
+    @PostMapping("/api/upload/complete")
+    public UploadCompleteResponse completeUpload(@RequestBody UploadCompleteRequest request) {
+        // S3 객체 존재 확인
+        s3Client.headObject(r -> r.bucket(bucket).key(request.getObjectKey()));
+
+        // DB에 파일 메타데이터 저장
+        FileMetadata metadata = fileMetadataRepository.save(FileMetadata.builder()
+                .objectKey(request.getObjectKey())
+                .originalName(request.getOriginalName())
+                .uploadedAt(LocalDateTime.now())
+                .build());
+
+        return UploadCompleteResponse.of(metadata);
+    }
+}
+```
+
 ### Self-Consistency
 
 같은 질문을 약간 다르게 여러 번 물어본 뒤 일관된 답을 선택한다. 중요한 의사결정에 활용한다.
@@ -183,6 +268,54 @@ for (Order order : orders) {
 → 3번 모두 언급된 문제 = 확실한 문제
 → 1번만 언급된 문제 = 추가 검토 필요
 ```
+
+**실전 구현 — Self-Consistency로 검증된 캐시 전략 적용 코드**
+
+세 번의 질문에서 공통으로 나온 문제: "캐시 없이 DB를 직접 조회하는 UserService"
+
+```java
+// Self-Consistency 검증 결과를 반영한 수정 코드
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    private final UserRepository userRepository;
+    private final RedisTemplate<String, User> redisTemplate;
+    private static final Duration CACHE_TTL = Duration.ofMinutes(10);
+
+    // 질문 1·2·3 모두 지적한 문제: 매 요청마다 DB 조회
+    // → Cache-Aside 패턴으로 수정
+    public User getUser(Long userId) {
+        String cacheKey = "user:" + userId;
+
+        // 1. 캐시 조회
+        User cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        // 2. 캐시 미스 → DB 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
+
+        // 3. 캐시 저장 (TTL 포함)
+        redisTemplate.opsForValue().set(cacheKey, user, CACHE_TTL);
+        return user;
+    }
+
+    // 쓰기 시 캐시 즉시 무효화 (세 질문 모두 지적한 정합성 문제 해결)
+    @Transactional
+    public User updateUser(Long userId, UserUpdateRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
+        user.update(request);
+        userRepository.save(user);
+
+        // 캐시 즉시 삭제 → 다음 조회 시 DB에서 최신 데이터 로드
+        redisTemplate.delete("user:" + userId);
+        return user;
+    }
+}
 
 ---
 

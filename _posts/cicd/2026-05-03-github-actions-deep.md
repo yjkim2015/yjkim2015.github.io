@@ -47,17 +47,12 @@ GitHub-hosted Runner의 하드웨어 스펙은 2 vCPU, 7GB RAM, 14GB SSD(Ubuntu 
 **Self-hosted Runner**는 자체 서버에 설치하는 Runner다. 고정된 머신에서 실행되므로 캐시가 유지되고, GPU/특수 하드웨어를 사용할 수 있다. 하지만 보안과 관리의 책임이 조직에 있다.
 
 ```mermaid
-sequenceDiagram
-    participant GH as "GitHub"
-    participant POOL as "Runner Pool"
-    participant VM as "Runner VM"
-    GH->>POOL: "1️⃣ Job 큐에 추가"
-    POOL->>VM: "2️⃣ 유휴 Runner 할당 (또는 새 VM 생성)"
-    VM->>VM: "3️⃣ 저장소 clone"
-    VM->>VM: "4️⃣ Step 순차 실행"
-    VM->>GH: "5️⃣ 결과/로그 전송"
-    VM->>POOL: "6️⃣ VM 폐기 (GitHub-hosted)"
-    Note over VM: "GitHub-hosted: 매번 새 VM<br/>Self-hosted: 동일 머신 재사용"
+graph LR
+    GH["GitHub"] -->|"Job 큐 추가"| POOL["Runner Pool"]
+    POOL -->|"Runner 할당"| VM["Runner VM"]
+    VM -->|"clone→실행"| VM
+    VM -->|"결과/로그 전송"| GH
+    VM -->|"VM 폐기"| POOL
 ```
 
 > **비유:** GitHub-hosted Runner는 호텔 객실이다. 투숙할 때마다 깨끗한 방(새 VM)을 받고, 체크아웃하면 방은 청소(폐기)된다. Self-hosted Runner는 자기 집이다. 항상 같은 공간이라 물건(캐시)이 그대로 있지만, 청소(보안 관리)는 스스로 해야 한다.

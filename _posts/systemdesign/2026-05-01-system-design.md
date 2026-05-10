@@ -159,6 +159,109 @@ RDB(MySQL, PostgreSQL)가 완벽해 보이지만, 다음 상황에서 물리적 
 
 DB 조회는 수십 ms, Redis 캐시는 수십 µs로 약 100~1000배 빠르다. 가장 많이 쓰이는 **Cache-Aside** 패턴은 앱이 캐시 확인 → 미스 시 DB 조회 → 캐시 저장 순서로 동작한다. 캐시 무효화(Cache Invalidation)는 컴퓨터 과학에서 가장 어려운 문제 중 하나다. "DB를 업데이트했는데 캐시가 오래된 데이터를 반환하는 문제를 어떻게 해결할 것인가?"라는 면접 질문에 TTL 기반, 이벤트 기반 무효화, Write-Through 등의 전략을 논의할 수 있어야 한다.
 
+**실전 구현 — Cache-Aside 패턴 + 규모 추정 계산 (Java/Spring Boot):**
+
+```java
+// 1단계: 규모 추정 (Back-of-Envelope)
+// MAU 1,000만 → DAU 100만 (10% 활성률)
+// DAU 100만 × 하루 10회 요청 = 1,000만 req/day
+// QPS = 10,000,000 / 86,400 ≈ 115 QPS (평균)
+// Peak QPS = 115 × 3 = 345 QPS (피크 3배)
+//
+// 저장 용량:
+// 게시글 1억 개 × 평균 1KB = 100GB (텍스트)
+// 이미지: 게시글 20%가 이미지, 평균 200KB → 1억 × 0.2 × 200KB = 4TB
+// 5년 보관 기준: (100GB + 4TB) × 5 = ~20TB
+
+@Service
+@RequiredArgsConstructor
+public class ProductService {
+
+    private final ProductRepository productRepository;
+    private final RedisTemplate<String, Product> redisTemplate;
+
+    private static final String CACHE_KEY_PREFIX = "product:";
+    private static final Duration CACHE_TTL = Duration.ofMinutes(30);
+
+    // Cache-Aside 패턴
+    public Product getProduct(Long productId) {
+        String cacheKey = CACHE_KEY_PREFIX + productId;
+
+        // 1. 캐시 조회
+        Product cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            return cached;  // 캐시 히트 → 즉시 반환 (수십 µs)
+        }
+
+        // 2. 캐시 미스 → DB 조회 (수십 ms)
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+
+        // 3. 캐시에 저장 (TTL 30분)
+        redisTemplate.opsForValue().set(cacheKey, product, CACHE_TTL);
+
+        return product;
+    }
+
+    // 쓰기 시 캐시 무효화 (Cache Invalidation)
+    @Transactional
+    public Product updateProduct(Long productId, UpdateProductRequest request) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+
+        product.update(request.getName(), request.getPrice());
+        productRepository.save(product);
+
+        // DB 업데이트 후 캐시 즉시 삭제 → 다음 조회 시 DB에서 신선한 데이터 로드
+        String cacheKey = CACHE_KEY_PREFIX + productId;
+        redisTemplate.delete(cacheKey);
+
+        return product;
+    }
+
+    // Write-Through 패턴 (쓰기 시 캐시도 동시 업데이트)
+    @Transactional
+    public Product updateProductWriteThrough(Long productId, UpdateProductRequest request) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+
+        product.update(request.getName(), request.getPrice());
+        productRepository.save(product);
+
+        // DB와 캐시를 동시에 업데이트 → 캐시 항상 최신 상태 유지
+        String cacheKey = CACHE_KEY_PREFIX + productId;
+        redisTemplate.opsForValue().set(cacheKey, product, CACHE_TTL);
+
+        return product;
+    }
+}
+
+// 캐시 히트율 모니터링 (CloudWatch 커스텀 메트릭 발행)
+@Aspect
+@Component
+public class CacheMetricsAspect {
+
+    private final MeterRegistry meterRegistry;
+
+    // AOP로 캐시 히트/미스 자동 측정
+    // 목표: 히트율 > 90% (히트율 70% 이하면 캐시 전략 재검토)
+    @Around("@annotation(Cacheable)")
+    public Object measureCacheHit(ProceedingJoinPoint joinPoint) throws Throwable {
+        Object result = joinPoint.proceed();
+        // Spring Cache가 캐시를 사용했는지 여부로 히트/미스 판별
+        boolean cacheHit = isCacheHit(joinPoint);
+        meterRegistry.counter("cache.requests",
+                "hit", String.valueOf(cacheHit)).increment();
+        return result;
+    }
+
+    private boolean isCacheHit(ProceedingJoinPoint joinPoint) {
+        // 실제 구현에서는 CacheManager를 통해 캐시 존재 여부 확인
+        return false;
+    }
+}
+```
+
 자세한 내용은 [기초편 — 캐싱]({% post_url systemdesign/2026-05-02-system-design-fundamentals %})을 참고하자.
 
 ---

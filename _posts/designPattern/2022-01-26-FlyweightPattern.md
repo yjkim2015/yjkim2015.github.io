@@ -207,18 +207,13 @@ public class GlyphFactory {
 ## 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as Forest
-    participant F as Factory
-    participant T as TreeType
-    C->>F: getTreeType(소나무)
-    F->>T: 캐시 없음 → new 소나무
-    T-->>C: 소나무 반환
-    C->>F: getTreeType(소나무) 재요청
-    F-->>C: 캐시 히트 → 재사용
-    C->>F: getTreeType(참나무)
-    F->>T: 캐시 없음 → new 참나무
-    T-->>C: 참나무 반환
+graph LR
+    C["Forest"] -->|"getTreeType(소나무)"| F["Factory"]
+    F -->|"캐시 없음→생성"| T["TreeType"]
+    T -->|"소나무 반환"| C
+    C -->|"재요청(소나무)"| F
+    F -->|"캐시 히트→재사용"| C
+    C -->|"getTreeType(참나무)"| F
 ```
 
 ---

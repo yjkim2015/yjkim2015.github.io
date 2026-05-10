@@ -164,16 +164,13 @@ console.log('4. 끝');
 ```
 
 ```mermaid
-sequenceDiagram
-    participant CS as CallStack
-    participant MQ as 마이크로태스크
-    participant TQ as 태스크큐
-    CS->>CS: log(1.시작)
-    CS->>TQ: setTimeout 등록
-    CS->>MQ: Promise.then 등록
-    CS->>CS: log(4.끝)
-    MQ->>CS: log(3.Promise)
-    TQ->>CS: log(2.setTimeout)
+graph LR
+    CS["CallStack"] -->|"log(1.시작)"| CS
+    CS -->|"setTimeout 등록"| TQ["태스크큐"]
+    CS -->|"Promise.then 등록"| MQ["마이크로태스크"]
+    CS -->|"log(4.끝)"| CS
+    MQ -->|"log(3.Promise)"| CS
+    TQ -->|"log(2.setTimeout)"| CS
 ```
 
 출력 결과:

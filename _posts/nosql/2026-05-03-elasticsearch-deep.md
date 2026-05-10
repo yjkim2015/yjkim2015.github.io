@@ -453,6 +453,116 @@ public class ProductSearchService {
 
 **이 코드의 핵심:** 정적 쿼리는 Repository의 `@Query`로, 동적 쿼리는 `ElasticsearchOperations`로 분리한다. `withHighlightQuery`로 검색어가 매칭된 부분을 `<em>` 태그로 감싸 하이라이팅하는 것이 검색 UX의 기본이다.
 
+### 6-3. Aggregation 결과 처리 (Java)
+
+```java
+// Aggregation 결과를 Java로 파싱하는 실전 코드
+@Service
+@RequiredArgsConstructor
+public class ProductAggregationService {
+
+    private final ElasticsearchOperations operations;
+
+    // 카테고리별 상품 수 + 평균 가격 집계
+    public List<CategoryStats> getCategoryStats() {
+        // Aggregation 쿼리 구성
+        NativeQuery query = NativeQuery.builder()
+            .withQuery(QueryBuilders.matchAllQuery())
+            .withAggregation("by_category",
+                AggregationBuilders.terms("by_category")
+                    .field("category")
+                    .size(20)
+                    .subAggregation(
+                        AggregationBuilders.avg("avg_price").field("price")
+                    )
+            )
+            .withMaxResults(0)  // hits 불필요, 집계만
+            .build();
+
+        SearchHits<Product> hits = operations.search(query, Product.class);
+        ElasticsearchAggregations aggregations =
+            (ElasticsearchAggregations) hits.getAggregations();
+
+        // 결과 파싱
+        StringTermsAggregate byCategory = aggregations.get("by_category");
+        return byCategory.buckets().array().stream()
+            .map(bucket -> {
+                String category = bucket.key().stringValue();
+                long count = bucket.docCount();
+                double avgPrice = ((AvgAggregate) bucket.aggregations()
+                    .get("avg_price")).value();
+                return new CategoryStats(category, count, avgPrice);
+            })
+            .toList();
+    }
+
+    // 자동완성 (Prefix 검색) — suggest API
+    public List<String> autocomplete(String prefix) {
+        NativeQuery query = NativeQuery.builder()
+            .withSuggestBuilder(new SuggestBuilder()
+                .addSuggestion("product_suggest",
+                    SuggestBuilders.completionSuggestion("name_suggest")
+                        .prefix(prefix)
+                        .size(10)
+                )
+            )
+            .withMaxResults(0)
+            .build();
+
+        SearchHits<Product> hits = operations.search(query, Product.class);
+        return hits.getSuggest()
+            .getSuggestion("product_suggest")
+            .getEntries().stream()
+            .flatMap(e -> e.getOptions().stream())
+            .map(SearchSuggestHit::getText)
+            .toList();
+    }
+}
+
+// REST API 연결
+@RestController
+@RequestMapping("/api/products")
+@RequiredArgsConstructor
+public class ProductSearchController {
+
+    private final ProductSearchService searchService;
+    private final ProductAggregationService aggregationService;
+
+    @GetMapping("/search")
+    public ResponseEntity<SearchResponse> search(
+            @RequestParam String keyword,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) Integer minPrice,
+            @RequestParam(required = false) Integer maxPrice,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        SearchHits<Product> hits = searchService.search(keyword, category, minPrice, maxPrice);
+
+        List<SearchResultDto> results = hits.stream()
+            .map(hit -> SearchResultDto.builder()
+                .product(hit.getContent())
+                // 하이라이팅 결과 포함
+                .highlights(hit.getHighlightFields())
+                .score(hit.getScore())
+                .build())
+            .toList();
+
+        return ResponseEntity.ok(new SearchResponse(results, hits.getTotalHits()));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<List<CategoryStats>> getCategoryStats() {
+        return ResponseEntity.ok(aggregationService.getCategoryStats());
+    }
+
+    @GetMapping("/autocomplete")
+    public ResponseEntity<List<String>> autocomplete(@RequestParam String q) {
+        return ResponseEntity.ok(aggregationService.autocomplete(q));
+    }
+}
+```
+
 ---
 
 ## 7. 성능 튜닝
@@ -689,7 +799,7 @@ graph TB
 
 ## 왜 Elasticsearch인가? (vs PostgreSQL 전문 검색 vs Solr)
 
-| | **Elasticsearch** | **PostgreSQL Full-Text** | **Solr** |
+| 구분 | **Elasticsearch** | **PostgreSQL Full-Text** | **Solr** |
 |--|-------------------|--------------------------|----------|
 | **확장성** | 수평 확장, 수십억 문서 | 단일 서버 한계 | 수평 확장 가능 |
 | **실시간성** | ~1초 딜레이(refresh) | 즉시 | ~1초 딜레이 |

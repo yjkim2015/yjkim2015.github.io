@@ -76,16 +76,21 @@ graph LR
 Java 스레드는 `java.lang.Thread.State` 열거형으로 6가지 상태를 가집니다.
 
 ```mermaid
-stateDiagram-v2
-  [*] --> NEW : new Thread()
-  NEW --> RUNNABLE : start()
-  RUNNABLE --> BLOCKED : synchronized 실패
-  BLOCKED --> RUNNABLE : 락 획득
-  RUNNABLE --> WAITING : wait/join/park
-  WAITING --> RUNNABLE : notify/unpark
-  RUNNABLE --> TIMED_WAITING : sleep/wait(n)
-  TIMED_WAITING --> RUNNABLE : 시간 경과
-  RUNNABLE --> TERMINATED : 완료/예외
+graph LR
+    NEW["NEW"]
+    RUNNABLE["RUNNABLE"]
+    BLOCKED["BLOCKED"]
+    WAITING["WAITING"]
+    TW["TIMED_WAITING"]
+    TERMINATED["TERMINATED"]
+    NEW -->|"start()"| RUNNABLE
+    RUNNABLE -->|"synchronized 실패"| BLOCKED
+    BLOCKED -->|"락 획득"| RUNNABLE
+    RUNNABLE -->|"wait/join/park"| WAITING
+    WAITING -->|"notify/unpark"| RUNNABLE
+    RUNNABLE -->|"sleep/wait(n)"| TW
+    TW -->|"시간 경과"| RUNNABLE
+    RUNNABLE -->|"완료/예외"| TERMINATED
 ```
 
 | 상태 | 설명 |

@@ -258,6 +258,134 @@ graph LR
 
 > 비유: 한 회사의 여러 부서가 같은 복지 제도, 같은 업무 시스템을 공유하는 것과 같습니다. 각 팀은 독립적으로 일하지만, 공통 인프라는 함께 씁니다.
 
+**실전 구현 — Turborepo 모노레포 설정:**
+
+```json
+// turbo.json — 빌드 파이프라인 정의
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],  // 의존 패키지 먼저 빌드
+      "outputs": [".next/**", "dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"]
+    }
+  }
+}
+```
+
+```json
+// package.json (루트)
+{
+  "name": "my-monorepo",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "latest"
+  }
+}
+```
+
+```typescript
+// packages/ui/src/Button.tsx — 공유 컴포넌트
+export interface ButtonProps {
+    children: React.ReactNode;
+    variant?: 'primary' | 'secondary' | 'ghost';
+    size?: 'sm' | 'md' | 'lg';
+    onClick?: () => void;
+    disabled?: boolean;
+}
+
+export function Button({ children, variant = 'primary', size = 'md', ...props }: ButtonProps) {
+    return (
+        <button
+            className={`btn btn-${variant} btn-${size}`}
+            {...props}
+        >
+            {children}
+        </button>
+    );
+}
+```
+
+```json
+// packages/ui/package.json
+{
+  "name": "@myapp/ui",
+  "version": "0.0.1",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
+```
+
+```typescript
+// packages/types/src/index.ts — 공유 타입 정의
+export interface User {
+    id: string;
+    name: string;
+    email: string;
+    role: 'admin' | 'user';
+}
+
+export interface Product {
+    id: string;
+    name: string;
+    price: number;
+    stock: number;
+}
+
+export interface ApiResponse<T> {
+    data: T;
+    message: string;
+    success: boolean;
+}
+```
+
+```typescript
+// apps/web/app/page.tsx — 공유 패키지 사용
+import { Button } from '@myapp/ui';
+import type { Product } from '@myapp/types';
+
+export default function HomePage() {
+    return (
+        <main>
+            <Button variant="primary" size="lg">
+                시작하기
+            </Button>
+        </main>
+    );
+}
+```
+
+```bash
+# 전체 빌드 (의존성 순서 자동 처리)
+npx turbo run build
+
+# web 앱만 dev 모드
+npx turbo run dev --filter=web
+
+# 변경된 패키지만 테스트 (캐시 활용)
+npx turbo run test --filter=...[HEAD^1]
+```
+
 ---
 
 ## 7. 마이크로 프론트엔드 — 팀별 독립 배포

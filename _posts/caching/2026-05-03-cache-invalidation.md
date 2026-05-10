@@ -173,18 +173,11 @@ public class CacheInvalidationHandler {
 ### 동작 원리
 
 ```mermaid
-sequenceDiagram
-    participant App
-    participant Redis
-    participant DB
-    App->>Redis: GET v3 → Miss
-    App->>DB: SELECT
-    DB-->>App: 데이터
-    App->>Redis: SET v3 (TTL 1h)
-    App->>DB: UPDATE
-    App->>Redis: INCR → v4
-    App->>Redis: GET v4 → Miss
-    App->>DB: DB 조회 후 저장
+graph LR
+    App["App"] -->|"GET v3 → Miss"| Redis["Redis"]
+    App -->|"SELECT"| DB["DB"]
+    App -->|"UPDATE → INCR v4"| Redis
+    App -->|"GET v4 → Miss → 저장"| Redis
 ```
 
 이 방식의 장점은 구 버전 캐시를 명시적으로 삭제할 필요가 없다는 것이다. 키 자체가 달라지니까 구 데이터에 접근 자체가 불가능하다. 단점은 Redis에 키가 좀 더 많이 쌓인다는 것인데, TTL이 지나면 자동 정리되므로 큰 문제는 아니다.

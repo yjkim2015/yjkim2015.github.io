@@ -621,7 +621,7 @@ java -Xshare:on \
 spring.main.lazy-initialization=true
 ```
 
-| | Eager Init (기본) | Lazy Init |
+| 구분 | Eager Init (기본) | Lazy Init |
 |--|-----------------|-----------|
 | **시작 시간** | 느림 (모든 빈 초기화) | 빠름 |
 | **첫 요청** | 정상 (이미 준비됨) | 느림 (빈 초기화 지연) |

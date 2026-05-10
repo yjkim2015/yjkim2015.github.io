@@ -257,13 +257,15 @@ member.getTeam().getName(); // LazyInitializationException 발생!
 > **비유**: 사람의 고용 상태와 같다. 입사 지원서만 낸 상태(비영속), 재직 중(영속), 퇴직(준영속), 인사 말소(삭제)로 나뉜다. 재직 중인 직원(영속 상태)만 회사 시스템(영속성 컨텍스트)이 관리한다.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> 비영속 : new Member()
-    비영속 --> 영속 : em.persist()
-    영속 --> 준영속 : detach() / close() / clear()
-    준영속 --> 영속 : em.merge()
-    영속 --> 삭제 : em.remove()
-    삭제 --> [*] : tx.commit()
+graph LR
+    비영속["비영속"]
+    영속["영속"]
+    준영속["준영속"]
+    삭제["삭제"]
+    비영속 -->|"em.persist()"| 영속
+    영속 -->|"detach/close/clear"| 준영속
+    준영속 -->|"em.merge()"| 영속
+    영속 -->|"em.remove()"| 삭제
 ```
 
 ### 비영속 (new / transient)

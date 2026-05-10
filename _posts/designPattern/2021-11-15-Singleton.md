@@ -240,16 +240,12 @@ singleton.businessLogic();
 ## 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C1 as 스레드1
-    participant C2 as 스레드2
-    participant S as Singleton
-    C1->>S: getInstance()
-    S->>S: null → 인스턴스 생성
-    S-->>C1: 새 인스턴스 반환
-    C2->>S: getInstance()
-    S->>S: not null 확인
-    S-->>C2: 기존 인스턴스 반환(동일 객체)
+graph LR
+    C1["스레드1"] -->|"getInstance()"| S["Singleton"]
+    S -->|"null→생성"| S
+    S -->|"새 인스턴스"| C1
+    C2["스레드2"] -->|"getInstance()"| S
+    S -->|"기존 인스턴스"| C2
 ```
 
 ---

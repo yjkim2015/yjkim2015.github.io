@@ -65,14 +65,15 @@ graph LR
 ```
 
 ```mermaid
-stateDiagram-v2
-    [*] --> 대기: Pool 초기화
-    대기 --> 사용중: getConnection()
-    사용중 --> 대기: close() 반납
-    대기 --> 폐기: idleTimeout / 헬스체크 실패
-    사용중 --> 폐기: maxLifetime 초과
-    폐기 --> 대기: minimumIdle 미달 시 재생성
-    폐기 --> [*]: 풀 충분
+graph LR
+    대기["대기"]
+    사용중["사용중"]
+    폐기["폐기"]
+    대기 -->|"getConnection()"| 사용중
+    사용중 -->|"close() 반납"| 대기
+    대기 -->|"idleTimeout/헬스체크 실패"| 폐기
+    사용중 -->|"maxLifetime 초과"| 폐기
+    폐기 -->|"minimumIdle 미달"| 대기
 ```
 
 ---

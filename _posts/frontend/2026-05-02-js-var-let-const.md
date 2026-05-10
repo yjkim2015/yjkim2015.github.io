@@ -118,16 +118,12 @@ console.log(name); // '홍길동'
 만약 이걸 모르면 `console.log(name)`이 `undefined`를 출력했을 때 "어? 왜 에러가 안 나지?"라며 혼란스러워집니다. 에러가 안 나는 게 오히려 더 위험한 이유이기도 합니다.
 
 ```mermaid
-sequenceDiagram
-    participant CODE as 작성된 코드
-    participant ENGINE as JS 엔진
-    participant EXEC as 실행
-    CODE->>ENGINE: console.log(name)이 먼저 등장
-    ENGINE->>ENGINE: var name 선언을 스캔
-    ENGINE->>EXEC: var name = undefined (호이스팅)
-    EXEC->>EXEC: console.log(name) → undefined
-    EXEC->>EXEC: name = '홍길동' (할당)
-    EXEC->>EXEC: console.log(name) → '홍길동'
+graph LR
+    CODE["코드"] -->|"console.log(name)"| ENGINE["JS 엔진"]
+    ENGINE -->|"var name 호이스팅"| EXEC["실행"]
+    EXEC -->|"undefined 출력"| EXEC
+    EXEC -->|"name='홍길동' 할당"| EXEC
+    EXEC -->|"홍길동 출력"| EXEC
 ```
 
 ### let/const 호이스팅과 TDZ — "올라가긴 하지만 접근은 막힌다"

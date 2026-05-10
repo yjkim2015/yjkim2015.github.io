@@ -255,17 +255,12 @@ public class Main {
 ## 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as 클라이언트
-    participant P as Proxy
-    participant R as Impl
-    C->>P: runCommand(ls -al)
-    P->>P: 로깅 + 권한 확인(통과)
-    P->>R: runCommand 위임
-    R-->>C: 실행 완료
-    C->>P: runCommand(rm -rf /)
-    P->>P: 권한 확인(거부)
-    P-->>C: SecurityException
+graph LR
+    C["클라이언트"] -->|"ls -al"| P["Proxy"]
+    P -->|"권한 통과→위임"| R["Impl"]
+    R -->|"실행 완료"| C
+    C -->|"rm -rf /"| P
+    P -->|"권한 거부"| C2["SecurityException"]
 ```
 
 ---

@@ -342,6 +342,134 @@ export default function ProductsPage({
 // → 새로고침하면 초기화, URL 공유 불가, 뒤로가기 동작 이상
 ```
 
+**실전 구현 — Zustand 전역 상태 + 에러 바운더리:**
+
+```tsx
+// store/cartStore.ts — Zustand로 장바구니 전역 상태 관리
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+interface CartItem {
+    id: string;
+    name: string;
+    price: number;
+    quantity: number;
+}
+
+interface CartStore {
+    items: CartItem[];
+    addItem: (item: Omit<CartItem, 'quantity'>) => void;
+    removeItem: (id: string) => void;
+    updateQuantity: (id: string, quantity: number) => void;
+    clearCart: () => void;
+    totalPrice: () => number;
+    totalCount: () => number;
+}
+
+// persist 미들웨어로 localStorage에 자동 저장 (새로고침 후에도 유지)
+export const useCartStore = create<CartStore>()(
+    persist(
+        (set, get) => ({
+            items: [],
+
+            addItem: (item) => set((state) => {
+                const existing = state.items.find(i => i.id === item.id);
+                if (existing) {
+                    // 이미 있으면 수량만 증가
+                    return {
+                        items: state.items.map(i =>
+                            i.id === item.id
+                                ? { ...i, quantity: i.quantity + 1 }
+                                : i
+                        )
+                    };
+                }
+                return { items: [...state.items, { ...item, quantity: 1 }] };
+            }),
+
+            removeItem: (id) => set((state) => ({
+                items: state.items.filter(i => i.id !== id)
+            })),
+
+            updateQuantity: (id, quantity) => set((state) => ({
+                items: quantity <= 0
+                    ? state.items.filter(i => i.id !== id)
+                    : state.items.map(i => i.id === id ? { ...i, quantity } : i)
+            })),
+
+            clearCart: () => set({ items: [] }),
+
+            totalPrice: () =>
+                get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+
+            totalCount: () =>
+                get().items.reduce((sum, i) => sum + i.quantity, 0),
+        }),
+        { name: 'cart-storage' }  // localStorage key
+    )
+);
+
+// components/ErrorBoundary.tsx — 에러 바운더리
+import { Component, ErrorInfo, ReactNode } from 'react';
+
+interface Props {
+    children: ReactNode;
+    fallback?: ReactNode;
+    onError?: (error: Error, errorInfo: ErrorInfo) => void;
+}
+
+interface State {
+    hasError: boolean;
+    error: Error | null;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+    state: State = { hasError: false, error: null };
+
+    static getDerivedStateFromError(error: Error): State {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+        // Sentry 등 에러 모니터링 서비스에 전송
+        console.error('ErrorBoundary caught:', error, errorInfo);
+        this.props.onError?.(error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return this.props.fallback ?? (
+                <div role="alert" className="error-container">
+                    <h2>문제가 발생했습니다</h2>
+                    <p>{this.state.error?.message}</p>
+                    <button onClick={() => this.setState({ hasError: false, error: null })}>
+                        다시 시도
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+// App.tsx — 에러 바운더리 적용
+function App() {
+    return (
+        // 전체 앱 에러 바운더리
+        <ErrorBoundary fallback={<GlobalErrorPage />}>
+            <ErrorBoundary
+                // 특정 섹션만 격리 — 장바구니 에러가 상품 목록에 영향 없음
+                fallback={<CartErrorFallback />}
+                onError={(err) => sendToSentry(err)}
+            >
+                <CartPanel />
+            </ErrorBoundary>
+            <ProductList />
+        </ErrorBoundary>
+    );
+}
+```
+
 #### 상태 관리 라이브러리 비교
 
 | 항목 | useState | Context | Zustand | Redux Toolkit | React Query |

@@ -221,17 +221,13 @@ public class Main {
 ## 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant M as Main
-    participant F as WindowsFactory
-    participant A as Application
-    M->>F: new WindowsFactory()
-    M->>A: new Application(factory)
-    A->>F: createButton()
-    F-->>A: WindowsButton
-    A->>F: createCheckbox()
-    F-->>A: WindowsCheckbox
-    A->>A: render()
+graph LR
+    M["Main"] -->|"new"| F["WindowsFactory"]
+    M -->|"new Application(factory)"| A["Application"]
+    A -->|"createButton()"| F
+    F -->|"WindowsButton"| A
+    A -->|"createCheckbox()"| F
+    F -->|"WindowsCheckbox"| A
 ```
 
 ---
