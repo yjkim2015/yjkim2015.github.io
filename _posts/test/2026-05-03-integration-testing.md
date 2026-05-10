@@ -465,16 +465,12 @@ Spring Boot는 동일한 설정의 ApplicationContext를 캐싱한다. `@MockBea
 컨텍스트 수를 줄이는 것이 속도 최적화의 핵심이다. 모든 통합 테스트가 같은 부모 클래스를 상속받아 동일한 설정을 공유하면, 컨텍스트가 한 번만 생성된다.
 
 ```mermaid
-flowchart LR
-    A["테스트 클래스 A"] --> CTX1["Context 1"]
-    B["테스트 클래스 B"] --> CTX1
-    C["테스트 클래스 C"] --> CTX2["Context 2"]
-    D["테스트 클래스 D"] --> CTX3["Context 3"]
-    CTX1 -->|"같은 설정 = 캐시 히트"| FAST["빠름"]
-    CTX2 -->|"다른 MockBean = 새 컨텍"| SLOW["느림"]
-    CTX3 -->|"다른 어노테이션 = 새 컨텍스트"| SLOW
-    style FAST fill:#8f8,stroke:#080,color:#000
-    style SLOW fill:#f88,stroke:#c00,color:#000
+graph LR
+    A[테스트A] --> C[Context1]
+    B[테스트B] --> C
+    C -->|캐시히트| D[빠름]
+    E[테스트C] --> F[Context2]
+    F -->|새컨텍스트| G[느림]
 ```
 
 ### 3️⃣ 테스트 태깅과 프로파일 분리

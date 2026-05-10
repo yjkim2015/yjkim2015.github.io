@@ -358,15 +358,11 @@ outbox 레코드 저장과 주문 저장이 같은 트랜잭션이므로 둘 다
 
 ```mermaid
 graph LR
-    START(["시작"]) --> Q1{"강한 일관성 필요?"}
-    Q1 -->|YES| R1["서비스 경계 재설계(단일 트랜잭션"]
+    Q1{"강한 일관성?"} -->|YES| R1["단일 트랜잭션"]
     Q1 -->|NO| SAGA["Saga 패턴"]
-    SAGA --> Q3{"흐름 단순?"}
-    Q3 -->|YES| CHOREO["Choreography(이벤트 기"]
-    Q3 -->|NO| ORCH["Orchestration(중앙 제"]
-    SAGA --> Q4{"원자적 발행 필요?"}
-    Q4 -->|YES| OUTBOX["Outbox Pattern"]
-    OUTBOX --> BEST["권장: Saga+Kafka+Out"]
+    SAGA -->|흐름 단순| CHOREO["Choreography"]
+    SAGA -->|흐름 복잡| ORCH["Orchestration"]
+    SAGA -->|원자적 발행| OUTBOX["Outbox Pattern"]
 ```
 
 ### 패턴별 특성 비교

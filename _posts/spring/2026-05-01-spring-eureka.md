@@ -26,17 +26,12 @@ date: 2026-05-01
 4️⃣ **Heartbeat**: 인스턴스가 살아있음을 주기적으로 알린다
 
 ```mermaid
-sequenceDiagram
-    participant S as Service
-    participant E as EurekaServer
-    participant C as Client
-    S->>E: Register
-    loop 매 10초
-        S->>E: Heartbeat
-    end
-    C->>E: 목록 조회
-    C->>S: HTTP 호출
-    S->>E: Deregister
+graph LR
+    S["Service"] -->|Register| E["EurekaServer"]
+    S -->|Heartbeat 10초| E
+    C["Client"] -->|목록 조회| E
+    C -->|HTTP 호출| S
+    S -->|Deregister| E
 ```
 
 ---

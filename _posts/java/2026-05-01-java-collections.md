@@ -21,14 +21,10 @@ Java 컬렉션 프레임워크(Java Collections Framework, JCF)는 데이터를 
 
 ```mermaid
 graph LR
-    Iterable --> Collection
-    Collection --> List["List (순서O 중복O)"]
-    Collection --> Set["Set (순서X 중복X)"]
-    Collection --> Queue["Queue (FIFO)"]
-    List --> ArrayList & LinkedList & Vector & COWAL["CopyOnWriteArrayLi"]
-    Set --> HashSet & LinkedHashSet & TreeSet["TreeSet (Sorted)"] & EnumSet
-    Queue --> PriorityQueue & ArrayDeque & LinkedBlockingQueue & ArrayBlockingQueue
-    Map["Map (Key-Value)"] --> HashMap & LinkedHashMap & TreeMap["TreeMap (Sorted)"] & ConcurrentHashMap & WeakHashMap
+    COL["Collection"] --> LIST["List: 순서O 중복O"]
+    COL --> SET["Set: 순서X 중복X"]
+    COL --> QUEUE["Queue: FIFO"]
+    MAP["Map"] --> KV["Key-Value 쌍"]
 ```
 
 ### 핵심 인터페이스 요약
@@ -205,10 +201,9 @@ public synchronized boolean add(E e) {
 
 ```mermaid
 graph LR
-    R1["기존 readers"] --> A1["배열 A,B,C"]
-    L["lock"] --> N["새 배열 A,B,C,D"] --> REF["참조 교체"] --> U["unlock"]
-    REF --> A2["배열 A,B,C,D"]
-    NR["new readers"] --> A2
+    OLD["기존 readers → 배열 A,B,C"]
+    WRITE["쓰기: 새 배열 복사"] --> REF["참조 교체"]
+    REF --> NEW["new readers → 배열 A,B,C,D"]
 ```
 
 ```java
@@ -347,10 +342,11 @@ graph LR
 
 ```mermaid
 graph LR
-    N5["5B"] --> N3["3R"] & N7["7R"]
-    N3 --> N1["1B"] & N4["4B"]
-    N7 --> N6["6B"] & N9["9B"]
-    RULE["규칙: 루트BLACK / RED자"]
+    N5["5(B)"] --> N3["3(R)"]
+    N5 --> N7["7(R)"]
+    N3 --> N1["1(B)"]
+    N7 --> N9["9(B)"]
+    RULE["루트=BLACK, RED자식=BLACK"]
 ```
 
 #### Comparable vs Comparator
@@ -686,10 +682,11 @@ System.out.println(cache.size()); // 1 (또는 2, GC 타이밍에 따라)
 
 ```mermaid
 graph LR
-    N1["1(0)"] --> N3["3(1)"] & N2["2(2)"]
-    N3 --> N7["7(3)"] & N4["4(4)"]
-    N2 --> N5["5(5)"] & N6["6(6)"]
-    RULE["부모(i-1)/2 / 좌2i+1"]
+    N1["1(idx0)"] --> N3["3(idx1)"]
+    N1 --> N2["2(idx2)"]
+    N3 --> N7["7(idx3)"]
+    N2 --> N5["5(idx5)"]
+    RULE["부모=(i-1)/2, 자식=2i+1"]
 ```
 
 #### 주요 연산 시간복잡도
@@ -966,15 +963,11 @@ graph LR
 
 ```mermaid
 graph LR
-    M0["Key-Value 저장"] --> M1{"멀티스레드?"}
-    M1 -->|YES| M2["ConcurrentHashMap"]
-    M1 -->|NO| M3{"Key 정렬?"}
-    M3 -->|YES| M4["TreeMap"]
-    M3 -->|NO| M5{"순서 보존?"}
-    M5 -->|YES| M6["LinkedHashMap (LRU"]
-    M5 -->|NO| M7{"Key=Enum?"}
-    M7 -->|YES| M8["EnumMap (빠름)"]
-    M7 -->|NO| M9["HashMap (기본)"]
+    A["Map 선택"] -->|"멀티스레드"| B["ConcurrentHashMap"]
+    A -->|"Key 정렬"| C["TreeMap"]
+    A -->|"순서 보존"| D["LinkedHashMap"]
+    A -->|"Key=Enum"| E["EnumMap"]
+    A -->|"기본"| F["HashMap"]
 ```
 
 ### 상황별 선택 예제

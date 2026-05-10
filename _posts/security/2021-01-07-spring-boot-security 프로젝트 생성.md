@@ -133,14 +133,12 @@ graph LR
 Spring Security는 여러 필터로 구성된 체인 구조로 동작합니다. 각 필터는 특정 보안 기능을 담당합니다.
 
 ```mermaid
-flowchart LR
-    A["HTTP 요청"] --> B["SecurityContextPer"]
-    B --> C["UsernamePasswordAu"]
-    C --> D["RememberMeAuthenti"]
-    D --> E["AnonymousAuthentic"]
-    E --> F["ExceptionTranslati"]
-    F --> G["FilterSecurityInte"]
-    G --> H["컨트롤러"]
+graph LR
+    A["HTTP 요청"] --> B["SCPFilter"]
+    B --> C["AuthFilter"]
+    C --> D["AnonymousFilter"]
+    D --> E["ExceptionFilter"]
+    E --> F["컨트롤러"]
 ```
 
 기본 설정만으로도 이 모든 필터가 자동으로 구성됩니다. 이후 포스팅에서는 각 필터의 역할과 커스터마이징 방법을 상세히 알아볼 것입니다.

@@ -18,14 +18,12 @@ toc_label: 목차
 **Spring 컨테이너 (ApplicationContext)**: Spring 빈들을 생성하고 의존성을 주입하는 IoC 컨테이너입니다. 서블릿 컨테이너와 별개로 동작합니다.
 
 ```mermaid
-flowchart LR
-    A["HTTP 요청"] --> B["서블릿 컨테이너"]
-    B --> C["서블릿 필터 체인"]
-    C --> D["DelegatingFilterPr"]
-    D <-- "Spring 빈 조회\n(springSecurityFilterChain)" --> E["Spring 컨테이너"]
+graph LR
+    A["HTTP 요청"] --> B["서블릿 필터 체인"]
+    B --> D["DelegatingFilterProxy"]
+    D -->|빈 조회| E["Spring 컨테이너"]
     E --> F["FilterChainProxy"]
-    F --> G["보안 필터 체인 실행"]
-    G --> H["DispatcherServlet\"]
+    F --> H["DispatcherServlet"]
 ```
 
 ## 왜 DelegatingFilterProxy가 필요한가
@@ -89,16 +87,13 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 **2. 요청에 맞는 필터 체인 선택**
 
 ```mermaid
-flowchart LR
+graph LR
     A["HTTP 요청"] --> B["FilterChainProxy"]
-    B --> C["등록된 SecurityFilter"]
-    C --> D{"요청 URL이"}
-    D -- "예" --> E["ApiSecurityConfig의"]
-    D -- "아니오" --> F{"요청 URL이"}
-    F -- "예" --> G["WebSecurityConfig의"]
-    F -- "아니오" --> H["매칭되는 체인 없음"]
-    E --> I["보안 처리 완료"]
-    G --> I
+    B --> D{"/api/** 매칭?"}
+    D -->|예| E["API 보안 체인"]
+    D -->|아니오| F{"일반 URL?"}
+    F -->|예| G["Web 보안 체인"]
+    F -->|아니오| H["매칭 없음"]
 ```
 
 **3. Spring Security 기본 제공 필터 목록**

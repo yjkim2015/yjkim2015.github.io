@@ -132,15 +132,11 @@ org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 ```
 
 ```mermaid
-sequenceDiagram
-    participant SA as SpringApplication
-    participant AIS as ImportSelector
-    participant C as Conditional
-    SA->>AIS: selectImports()
-    AIS->>C: @Conditional 평가
-    C-->>AIS: 통과 클래스 반환
-    AIS-->>SA: 자동구성 목록
-    SA->>SA: 빈 등록
+graph LR
+    A[SpringApp] --> B[ImportSelector]
+    B --> C{Conditional}
+    C -->|통과| D[빈 등록]
+    C -->|제외| E[스킵]
 ```
 
 142개 후보 중 실제로 조건을 통과하는 것은 프로젝트에 따라 다르지만 보통 20~50개입니다. `--debug` 플래그로 실행하면 어떤 자동 구성이 적용됐고 왜 나머지는 제외됐는지 볼 수 있습니다.
@@ -206,16 +202,12 @@ public class DataSourceAutoConfiguration {
 ```
 
 ```mermaid
-flowchart LR
-    A[DataSourceAutoConfiguration 평가] --> B{"DataSource.class"}
-    B -->|"No — JDBC 의존성 없음"| C["자동 구성 완전히 건너뜀"]
-    B -->|"Yes"| D{"DataSource 빈이"}
-    D -->|"Yes — 개발자가 직접 정의"| E["자동 구성 건너뜀"]
-    D -->|"No"| F{"H2/HSQL/Derby"}
-    F -->|"Yes"| G["인메모리 DB 자동 생성"]
-    F -->|"No"| H{"HikariCP 있음?"}
-    H -->|"Yes"| I["HikariDataSource 생"]
-    H -->|"No"| J["다른 커넥션 풀 시도"]
+graph LR
+    A[DataSource평가] --> B{JDBC있음?}
+    B -->|No| C[스킵]
+    B -->|Yes| D{빈 존재?}
+    D -->|Yes| C
+    D -->|No| E[자동생성]
 ```
 
 **이 흐름이 실무에서 왜 중요한가?** `application.yml`에 DB URL을 설정하지 않아도 H2가 클래스패스에 있으면 자동으로 인메모리 DB를 쓰게 됩니다. 운영 환경에서 실수로 H2 의존성을 포함했다면 연결이 끊겨도 앱이 시작되는 것처럼 보일 수 있습니다. 운영용 DB URL 설정을 빠뜨리면 H2를 쓰게 되는 사고가 발생합니다. `@ConditionalOnMissingBean`을 이해하면 이런 상황을 미리 예방할 수 있습니다.

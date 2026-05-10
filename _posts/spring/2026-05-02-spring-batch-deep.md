@@ -19,10 +19,8 @@ toc_label: 목차
 graph LR
     A[JobLauncher] --> B[Job]
     B --> C[Step1]
-    B --> D[Step2: Chunk]
-    D --> R[Reader] --> P[Processor] --> W[Writer]
-    K[JobRepository] --> B
-    L[JobParameters] --> B
+    B --> D[Step2]
+    D --> R[Reader] --> W[Writer]
 ```
 
 ### 2.1 메타 테이블 구조
@@ -30,12 +28,9 @@ graph LR
 Spring Batch는 실행 이력을 DB에 저장합니다.
 
 ```mermaid
-erDiagram
-    BATCH_JOB_INSTANCE ||--o{ BATCH_JOB_EXECUTION : "has"
-    BATCH_JOB_EXECUTION ||--o{ BATCH_STEP_EXECUTION : "has"
-    BATCH_JOB_INSTANCE { BIGINT ID PK; VARCHAR JOB_NAME }
-    BATCH_JOB_EXECUTION { BIGINT ID PK; VARCHAR STATUS; VARCHAR EXIT_CODE }
-    BATCH_STEP_EXECUTION { BIGINT ID PK; VARCHAR STEP_NAME; BIGINT READ_COUNT; BIGINT WRITE_COUNT }
+graph LR
+    A[JOB_INSTANCE] -->|has| B[JOB_EXECUTION]
+    B -->|has| C[STEP_EXECUTION]
 ```
 
 ---
@@ -409,15 +404,10 @@ public JdbcCursorItemReader<Order> orderReader(
 
 ```mermaid
 graph LR
-    A[Master Step] -->|"파티션 생성"| B[Partitioner]
-    B --> C["Worker Step 1: ID"]
-    B --> D["Worker Step 2: ID"]
-    B --> E["Worker Step 3: ID"]
-    B --> F["Worker Step N: ..."]
-    C --> G["각자 독립적으로 처리"]
-    D --> G
-    E --> G
-    F --> G
+    A[Master] --> B[Partitioner]
+    B --> C[Worker1]
+    B --> D[Worker2]
+    B --> E[WorkerN]
 ```
 
 ```java
@@ -679,17 +669,12 @@ public class LargeScaleBatchConfig {
 ## 14. 전체 흐름 정리
 
 ```mermaid
-flowchart LR
-    A[JobLauncher] --> B[Step 시작]
+graph LR
+    A[JobLauncher] --> B[Step]
     B --> C{Chunk?}
-    C -->|Yes| D[Reader→Processor→Writer]
-    D --> E{더 있음?}
-    E -->|Yes| D
-    E -->|No| F[Step 완료]
-    C -->|No| G[Tasklet] --> F
-    F --> H{다음 Step?}
-    H -->|Yes| B
-    H -->|No| I[Job 완료]
+    C -->|Yes| D[Read→Write]
+    C -->|No| E[Tasklet]
+    D & E --> F[완료]
 ```
 
 ---

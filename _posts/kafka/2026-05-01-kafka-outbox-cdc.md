@@ -309,16 +309,10 @@ Phase 2 (Commit):
 Outbox는 Saga 패턴과 자연스럽게 조합된다. 각 서비스가 자신의 트랜잭션을 완료하고 다음 서비스를 위한 이벤트를 Outbox에 저장한다.
 
 ```mermaid
-sequenceDiagram
-    participant OS as "주문 서비스"
-    participant IS as "재고 서비스"
-    participant PS as "결제 서비스"
-    OS ->> OS: "주문 저장 + OrderPlaced 이벤트 Outbox 저장"
-    OS ->> IS: "OrderPlaced (Kafka)"
-    IS ->> IS: "재고 예약 + StockReserved 이벤트 Outbox 저장"
-    IS ->> PS: "StockReserved (Kafka)"
-    PS ->> PS: "결제 처리 + PaymentCompleted 이벤트 Outbox 저장"
-    Note over OS,PS: 각 서비스는 자신의 DB 트랜잭션만 관리<br>보상 트랜잭션도 동일한 Outbox 패턴으로 발행
+graph LR
+    OS["주문서비스"] -->|OrderPlaced| IS["재고서비스"]
+    IS -->|StockReserved| PS["결제서비스"]
+    PS -->|PaymentCompleted| DONE["완료"]
 ```
 
 보상 트랜잭션(Compensating Transaction)도 같은 방식으로 Outbox를 통해 발행한다.

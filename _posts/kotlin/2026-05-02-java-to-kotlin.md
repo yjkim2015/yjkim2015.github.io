@@ -235,13 +235,10 @@ val member = memberRepository.findByIdOrThrow(1L)  // null이면 즉시 예외
 
 ```mermaid
 graph LR
-    ScopeFn["스코프 함수"] --> LambdaResult["반환값: 람다 결과"]
-    ScopeFn --> ReceiverResult["반환값: 수신 객체 자신"]
-    LambdaResult --> Let["let"]
-    LambdaResult --> Run["run"]
-    LambdaResult --> With["with"]
-    ReceiverResult --> Apply["apply"]
-    ReceiverResult --> Also["also"]
+    SF["스코프 함수"] --> LR["람다 결과 반환"]
+    SF --> RR["수신 객체 반환"]
+    LR --> Let["let/run/with"]
+    RR --> Apply["apply/also"]
 ```
 
 ```kotlin

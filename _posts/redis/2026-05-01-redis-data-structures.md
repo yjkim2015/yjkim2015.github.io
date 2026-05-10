@@ -447,14 +447,11 @@ OBJECT ENCODING key
 
 ```mermaid
 graph LR
-    Q1{"저장 목적"} -->|값·카운터·세션| STRING["String"]
-    Q1 -->|순서 있는 목록·큐| LIST["List"]
-    Q1 -->|중복 없는 집합| Q2{"집합 연산?"}
-    Q1 -->|순위·점수 정렬| ZSET["Sorted Set"]
+    Q1{"저장 목적"} -->|값·세션| STRING["String"]
+    Q1 -->|목록·큐| LIST["List"]
+    Q1 -->|집합| SET["Set"]
+    Q1 -->|순위 정렬| ZSET["Sorted Set"]
     Q1 -->|필드별 객체| HASH["Hash"]
-    Q1 -->|불리언·유니크·메시지·위치| OTHER["Bitmap/HLL/Stream/"]
-    Q2 -->|Yes| SET["Set"]
-    Q2 -->|No| STRING
 ```
 
 ---

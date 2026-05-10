@@ -183,10 +183,9 @@ public class OrderService {
 
 ```mermaid
 graph LR
-    A[OrderService] --> B["모든 비즈니스로직"]
-    C[Order] --> D["데이터(getter/set)"]
-    E[OrderSvc-DM] --> F["오케스트레이션"]
-    G[Order-DM] --> H["cancel/getTotal"]
+    A["빈약한 OrderService"] --> B["모든 비즈니스 로직"]
+    C["풍부한 OrderService"] --> D["오케스트레이션"]
+    E["풍부한 Order"] --> F["cancel/getTotal"]
 ```
 
 ---
@@ -197,26 +196,22 @@ graph LR
 
 ```mermaid
 graph LR
-    A[Controller] --> B[Service]
-    B --> C[Repository]
-    C --> D[Database]
-    B -->|"의존"| E[JPA Entity]
-    B -->|"의존"| F[Spring @Transactional]
-    B -->|"의존"| G[Jackson DTO]
-    Note["서비스가 외부 기술에 오염됨"]
+    A["Controller"] --> B["Service"]
+    B --> C["Repository"]
+    B -->|의존| E["JPA Entity"]
+    B -->|의존| F["@Transactional"]
+    B -->|의존| G["Jackson DTO"]
 ```
 
 ### 3.2 헥사고날 아키텍처 구조
 
 ```mermaid
 graph LR
-    A[REST/Kafka] -->|인바운드| E[OrderUseCase]
-    E --> G[OrderService]
-    G --> H[Order 도메인]
-    G -->|아웃바운드| J[OrderPort]
-    G -->|아웃바운드| L[EventPort]
-    J --> M[JPA Repository]
-    L --> O[Kafka Publisher]
+    A["REST/Kafka"] -->|인바운드| E["OrderUseCase"]
+    E --> G["OrderService"]
+    G --> H["Order 도메인"]
+    G -->|아웃바운드| J["OrderPort"]
+    J --> M["JPA/Kafka"]
 ```
 
 ---

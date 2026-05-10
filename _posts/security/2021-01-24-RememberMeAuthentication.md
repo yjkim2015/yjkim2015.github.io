@@ -76,15 +76,12 @@ CREATE TABLE persistent_logins (
 Remember Me 토큰 검증이 실패하는 경우와 그 처리 방식입니다.
 
 ```mermaid
-flowchart LR
-    A["remember-me 쿠키"] --> B["autoLogin()"]
-    B --> C{"토큰 유효?"}
-    C -- "만료/불일치" --> D["onLoginFail()"]
-    C -- "사용자 없음" --> D
-    C -- "유효" --> E["RememberMeToken 생성"]
-    D --> F["로그인 페이지 리다이렉트"]
-    E --> G["AuthenticationMana"]
-    G --> F2["SecurityContext 저장"]
+graph LR
+    A["remember-me 쿠키"] --> B{"토큰 유효?"}
+    B -->|만료/불일치| D["onLoginFail()"]
+    B -->|유효| E["토큰 생성"]
+    D --> F["로그인 리다이렉트"]
+    E --> G["SecurityContext 저장"]
 ```
 
 토큰 검증 실패 시 `onLoginFail()` 메서드가 호출되어 쿠키를 삭제하고 `null`을 반환합니다. 이후 필터 체인이 계속 진행되어 인증되지 않은 상태로 로그인 페이지로 이동하게 됩니다.

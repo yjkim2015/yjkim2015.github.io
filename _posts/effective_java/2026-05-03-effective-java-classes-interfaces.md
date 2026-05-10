@@ -28,11 +28,11 @@ date: 2026-05-03
 접근 수준은 네 가지가 있으며, **가능한 한 가장 낮은 수준**을 사용해야 합니다.
 
 ```mermaid
-flowchart LR
-    A["private"] -->|"같은 클래스만"| B["가장 제한적"]
-    C["package-private"] -->|"같은 패키지"| D["기본값"]
-    E["protected"] -->|"같은 패키지 + 하위 클래스"| F["상속 허용"]
-    G["public"] -->|"어디서든"| H["가장 개방적 — API"]
+graph LR
+    A["private"] -->|"클래스 내부"| B["가장 좁음"]
+    C["package"] -->|"패키지"| D["기본값"]
+    E["protected"] -->|"패키지+하위"| F["상속"]
+    G["public"] -->|"어디서든"| H["API"]
 ```
 
 핵심 원칙은 다음과 같습니다.
@@ -160,13 +160,11 @@ public final class Complex {
 컴포지션(composition)은 기존 클래스를 **필드로 참조**하고, 새 클래스의 메서드에서 기존 클래스의 메서드를 호출(forwarding)하는 방식입니다.
 
 ```mermaid
-flowchart LR
-    A["상속 방식"] --> B["InstrumentedHashSe"]
-    B --> C["HashSet 내부 구현에 의존"]
-    C --> D["addAll이 add를 호출하면"]
-    E["컴포지션 방식"] --> F["InstrumentedSet ha"]
-    F --> G["ForwardingSet이 위임"]
-    G --> H["내부 구현에 독립적"]
+graph LR
+    A["상속"] --> B["HashSet 구현에 의존"]
+    B --> C["이중 카운트 버그"]
+    D["컴포지션"] --> E["위임으로 독립"]
+    E --> F["구현 변경에 안전"]
 ```
 
 아래는 상속의 위험성을 보여주는 고전적인 사례입니다. `HashSet.addAll()`은 내부적으로 `add()`를 호출하는데, 이를 모르고 `addAll()`과 `add()` 모두에서 카운트를 증가시키면 **이중 계산**이 됩니다.
@@ -253,13 +251,11 @@ public class InstrumentedSet<E> extends ForwardingSet<E> {
 > **비유:** 추상 클래스는 **혈통(가문)**과 같습니다 — 하나만 선택할 수 있습니다. 인터페이스는 **자격증**과 같습니다 — 운전면허, 조리사 자격증, TOEIC 점수를 동시에 가질 수 있습니다.
 
 ```mermaid
-flowchart LR
-    A["인터페이스"] --> B["다중 구현 가능"]
-    A --> C["믹스인 정의 가능"]
-    A --> D["default 메서드로 골격 제공"]
-    E["추상 클래스"] --> F["단일 상속만 가능"]
-    E --> G["생성자/필드 가질 수 있음"]
-    D --> H["골격 구현 = 템플릿 메서드 패턴"]
+graph LR
+    A["인터페이스"] --> B["다중 구현/믹스인"]
+    A --> D["default 메서드"]
+    E["추상 클래스"] --> F["단일 상속"]
+    E --> G["생성자/필드 보유"]
 ```
 
 **골격 구현(skeletal implementation)** 클래스는 인터페이스와 추상 클래스의 장점을 결합합니다. 관례적으로 `Abstract-`를 접두어로 붙입니다 (`AbstractList`, `AbstractSet` 등).

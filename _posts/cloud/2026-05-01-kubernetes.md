@@ -21,13 +21,10 @@ K8s 클러스터는 Control Plane(마스터)과 Worker Node로 구성된다. Con
 ```mermaid
 graph LR
     API["API Server"] --> ETCD[("etcd")]
-    API --> SCHED["Scheduler"]
-    API --> CM["Controller Manager"]
-    KL1["kubelet(Node1)"] --> C1["Pod: app-1"]
-    KL1 --> C2["Pod: app-2"]
-    KL2["kubelet(Node2)"] --> C3["Pod: app-3"]
-    API -->|"명령"| KL1
-    API -->|"명령"| KL2
+    API --> SCHED["스케줄러"]
+    API -->|"명령"| KL1["Node1 kubelet"]
+    API -->|"명령"| KL2["Node2 kubelet"]
+    KL1 --> POD1["Pod들"]
 ```
 
 ### Control Plane 컴포넌트

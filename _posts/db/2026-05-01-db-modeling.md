@@ -61,16 +61,9 @@ graph LR
 
 ```mermaid
 erDiagram
-    CUSTOMER { bigint customer_id PK }
-    ORDER { bigint order_id PK }
-    ORDER_ITEM { bigint order_item_id PK }
-    PRODUCT { bigint product_id PK }
-    CATEGORY { bigint category_id PK }
-    CUSTOMER ||--o{ ORDER : "places"
-    ORDER ||--|{ ORDER_ITEM : "contains"
-    PRODUCT ||--o{ ORDER_ITEM : "included in"
-    CATEGORY ||--o{ PRODUCT : "has"
-    CATEGORY ||--o{ CATEGORY : "parent of"
+    CUSTOMER ||--o{ ORDER : "주문"
+    ORDER ||--|{ ORDER_ITEM : "포함"
+    PRODUCT ||--o{ ORDER_ITEM : "상품"
 ```
 
 ---
@@ -159,11 +152,6 @@ CREATE TABLE enrollments (
 
 ```mermaid
 erDiagram
-    ORDER { bigint order_id PK }
-    ORDER_ITEM { bigint order_id PK_FK
-        int item_seq PK }
-    DELIVERY { bigint delivery_id PK
-        bigint order_id FK }
     ORDER ||--|{ ORDER_ITEM : "식별관계"
     ORDER ||--o{ DELIVERY : "비식별관계"
 ```

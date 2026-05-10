@@ -533,13 +533,11 @@ class OrderServiceTest {
 ## 코루틴 전체 구조 정리
 
 ```mermaid
-flowchart LR
+graph LR
     Normal["일반 함수"] -->|runBlocking| Scope["코루틴 스코프"]
-    Scope -->|launch| Job["Job (결과 없음)"]
-    Scope -->|async/await| Deferred["Deferred (결과 있음)"]
-    SuspendFn["suspend fun"] -->|IO| IOPool["I/O 풀"]
-    SuspendFn -->|Default| CPUPool["CPU 풀"]
-    Flow["Flow/StateFlow/Sha"] -->|"emit → collect"| Consume["소비·변환"]
+    Scope -->|launch| Job["Job"]
+    Scope -->|async| Deferred["Deferred"]
+    Flow["Flow"] -->|emit/collect| Consume["소비"]
 ```
 
 ---

@@ -350,18 +350,12 @@ graph LR
 메서드 호출 전에 트랜잭션을 시작하고, 정상 반환이면 커밋, 예외 발생이면 롤백하는 코드가 자동으로 삽입된다. 개발자는 트랜잭션 관리 코드를 전혀 작성하지 않아도 된다.
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant P as Proxy
-    participant S as Service
-    C->>P: createOrder()
-    P->>S: proceed()
-    alt 정상
-        P->>P: commit()
-    else 예외
-        P->>P: rollback()
-    end
-    P-->>C: 응답
+graph LR
+    C["Client"] -->|createOrder| P["Proxy"]
+    P -->|proceed| S["Service"]
+    S -->|정상| OK["commit()"]
+    S -->|예외| RB["rollback()"]
+    P -->|응답| C
 ```
 
 ```java

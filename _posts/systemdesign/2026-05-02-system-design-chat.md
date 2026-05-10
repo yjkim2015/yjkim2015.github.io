@@ -397,14 +397,10 @@ A가 서버1에, B가 서버2에 연결되어 있을 때 어떻게 메시지를 
 
 ```mermaid
 graph LR
-    Problem["문제: A는 서버1, B는 서버2"]
-    Problem --> Sol1["방법1: 서버간 직접 P2P 통신"]
-    Problem --> Sol2["방법2: Redis Pub/Sub"]
-    Problem --> Sol3["방법3: Kafka 메시지 큐"]
-    Sol1 --> D1["단점: N×(N-1) 연결 필요\"]
-    Sol2 --> D2["Redis Pub/Sub"]
-    Sol3 --> D3["Kafka"]
-    Sol3 --> Rec["추천: Kafka"]
+    A[서버1-A] --> B{라우팅}
+    B -->|P2P| C[서버2-B]
+    B -->|PubSub| D[Redis]
+    B -->|MQ| E[Kafka]
 ```
 
 ---
@@ -561,16 +557,12 @@ CREATE TABLE conversation_members (
 ### 온라인 상태 추적 — Redis TTL 활용
 
 ```mermaid
-sequenceDiagram
-    participant App as 모바일 앱
-    participant WS as WS 서버
-    participant Redis as Redis
-    App->>WS: 연결
-    WS->>Redis: SET presence EX=30
-    App->>WS: ping(하트비트)
-    WS->>Redis: EXPIRE 갱신
-    App->>WS: close
-    WS->>Redis: DEL presence
+graph LR
+    A[앱연결] --> B[WS서버]
+    B --> C[Redis SET TTL]
+    A -->|ping| B
+    B --> D[EXPIRE갱신]
+    A -->|close| E[DEL]
 ```
 
 ### Presence 최적화 — 대규모에서의 팬아웃 문제

@@ -118,13 +118,11 @@ Bridge 패턴은 추상화 계층(리모컨)과 구현 계층(기기 종류)을 
 
 ```mermaid
 graph LR
-    A["📁 프로젝트 루트"] --> B["📄 README.md"]
-    A --> C["📁 src"]
-    A --> D["📄 build.gradle"]
-    C --> E["📄 Main.java"]
-    C --> F["📁 service"]
-    F --> G["📄 UserService.java"]
-    F --> H["📄 OrderService.jav"]
+    A["루트"] --> B["README"]
+    A --> C["src/"]
+    C --> E["Main.java"]
+    C --> F["service/"]
+    F --> G["UserService/OrderService"]
 ```
 
 ```java
@@ -189,15 +187,11 @@ JDK에서 `BufferedInputStream(new FileInputStream(file))`이 대표적인 Decor
 **비유:** 스마트홈 앱의 "취침 모드" 버튼 한 번으로 조명 끄기, 문 잠금, 에어컨 끄기를 모두 실행
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant F as Facade
-    participant Sub as Subsystems
-    C->>F: sleepMode()
-    F->>Sub: turnOffLights()
-    F->>Sub: lockDoors()
-    F->>Sub: turnOffAC()
-    F-->>C: 완료
+graph LR
+    C["Client"] -->|"sleepMode"| F["Facade"]
+    F --> L["조명 끄기"]
+    F --> D["문 잠금"]
+    F --> AC["에어컨 끄기"]
 ```
 
 ```java

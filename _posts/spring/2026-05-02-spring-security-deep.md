@@ -31,14 +31,11 @@ Spring Security를 처음 보면 복잡해 보입니다. 하지만 핵심은 단
 
 ```mermaid
 graph LR
-    A["HTTP 요청"] --> B["DelegatingFilterPr"]
-    B --> C["Chain:/admin/**"]
-    B --> D["Chain:/api/**"]
-    C & D --> E["SecurityContext→Au"]
-    E --> F{"인증·권한?"}
-    F -->|"미인증"| G["401"]
-    F -->|"권한없음"| H["403"]
-    F -->|"통과"| I["Controller"]
+    A[요청] --> B[FilterProxy]
+    B --> C{인증·권한?}
+    C -->|미인증| D[401]
+    C -->|권한없음| E[403]
+    C -->|통과| F[Controller]
 ```
 
 `FilterChainProxy`가 여러 개의 `SecurityFilterChain`을 가질 수 있는 것이 중요합니다. 관리자 API(`/admin/**`)와 일반 API(`/api/**`)에 서로 다른 보안 정책을 독립적으로 적용할 수 있기 때문입니다. 하나의 설정으로 모든 경로를 처리하다가 충돌하는 문제를 피할 수 있습니다.
@@ -124,15 +121,11 @@ public class SecurityConfig {
 > 7. 사원증을 금고(SecurityContext)에 보관
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant F as AuthFilter
-    participant DB as Database
-    U->>F: POST /login
-    F->>DB: loadUserByUsername()
-    DB-->>F: UserDetails
-    F->>F: BCrypt 검증
-    F-->>U: JWT 발급
+graph LR
+    A[로그인요청] --> B[AuthFilter]
+    B --> C[UserDetailsService]
+    C --> D[BCrypt검증]
+    D --> E[JWT발급]
 ```
 
 **AuthenticationManager가 직접 처리하지 않고 AuthenticationProvider에게 위임하는 이유:** 여러 종류의 인증 방식(폼 로그인, OAuth2, 인증서 기반 등)을 지원하기 위해서입니다. `ProviderManager`(AuthenticationManager 구현체)는 등록된 `AuthenticationProvider` 목록을 순회하면서 현재 토큰을 처리할 수 있는 Provider를 찾습니다. 새로운 인증 방식을 추가할 때 기존 코드를 수정하지 않고 새 Provider만 등록하면 됩니다.
@@ -339,14 +332,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 ```mermaid
 graph LR
-    C["Client"] -->|"API 요청(유효 토큰)"| S["Server"]
-    S -->|"200"| C
-    C -->|"만료 토큰→401"| S
-    C -->|"POST /auth/refresh"| S
-    S -->|"토큰 교체"| DB["Redis"]
-    S -->|"새 Access+Refresh"| C
-    C -->|"탈취 토큰 재사용"| S
-    S -->|"전체 무효화→401"| C
+    A[Client] -->|유효토큰| B[Server]
+    B -->|200| A
+    A -->|만료→401| B
+    A -->|refresh요청| B
+    B -->|신규토큰| A
 ```
 
 **RTR(Refresh Token Rotation)을 쓰는 이유:** 리프레시 토큰을 한 번 쓰면 새것으로 교체합니다. 만약 탈취된 리프레시 토큰을 공격자가 사용하면, 정상 사용자가 다음에 갱신을 시도할 때 "이미 사용된 토큰"임을 감지합니다. 리프레시 토큰이 Redis에 저장되는 이유는 서버 재시작 시에도 토큰이 유지되어야 하고, 강제 로그아웃(토큰 즉시 무효화)도 가능해야 하기 때문입니다.
@@ -363,14 +353,11 @@ graph LR
 
 ```mermaid
 graph LR
-    U["사용자"] -->|"카카오 로그인"| A["우리앱"]
-    A -->|"인증 페이지"| U
-    U -->|"로그인+동의"| K["카카오"]
-    K -->|"Auth Code"| U
-    U -->|"Code 전달"| A
-    A -->|"Code→Token"| K
-    K -->|"Access Token"| A
-    A -->|"JWT 발급"| U
+    A[사용자] -->|로그인| B[카카오]
+    B -->|AuthCode| A
+    A -->|Code전달| C[우리앱]
+    C -->|Token교환| B
+    C -->|JWT발급| A
 ```
 
 **Authorization Code를 직접 토큰으로 교환하는 이유:** 4번 단계에서 Authorization Code가 브라우저 URL에 노출됩니다. 만약 여기서 바로 액세스 토큰을 주면 토큰이 URL에 노출됩니다. 브라우저 히스토리, 서버 로그, 프록시 로그에 남을 수 있습니다. Authorization Code는 짧은 유효 시간을 가진 일회용 코드이므로, 설령 노출되더라도 즉시 무효화됩니다. 6번 단계에서 서버 간 통신으로 토큰을 교환하기 때문에 토큰이 외부에 노출되지 않습니다.

@@ -21,10 +21,10 @@ NoSQL 데이터베이스는 데이터를 **어떤 형태로 저장하느냐**에
 
 ```mermaid
 graph LR
-    KV["Key-Value: key→val"] -->|대표| R["Redis"]
-    DOC["Document: key→JSON"] -->|대표| M["MongoDB"]
-    CF["Column-Family: row"] -->|대표| C["Cassandra"]
-    GR["Graph: node→edge→n"] -->|대표| N["Neo4j"]
+    KV["Key-Value"] --> R["Redis"]
+    DOC["Document"] --> M["MongoDB"]
+    CF["Column-Family"] --> C["Cassandra"]
+    GR["Graph"] --> N["Neo4j"]
 ```
 
 ---
@@ -172,14 +172,10 @@ RETURN path, length(path)
 
 ```mermaid
 graph LR
-    CAP["CAP 정리"] --> CP["CP: 일관성 + 분할내성"]
-    CAP --> AP["AP: 가용성 + 분할내성"]
-    CP --> MongoDB_cp["MongoDB (기본 설정)"]
-    CP --> Redis_cp["Redis Cluster"]
-    CP --> Neo4j_cp["Neo4j"]
-    AP --> Cassandra_ap["Cassandra"]
-    AP --> DynamoDB_ap["DynamoDB"]
-    AP --> CouchDB_ap["CouchDB"]
+    CAP["CAP 정리"] --> CP["CP: 일관성+분할"]
+    CAP --> AP["AP: 가용성+분할"]
+    CP --> C1["MongoDB/Redis/Neo4j"]
+    AP --> C2["Cassandra/DynamoDB"]
     style CP fill:#4A90D9,color:#fff
     style AP fill:#D94A4A,color:#fff
 ```
@@ -213,16 +209,13 @@ ALL                | 모든 복제본 응답             | 최고 (비추천)
 > **비유:** 데이터베이스 선택은 **집을 지을 때 기초 공사 방식을 결정하는 것**과 같다. 아파트(RDBMS)는 규격화되어 안정적이지만, 나중에 구조 변경이 어렵다. 컨테이너 하우스(NoSQL)는 자유롭게 배치·확장할 수 있지만, 수도·전기(트랜잭션·일관성) 연결이 까다롭다. 기초 공사를 잘못 선택하면 나중에 건물을 허물어야 한다.
 
 ```mermaid
-flowchart LR
-    START["데이터 특성 분석"] --> Q1{"ACID 필수?"}
-    Q1 -- 예 --> RDBMS["RDBMS (MySQL/PG)"]
-    Q1 -- 아니오 --> Q2{"관계 탐색 핵심?"}
-    Q2 -- 예 --> GRAPH["Graph DB (Neo4j)"]
-    Q2 -- 아니오 --> Q3{"쓰기 10만/s 이상?"}
-    Q3 -- 예 --> COLUMN["Column-Family (Cas"]
-    Q3 -- 아니오 --> Q4{"밀리초 미만 응답?"}
-    Q4 -- 예 --> KV["Key-Value (Redis)"]
-    Q4 -- 아니오 --> DOC["Document DB (Mongo"]
+graph LR
+    Q1{"ACID 필수?"} -->|예| RDBMS["RDBMS"]
+    Q1 -->|아니오| Q2{"관계 탐색?"}
+    Q2 -->|예| GRAPH["Graph DB"]
+    Q2 -->|아니오| Q3{"고속 쓰기?"}
+    Q3 -->|예| COLUMN["Cassandra"]
+    Q3 -->|아니오| KV["Redis/Mongo"]
 ```
 
 ### 핵심 판단 기준 비교표

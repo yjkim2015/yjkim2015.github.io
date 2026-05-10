@@ -25,18 +25,12 @@ Spring Security의 인증 흐름이 이 과정과 동일합니다.
 ![image-20210531224017165](../../assets/images/2021-05-31-AuthenticationFlow/image-20210531224017165.png)
 
 ```mermaid
-sequenceDiagram
-    participant U as User
-    participant F as AuthFilter
-    participant AP as AuthProvider
-    U->>F: POST /login
-    F->>AP: authenticate(token)
-    AP->>AP: UserDetails 조회+검증
-    alt 일치
-        AP-->>U: 로그인 성공
-    else 불일치
-        AP-->>U: BadCredentials
-    end
+graph LR
+    U["User"] -->|POST /login| F["AuthFilter"]
+    F -->|authenticate| AP["AuthProvider"]
+    AP -->|UserDetails 검증| AP
+    AP -->|성공| OK["로그인 성공"]
+    AP -->|실패| ERR["BadCredentials"]
 ```
 
 ## 컴포넌트별 역할 상세 설명
@@ -214,13 +208,11 @@ public class OtpAuthenticationProvider implements AuthenticationProvider {
 ## 인증 흐름 전체 컴포넌트 구조
 
 ```mermaid
-flowchart LR
-    A["Filter"] --> B["AuthenticationMana"]
-    B --> C["AuthenticationProv"]
-    B --> D["AuthenticationProv"]
+graph LR
+    A["Filter"] --> B["ProviderManager"]
+    B --> C["AuthProvider"]
     B --> E["부모 ProviderManager"]
     C --> F["UserDetailsService"]
-    C --> G["PasswordEncoder"]
     F --> H["UserDetails"]
 ```
 

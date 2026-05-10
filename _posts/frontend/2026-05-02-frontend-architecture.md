@@ -178,14 +178,10 @@ export function useProducts(params?: { category?: string }) {
 
 ```mermaid
 graph LR
-    STATE["상태 분류"] --> LOCAL["로컬 상태<br>컴포넌트 내부만"]
-    STATE --> SHARED["공유 상태<br>여러 컴포넌트가"]
-    STATE --> SERVER["서버 상태<br>API 데이터"]
-    STATE --> URL["URL 상태<br>라우터 파라미터"]
-    LOCAL --> USESTATE["useState, useReduc"]
-    SHARED --> CONTEXT["Context / Zustand"]
-    SERVER --> RQ["React Query / SWR"]
-    URL --> ROUTER["React Router / Nex"]
+    STATE["상태 분류"] --> LOCAL["로컬 → useState"]
+    STATE --> SHARED["공유 → Zustand"]
+    STATE --> SERVER["서버 → React Query"]
+    STATE --> URL["URL → Router"]
     style LOCAL fill:#2ecc71,color:#fff
     style SERVER fill:#e74c3c,color:#fff
 ```
@@ -251,9 +247,10 @@ function App() {
 
 ```mermaid
 graph LR
-    ROOT["root/"] --> APPS["apps/"] & PACKAGES["packages/"]
-    APPS --> WEB["web Next.js"] & MOBILE["mobile RN"]
-    PACKAGES --> UI["ui"] & TYPES["types"] & UTILS["utils"]
+    ROOT["root/"] --> APPS["apps/"]
+    ROOT --> PKG["packages/"]
+    APPS --> WEB["web"] & MOBILE["mobile"]
+    PKG --> UI["ui/types/utils"]
 ```
 
 > 비유: 한 회사의 여러 부서가 같은 복지 제도, 같은 업무 시스템을 공유하는 것과 같습니다. 각 팀은 독립적으로 일하지만, 공통 인프라는 함께 씁니다.

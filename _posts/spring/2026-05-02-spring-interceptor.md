@@ -125,29 +125,23 @@ public class AuthInterceptor implements HandlerInterceptor {
 ### Mermaid 다이어그램: 처리 흐름 비교
 
 ```mermaid
-graph TB
-    A[HTTP 요청] --> B["Filter Chain"]
-    B --> C[DispatcherServlet]
-    C --> D["Interceptor preHan"]
+graph LR
+    A[요청] --> B[Filter]
+    B --> C[Servlet]
+    C --> D[Interceptor]
     D --> E[Controller]
-    E --> F["AOP Before/After"]
-    E --> G["Interceptor postHa"]
-    G --> H[HTTP 응답]
+    E --> F[응답]
 ```
 
 ### 언제 무엇을 사용해야 하는가
 
 ```mermaid
-flowchart LR
-    A["횡단 관심사 구현 필요"] --> B{"Spring Bean 접근 필요?"}
-    B -->|"아니오"| C{"모든 요청에 적용?"}
-    B -->|"예"| D{"URL 기반 제어 필요?"}
-    C -->|"예"| E["Filter 사용"]
-    C -->|"아니오"| F["Filter 사용"]
-    D -->|"예"| G["Interceptor 사용"]
-    D -->|"아니오"| H{"메서드 레벨 제어?"}
-    H -->|"예"| I["AOP 사용"]
-    H -->|"아니오"| G
+graph LR
+    A[횡단관심사] --> B{Bean접근?}
+    B -->|No| C[Filter]
+    B -->|Yes| D{URL제어?}
+    D -->|Yes| E[Interceptor]
+    D -->|No| F[AOP]
 ```
 
 ---

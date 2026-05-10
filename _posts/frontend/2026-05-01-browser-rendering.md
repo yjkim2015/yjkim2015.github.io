@@ -29,14 +29,11 @@ toc_label: 목차
 
 ```mermaid
 flowchart LR
-    HTML["HTML"] --> DOM["DOM 트리"]
-    CSS["CSS"] --> CSSOM["CSSOM 트리"]
-    DOM --> RT["렌더 트리"]
-    CSSOM --> RT
+    HTML["HTML/CSS"] --> RT["렌더 트리"]
     JS["JS"] -->|"DOM 수정"| RT
     RT --> LAYOUT["Layout"]
     LAYOUT --> PAINT["Paint"]
-    PAINT --> SCREEN["화면 출력"]
+    PAINT --> SCREEN["화면"]
 ```
 
 ---
@@ -95,16 +92,11 @@ document
 자바스크립트는 **파서 블로킹 리소스**입니다. `<script>` 태그를 만나면 HTML 파싱을 멈추고 JS를 다운로드·실행합니다. JS가 DOM을 변경할 수 있기 때문입니다.
 
 ```mermaid
-sequenceDiagram
-    participant PARSER as HTML 파서
-    participant NETWORK as 네트워크
-    participant JS as JS 엔진
-    PARSER->>PARSER: 1️⃣ HTML 파싱 진행
-    PARSER->>NETWORK: 2️⃣ script 태그 발견 → JS 다운로드 요청
-    Note over PARSER: ⛔ 파싱 일시 중단!
-    NETWORK-->>JS: 3️⃣ JS 파일 수신
-    JS->>JS: 4️⃣ JS 실행 완료
-    PARSER->>PARSER: 5️⃣ HTML 파싱 재개
+graph LR
+    A["HTML 파싱"] -->|"script 발견"| B["파싱 중단"]
+    B --> C["JS 다운로드/실행"]
+    C --> D["파싱 재개"]
+    D --> E["DOM 완성"]
 ```
 
 ```html

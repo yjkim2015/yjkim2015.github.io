@@ -237,14 +237,10 @@ count++;  // 이 줄이 있으면 위의 람다도 컴파일 에러
 스택 변수는 메서드가 끝나면 사라지지만, 람다 인스턴스는 힙에서 더 오래 살 수 있습니다. 람다가 스택 변수를 직접 참조하면 메서드 종료 후 댕글링 참조가 발생합니다. 해결책은 **람다 생성 시점의 값을 복사(copy-by-value)** 하는 것입니다. 복사 후 원본이 바뀌면 복사본과 불일치가 생겨 혼란이 발생하므로, Java는 변경 자체를 금지합니다.
 
 ```mermaid
-sequenceDiagram
-    participant S as 스택(메서드)
-    participant L as 람다(힙)
-    S->>S: int count = 0 선언
-    S->>L: 람다 생성 시 count 값(0) 복사
-    S->>S: 메서드 종료 → count 소멸
-    L->>L: 복사된 0은 여전히 유효
-    Note over S,L: count를 변경하면 복사본과 불일치 → Java가 컴파일 에러로 차단
+graph LR
+    S["스택(메서드)"] -->|count=0 복사| L["람다(힙)"]
+    S -->|메서드 종료| GONE["count 소멸"]
+    L -->|복사본 유효| LIVE["0 사용 가능"]
 ```
 
 ### 우회 방법 — 변경 가능한 컨테이너 사용
@@ -626,16 +622,11 @@ public void scopeExample() {
 람다는 익명 클래스처럼 별도의 `.class` 파일을 생성하지 않습니다. 대신 Java 7에서 도입된 `invokedynamic` JVM 명령어를 사용합니다. 첫 번째 호출 시 `LambdaMetafactory`가 런타임에 함수형 인터페이스 구현 클래스를 동적으로 생성하고 캐싱합니다. 이후 호출에서는 캐시된 구현을 재사용하므로 클래스 로딩 비용이 없습니다.
 
 ```mermaid
-sequenceDiagram
-    participant C as 컴파일러
-    participant JVM as JVM(런타임)
-    participant LMF as LambdaMetafactory
-    C->>C: 람다 바디를 private static 메서드로 추출
-    C->>C: invokedynamic 명령어 삽입
-    JVM->>LMF: 최초 실행 시 LambdaMetafactory.metafactory() 호출
-    LMF->>JVM: 함수형 인터페이스 구현 클래스 동적 생성
-    JVM->>JVM: CallSite 캐싱
-    Note over JVM: 이후 호출은 캐시된 구현 직접 사용
+graph LR
+    C["컴파일러"] -->|invokedynamic| JVM["JVM"]
+    JVM -->|최초 호출| LMF["LambdaMetafactory"]
+    LMF --> CS["CallSite 캐시"]
+    CS -->|재호출| JVM
 ```
 
 ### 캡처링 람다 vs 비캡처링 람다
@@ -801,14 +792,10 @@ list.forEach(System.out::println);
 
 ```mermaid
 graph LR
-    A["람다 핵심 포인트"] --> B["1️⃣ 함수형 인터페이스의 인스턴"]
-    A --> C["2️⃣ 타입 추론"]
-    A --> D["3️⃣ effectively fi"]
-    A --> E["4️⃣ this"]
-    A --> F["5️⃣ 메서드 레퍼런스"]
-    A --> G["6️⃣ java.util.func"]
-    A --> H["7️⃣ 내부 구현"]
-    A --> I["8️⃣ 성능"]
+    A["람다"] --> B["함수형 인터페이스"]
+    A --> C["타입 추론"]
+    A --> D["effectively final"]
+    A --> E["메서드 레퍼런스"]
 ```
 
 ---

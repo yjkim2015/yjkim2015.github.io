@@ -200,14 +200,10 @@ public class MemberServiceImpl implements MemberService {
 
 ```mermaid
 graph LR
-    A["@Component"] --> B["@Controller"]
-    A --> C["@Service"]
-    A --> D["@Repository"]
-    A --> E["@Configuration"]
-    B -->|"추가 기능"| F["HandlerMapping에 등록"]
-    C -->|"추가 기능"| G["(의미론적 분류만)"]
-    D -->|"추가 기능"| H["DataAccessExceptio"]
-    E -->|"추가 기능"| I["CGLIB 프록시 적용"]
+    A[Component] --> B[Controller]
+    A --> C[Service]
+    A --> D[Repository]
+    A --> E[Configuration]
 ```
 
 `@Repository`가 특히 중요한 이유를 설명하겠습니다. JPA를 쓰다 보면 `EntityNotFoundException`, `PersistenceException` 등 JPA 전용 예외가 발생합니다. 만약 서비스 레이어에서 이 예외를 잡으려면 JPA에 종속된 코드를 작성해야 합니다. 나중에 MyBatis로 바꾸면 다른 예외가 나오므로 서비스 코드도 바꿔야 합니다.
@@ -363,15 +359,13 @@ public class RateDiscountPolicy implements DiscountPolicy { ... }
 ### 6.2 @Autowired 매칭 규칙 흐름
 
 ```mermaid
-flowchart LR
-    A["@Autowired"] --> B{"빈 개수?"}
-    B -->|"1개"| D["주입 성공"]
-    B -->|"0개"| E{"required=false?"}
-    E -->|"true"| D
-    E -->|"false"| G["NoSuchBeanDefiniti"]
-    B -->|"여러 개"| H{"@Qualifier → @Primary → 이름 일치?"}
-    H -->|"예"| D
-    H -->|"아니오"| K["NoUniqueBeanDefini"]
+graph LR
+    A[Autowired] --> B{빈 개수}
+    B -->|1개| C[주입 성공]
+    B -->|0개| D[예외]
+    B -->|여러개| E{Qualifier?}
+    E -->|있음| C
+    E -->|없음| D
 ```
 
 ---
@@ -413,17 +407,11 @@ public class NetworkClient {
 ### 7.2 전체 생명주기 — 한 번에 보기
 
 ```mermaid
-sequenceDiagram
-    participant C as Container
-    participant B as Bean
-    participant BPP as BeanPostProcessor
-    C->>B: 객체 생성 + 의존관계 주입
-    C->>BPP: postProcessBeforeInitialization()
-    C->>B: @PostConstruct / afterPropertiesSet()
-    C->>BPP: postProcessAfterInitialization()
-    Note over B: 빈 사용 가능
-    C->>B: @PreDestroy / destroy()
-    Note over B: 빈 소멸
+graph LR
+    A[생성+주입] --> B[BeforeInit]
+    B --> C[PostConstruct]
+    C --> D[사용]
+    D --> E[PreDestroy]
 ```
 
 ### 7.3 초기화 / 소멸 콜백 방법 비교
@@ -736,12 +724,11 @@ public class DiscountService {
 ## 12. 전체 흐름 정리
 
 ```mermaid
-flowchart LR
-    A["앱 시작"] --> B["Container 생성"]
-    B --> C["@Config 읽기"] --> D["BeanDefinition"]
-    D --> E["빈 생성"] --> F["@Autowired"]
-    F --> G["빈 준비완료"]
-    G --> H["사용→소멸"]
+graph LR
+    A[앱시작] --> B[Config읽기]
+    B --> C[빈생성]
+    C --> D[주입완료]
+    D --> E[사용→소멸]
 ```
 
 ---

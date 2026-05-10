@@ -269,15 +269,10 @@ ECS는 **Docker 컨테이너 오케스트레이션** 서비스다. Kubernetes보
 
 ```mermaid
 graph LR
-    C[ECS Cluster]
-    C --> S1[Service A]
-    C --> S2[Service B]
-    S1 --> T1[Task 1]
-    S1 --> T2[Task 2]
-    S2 --> T3[Task 3]
-    T1 --> D1[ECR Image]
-    T2 --> D1
-    T3 --> D2[ECR Image]
+    C["ECS 클러스터"] --> SA["Service A"]
+    C --> SB["Service B"]
+    SA --> T["Task들"]
+    T --> ECR["ECR 이미지"]
 ```
 
 **ECS 실행 유형:**

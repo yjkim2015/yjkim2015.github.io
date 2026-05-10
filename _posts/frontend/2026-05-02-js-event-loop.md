@@ -93,13 +93,11 @@ infinite(); // RangeError: Maximum call stack size exceeded
 이벤트 루프가 하는 일을 정확히 표현하면 이렇습니다. 이 알고리즘을 외워두면 어떤 비동기 코드든 실행 순서를 예측할 수 있습니다.
 
 ```mermaid
-flowchart LR
+graph LR
     A{"콜스택 비었나?"} -->|아니오| B["콜스택 실행"] --> A
     A -->|예| C{"마이크로태스크?"}
-    C -->|예| D["마이크로태스크 실행"] --> C
-    C -->|아니오| E{"태스크큐?"}
-    E -->|예| F["태스크 → 콜스택"] --> A
-    E -->|아니오| G["대기"] --> A
+    C -->|예| D["마이크로태스크 실행"] --> A
+    C -->|아니오| E["태스크큐 처리"] --> A
 ```
 
 핵심 규칙 4가지를 기억하세요.
@@ -198,17 +196,13 @@ console.log('2: 후');
 ```
 
 ```mermaid
-flowchart LR
-    A["console.log('1: 전'"] --> B["fetchData() 호출"]
-    B --> C["console.log('A: fe"]
-    C --> D["await Promise.reso"]
-    D --> E["함수 실행 일시 중단<br>제어권"]
-    E --> F["console.log('2: 후'"]
-    F --> G["콜스택 비워짐"]
-    G --> H["마이크로태스크 큐 처리"]
-    H --> I["console.log('B: aw"]
-    style D fill:#4ecdc4,color:#fff
-    style H fill:#4ecdc4,color:#fff
+graph LR
+    A["log(1)"] --> B["await 만남"]
+    B -->|"중단"| C["log(2) 실행"]
+    C --> D["콜스택 빔"]
+    D --> E["마이크로태스크: log(B)"]
+    style B fill:#4ecdc4,color:#fff
+    style E fill:#4ecdc4,color:#fff
 ```
 
 출력 결과:
@@ -324,15 +318,12 @@ console.log('script end');
 ```
 
 ```mermaid
-flowchart LR
-    A["script start"] --> B["setTimeout → 태스크 큐"]
-    B --> C["Promise.then → 마이크"]
-    C --> D["async start / awai"]
-    D --> E["script end / 콜스택 비"]
-    E --> F["마이크로태스크: promise1"]
-    F --> G["마이크로태스크: async end"]
-    G --> H["마이크로태스크: promise2"]
-    H --> I["태스크 큐: setTimeout"]
+graph LR
+    A["script 실행"] --> B["마이크로태스크 처리"]
+    B --> C["promise1 → async end → promise2"]
+    C --> D["태스크 큐: setTimeout"]
+    A -->|"등록"| MT["Promise.then/await"]
+    A -->|"등록"| TQ["setTimeout"]
 ```
 
 출력 결과:

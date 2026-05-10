@@ -680,13 +680,11 @@ class TTLManager:
 
 ```mermaid
 graph LR
-    Client["클라이언트"] --> LB["로드밸런서"]
-    LB --> Coord["코디네이터 1~N"]
-    Coord --> Ring["Consistent Hash Ri"]
-    Ring --> D1["데이터노드1"]
-    Ring --> D2["데이터노드2"]
-    Ring --> D3["데이터노드3"]
-    D1 <-->|"Gossip"| D2 <-->|"Gossip"| D3 <-->|"Gossip"| D1
+    A[Client] --> B[코디네이터]
+    B --> C[HashRing]
+    C --> D[노드1]
+    C --> E[노드2]
+    D <-->|Gossip| E
 ```
 
 **요청 흐름**:

@@ -28,9 +28,11 @@ NestJS는 Angular에서 영감을 받아 **모듈-컨트롤러-서비스**라는
 
 ```mermaid
 graph LR
-    CLIENT --> MW["미들웨어"] --> GUARD["가드"] --> PIPE["파이프"] --> CTRL["컨트롤러"]
-    CTRL --> SERVICE["서비스"] --> REPO["레포지토리"]
-    REPO --> SERVICE --> CTRL --> INTR["인터셉터"] --> CLIENT
+    CLIENT --> MW["미들웨어/가드/파이프"]
+    MW --> CTRL["컨트롤러"]
+    CTRL --> SERVICE["서비스"]
+    SERVICE --> REPO["레포지토리"]
+    CTRL --> CLIENT
 ```
 
 이 파이프라인이 중요한 이유가 있습니다. 왜냐하면 인증, 로깅, 유효성 검사 같은 **횡단 관심사(Cross-cutting Concerns)**를 비즈니스 로직과 완전히 분리할 수 있기 때문입니다. 컨트롤러와 서비스는 순수하게 자신의 일만 합니다.
@@ -285,15 +287,11 @@ export class ResponseTransformInterceptor<T> implements NestInterceptor<T> {
 ## 2번 다이어그램 - 전체 요청 흐름 시퀀스
 
 ```mermaid
-sequenceDiagram
-    participant C as 클라이언트
-    participant MW as 미들웨어/가드
-    participant CTRL as 컨트롤러
-    C->>MW: HTTP 요청
-    MW->>MW: JWT/DTO 검사
-    MW->>CTRL: 컨트롤러 호출
-    CTRL->>CTRL: 서비스 위임
-    CTRL-->>C: 최종 응답
+graph LR
+    C["클라이언트"] -->|"HTTP 요청"| MW["미들웨어/가드"]
+    MW -->|"JWT/DTO 검사"| CTRL["컨트롤러"]
+    CTRL -->|"서비스 위임"| SVC["서비스"]
+    CTRL -->|"응답"| C
 ```
 
 ---

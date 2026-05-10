@@ -45,14 +45,10 @@ public class WordList {
 
 ```mermaid
 graph LR
-    A["compareTo 4대 규약"] --> B["대칭성"]
+    A["compareTo 규약"] --> B["대칭성"]
     A --> C["추이성"]
     A --> D["반사성"]
     A --> E["equals와 일관성"]
-    B --> B1["sgn(x.compareTo(y)"]
-    C --> C1["x>y, y>z 이면"]
-    D --> D1["x.compareTo(y)==0이"]
-    E --> E1["compareTo==0이면"]
     style E fill:#ffd43b
 ```
 

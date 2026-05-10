@@ -55,15 +55,11 @@ graph LR
 
 ```mermaid
 graph LR
-    A["데이터 증가 / 성능 문제"] --> B{"인덱스 최적화·쿼리 튜닝으로 해결?"}
-    B -->|"YES"| Z1["해결 완료"]
-    B -->|"NO"| C{"읽기 복제 + 캐싱으로 해결?"}
-    C -->|"YES"| Z2["해결 완료 (샤딩 불필요)"]
-    C -->|"NO"| D{"파티셔닝으로 해결?"}
-    D -->|"YES"| Z3["해결 완료 (샤딩 불필요)"]
-    D -->|"NO"| E{"수직 확장으로 해결? (비용 감수)"}
-    E -->|"YES"| Z4["한시적 해결"]
-    E -->|"NO"| F["샤딩 도입 검토"]
+    A["성능 문제"] --> B{"튜닝/캐싱"}
+    B -->|"해결"| Z["완료"]
+    B -->|"미해결"| C{"파티셔닝"}
+    C -->|"해결"| Z
+    C -->|"미해결"| F["샤딩 도입"]
 ```
 
 ---
@@ -78,8 +74,7 @@ graph LR
 graph LR
     R["라우터"] --> SH0["Shard 0"]
     R --> SH1["Shard 1"]
-    R --> SH2["Shard 2"]
-    R --> SH3["Shard 3"]
+    R --> SH2["Shard 2~N"]
 ```
 
 **단점 — 핫스팟(Hot Spot) 문제**
@@ -92,10 +87,9 @@ graph LR
 
 ```mermaid
 graph LR
-    K1["user_id = 1234"] --> SH2["Shard 2"]
-    K2["user_id = 5678"] --> SH0["Shard 0"]
-    K3["user_id = 9999"] --> SH3["Shard 3"]
-    K4["user_id = 10001"] --> SH1["Shard 1"]
+    K["user_id"] -->|"hash % N"| SH0["Shard 0"]
+    K -->|"hash % N"| SH1["Shard 1"]
+    K -->|"hash % N"| SH2["Shard 2~N"]
 ```
 
 **단점 — 노드 추가/제거 시 대규모 재분배**
@@ -128,10 +122,10 @@ graph LR
 
 ```mermaid
 graph LR
-    V1["N0_vn3(35)"] --> V2["N1_vn47(62)"] --> V3["N2_vn91(89)"] --> V4["N0_vn15(130)"] --> V5["N1_vn62(175)"]
-    V1 & V4 --> RN0["Node 0"]
-    V2 & V5 --> RN1["Node 1"]
-    V3 --> RN2["Node 2"]
+    RING["해시 링"] --> N0["Node 0"]
+    RING --> N1["Node 1"]
+    RING --> N2["Node 2"]
+    N0 -->|"가상노드"| RING
 ```
 
 ### Directory-based Sharding

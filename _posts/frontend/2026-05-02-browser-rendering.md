@@ -27,14 +27,12 @@ URL을 입력하고 엔터를 누르는 순간, 브라우저는 믿기 어려울
 ## 1번 다이어그램 - 전체 렌더링 파이프라인
 
 ```mermaid
-flowchart LR
-    HTML["HTML 파싱"] --> DOM["DOM"]
-    CSS["CSS 파싱"] --> CSSOM["CSSOM"]
-    DOM & CSSOM --> RT["렌더 트리"]
+graph LR
+    HTML["HTML/CSS"] --> RT["렌더 트리"]
+    JS["JS"] -->|"DOM 수정"| RT
     RT --> L["Layout"]
     L --> P["Paint"]
-    P --> SCREEN["화면 출력"]
-    JS["JS 실행"] -->|"DOM/CSSOM 수정"| DOM
+    P --> SCREEN["화면"]
 ```
 
 DOM과 CSSOM은 따로 만들어지다가 렌더 트리에서 합쳐집니다. 자바스크립트는 이 두 트리를 모두 수정할 수 있습니다. 그래서 자바스크립트 실행 타이밍이 잘못되면 파싱이 중단되는 문제가 생깁니다.
@@ -76,12 +74,9 @@ graph LR
     DOC[Document] --> HTML[html]
     HTML --> HEAD[head]
     HTML --> BODY[body]
-    HEAD --> TITLE["title: 예제"]
-    HEAD --> LINK["link: style.css"]
-    BODY --> H1["h1: 제목"]
-    BODY --> P["p: 단락"]
+    HEAD --> TITLE["title"]
+    BODY --> H1["h1/p"]
     style DOC fill:#e74c3c,color:#fff
-    style HTML fill:#e74c3c,color:#fff
 ```
 
 ### 파싱 블로킹 — script 태그가 왜 위험한가

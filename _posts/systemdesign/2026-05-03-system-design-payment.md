@@ -780,15 +780,12 @@ PCI DSS(Payment Card Industry Data Security Standard)는 카드 데이터를 다
 ### 토큰화 흐름
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant PG as PG사 JS SDK
-    participant PS as 결제서비스
-    U->>PG: 카드번호 입력 (브라우저에서 직접 PG로)
-    PG-->>U: 토큰 반환 (tok_xxxx1234)
-    U->>PS: 결제 요청 + tok_xxxx1234
-    PS->>PG: 토큰으로 승인 요청
-    PG-->>PS: 승인 결과
+graph LR
+    A[사용자] -->|카드입력| B[PG SDK]
+    B -->|토큰반환| A
+    A -->|토큰+결제요청| C[결제서비스]
+    C -->|승인요청| B
+    B -->|승인결과| C
 ```
 
 카드번호는 PG사 서버에만 존재하고 우리 서버를 거치지 않습니다. 우리는 토큰만 저장합니다. 해커가 우리 DB를 털어도 카드번호는 없습니다.

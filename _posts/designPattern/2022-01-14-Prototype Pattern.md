@@ -253,15 +253,11 @@ public class Main {
 ## 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant R as Registry
-    participant P as Prototype
-    C->>R: getShape() 요청
-    R->>P: shape.clone()
-    P-->>R: 복사본 반환
-    R-->>C: 복사본 전달
-    C->>P: draw() 호출
+graph LR
+    C["Client"] --> R["Registry"]
+    R -->|"clone"| P["Prototype"]
+    P -->|"복사본"| C
+    C -->|"draw"| P
 ```
 
 ---

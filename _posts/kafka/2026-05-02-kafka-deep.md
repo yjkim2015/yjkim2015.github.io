@@ -47,10 +47,9 @@ graph LR
 
 ```mermaid
 graph LR
-    M0["P0:off0"] --> M1["off1"] --> M2["off2"] --> M3["off3"]
-    N0["P1:off0"] --> N1["off1"] --> N2["off2"]
-    O0["P2:off0"] --> O1["off1"]
-    Consumer["컨슈머"]
+    P0["P0:off0→1→2"] --> C["컨슈머"]
+    P1["P1:off0→1"] --> C
+    P2["P2:off0"] --> C
 ```
 
 오프셋은 단순한 번호가 아닙니다. **"내가 여기까지 처리했다"는 책갈피**입니다. 컨슈머가 오프셋 2까지 처리했다고 커밋하면, 재시작 후에도 오프셋 3부터 이어서 처리합니다.
@@ -163,14 +162,9 @@ acks=all: 모든 ISR 레플리카 확인 (가장 안전, 느림)
 
 ```mermaid
 graph LR
-    P0[P0] & P1[P1] & P2[P2] & P3[P3] & P4[P4] & P5[P5]
-    C1[컨슈머1] & C2[컨슈머2] & C3[컨슈머3]
-    P0 --> C1
-    P1 --> C1
-    P2 --> C2
-    P3 --> C2
-    P4 --> C3
-    P5 --> C3
+    P0 & P1 --> C1["컨슈머1"]
+    P2 & P3 --> C2["컨슈머2"]
+    P4 & P5 --> C3["컨슈머3"]
 ```
 
 컨슈머 그룹은 **분산 처리 팀**입니다. 파티션 6개, 컨슈머 3개면 컨슈머 한 명이 파티션 2개씩 담당합니다. 처리량이 부족하면 컨슈머를 추가하면 됩니다. 파티션 6개에 컨슈머 6개면 1:1 매핑으로 최대 처리량이 나옵니다.
@@ -571,14 +565,10 @@ socket.receive.buffer.bytes=102400
 
 ```mermaid
 graph LR
-    SRC["ATM/POS/온라인뱅킹"] --> P["Kafka Producer"]
-    P --> KC["Kafka Cluster (30브"]
-    KC --> FD["사기감지 (Streams, 100"]
-    KC --> ST["정산 (배치)"]
-    KC --> AN["분석 (Flink→Druid)"]
-    KC --> AR["아카이브 (S3)"]
-    FD --> Alert["사기 알림"]
-    AN --> Dashboard["실시간 대시보드"]
+    SRC["ATM/POS/온라인"] --> KC["Kafka Cluster"]
+    KC --> FD["사기감지"] --> Alert["알림"]
+    KC --> ST["정산"]
+    KC --> AN["분석"] --> Dashboard["대시보드"]
 ```
 
 **성능 최적화 포인트:**

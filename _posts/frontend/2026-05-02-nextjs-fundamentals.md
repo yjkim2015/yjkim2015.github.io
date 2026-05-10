@@ -47,12 +47,11 @@ Next.js 13에서 App Router가 도입되었습니다. Pages Router는 기존 방
 
 ```mermaid
 graph LR
-    PR["pages/"] --> PI["index.js → /"]
-    PR --> PB["blog/[id].js → /bl"]
-    PR --> PA["api/users.js → /ap"]
-    AR["app/ (권장)"] --> AI["page.tsx → /"]
+    PR["pages/ (구)"] --> PI["index.js"]
+    PR --> PB["blog/[id].js"]
+    AR["app/ (권장)"] --> AI["page.tsx"]
     AR --> AB["blog/[id]/page.tsx"]
-    AR --> ARO["layout / loading /"]
+    AR --> ARO["layout/loading/error"]
 ```
 
 App Router의 가장 큰 변화는 **서버 컴포넌트**입니다. 모든 컴포넌트가 기본적으로 서버에서만 실행됩니다. 클라이언트에서 실행이 필요한 컴포넌트만 `'use client'`를 선언합니다.

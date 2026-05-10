@@ -40,14 +40,10 @@ Spring은 `spring-context` 모듈에 **캐시 추상화 레이어**를 제공한
 
 ```mermaid
 graph LR
-    CM["CacheManager (인터페이"]
-    CM --> GC["getCache(name) → C"]
-    CM --> GCN["getCacheNames() →"]
-    C["Cache (인터페이스)"]
-    C --> CG["get(key) → ValueWr"]
-    C --> CP["put(key, value)"]
+    CM["CacheManager"] --> C["Cache"]
+    C --> CG["get(key)"]
+    C --> CP["put(key,val)"]
     C --> CE["evict(key)"]
-    C --> CCL["clear()"]
 ```
 
 ### 주요 애노테이션

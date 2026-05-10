@@ -21,13 +21,9 @@ Java는 성능과 객체지향이라는 두 가지 목표를 동시에 추구했
 
 ```mermaid
 graph LR
-    P1["byte/short/int/lon"] <-->|"박싱/언박싱"| W1["Byte/Short/Integer"]
-    P2["float/double"] <-->|"박싱/언박싱"| W2["Float/Double"]
-    P3["char/boolean"] <-->|"박싱/언박싱"| W3["Character/Boolean"]
-    W1 --> OBJ["Object (참조형 계층)"]
-    W2 --> OBJ
-    W3 --> OBJ
-    OBJ --> REF["String / List&lt;T"]
+    P1["int/long"] <-->|박싱/언박싱| W1["Integer/Long"]
+    P2["double/boolean"] <-->|박싱/언박싱| W2["Double/Boolean"]
+    W1 & W2 --> OBJ["Object"]
 ```
 
 ### 메모리 저장 방식 비교

@@ -343,12 +343,11 @@ public record Failure<T>(String error) implements Result<T> {}
 
 ```mermaid
 graph LR
-    A["Spring 6 + GraalVM"] --> B["AOT 컴파일"]
-    B --> C["Native Image"]
-    C --> D["빠른 시작"]
-    C --> E["낮은 메모리"]
-    G["JVM 방식"] --> H["JIT 컴파일"]
-    H --> I["긴 시작 시간"]
+    A[GraalVM] --> B[AOT]
+    B --> C[NativeImage]
+    C --> D[빠른시작]
+    E[JVM] --> F[JIT]
+    F --> G[긴시작]
 ```
 
 ```java

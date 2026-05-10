@@ -49,15 +49,12 @@ RAG는 두 단계로 나뉜다. 문서를 미리 처리해 저장하는 **인덱
 
 ```mermaid
 graph LR
-    DOC["원본 문서"] --> CHUNK["청킹"]
-    CHUNK --> EMBED["임베딩 모델"]
-    EMBED --> VDB[("벡터 DB 저장")]
-    QUERY["사용자 질문"] --> EMBED2["임베딩"]
-    EMBED2 --> SEARCH["유사도 검색"]
+    DOC["문서"] --> EMBED["임베딩"]
+    EMBED --> VDB[("벡터 DB")]
+    QUERY["질문"] --> SEARCH["검색"]
     VDB --> SEARCH
-    SEARCH --> RERANK["Re-ranking"]
-    RERANK --> LLM["LLM 답변 생성"]
-    LLM --> ANS["최종 답변"]
+    SEARCH --> LLM["LLM"]
+    LLM --> ANS["답변"]
 ```
 
 ---
@@ -153,12 +150,10 @@ chunks = splitter.split_documents(documents)
 
 ```mermaid
 graph LR
-    T1["배송이 늦었어요"] --> E["임베딩 모델"]
-    T2["배달이 지연됩니다"] --> E
-    T3["오늘 날씨는?"] --> E
-    E --> V1["[0.2, 0.8, -0.1, ...]"]
-    E --> V2["[0.21, 0.79, -0.12, ...]"]
-    E --> V3["[-0.5, 0.1, 0.9, ...]"]
+    T1["배송 지연"] --> E["임베딩"]
+    T2["배달 지연"] --> E
+    T3["날씨?"] --> E
+    E --> V["유사 벡터 ↔ 비유사 벡터"]
 ```
 
 V1과 V2는 가깝고(유사), V3는 멀다(비유사).

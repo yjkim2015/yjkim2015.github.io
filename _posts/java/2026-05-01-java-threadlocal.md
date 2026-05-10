@@ -97,14 +97,10 @@ ThreadLocalMap getMap(Thread t) {
 
 ```mermaid
 graph LR
-    TLA["ThreadLocal-A"] -.->|키| E1A["T1: Value-1"]
-    TLA -.->|키| E2A["T2: Value-X"]
-    TLB["ThreadLocal-B"] -.->|키| E1B["T1: Value-2"]
-    TLB -.->|키| E2B["T2: Value-Y"]
-    T1["Thread-1"] --> E1A
-    T1 --> E1B
-    T2["Thread-2"] --> E2A
-    T2 --> E2B
+    T1["Thread-1"] --> E1A["TL-A: Val1"]
+    T1 --> E1B["TL-B: Val2"]
+    T2["Thread-2"] --> E2A["TL-A: ValX"]
+    T2 --> E2B["TL-B: ValY"]
 ```
 
 ---

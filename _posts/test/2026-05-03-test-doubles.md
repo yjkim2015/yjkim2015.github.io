@@ -474,12 +474,11 @@ Sociable Test는 테스트 대상과 그 의존성을 함께 실행한다. Mock 
 
 ```mermaid
 graph LR
-    S1["Solitary: 대상"] --> SM1["Mock A"]
-    S1 --> SM2["Mock B"]
-    S1 --> SM3["Mock C"]
-    T1["Sociable: 대상"] --> R1["실제 A"]
-    T1 --> R2["Fake B"]
-    R1 --> R3["실제 C"]
+    A[Solitary] --> B[MockA]
+    A --> C[MockB]
+    D[Sociable] --> E[실제A]
+    D --> F[FakeB]
+    E --> G[실제C]
 ```
 
 Solitary Test는 테스트 대상만 실제이고 나머지는 모두 Mock이다. 격리도가 높지만 실제 협력을 검증하지 못한다. Sociable Test는 테스트 대상과 협력 객체를 함께 실행하므로 "실제로 맞물려 돌아가는가"를 확인할 수 있다.

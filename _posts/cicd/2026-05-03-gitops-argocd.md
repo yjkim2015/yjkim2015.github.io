@@ -158,16 +158,12 @@ spec:
 ArgoCD의 동기화 전략은 "자동(Auto)"과 "수동(Manual)" 두 가지다. 환경에 따라 적절히 선택해야 한다.
 
 ```mermaid
-flowchart LR
-    COMMIT["Git 커밋"] --> DETECT["ArgoCD 감지"]
-    DETECT --> CHECK{"Auto Sync?"}
-    CHECK -->|"Yes"| APPLY["kubectl apply"]
-    CHECK -->|"No"| WAIT["OutOfSync 표시"]
-    WAIT --> APPROVE["운영자 승인"]
-    APPROVE --> APPLY
-    APPLY --> HEALTH{"Health?"}
-    HEALTH -->|"OK"| DONE["완료"]
-    HEALTH -->|"NG"| ALERT["알림 발송"]
+graph LR
+    COMMIT["Git 커밋"] --> ARGO["ArgoCD"]
+    ARGO -->|"Auto"| APPLY["배포"]
+    ARGO -->|"Manual"| APPROVE["승인 후 배포"]
+    APPLY -->|"실패"| ALERT["알림"]
+    APPLY -->|"성공"| DONE["완료"]
 ```
 
 **Auto Sync**는 Git에 커밋하면 자동으로 배포된다. 개발/스테이징 환경에 적합하다. 빠른 피드백 루프가 가능하지만, 잘못된 커밋이 즉시 반영되는 위험이 있다.
@@ -468,16 +464,11 @@ argocd app rollback order-service 2
 > **비유:** Git 기반 롤백은 법적 절차를 밟아 계약을 해지하는 것이다(기록이 남고 안전). ArgoCD 자체 롤백은 구두로 "그 계약 없던 걸로"라고 하는 것이다(빠르지만 나중에 혼란 발생 가능).
 
 ```mermaid
-sequenceDiagram
-    participant DEV as 개발자
-    participant ARGO as ArgoCD
-    participant K8S as 클러스터
-    Note over K8S: v2 장애 발생
-    DEV->>ARGO: Sync 비활성화
-    DEV->>ARGO: rollback 실행
-    ARGO->>K8S: v1 복원
-    DEV->>ARGO: git revert & push
-    ARGO->>K8S: Synced
+graph LR
+    FAIL["v2 장애"] --> DEV["개발자"]
+    DEV -->|"rollback"| ARGO["ArgoCD"]
+    ARGO -->|"v1 복원"| K8S["클러스터"]
+    DEV -->|"git revert"| ARGO
 ```
 
 ---

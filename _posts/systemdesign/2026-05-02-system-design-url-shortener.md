@@ -165,14 +165,10 @@ graph LR
 
 ```mermaid
 graph LR
-    Client["클라이언트"] --> LB["로드밸런서"]
-    LB --> API["API 서버 (Auto Scali"]
-    API --> Cache["Redis 클러스터<br>읽기 트"]
-    API --> IDService["Snowflake ID 서비스 ("]
-    API --> DB_W["MySQL 마스터 (쓰기)"]
-    DB_W --> DB_R["MySQL 레플리카 (읽기)"]
-    API --> Kafka["Kafka (클릭 이벤트 비동기)"]
-    Kafka --> Analytics["분석 파이프라인"]
+    A[Client] --> B[API서버]
+    B --> C[Redis]
+    B --> D[MySQL마스터]
+    D --> E[레플리카]
 ```
 
 ---
@@ -180,18 +176,12 @@ graph LR
 ## URL 단축 흐름 (쓰기)
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant API
-    participant DB as MySQL
-    C->>API: POST /shorten
-    API->>DB: 중복 확인
-    alt 존재
-        DB-->>API: 기존 shortCode
-    else 신규
-        API->>DB: ID생성+Base62+INSERT
-    end
-    API-->>C: shortUrl
+graph LR
+    A[Client] -->|POST /shorten| B[API]
+    B --> C{중복?}
+    C -->|존재| D[기존코드반환]
+    C -->|신규| E[Base62+INSERT]
+    D & E --> F[shortUrl]
 ```
 
 ---
@@ -201,18 +191,12 @@ sequenceDiagram
 읽기 QPS가 116,000이다. 이 모두를 DB에서 처리하면 MySQL이 즉시 과부하된다. **캐시 히트율 80%**가 목표다:
 
 ```mermaid
-sequenceDiagram
-    participant C as Browser
-    participant API
-    participant Cache as Redis
-    C->>API: GET /W7e
-    API->>Cache: GET W7e
-    alt Hit(80%)
-        Cache-->>C: 302 Redirect
-    else Miss(20%)
-        API->>API: DB조회+Cache SET
-        API-->>C: 302 Redirect
-    end
+graph LR
+    A[Browser] -->|GET /W7e| B[API]
+    B --> C{Redis hit?}
+    C -->|Yes| D[302 Redirect]
+    C -->|No| E[DB조회]
+    E --> D
 ```
 
 ### 301 vs 302 — 왜 bit.ly는 302를 쓰는가

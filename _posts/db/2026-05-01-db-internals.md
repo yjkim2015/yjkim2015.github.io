@@ -119,11 +119,10 @@ MyISAM은 데이터와 인덱스가 분리 → 인덱스에서 데이터 위치(
 
 ```mermaid
 graph LR
-    Root --> I1[Internal] & I2[Internal] & I3[Internal]
-    I1 --> L1[Leaf] & L2[Leaf]
-    I2 --> L3[Leaf] & L4[Leaf]
-    I3 --> L5[Leaf] & L6[Leaf]
-    L1 <-->|"Linked List"| L2 <--> L3 <--> L4 <--> L5 <--> L6
+    Root --> I1["Internal"] & I2["Internal"]
+    I1 --> L1["Leaf"] & L2["Leaf"]
+    I2 --> L3["Leaf"] & L4["Leaf"]
+    L1 <-->|"LinkedList"| L2 <--> L3 <--> L4
 ```
 
 **핵심 특징:**

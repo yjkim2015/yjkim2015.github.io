@@ -93,16 +93,11 @@ car.setPrice(1000);
 **치명적 문제 — 일관성(consistency) 깨짐:**
 
 ```mermaid
-sequenceDiagram
-    participant T1 as 스레드 1
-    participant T2 as 스레드 2
-    participant C as Car 객체
-    T1->>C: new Car() — 빈 객체 생성
-    T1->>C: setColor("Red")
-    T2->>C: car 사용! (아직 name, type 없음)
-    Note over T2: name=null, type=null 상태로 사용됨!
-    T1->>C: setName("K7")
-    T1->>C: setType("KIA")
+graph LR
+    T1["스레드1"] -->|"new Car()"| C["불완전 객체"]
+    T2["스레드2"] -->|"즉시 사용!"| C
+    C --> BUG["name=null, type=null 버그"]
+    T1 -->|"setName/setType"| C
 ```
 
 객체 생성이 완료되기 전에 다른 스레드가 사용할 수 있어 **불완전한 객체**가 노출됩니다. 또한 `final` 필드를 쓸 수 없어 **불변(immutable) 클래스**를 만들 수 없습니다.

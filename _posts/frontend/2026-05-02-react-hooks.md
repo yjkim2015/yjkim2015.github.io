@@ -602,17 +602,11 @@ function AnimatedSection({ children }: { children: React.ReactNode }) {
 
 ```mermaid
 graph LR
-    A["Hooks 규칙"] --> B["최상위에서만 호출"]
-    A --> C["React 함수에서만 호출"]
-    B --> B1["조건문 안 호출 금지"]
-    B --> B2["루프 안 호출 금지"]
-    B --> B3["중첩 함수 안 호출 금지"]
-    C --> C1["함수형 컴포넌트 OK"]
-    C --> C2["커스텀 훅 OK"]
-    C --> C3["일반 함수 금지"]
-    style B1 fill:#e74c3c,color:#fff
-    style B2 fill:#e74c3c,color:#fff
-    style B3 fill:#e74c3c,color:#fff
+    A["Hooks 규칙"] --> B["최상위에서만"]
+    A --> C["React 함수에서만"]
+    B --> D["조건/루프/중첩 금지"]
+    C --> E["컴포넌트/커스텀훅 OK"]
+    style D fill:#e74c3c,color:#fff
 ```
 
 왜 이런 규칙이 있을까요? 이유는 React가 Hook 호출 순서로 어떤 상태가 어떤 Hook에 해당하는지 추적하기 때문입니다. 조건문에서 Hook을 호출하면 렌더링마다 순서가 달라질 수 있고, 그러면 상태가 잘못 매핑됩니다.

@@ -34,42 +34,33 @@ flowchart LR
 ### 1. 익명 사용자 (미인증)
 
 ```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant SCPF as SCPFilter
-    participant TL as ThreadLocal
-    B->>SCPF: GET /public
-    SCPF->>TL: 빈 Context 생성
-    TL->>TL: AnonymousToken 저장
-    SCPF->>TL: clearContext()
-    SCPF-->>B: 응답
+graph LR
+    B["Browser"] -->|GET /public| SCPF["SCPFilter"]
+    SCPF -->|빈 Context 생성| TL["ThreadLocal"]
+    TL -->|AnonymousToken| TL
+    SCPF -->|clearContext| TL
+    SCPF -->|응답| B
 ```
 
 ### 2. 최초 인증 시
 
 ```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant SCPF as SCPFilter
-    participant S as Session
-    B->>SCPF: POST /login
-    SCPF->>SCPF: 인증 처리
-    SCPF->>S: SecurityContext 저장
-    SCPF->>SCPF: clearContext()
-    SCPF-->>B: 로그인 성공
+graph LR
+    B["Browser"] -->|POST /login| SCPF["SCPFilter"]
+    SCPF -->|인증 처리| SCPF
+    SCPF -->|Context 저장| S["Session"]
+    SCPF -->|clearContext| SCPF
+    SCPF -->|로그인 성공| B
 ```
 
 ### 3. 인증 후 재방문
 
 ```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant SCPF as SCPFilter
-    participant CTRL as Controller
-    B->>SCPF: GET /mypage
-    SCPF->>CTRL: Context 로드 후 실행
-    CTRL-->>SCPF: 응답
-    SCPF-->>B: clearContext() 후 응답
+graph LR
+    B["Browser"] -->|GET /mypage| SCPF["SCPFilter"]
+    SCPF -->|Context 로드| CTRL["Controller"]
+    CTRL -->|응답| SCPF
+    SCPF -->|clearContext 후 응답| B
 ```
 
 ## HttpSessionSecurityContextRepository

@@ -111,15 +111,10 @@ MySQL FULLTEXT가 있는데 왜 Elasticsearch인가?
 
 ```mermaid
 graph LR
-    Query["검색어: '파이썬 머신러닝'"] --> Tokenize["1. 토크나이저: 단어 분리"]
-    Tokenize --> T1["'파이썬'"]
-    Tokenize --> T2["'머신러닝'"]
-    T1 --> Idx1["역인덱스 조회 → [문서1, 문서"]
-    T2 --> Idx2["역인덱스 조회 → [문서1, 문서"]
-    Idx1 --> Inter["2. 교집합 계산 → [문서1]"]
-    Idx2 --> Inter
-    Inter --> Rank["3. 랭킹 (BM25)"]
-    Rank --> Result["최종 결과"]
+    A[검색어] --> B[토크나이저]
+    B --> C[역인덱스조회]
+    C --> D[교집합]
+    D --> E[BM25랭킹]
 ```
 
 만약 역인덱스 없이 100억 문서를 SELECT WHERE content LIKE '%파이썬%'로 검색하면? 초당 11,600 QPS에 100ms 이내 응답은 물리적으로 불가능하다.
@@ -312,14 +307,11 @@ def index_document(doc_id: int, text: str):
 
 ```mermaid
 graph LR
-    Client["검색 API"] --> Coord["코디네이터 노드"]
-    Coord --> S1["샤드 1"]
-    Coord --> S2["샤드 2"]
-    Coord --> S3["샤드 3"]
-    Coord --> S4["샤드 4"]
-    Coord --> S5["샤드 5"]
-    S1 --> R1["레플리카 1 (고가용성)"]
-    S2 --> R2["레플리카 2"]
+    A[검색API] --> B[코디네이터]
+    B --> C[샤드1]
+    B --> D[샤드2]
+    B --> E[샤드3]
+    C --> F[레플리카]
 ```
 
 각 샤드는 독립적인 Lucene 역인덱스다. 쿼리가 들어오면 코디네이터가 모든 샤드에 병렬로 요청하고, 결과를 모아 랭킹한 후 반환한다.

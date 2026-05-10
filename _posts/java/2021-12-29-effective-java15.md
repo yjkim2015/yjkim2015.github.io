@@ -32,14 +32,11 @@ graph LR
 
 ```mermaid
 graph LR
-    A["접근 범위 (좁음 → 넓음)"] --> B["private"]
-    B --> C["package-private"]
-    C --> D["protected"]
-    D --> E["public"]
-    B --> B1["선언 클래스 내부만"]
-    C --> C1["같은 패키지 내"]
-    D --> D1["같은 패키지 +"]
-    E --> E1["모든 곳"]
+    A["private"] --> B["package-private"]
+    B --> C["protected"]
+    C --> D["public"]
+    A --> A1["클래스 내부만"]
+    D --> D1["모든 곳"]
 ```
 
 **기본 원칙: 모든 클래스와 멤버의 접근성을 가능한 한 좁혀야 합니다.**

@@ -131,10 +131,10 @@ function ProductList({ products, category, onPurchase }) {
 
 ```mermaid
 graph LR
-    A["products/category"] --> B["filteredProducts 재"]
-    D["다른 상태 변경"] --> E["재계산 스킵 (useMemo)"]
-    F["category 변경"] --> G["handlePurchase 새 함"]
-    H["다른 상태 변경"] --> I["같은 참조 유지 (useCallb"] --> J["리렌더링 스킵"]
+    A["category 변경"] --> B["filteredProducts 재계산"]
+    C["다른 상태 변경"] --> D["useMemo: 재계산 스킵"]
+    C --> E["useCallback: 참조 유지"]
+    E --> F["자식 리렌더링 스킵"]
 ```
 
 ---
@@ -413,17 +413,13 @@ const StockRow = React.memo(
 ## 3번 다이어그램 - 성능 최적화 우선순위
 
 ```mermaid
-flowchart LR
-    A["성능 최적화 시작"] --> B["1. 측정 먼저 — Profile"]
-    B --> C["2. 번들 크기 줄이기 — 가장"]
-    C --> D["3. 이미지 최적화"]
-    D --> E["4. 불필요한 네트워크 요청 제거"]
-    E --> F["5. 불필요한 리렌더링 제거"]
-    F --> G["6. useMemo/useCall"]
-    G --> H["7. 가상화 (목록이 긴 경우)"]
-    H --> I["다시 측정해서 효과 확인"]
-    style B fill:#e74c3c,color:#fff
-    style C fill:#f39c12,color:#fff
+graph LR
+    A["측정/Profiler"] --> B["번들 크기 축소"]
+    B --> C["이미지/네트워크 최적화"]
+    C --> D["리렌더링 제거"]
+    D --> E["다시 측정"]
+    style A fill:#e74c3c,color:#fff
+    style B fill:#f39c12,color:#fff
 ```
 
 ### 최적화 체크리스트

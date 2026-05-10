@@ -354,16 +354,12 @@ while (true) {
 소켓이 준비되면 커널이 SIGIO 시그널을 보낸다. 잘 사용하지 않는다.
 
 ```mermaid
-sequenceDiagram
-    participant App as Application
-    participant K as Kernel
-    App->>K: sigaction() 등록
-    K-->>App: 즉시 반환
-    Note over App: 다른 작업 진행
-    Note over K: 데이터 도착
-    K-->>App: SIGIO 시그널
-    App->>K: recvfrom()
-    K-->>App: 데이터 반환
+graph LR
+    App["Application"] -->|sigaction 등록| K["Kernel"]
+    K -->|즉시 반환| App
+    App -->|다른 작업| App
+    K -->|SIGIO 시그널| App
+    App -->|recvfrom| K
 ```
 
 ### 5. Asynchronous I/O (aio_read)

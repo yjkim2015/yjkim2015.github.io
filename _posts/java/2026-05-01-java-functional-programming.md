@@ -1041,12 +1041,10 @@ Function<String, String> timedAndLogged  = withTiming.apply(withLogging.apply(ba
 
 ```mermaid
 graph LR
-    OOP["OOP"] --> O1["데이터+동작=객체"]
-    OOP --> O2["상태 변경 허용"]
-    OOP --> O3["상속으로 재사용/캡슐화/명령형"]
-    FP["FP"] --> F1["데이터와 함수 분리"]
-    FP --> F2["불변 데이터 선호"]
-    FP --> F3["합성/순수함수/선언적/파이프라인"]
+    OOP --> O1["객체=데이터+동작"]
+    OOP --> O2["상태변경 허용"]
+    FP --> F1["데이터/함수 분리"]
+    FP --> F2["불변 데이터"]
 ```
 
 ### Java에서의 조화 전략

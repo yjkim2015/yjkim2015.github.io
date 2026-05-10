@@ -111,16 +111,12 @@ public short getLineNum()  { return lineNum; }
 
 ```mermaid
 graph LR
-    A["toString 재정의 여부"] --> B["재정의 안 함"]
-    A --> C["재정의 함"]
-    B --> B1["로그: PhoneNumber@1f"]
-    B --> B2["예외 메시지: 의미없는 해시코드"]
-    B --> B3["테스트 실패 메시지 이해 불가"]
-    C --> C1["로그: 707-867-5309"]
-    C --> C2["예외 메시지: 명확한 값 표시"]
-    C --> C3["테스트 실패 시 원인 즉시 파악"]
-    style B fill:#ff6b6b,color:#fff
-    style C fill:#51cf66,color:#fff
+    A["toString 미재정의"] --> B["로그: PhoneNumber@1f"]
+    A --> C["테스트 실패 원인 불명"]
+    D["toString 재정의"] --> E["로그: 707-867-5309"]
+    D --> F["테스트 원인 즉시 파악"]
+    style A fill:#ff6b6b,color:#fff
+    style D fill:#51cf66,color:#fff
 ```
 
 **실제 비교:**

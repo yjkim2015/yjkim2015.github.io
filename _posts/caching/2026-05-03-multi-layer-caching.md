@@ -31,10 +31,9 @@ date: 2026-05-03
 
 ```mermaid
 graph LR
-    S1["서버1~N"] -->|"1ms"| R1["Redis"] -->|"Miss"| DB1["DB (단일 Redis)"]
-    S2["서버1"] -->|"0ns"| L1A["L1 Local"]
-    S3["서버2"] -->|"0ns"| L1B["L1 Local"]
-    L1A & L1B -->|"Miss 1ms"| R2["L2 Redis"] -->|"Miss"| DB2["DB (멀티 레이어)"]
+    S["서버"] -->|"Miss"| L1["L1 로컬"]
+    L1 -->|"Miss"| L2["L2 Redis"]
+    L2 -->|"Miss"| DB["DB"]
 ```
 
 ---
@@ -507,13 +506,11 @@ public class GatewayCacheConfig {
 
 ```mermaid
 graph LR
-    Total["100K TPS 유입"] --> CDN["CDN Hit 70%"]
-    Total --> GW["Gateway Hit 5%"]
-    Total --> Miss1["CDN+GW Miss"]
-    Miss1 --> L1["L1 Hit 80%"]
-    Miss1 --> Miss2["L1 Miss"]
-    Miss2 --> L2["L2 Hit 90%"]
-    Miss2 --> DB["L2 Miss → DB"]
+    T["100K TPS"] --> CDN["CDN 70%"]
+    T --> GW["Gateway 5%"]
+    T --> L1["L1 80%"]
+    L1 -->|"Miss"| L2["L2 90%"]
+    L2 -->|"Miss"| DB["DB"]
 ```
 
 ### 계층별 부하 분석

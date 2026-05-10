@@ -651,13 +651,10 @@ worker.onmessage = (e) => setResult(e.data);
 ## 극한 시나리오
 
 ```mermaid
-flowchart LR
-    PC2["ProductCard"] -->|"useCart"| UC["useCart"]
-    UC -->|"CartContext"| CC["CartContext"]
-    CC -->|"렌더링? 순환!"| PC2
-    PC3["ProductCard"] -->|"ADD_TO_CART"| EB["EventBus/Zustand"]
-    EB -->|"상태 업데이트"| CS["Cart Store"]
-    CS -->|"구독"| CH["CartHeader"] & CL2["CartList"]
+graph LR
+    PC["ProductCard"] -->|"ADD_TO_CART"| STORE["Cart Store"]
+    STORE -->|"구독"| CH["CartHeader"]
+    STORE -->|"구독"| CL["CartList"]
 ```
 
 ```typescript

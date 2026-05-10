@@ -140,10 +140,11 @@ DAU: 5,000만 명
 
 ```mermaid
 graph LR
-    C["클라이언트"] --> LB["로드밸런서"] --> API["API 서버"]
-    API --> META["메타데이터DB"] & BLOCK["블록스토리지"] & QUEUE["Kafka"]
-    QUEUE --> NOTIF["알림서비스"] --> C
-    BLOCK --> CDN["CDN"] --> C
+    A[Client] --> B[API서버]
+    B --> C[메타DB]
+    B --> D[블록스토리지]
+    D --> E[CDN]
+    E --> A
 ```
 
 각 구성 요소의 역할은 다음과 같습니다:
@@ -206,15 +207,12 @@ S3 내구성 복제:        3 AZ 동기 복제 — 추가 100~200ms
 ### 업로드 흐름 상세
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant API
-    participant META as 메타DB
-    C->>API: POST /upload/init
-    API->>META: 없는 블록 조회
-    API-->>C: 업로드 필요 블록
-    C->>API: PUT /block/{hash}
-    C->>API: POST /upload/complete
+graph LR
+    A[Client] -->|init| B[API]
+    B --> C[메타DB조회]
+    C -->|필요블록| A
+    A -->|PUT block| B
+    A -->|complete| B
 ```
 
 ### 왜 SHA-256인가 — MD5·CRC32와 비교
@@ -514,14 +512,10 @@ v2: [hash_A, hash_B, hash_E, hash_D]  ← hash_C만 hash_E로 교체
 
 ```mermaid
 graph LR
-    A["Short Polling"]
-    B["Long Polling"]
-    C["WebSocket"]
-    D["SSE"]
-    A -->|"낭비 심함"| X["비추천"]
-    B -->|"서버 부하"| Y["보통"]
-    C -->|"양방향 불필요"| Z["과스펙"]
-    D -->|"단방향으로 충분"| W["추천"]
+    A[ShortPolling] -->|낭비| E[비추천]
+    B[LongPolling] -->|부하| F[보통]
+    C[WebSocket] -->|과스펙| E
+    D[SSE] -->|최적| G[추천]
 ```
 
 ### 왜 SSE인가 — WebSocket·Long Polling과 비교

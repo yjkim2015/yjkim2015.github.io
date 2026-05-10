@@ -104,8 +104,8 @@ public class RegionPartitioner implements Partitioner {
 
 ```mermaid
 graph LR
-    RR["라운드로빈: msg1→P0,msg2→P1"]
-    ST1["Sticky: msg1,2,3 P0 누적"] --> ST2["전송 후 파티션 전환"]
+    RR["RoundRobin: msg→P0,P1 순환"]
+    ST["Sticky: msg 배치 P0 누적"] --> SW["전송 후 전환"]
 ```
 
 ---

@@ -112,13 +112,11 @@ SMS:          100만 건/일 →  11 QPS
 
 ```mermaid
 graph LR
-    Svc["마이크로서비스"] --> API["알림 API GW"]
-    API --> P0["Kafka: critical/hi"]
-    API --> P2["Kafka: normal/low"]
-    P0 --> Push["푸시 워커"] --> APNs["APNs/FCM"]
-    P0 --> SMS["SMS 워커"] --> Twilio["Twilio/Nexmo"]
-    P2 --> Email["이메일 워커"] --> SendGrid
-    Push & SMS & Email -->|실패| DLQ
+    A[서비스] --> B[API GW]
+    B --> C[Kafka]
+    C --> D[푸시워커]
+    C --> E[SMS워커]
+    D & E -->|실패| F[DLQ]
 ```
 
 ---
@@ -212,15 +210,11 @@ APNs가 일시적으로 느려졌을 때 모든 워커가 즉시 재시도하면
 
 ```mermaid
 graph LR
-    Send["알림 전송"] --> Fail{"실패?"}
-    Fail -->|"1회"| W1["1초 대기"]
-    W1 --> Send
-    Fail -->|"2회"| W2["4초 대기"]
-    W2 --> Send
-    Fail -->|"3회"| W3["16초 대기"]
-    W3 --> Send
-    Fail -->|"4회 초과"| DLQ["Dead Letter Queue"]
-    DLQ --> Alert["운영팀 알림"]
+    A[전송] --> B{실패?}
+    B -->|재시도| C[지수백오프]
+    C --> A
+    B -->|초과| D[DLQ]
+    D --> E[알림]
 ```
 
 ```python
@@ -297,13 +291,11 @@ def should_send_now(user_id: str, priority: str) -> bool:
 
 ```mermaid
 graph LR
-    Marketing["마케팅팀: 1억명 캠페인 발송"] --> Segment["사용자 세그먼트 추출<br>(DB"]
-    Segment --> Batch["1000명씩 10만 배치 분할"]
-    Batch --> Kafka["Kafka: notificatio"]
-    Kafka --> Workers["워커 100개 병렬 처리"]
-    Workers --> APNs["APNs: 초당 1만건"]
-    Workers --> FCM["FCM: 초당 1만건"]
-    Note["예상 완료: 약 2시간 46분"]
+    A[캠페인] --> B[세그먼트]
+    B --> C[배치분할]
+    C --> D[Kafka]
+    D --> E[워커×100]
+    E --> F[APNs/FCM]
 ```
 
 **왜 속도 제한이 필요한가?** APNs/FCM은 초당 처리 한도가 있다. 한도 초과 시 IP 차단 → 모든 푸시 불가. 초당 1만 건 이하로 제어해서 차단을 피한다.

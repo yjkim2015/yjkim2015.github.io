@@ -150,14 +150,10 @@ graph LR
 
 ```mermaid
 graph LR
-    Post["게시글 작성"] --> Check{"팔로워 수 확인"}
-    Check -->|"< 1만 (일반 사용자)"| Push["쓰기 시 팬아웃"]
-    Check -->|"> 1만 (셀럽)"| Pull["팬아웃 건너뜀"]
-    ReadReq["피드 읽기"] --> NormalFeed["캐시에서 일반 팔로잉 피드"]
-    ReadReq --> CelebFeed["팔로우한 셀럽 게시글 동적 조합"]
-    NormalFeed --> Merge["병합 + 랭킹"]
-    CelebFeed --> Merge
-    Merge --> Final["최종 피드"]
+    A[게시글작성] --> B{팔로워수}
+    B -->|일반| C[쓰기팬아웃]
+    B -->|셀럽| D[읽기시조합]
+    C & D --> E[최종피드]
 ```
 
 대부분의 읽기는 캐시에서 빠르게, 셀럽 게시글만 읽기 시 동적으로 가져온다.
@@ -168,13 +164,12 @@ graph LR
 
 ```mermaid
 graph LR
-    Client["모바일/웹"] --> LB["로드밸런서"]
-    LB --> PostSvc["게시글 서비스"]
-    LB --> FeedSvc["피드 서비스"]
-    LB --> UserSvc["사용자/팔로우 DB"]
-    PostSvc --> Kafka["Kafka → 팬아웃 워커×N"]
-    Kafka --> FeedCache["Redis 피드 캐시"]
-    FeedSvc --> FeedCache
+    A[Client] --> B[로드밸런서]
+    B --> C[게시글서비스]
+    B --> D[피드서비스]
+    C --> E[Kafka]
+    E --> F[Redis캐시]
+    D --> F
 ```
 
 ---
@@ -182,13 +177,11 @@ graph LR
 ## 게시글 작성 흐름
 
 ```mermaid
-sequenceDiagram
-    participant App
-    participant Svc as 게시글서비스
-    participant C as Kafka/Redis
-    App->>Svc: POST /posts
-    Svc-->>App: 201
-    Svc->>C: post-created→LPUSH
+graph LR
+    A[App] -->|POST /posts| B[게시글서비스]
+    B -->|201| A
+    B --> C[Kafka]
+    C --> D[Redis LPUSH]
 ```
 
 왜 비동기로 처리하는가? 팔로워가 1000명이면 1000번의 Redis LPUSH다. 동기로 처리하면 게시글 저장 API가 수초가 걸린다. Kafka에 발행하고 즉시 반환한다.

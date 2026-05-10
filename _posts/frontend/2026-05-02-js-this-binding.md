@@ -20,16 +20,11 @@ toc_label: 목차
 ## 1번 다이어그램 - this 바인딩 결정 전체 지도
 
 ```mermaid
-flowchart LR
-    A["함수 호출"] --> B{"new?"}
-    B -->|"예"| C["new 바인딩: 새 객체"]
-    B -->|"아니오"| D{"call/apply/bind?"}
-    D -->|"예"| E["명시적 바인딩: 첫 인자"]
-    D -->|"아니오"| F{"obj.method()?"}
-    F -->|"예"| G["암시적 바인딩: 점 앞 객체"]
-    F -->|"아니오"| H{"엄격 모드?"}
-    H -->|"예"| I["undefined"]
-    H -->|"아니오"| J["전역 window/global"]
+graph LR
+    A["함수 호출"] -->|"new"| B["새 객체"]
+    A -->|"call/bind"| C["명시적 값"]
+    A -->|"obj.method"| D["obj"]
+    A -->|"기본"| E["전역/undefined"]
 ```
 
 이 다이어그램이 `this`의 모든 진실입니다. 복잡해 보이지만, **위에서 아래로 순서대로 적용**하는 단순한 규칙입니다. `this`가 헷갈릴 때마다 이 순서도를 따라가면 반드시 답을 찾을 수 있습니다.
@@ -134,15 +129,9 @@ greetFn(); // '안녕하세요, undefined입니다' — window가 this
 왜 이런 일이 생길까요? `person.greet`를 변수에 담는 순간, 그것은 더 이상 "person의 greet"가 아니라 그냥 "greet 함수"입니다. 누구의 소속도 아닌 함수를 호출하면 기본 바인딩이 적용됩니다.
 
 ```mermaid
-sequenceDiagram
-    participant Dev as 개발자
-    participant Obj as person 객체
-    participant Fn as greet 함수
-    Dev->>Obj: person.greet() 호출
-    Obj->>Fn: this = person으로 실행
-    Fn-->>Dev: '이영희' 출력
-    Dev->>Fn: greetFn() 직접 호출
-    Fn-->>Dev: undefined 출력
+graph LR
+    A["person.greet()"] -->|"this=person"| B["'이영희' 출력"]
+    C["greetFn()"] -->|"this=전역"| D["undefined 출력"]
 ```
 
 ### 콜백으로 전달할 때의 함정
@@ -471,14 +460,9 @@ class MyComponent extends React.Component {
 
 ```mermaid
 graph LR
-    PROBLEM["this 손실 문제"] --> P1["패턴 1: 클로저"]
-    PROBLEM --> P2["패턴 2: bind"]
-    PROBLEM --> P3["패턴 3: 화살표 함수"]
-    P1 --> P1D["const self = this<"]
-    P2 --> P2D["setTimeout(fn.bind"]
-    P3 --> P3D["setTimeout(() => ."]
-    P3 --> BEST["권장"]
-    style BEST fill:#2ecc71,color:#fff
+    PROBLEM["this 손실"] --> P1["클로저: self=this"]
+    PROBLEM --> P2["bind: fn.bind(this)"]
+    PROBLEM --> P3["화살표 함수 (권장)"]
     style P3 fill:#9b59b6,color:#fff
 ```
 
@@ -578,16 +562,11 @@ console.log(calculator.addToValue(3)); // ??
 ## 11번 다이어그램 - this 결정 최종 알고리즘
 
 ```mermaid
-flowchart LR
-    A["this 결정"] --> B{"화살표 함수?"}
-    B -->|예| B1["렉시컬 this(고정)"]
-    B -->|아니오| C{"new?"}
-    C -->|예| C1["새 객체"]
-    C -->|아니오| D{"call/apply/bind?"}
-    D -->|예| D1["지정 값"]
-    D -->|아니오| E{"obj.method()?"}
-    E -->|예| E1["obj"]
-    E -->|아니오| F1["엄격: undefined / 비엄"]
+graph LR
+    A["this 결정"] -->|"화살표"| B["렉시컬 고정"]
+    A -->|"new"| C["새 객체"]
+    A -->|"call/bind"| D["지정 값"]
+    A -->|"obj.method"| E["obj"]
 ```
 
 이 5단계 체크리스트만 있으면 어떤 `this` 문제도 해결할 수 있습니다.

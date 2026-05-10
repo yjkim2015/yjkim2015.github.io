@@ -257,15 +257,11 @@ geohashes = get_nearby_geohashes(37.5172, 127.0473, precision=6)
 
 ```mermaid
 graph LR
-    Root["전국 지도"]
-    Root --> NW["북서"]
-    Root --> NE["북동"]
-    Root --> SW["남서"]
-    Root --> SE["남동"]
-    NE --> NE_NW["강남 북서"]
-    NE --> NE_NE["강남 북동"]
-    NE --> NE_SW["강남 남서"]
-    NE --> NE_SE["강남 남동"]
+    A[전국] --> B[북서]
+    A --> C[북동]
+    A --> D[남서]
+    C --> E[강남북동]
+    C --> F[강남남동]
 ```
 
 ```
@@ -306,15 +302,12 @@ graph LR
 ### 전체 검색 흐름
 
 ```mermaid
-sequenceDiagram
-    participant App
-    participant S as 검색서비스
-    participant C as Redis
-    App->>S: GET /shops?lat&lon
-    S->>S: Geohash 변환
-    S->>C: 캐시 조회
-    C-->>S: 미스 시 DB 쿼리
-    S-->>App: 가게 목록
+graph LR
+    A[App] -->|lat,lon| B[검색서비스]
+    B --> C[Geohash변환]
+    C --> D{Redis캐시}
+    D -->|miss| E[DB쿼리]
+    D & E --> F[결과반환]
 ```
 
 ### MySQL 스키마 — Geohash 인덱스
@@ -567,15 +560,12 @@ ORDER BY time;
 주문이 들어오면 가장 빠르게 픽업할 수 있는 라이더를 찾아야 합니다. 단순히 "가장 가까운 라이더"가 아니라 **ETA(예상 도착 시간) 기반** 최적 매칭을 사용합니다.
 
 ```mermaid
-sequenceDiagram
-    participant Order as 주문서비스
-    participant Match as 매칭서비스
-    participant Redis as Redis GEO
-    Order->>Match: 주문 발생
-    Match->>Redis: GEORADIUS 3km
-    Redis-->>Match: 후보 라이더
-    Match->>Match: ETA 계산
-    Match-->>Order: 매칭 완료
+graph LR
+    A[주문] --> B[매칭서비스]
+    B --> C[Redis GEORADIUS]
+    C --> D[후보라이더]
+    D --> E[ETA계산]
+    E --> F[매칭완료]
 ```
 
 ### 매칭 알고리즘 구현

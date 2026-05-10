@@ -153,13 +153,10 @@ public class DateUtils {
 
 ```mermaid
 graph LR
-    A["유틸리티 클래스 인스턴스화 방지"] --> B["방법"]
-    A --> C["주의사항"]
-    B --> B1["private 생성자 명시"]
-    B --> B2["AssertionError thr"]
-    B --> B3["의도를 설명하는 주석 추가"]
-    C --> C1["abstract 클래스는 충분하지"]
-    C --> C2["부수 효과: 상속도 불가능해짐"]
+    A["유틸리티 클래스"] --> B["private 생성자"]
+    B --> C["AssertionError throw"]
+    B --> D["상속도 불가 (부수 효과)"]
+    A --> E["abstract는 불충분"]
 ```
 
 > 정적 메서드만 담은 유틸리티 클래스는 반드시 `private` 생성자를 추가해 인스턴스화와 상속을 모두 막으세요.

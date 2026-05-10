@@ -946,14 +946,12 @@ graph LR
 
 ```mermaid
 graph LR
-    A{"환경 선택"} --> B{"단일 JVM?"}
-    B -->|"간단한 제한"| C["Guava RateLimiter\"]
-    B -->|"정교한 Token Bucket"| D["Bucket4j (InMemory"]
+    A{"환경"} --> B{"단일 JVM?"}
+    B -->|간단| C["Guava RateLimiter"]
+    B -->|정교| D["Bucket4j InMemory"]
     A --> E{"분산 환경?"}
-    E -->|"범용"| F["Bucket4j (Redis)"]
-    E -->|"API Gateway 레벨"| G["Spring Cloud Gatew"]
-    E -->|"인프라 레벨 1차 방어"| H["Nginx limit_req"]
-    E -->|"극한 정확도 (금융·결제)"| I["Redis Sliding Wind"]
+    E -->|범용| F["Bucket4j Redis"]
+    E -->|인프라| H["Nginx limit_req"]
 ```
 
 Redis 장애 시 **로컬 캐시 폴백**을 기본 전략으로, Hot Key는 **키 샤딩**으로 대응하고, 모든 Rate Limit 응답에는 **표준 헤더(X-RateLimit-*, Retry-After)**를 반드시 포함하는 것이 실무 표준이다.

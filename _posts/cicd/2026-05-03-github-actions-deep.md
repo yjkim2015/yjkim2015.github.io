@@ -26,12 +26,10 @@ GitHub Actions의 실행 단위는 3계층으로 나뉜다. 이 구조를 정확
 **Step**은 Job 안에서 순차적으로 실행되는 개별 명령이다. `run`으로 셸 명령을 실행하거나, `uses`로 공개된 Action을 호출한다. 같은 Job의 Step끼리는 파일 시스템을 공유한다.
 
 ```mermaid
-graph TB
-    S1["checkout"] --> S2["setup-java"] --> S3["run tests"]
-    S4["checkout"] --> S5["docker build"] --> S6["docker push"]
-    S7["kubectl apply"] --> S8["health check"]
-    S3 -->|"needs: test"| S4
-    S6 -->|"needs: build"| S7
+graph LR
+    TEST["테스트"] --> BUILD["도커 빌드"]
+    BUILD --> DEPLOY["배포"]
+    DEPLOY --> HC["헬스체크"]
 ```
 
 > **비유:** Job 간 관계는 요리 순서와 같다. 밥 짓기(test)와 국 끓이기(lint)는 동시에 할 수 있지만, 상차림(deploy)은 밥과 국이 다 된 후에야 가능하다. `needs`는 "이 요리가 끝나야 다음 요리를 시작한다"는 의존성 선언이다.

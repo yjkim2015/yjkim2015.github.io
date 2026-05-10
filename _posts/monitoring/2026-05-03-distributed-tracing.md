@@ -175,13 +175,9 @@ OpenTelemetry(OTel)는 CNCF 프로젝트로, Traces/Metrics/Logs를 수집하는
 
 ```mermaid
 graph LR
-    AUTO["자동 계측"] --> SDK["OTel SDK"]
-    MANUAL["수동 계측"] --> SDK
-    SDK -->|OTLP| RECV["Receiver"]
-    RECV --> PROC["Processor"] --> EXPO["Exporter"]
-    EXPO -->|Traces| JAEGER["Jaeger/Tempo"]
-    EXPO -->|Metrics| PROM["Prometheus"]
-    EXPO -->|Logs| LOKI["Loki/ES"]
+    AUTO["자동계측"] & MANUAL["수동계측"] --> SDK["OTel SDK"]
+    SDK -->|OTLP| EXPO["Exporter"]
+    EXPO --> JAEGER["Jaeger"] & PROM["Prometheus"]
 ```
 
 OTel의 핵심 구성요소는 세 가지다.
@@ -424,14 +420,11 @@ graph LR
 
 ```mermaid
 graph LR
-    REQ["요청 진입"] --> COLLECT["모든 Span"]
-    COLLECT --> BUFFER["버퍼에 보관"]
+    REQ["요청"] --> BUFFER["Span 버퍼"]
     BUFFER --> EVAL{"조건 평가"}
-    EVAL -->|"에러 포함"| KEEP["저장"]
-    EVAL -->|"지연 > 2초"| KEEP
-    EVAL -->|"정상 + 빠름"| SAMPLE{"10%만 저장"}
-    SAMPLE -->|"선택됨"| KEEP
-    SAMPLE -->|"미선택"| DROP["폐기"]
+    EVAL -->|에러/지연| KEEP["저장"]
+    EVAL -->|정상| SAMPLE{"10% 샘플"}
+    SAMPLE -->|미선택| DROP["폐기"]
 ```
 
 **장점:** 에러, 지연 등 중요한 Trace를 100% 보존할 수 있다. 정상 요청만 샘플링으로 줄인다.

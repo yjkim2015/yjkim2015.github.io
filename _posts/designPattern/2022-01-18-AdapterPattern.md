@@ -263,15 +263,11 @@ public class OrderService {
 ## 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as "클라이언트"
-    participant A as "SocketAdapter (어댑터)"
-    participant S as "Socket (Adaptee)"
-    C->>A: "1. get12Volt() 호출"
-    A->>S: "2. socket.getVolt() 호출"
-    S-->>A: "3. Volt(120) 반환"
-    A->>A: "4. 120 / 10 = 12 변환"
-    A-->>C: "5. Volt(12) 반환"
+graph LR
+    C["Client"] -->|"get12Volt"| A["Adapter"]
+    A -->|"getVolt"| S["Socket(120V)"]
+    S -->|"120V"| A
+    A -->|"12V 변환"| C
 ```
 
 ---

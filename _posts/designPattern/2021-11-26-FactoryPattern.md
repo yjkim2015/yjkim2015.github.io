@@ -186,15 +186,10 @@ public class SimpleTransportFactory {
 ## 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant CF as RoadLogistics
-    participant P as Truck
-    C->>CF: planDelivery()
-    CF->>P: new Truck()
-    P-->>CF: 인스턴스 반환
-    CF->>P: deliver()
-    CF-->>C: 완료
+graph LR
+    C["Client"] --> CF["팩토리"]
+    CF -->|"생성"| P["Truck"]
+    P -->|"deliver"| C
 ```
 
 ---

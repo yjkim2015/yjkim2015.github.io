@@ -148,16 +148,13 @@ http
 `CsrfFilter`는 Spring Security 필터 체인의 초반에 위치합니다.
 
 ```mermaid
-flowchart LR
-    A["HTTP 요청"] --> B["CsrfFilter"]
-    B --> C{"GET, HEAD, TRACE,"}
-    C -- "예 (읽기 전용)" --> D["CSRF 검증 생략"]
-    C -- "아니오 (POST, PUT, DELETE, PATCH)" --> E["요청에서 CSRF 토큰 추출"]
-    E --> F["세션에 저장된 토큰과 비교"]
-    F --> G{"일치?"}
-    G -- "예" --> H["다음 필터로 진행"]
-    G -- "아니오" --> I["InvalidCsrfTokenEx"]
-    D --> H
+graph LR
+    A["HTTP 요청"] --> B{"GET/HEAD?"}
+    B -->|예| D["CSRF 생략"]
+    B -->|아니오| E["토큰 추출"]
+    E --> G{"토큰 일치?"}
+    G -->|예| H["다음 필터"]
+    G -->|아니오| I["403 InvalidCsrf"]
 ```
 
 CSRF 검증 대상은 **상태를 변경하는 HTTP 메서드**(`POST`, `PUT`, `DELETE`, `PATCH`)입니다. `GET`, `HEAD`, `TRACE`, `OPTIONS`는 상태를 변경하지 않으므로 검증하지 않습니다.

@@ -290,15 +290,11 @@ Retry는 **일시적(transient) 오류**에만 사용해야 합니다. 네트워
 Retry는 **Processor와 Writer에서만 동작**합니다. Reader에서는 retry가 지원되지 않습니다(read()는 상태를 변경하므로 재시도 시 데이터 중복 위험).
 
 ```mermaid
-flowchart LR
-    A["처리 호출"] --> B{"예외?"}
-    B -->|"retry 대상"| F{"retryLimit 초과?"}
-    F -->|"아니오"| A
-    F -->|"예"| H{"skip 대상?"}
-    B -->|"skip 대상"| H
-    B -->|"치명적"| J["Step 실패"]
-    H -->|"예"| I["아이템 스킵"]
-    H -->|"아니오"| J
+graph LR
+    A["처리"] --> B{"예외"}
+    B -->|"retry"| A
+    B -->|"skip"| I["스킵"]
+    B -->|"치명적"| J["실패"]
 ```
 
 ### 6.3 RetryTemplate 커스터마이징
@@ -347,15 +343,11 @@ private BackOffPolicy exponentialBackOff() {
 이 전체 전략을 하나의 다이어그램으로 정리하면 다음과 같습니다.
 
 ```mermaid
-flowchart LR
-    A["chunk 처리"] --> C{"예외 분류"}
-    C -->|"retry 대상"| D["RetryTemplate 재시도"]
-    D -->|"retryLimit 초과"| F{"skip 대상?"}
-    D -->|"재시도"| A
-    C -->|"skip 대상"| F
-    C -->|"치명적"| G["Step FAILED"]
-    F -->|"skipLimit 이내"| I["아이템 스킵"]
-    F -->|"한도 초과/불가"| G
+graph LR
+    A["청크"] --> C{"예외"}
+    C -->|"retry"| A
+    C -->|"skip"| I["스킵"]
+    C -->|"치명적"| G["FAILED"]
 ```
 
 ### noRetry와 noSkip

@@ -160,15 +160,9 @@ graph LR
 ### 객체 승격(Promotion) 과정
 
 ```mermaid
-sequenceDiagram
-    participant Eden
-    participant S0 as Survivor S0
-    participant Old as Old Gen
-    Note over Eden: 새 객체 할당(A,B,C)
-    Eden->>S0: Minor GC→생존(A,C) age=1
-    Note over Eden: Eden 비움
-    S0->>Old: age>=15→승격
-    Note over Old: 장수 객체 보관
+graph LR
+    Eden -->|Minor GC 생존| S0["Survivor S0(age=1)"]
+    S0 -->|age>=15| Old["Old Gen"]
 ```
 
 ---
@@ -239,18 +233,10 @@ gantt
 애플리케이션 스레드와 GC 스레드가 **동시에(Concurrent)** 실행되어 STW를 최소화합니다. Java 9에서 Deprecated, Java 14에서 완전 제거되었습니다.
 
 ```mermaid
-sequenceDiagram
-    participant App as AppThread
-    participant GC as GCThread
-    Note over App,GC: Phase1: Initial Mark (STW 짧음)
-    App->>GC: STW 시작
-    GC->>App: GC Root 직접 참조만 표시 후 STW 종료
-    Note over App,GC: Phase2: Concurrent Mark (동시)
-    GC->>GC: Mark 탐색 (App 동시 실행)
-    Note over App,GC: Phase3: Remark (STW 중간)
-    App->>GC: STW → 변경된 참조 재확인 → STW 종료
-    Note over App,GC: Phase4: Concurrent Sweep (동시)
-    GC->>GC: Sweep (App 동시 실행)
+graph LR
+    P1["Initial Mark(STW)"] --> P2["Concurrent Mark"]
+    P2 --> P3["Remark(STW)"]
+    P3 --> P4["Concurrent Sweep"]
 ```
 
 **CMS 단점**:

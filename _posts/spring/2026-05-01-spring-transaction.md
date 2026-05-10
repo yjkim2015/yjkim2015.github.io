@@ -75,15 +75,12 @@ public void someMethod() { ... }
 3️⃣ **커밋 또는 롤백**: 정상 반환이면 커밋, `rollbackFor` 조건에 맞는 예외이면 롤백
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant P as TxProxy
-    participant S as Service
-    C->>P: createOrder()
-    P->>P: getTransaction()
-    P->>S: 실행
-    P->>P: commit/rollback
-    P-->>C: 응답
+graph LR
+    C["Client"] -->|createOrder| P["TxProxy"]
+    P -->|getTransaction| P
+    P -->|실행| S["Service"]
+    S -->|정상| OK["commit"]
+    S -->|예외| RB["rollback"]
 ```
 
 ### PlatformTransactionManager

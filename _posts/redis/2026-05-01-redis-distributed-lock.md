@@ -24,16 +24,12 @@ toc_label: 목차
 ### 전체 아키텍처 흐름
 
 ```mermaid
-flowchart LR
-    S1[서버1] & S2[서버2] & S3[서버3]
-    S1 -->|"SET NX EX"| R[(Redis)]
-    S2 -->|"SET NX EX"| R
-    S3 -->|"SET NX EX"| R
-    R -->|"OK - 락 획득"| S1
-    R -->|"FAIL - 대기"| S2
-    R -->|"FAIL - 대기"| S3
-    S1 -->|"재고 차감+결제"| DB[(Database)]
-    S1 -->|"Lua DEL"| R
+graph LR
+    S1["서버1"] -->|SET NX EX| R["Redis"]
+    S2["서버2"] -->|SET NX EX| R
+    R -->|OK 락획득| S1
+    R -->|FAIL 대기| S2
+    S1 -->|Lua DEL| R
 ```
 
 ### 왜 Redis인가?
@@ -313,15 +309,12 @@ lock.lock(); // 무기한 보유, Watchdog이 TTL 연장
 Redisson의 가장 큰 장점은 락 대기 방식이다. 스핀락이 아닌 Pub/Sub 이벤트로 대기한다.
 
 ```mermaid
-sequenceDiagram
-    participant A as ThreadA
-    participant R as Redis
-    participant B as ThreadB
-    A->>R: SET NX EX → OK
-    B->>R: tryLock → FAIL, SUBSCRIBE
-    A->>R: unlock + PUBLISH
-    R-->>B: 이벤트 수신
-    B->>R: tryLock → OK
+graph LR
+    A["ThreadA"] -->|SET NX EX| R["Redis"]
+    B["ThreadB"] -->|tryLock FAIL| R
+    B -->|SUBSCRIBE| R
+    A -->|unlock+PUBLISH| R
+    R -->|이벤트| B
 ```
 
 **스핀락 vs Pub/Sub 비교:**
@@ -537,12 +530,11 @@ latch.await();
 4. 실패 시 모든 노드에서 락을 해제한다
 
 ```mermaid
-flowchart LR
-    C[클라이언트] --> START[T1 기록]
-    START -->|SET NX PX ttl| R1[Redis1:OK] & R2[Redis2:OK] & R3[Redis3:OK] & R4[Redis4:FAIL] & R5[Redis5:OK]
-    R1 & R2 & R3 & R4 & R5 --> CHECK{과반수 충족?}
-    CHECK -->|4/5 성공 AND 소요시간<TTL| SUCCESS[락 획득 성공]
-    CHECK -->|과반수 미달 OR 시간초과| FAIL[실패 - 전체 해제]
+graph LR
+    C["클라이언트"] -->|SET NX PX| R1["Redis1~5"]
+    R1 --> CHECK{"과반수 충족?"}
+    CHECK -->|성공+TTL내| OK["락 획득"]
+    CHECK -->|미달/초과| FAIL["실패·전체해제"]
 ```
 
 ```
@@ -599,14 +591,11 @@ Martin Kleppmann(DDIA 저자)은 Redlock의 안전성에 의문을 제기했다:
 
 ```mermaid
 graph LR
-    A["ProcessA"] -->|"SET lock NX EX 30"| R["Redis"]
-    R -->|"OK"| A
-    A -->|"크래시"| A
-    B["ProcessB"] -->|"SET lock NX EX 30"| R
-    R -->|"FAIL(락 존재)"| B
-    R -->|"30s 후 TTL 만료"| R
-    B -->|"SET lock NX EX 30"| R
-    R -->|"OK"| B
+    A["ProcessA"] -->|SET NX EX 30| R["Redis"]
+    R -->|OK| A
+    A -->|크래시| DEAD["종료"]
+    R -->|TTL 만료| B["ProcessB"]
+    B -->|SET NX EX 30| R
 ```
 
 **해결**: TTL이 자동으로 만료시킨다. **TTL이 없으면 영원히 데드락**이다. TTL은 반드시 설정해야 한다.

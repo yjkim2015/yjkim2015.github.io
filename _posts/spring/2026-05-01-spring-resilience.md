@@ -245,13 +245,11 @@ public Result callService(Request request) {
 ```mermaid
 graph LR
     REQ["요청"] --> BH["Bulkhead"]
-    BH --> RL["Rate Limiter"]
-    RL --> CB["Circuit Breaker"]
+    BH --> CB["Circuit Breaker"]
     CB --> RT["Retry"]
-    RT --> SVC["실제 서비스 호출"]
-    SVC -->|"실패"| RT
-    RT -->|"최대 재시도 초과"| CB
-    CB -->|"실패율 임계치 초과"| OPEN["OPEN 상태"]
+    RT --> SVC["서비스 호출"]
+    SVC -->|실패| RT
+    CB -->|임계치 초과| OPEN["OPEN"]
 ```
 
 ---

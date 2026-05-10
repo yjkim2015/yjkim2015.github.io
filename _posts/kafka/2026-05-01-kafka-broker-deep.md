@@ -152,15 +152,10 @@ log.retention.minutes=1440       # 최소 1일 보존 후 compaction
 리더 브로커가 장애 나면 Controller가 즉시 새 리더를 선출한다. ZooKeeper 기반과 KRaft 기반의 처리 방식이 다르다.
 
 ```mermaid
-sequenceDiagram
-    participant C as Controller
-    participant B3 as Broker3(새리더)
-    participant PC as Producer/Consumer
-    C->>C: Broker2 장애→B3 선정
-    C->>B3: LeaderAndIsr 요청
-    B3->>B3: 리더 역할 시작
-    C->>PC: Metadata 갱신
-    PC->>B3: 새 리더 재연결
+graph LR
+    C["Controller"] -->|장애 감지| B3["Broker3 신규 리더"]
+    C -->|Metadata 갱신| PC["Producer/Consumer"]
+    PC -->|재연결| B3
 ```
 
 **KRaft 기반 (Kafka 3.x+)** 은 ZooKeeper 없이 Raft 합의로 처리하므로 ZooKeeper 세션 만료 대기 없이 수십 ms 안에 선출이 완료된다.

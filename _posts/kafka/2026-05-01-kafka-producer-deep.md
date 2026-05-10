@@ -179,16 +179,11 @@ props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG,
 네트워크 장애로 ACK가 전달되지 않으면 Producer는 성공한 메시지를 재전송한다. 이로 인해 브로커에 같은 메시지가 두 번 저장될 수 있다.
 
 ```mermaid
-sequenceDiagram
-    participant P as "Producer"
-    participant B as "Broker"
-    P ->> B: "msg1 전송"
-    B ->> B: "msg1 저장 성공"
-    B --x P: "ACK 전달 실패 (네트워크 장애)"
-    P ->> P: "timeout → 재시도"
-    P ->> B: "msg1 재전송"
-    B ->> B: "msg1 중복 저장"
-    Note over B: "메시지 중복!"
+graph LR
+    P["Producer"] -->|msg1 전송| B["Broker"]
+    B -->|저장 성공| B
+    B -->|ACK 실패| P
+    P -->|timeout 재전송| B2["Broker(중복 저장!)"]
 ```
 
 ### 멱등성 Producer 동작

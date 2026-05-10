@@ -37,16 +37,12 @@ public interface AuthenticationManager {
 Spring Security에서 `AuthenticationManager`의 기본 구현체는 `ProviderManager`입니다.
 
 ```mermaid
-flowchart LR
+graph LR
     A["인증 요청"] --> B["ProviderManager"]
     B --> C{"supports?"}
     C -->|true| D["authenticate()"]
     D -->|성공| E["인증 성공"]
-    D -->|실패| F["다음 Provider"]
-    C -->|false| F
-    F --> G{"소진?"}
-    G -->|No| C
-    G -->|Yes| H{"부모 PM?"}
+    D -->|실패| H{"부모 PM?"}
     H -->|Yes| I["부모 위임"]
     H -->|No| J["인증 실패"]
 ```
