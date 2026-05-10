@@ -35,10 +35,8 @@ public void completeOrder(Order order) {
 
 ```mermaid
 graph LR
-    Svc["주문서비스"] --> T1["결제 토픽 ✅"]
-    Svc --> T2["재고 토픽 ✅"]
-    Svc --> T3["알림 토픽 ❌"]
-    Svc --> T4["분석 토픽 ❌"]
+    S["주문"] --> A["결제 ✅"] & B["재고 ✅"]
+    S --> C["알림 ❌"] & D["분석 ❌"]
 ```
 
 결제와 재고는 이미 처리 중인데 알림과 분석에는 이벤트가 없습니다. DB `@Transactional`은 DB 연산에만 적용되고, Kafka 발행은 **DB 트랜잭션 경계 바깥**에 있습니다.
@@ -77,8 +75,7 @@ public void completeOrder(Order order) {
 
 ```mermaid
 graph LR
-    Svc["주문서비스"] --> TX["Kafka TX"]
-    TX --> T1["결제"] & T2["재고"] & T3["알림"] & T4["분석"]
+    S["주문"] --> TX --> T1["결제"] & T2["재고"] & T3["알림"]
 ```
 
 DB 저장과 Kafka 발행을 하나의 원자 단위로 묶지는 못합니다. DB가 커밋됐는데 Kafka 발행이 실패하면 여전히 불일치가 생깁니다.
@@ -87,11 +84,8 @@ DB 저장과 Kafka 발행을 하나의 원자 단위로 묶지는 못합니다. 
 
 ```mermaid
 graph LR
-    Order["주문 서비스"] -->|"order.completed"| T["단일 토픽"]
-    T --> Pay["결제 서비스"]
-    T --> Inv["재고 서비스"]
-    T --> Noti["알림 서비스"]
-    T --> Anal["분석 서비스"]
+    S["주문"] -->|completed| T["토픽"]
+    T --> A["결제"] & B["재고"] & C["알림"]
 ```
 
 주문 서비스는 `order.completed` 토픽 하나에만 발행합니다. 결제, 재고, 알림, 분석 서비스가 각자 해당 토픽을 구독해서 처리합니다. 주문 서비스는 하류 서비스를 전혀 알 필요가 없습니다. 신규 서비스가 생겨도 주문 서비스 코드는 변경되지 않습니다.
@@ -102,12 +96,9 @@ graph LR
 
 ```mermaid
 graph LR
-    Svc["주문서비스"] -->|"TX 커밋"| DB["DB + Outbox 4건"]
-    DB -->|"CDC"| D["Debezium"]
-    D --> T1["결제 토픽"]
-    D --> T2["재고 토픽"]
-    D --> T3["알림 토픽"]
-    D --> T4["분석 토픽"]
+    S["주문"] -->|TX| DB["DB+Outbox"]
+    DB -->|CDC| D["Debezium"]
+    D --> A["결제"] & B["재고"] & C["알림"]
 ```
 
 방법 B와 C 모두 DB와 Kafka 사이의 불일치를 해결하지 못합니다. Outbox 패턴은 **DB 트랜잭션 안에서 이벤트를 Outbox 테이블에 함께 저장**하고, CDC(Debezium)가 감지해서 Kafka로 발행합니다. 멀티 토픽 시나리오에서는 **하나의 비즈니스 액션에 여러 이벤트 타입을 Outbox에 넣고, Debezium EventRouter가 토픽별로 라우팅**합니다.
@@ -228,12 +219,8 @@ kafkaTemplate.send("order.events", order.getId(), event);
 
 ```mermaid
 graph LR
-    E1["order-123: CREATED"] --> P0["파티션 0"]
-    E2["order-123: PAID"] --> P0
-    E3["order-123: SHIPPED"] --> P0
-    E4["order-456: CREATED"] --> P1["파티션 1"]
-    P0 --> C0["컨슈머 0"]
-    P1 --> C1["컨슈머 1"]
+    A["order-123"] --> P0["P0"] --> C0["C0"]
+    B["order-456"] --> P1["P1"] --> C1["C1"]
 ```
 
 ### 순서가 깨지는 케이스 — 재시도 시 역전
@@ -363,11 +350,9 @@ max.partition.fetch.bytes=10485760
 
 ```mermaid
 graph LR
-    Producer["Producer"] -->|"2MB 이미지"| S3["S3/GCS/MinIO"]
-    S3 -->|"URL 반환"| Producer
-    Producer -->|"URL만 발행"| T["Kafka 토픽"]
-    T --> Consumer["Consumer"]
-    Consumer -->|"URL로 직접 다운로드"| S3
+    P["Producer"] -->|파일| S3
+    P -->|URL만| K["Kafka"]
+    K --> C["Consumer"] -->|다운로드| S3
 ```
 
 ```java
@@ -454,13 +439,9 @@ DLQ로 이동된 메시지에는 실패 원인, 원본 토픽, 파티션, 오프
 
 ```mermaid
 graph LR
-    MSG["메시지 소비"] --> PROC["처리 시도"]
-    PROC -->|"실패"| RETRY["지수 백오프 재시도"]
-    RETRY -->|"4회 모두 실패"| DLQ["DLT 토픽"]
-    DLQ --> MON["모니터링 알림"]
-    DLQ --> ADMIN["수동 검토"]
-    ADMIN -->|"수정 후"| REPROCESS["재처리 도구"]
-    REPROCESS --> MSG
+    M["소비"] -->|실패| R["재시도 3회"]
+    R -->|실패| D["DLQ"]
+    D --> A["수동 검토 → 재처리"]
 ```
 
 ### DLQ 모니터링 + 수동 재처리 도구
@@ -787,13 +768,10 @@ Burrow(LinkedIn 오픈소스)는 Lag을 단순 숫자가 아닌 **추세(증가 
 
 ```mermaid
 graph LR
-    LAG["Lag 급증"] --> Q1{"컨슈머 상태?"}
-    Q1 -->|"정상"| Q2{"처리 속도?"}
-    Q1 -->|"다운"| FIX1["파드 재시작/스케일아웃"]
-    Q2 -->|"느림"| Q3{"외부 의존성?"}
-    Q2 -->|"정상"| FIX2["발행량 급증 확인"]
-    Q3 -->|"지연"| FIX3["서킷브레이커 오픈"]
-    Q3 -->|"정상"| FIX4["컨슈머 병렬도 증가"]
+    L["Lag 급증"] --> Q{"원인?"}
+    Q -->|다운| A["재시작"]
+    Q -->|느림| B["병렬도 증가"]
+    Q -->|외부지연| C["서킷브레이커"]
 ```
 
 ---
