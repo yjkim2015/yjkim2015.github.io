@@ -30,7 +30,6 @@ date: 2026-05-03
 이 세 가지 문제를 멀티 레이어 캐싱이 해결한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S["서버"] -->|"Miss"| L1["L1 로컬"]
     L1 -->|"Miss"| L2["L2 Redis"]
@@ -44,7 +43,6 @@ graph LR
 실제 프로덕션 환경에서의 캐시 계층은 최대 5단계까지 존재할 수 있다. 각 계층마다 응답 속도, 용량, 비용이 다르다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Client["클라이언트"] -->|"1️⃣ CDN Hit: 5~50m"| CDN["CDN"]
     CDN -->|"Miss"| GW["2️⃣ API Gateway"]
@@ -78,7 +76,6 @@ Caffeine은 Google Guava Cache의 후속작으로, W-TinyLFU 알고리즘을 사
 ### W-TinyLFU 동작 원리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     New["새 항목"] -->|"1️⃣ Window Cache\n"| WC["Window"]
     WC -->|"2️⃣ 빈도 비교"| Filter{"TinyLFU"}
@@ -192,7 +189,6 @@ Spring의 Cache 추상화를 활용하면 L1(Caffeine)과 L2(Redis)를 투명하
 ### 동작 흐름
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant App
     participant L1 as L1(Caffeine)
@@ -347,7 +343,6 @@ L2(Redis)는 모든 서버가 공유하므로 일관성 문제가 없다. 진짜
 ### Redis Pub/Sub 기반 L1 동기화
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant SA as 서버A
     participant Redis as Redis
@@ -510,7 +505,6 @@ public class GatewayCacheConfig {
 ### 트래픽 분산 시뮬레이션
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     T["100K TPS"] --> CDN["CDN 70%"]
     T --> GW["Gateway 5%"]
@@ -534,7 +528,6 @@ graph LR
 ### 계층이 빠지면 어떻게 되나?
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A1["25K TPS"] -->|"L1 없음"| R1["Redis 25K ops"]
     A2["25K TPS"] -->|"80% L1 Hit"| L1["L1: 20K 처리"]
@@ -706,7 +699,6 @@ API 응답에 `Cache-Control: max-age=3600`을 설정해놓고, 긴급 데이터
 ## 핵심 정리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     CDN["CDN"] --> GW["API Gateway"]
     GW --> L1["L1 Caffeine"]

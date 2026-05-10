@@ -28,7 +28,6 @@ toc_label: 목차
 ## 브라우저 렌더링 전체 파이프라인
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     HTML["HTML/CSS"] --> RT["렌더 트리"]
     JS["JS"] -->|"DOM 수정"| RT
@@ -52,7 +51,6 @@ DOM은 **동적으로 변경 가능**합니다. 자바스크립트로 노드를 
 #### HTML → DOM 변환 과정
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["바이트"] --> B["문자"]
     B --> C["토큰"]
@@ -94,7 +92,6 @@ document
 자바스크립트는 **파서 블로킹 리소스**입니다. `<script>` 태그를 만나면 HTML 파싱을 멈추고 JS를 다운로드·실행합니다. JS가 DOM을 변경할 수 있기 때문입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["HTML 파싱"] -->|"script 발견"| B["파싱 중단"]
     B --> C["JS 다운로드/실행"]
@@ -175,7 +172,6 @@ body div p span { color: red; }
 DOM + CSSOM을 합쳐 **실제로 화면에 그려질 노드만** 포함한 트리입니다. 비시각적 노드는 제외됩니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     DOM["DOM: html, body, h"]
     RT["렌더 트리: body, h1, p"]
@@ -205,7 +201,6 @@ flowchart LR
 Reflow는 **계산 비용이 가장 큽니다**. 특정 요소의 크기가 바뀌면 부모·형제·자식 노드 모두에 영향을 줄 수 있기 때문입니다. 예를 들어 `<table>` 의 셀 하나가 바뀌면 테이블 전체가 다시 계산됩니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["렌더 트리 노드"] --> B["뷰포트 크기 참조"]
     B --> C["박스 모델 계산"]
@@ -278,7 +273,6 @@ element.style.visibility      = 'hidden'; // 레이아웃 그대로
 ### 성능 비용 순서
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["💸💸💸 Reflow"] --> B["💸💸 Repaint"] --> C["💸 Composite"]
     style A fill:#e74c3c,color:#fff
@@ -327,7 +321,6 @@ transform: translateZ(0);          /* 핵 (hack), 남용 금지 */
 첫 화면 렌더링을 빠르게 하는 전략입니다. 핵심은 **렌더 블로킹 리소스를 최소화**하는 것입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["render-blocking 제거"] --> B["Critical CSS 인라인"]
     B --> C["JS defer/async"]
@@ -410,7 +403,6 @@ list.appendChild(fragment);  // Reflow 1번만
 이벤트가 DOM 트리를 통해 전파되는 방식입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant WIN as window
     participant DOC as document

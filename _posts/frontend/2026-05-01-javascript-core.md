@@ -26,7 +26,6 @@ JavaScript 런타임은 **한 명의 유능한 웨이터가 있는 레스토랑*
 JavaScript 코드가 실행될 때, 엔진은 **실행 컨텍스트**를 생성합니다. 실행 컨텍스트는 코드가 실행되는 환경으로, 변수·함수 선언·this 바인딩 정보를 담습니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     GEC["Global Execution C"]
     FEC["Function Execution"]
@@ -90,7 +89,6 @@ let y = 20;
 JavaScript는 싱글 스레드이지만 이벤트 루프 덕분에 비동기 처리가 가능합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     CS["콜 스택"] -->|"비동기"| WA["Web APIs"]
     WA -->|"Promise"| MQ["마이크로태스크 큐"]
@@ -162,7 +160,6 @@ async function processInChunks(items, chunkSize = 100) {
 `this`는 **함수가 호출되는 방식**에 따라 결정됩니다. 선언 위치가 아닌 호출 시점의 컨텍스트입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     Q["함수 호출 방식은?"]
     Q -->|"new 키워드"| NEW["new 바인딩"]
@@ -253,7 +250,6 @@ class Button extends React.Component {
 클로저는 **함수가 생성될 때의 렉시컬 환경을 기억**하는 것입니다. 함수가 외부 함수의 실행이 끝난 후에도 외부 함수의 변수에 접근할 수 있는 메커니즘입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     F["makeCounter(10): c"] --> RET["increment/decremen"]
     RET -.->|클로저 참조| ENV["렉시컬환경: count=10 (공"]
@@ -358,7 +354,6 @@ cleanup();
 JavaScript는 **프로토타입 기반 상속**을 사용합니다. 모든 객체는 `[[Prototype]]` 내부 슬롯을 통해 다른 객체를 참조하고, 이 체인을 따라 프로퍼티를 검색합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     DOG["dog 인스턴스"]
     ANIMAL_PROTO["Animal.prototype"]
@@ -425,7 +420,6 @@ console.log(dog instanceof Animal); // true (프로토타입 체인)
 ### Promise 상태 다이어그램
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Pending["Pending"]
     Fulfilled["Fulfilled"]

@@ -23,7 +23,6 @@ toc_label: 목차
 ## 1번 다이어그램 - 렌더링 전략 비교
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     CSR["CSR: 빈 HTML + JS 번"]
     SSR["SSR: 요청마다 서버 HTML"]
@@ -47,7 +46,6 @@ graph LR
 Next.js 13에서 App Router가 도입되었습니다. Pages Router는 기존 방식으로, 현재도 동작하지만 App Router가 공식 권장 방식입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     PR["pages/ (구)"] --> PI["index.js"]
     PR --> PB["blog/[id].js"]
@@ -106,7 +104,6 @@ function LikeButton({ postId, initialCount }) {
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     SC["서버 컴포넌트 (기본값)"]
     CC["클라이언트 컴포넌트 (use cl"]
@@ -166,7 +163,6 @@ export async function generateStaticParams() {
 ## 5번 다이어그램 - App Router 파일 컨벤션
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ROOT["app/layout.tsx (루트"] --> HOME["page.tsx /"]
     ROOT --> BLOG["blog/layout.tsx"]
@@ -260,7 +256,6 @@ export const config = {
 SSR/SSG 페이지는 서버에서 완성된 HTML을 보내지만, 클릭이나 입력 같은 인터랙션은 자바스크립트가 붙어야 가능합니다. 이 과정을 Hydration이라고 합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["브라우저"] -->|"페이지 요청"| S["Next.js 서버"]
     S -->|"서버 컴포넌트 실행"| S
@@ -530,7 +525,6 @@ export async function POST(request: NextRequest) {
 ## 3번 다이어그램 - Next.js 정리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((Next.js))
     렌더링

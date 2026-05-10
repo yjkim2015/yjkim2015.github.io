@@ -48,7 +48,6 @@ Fine-tuning의 오해:
 RAG는 두 단계로 나뉜다. 문서를 미리 처리해 저장하는 **인덱싱 파이프라인**과, 사용자 질문에 답변하는 **검색-생성 파이프라인**이다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     DOC["문서"] --> EMBED["임베딩"]
     EMBED --> VDB[("벡터 DB")]
@@ -150,7 +149,6 @@ chunks = splitter.split_documents(documents)
 임베딩은 텍스트를 수백~수천 차원의 숫자 벡터로 변환하는 과정이다. 의미가 비슷한 텍스트일수록 벡터 공간에서 가까운 위치에 놓인다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     T1["배송 지연"] --> E["임베딩"]
     T2["배달 지연"] --> E

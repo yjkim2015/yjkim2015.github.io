@@ -23,7 +23,6 @@ Spring의 `@Async`는 메서드를 별도 스레드에서 비동기로 실행하
 호출자 스레드는 `TaskExecutor`에 작업을 제출한 즉시 반환된다. 실제 메서드는 스레드 풀의 다른 스레드에서 실행된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant C as 호출자
     participant P as Proxy
@@ -145,7 +144,6 @@ public class AsyncConfig implements AsyncConfigurer {
 > **함정**: 큐가 먼저 채워지고, 큐가 가득 찬 뒤에야 maxPoolSize까지 스레드가 늘어난다. 큐가 크면 스레드가 늘어나지 않아서 처리 속도가 느릴 수 있다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     REQ["요청 도착"] --> C1{"corePoolSize 미만?"}
     C1 -->|"YES"| T1["새 스레드 생성해 즉시 처리"]

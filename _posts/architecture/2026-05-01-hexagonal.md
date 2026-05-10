@@ -58,7 +58,6 @@ Adapter(구현체)가 기술을 다룬다.
 ## 핵심 구조
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     HTTP["HTTP/CLI/Test"]
     AS["Application Servic"]
@@ -98,7 +97,6 @@ graph LR
 > **모든 의존성은 Application Core를 향해야 한다**
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     WA["Web Adapter"]
     IP["Inbound Port"]
@@ -272,7 +270,6 @@ public class OrderPersistenceAdapter implements OrderRepository {
 헥사고날 아키텍처의 가장 큰 이점 중 하나는 **테스트 용이성**입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     UT["단위 테스트"] -->|"70%"| IT["통합 테스트"]
     IT -->|"20%"| E2E["E2E 테스트"]
@@ -340,7 +337,6 @@ class OrderServiceTest {
 ## DDD와의 관계
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     WA["Web Adapter"] -->|HTTP 요청| IP["Inbound Port"]
     IP --> UC["Application Servic"]

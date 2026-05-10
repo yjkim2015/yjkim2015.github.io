@@ -446,7 +446,6 @@ OBJECT ENCODING key
 ## 자료구조 선택 가이드
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Q1{"저장 목적"} -->|값·세션| STRING["String"]
     Q1 -->|목록·큐| LIST["List"]

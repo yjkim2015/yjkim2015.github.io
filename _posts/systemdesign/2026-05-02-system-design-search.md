@@ -110,7 +110,6 @@ MySQL FULLTEXT가 있는데 왜 Elasticsearch인가?
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[검색어] --> B[토크나이저]
     B --> C[역인덱스조회]
@@ -143,7 +142,6 @@ graph LR
 새 문서가 들어오면 검색 가능하게 처리하는 과정:
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Source["문서 소스"] --> Kafka["Kafka 문서 큐"]
     Kafka --> Parser["파서"]
@@ -308,7 +306,6 @@ def index_document(doc_id: int, text: str):
 ## Elasticsearch 설계
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[검색API] --> B[코디네이터]
     B --> C[샤드1]
@@ -581,7 +578,6 @@ Redis ZRANGEBYLEX의 한계:
 갑자기 "BTS 컴백"이 검색어 1위가 되는 순간을 실시간으로 감지한다:
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Searches["모든 검색 요청"] --> Kafka["Kafka"]
     Kafka --> Flink["Flink"]
@@ -613,7 +609,6 @@ def get_trending(self, limit: int = 10) -> list:
 ## 전체 아키텍처
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     User["사용자"] --> API["검색 API"]
     API --> AC["자동완성 Redis"]

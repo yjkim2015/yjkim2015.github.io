@@ -18,7 +18,6 @@ toc_label: 목차
 ## 정규화가 필요한 이유
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     UNF[비정규형 UNF<br>모든 데이터가 한 테이블] -->|원자값 분리| NF1[1NF<br>셀에 단일 값만]
     NF1 -->|부분 종속 제거| NF2[2NF<br>PK 전체에 종속]
@@ -290,7 +289,6 @@ WHERE date BETWEEN '2026-01-01' AND '2026-01-31';
 ## 성능 vs 정합성 트레이드오프
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     NORM["정규화"] -->|"중복 없음"| CONSIST["정합성↑"]
     NORM -->|"JOIN 증가"| SLOW["읽기 느림"]
@@ -303,7 +301,6 @@ graph LR
 ## 실무 판단 기준
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     START["성능 문제"] --> INDEX{"인덱스로 해결?"}
     INDEX -->|"예"| ADD_IDX["인덱스 추가"]

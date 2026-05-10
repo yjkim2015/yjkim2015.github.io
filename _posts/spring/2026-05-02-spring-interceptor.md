@@ -125,7 +125,6 @@ public class AuthInterceptor implements HandlerInterceptor {
 ### Mermaid 다이어그램: 처리 흐름 비교
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[요청] --> B[Filter]
     B --> C[Servlet]
@@ -137,7 +136,6 @@ graph LR
 ### 언제 무엇을 사용해야 하는가
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[횡단관심사] --> B{Bean접근?}
     B -->|No| C[Filter]
@@ -320,7 +318,6 @@ public void afterCompletion(HttpServletRequest request,
 ### 정상 흐름 Sequence Diagram
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
     DS -->|"preHandle()"| DS
@@ -332,7 +329,6 @@ graph LR
 ### preHandle에서 false 반환 시 흐름
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
     DS -->|"preHandle()→false"| I1["Interceptor1"]
@@ -343,7 +339,6 @@ graph LR
 ### 예외 발생 시 흐름
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
     DS -->|"preHandle()"| I1["Interceptor1"]
@@ -875,7 +870,6 @@ order(4) 인증    → order(3) RateLimit → order(2) 성능    → order(1) �
 ### 시나리오 1: 트래픽 적을 때 (100 TPS)
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["요청"] --> B[Interceptor Chain]
     B --> C[Controller]
@@ -1050,7 +1044,6 @@ public class UltraOptimizedInterceptor implements HandlerInterceptor {
 **Interceptor 체인 최적화 원칙:**
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["요청"] --> G{"경로 분기"}
     G -->|"/public"| H["성능만"]
@@ -1318,7 +1311,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
 ## 핵심 포인트 정리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((Spring Interceptor))
     위치: DispatcherServlet 이후, Bean 접근 가능

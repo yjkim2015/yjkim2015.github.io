@@ -20,7 +20,6 @@ toc_label: 목차
 ## 1번 다이어그램 - this 바인딩 결정 전체 지도
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["함수 호출"] -->|"new"| B["새 객체"]
     A -->|"call/bind"| C["명시적 값"]
@@ -130,7 +129,6 @@ greetFn(); // '안녕하세요, undefined입니다' — window가 this
 왜 이런 일이 생길까요? `person.greet`를 변수에 담는 순간, 그것은 더 이상 "person의 greet"가 아니라 그냥 "greet 함수"입니다. 누구의 소속도 아닌 함수를 호출하면 기본 바인딩이 적용됩니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["person.greet()"] -->|"this=person"| B["'이영희' 출력"]
     C["greetFn()"] -->|"this=전역"| D["undefined 출력"]
@@ -196,7 +194,6 @@ boundIntroduce('대전');
 `bind`는 즉시 실행하지 않고 **`this`가 영구적으로 고정된 새 함수를 반환**합니다. 이 함수는 나중에 아무리 다른 방식으로 호출해도 `this`가 바뀌지 않습니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["명시적 바인딩"] --> B["call(thisArg, a, b"]
     A --> C["apply(thisArg, [a,"]
@@ -244,7 +241,6 @@ console.log(kim.name); // '김민준'
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["new Person('김민준',"] --> B["새 빈 객체 {} 생성"]
     B --> C["this = 새 객체로 설정"]
@@ -282,7 +278,6 @@ console.log(window.count); // 0 — window.count가 생겨버림!
 > 비유: 일반 함수는 "내가 어디서 불렸느냐"에 따라 정체가 결정되는 용병입니다. 반면 화살표 함수는 "내가 어디서 태어났느냐"에 충성하는 세습 신하입니다. 태어난 순간의 주인(this)이 영구히 고정됩니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["화살표 함수"] --> B["자신의 this 없음"]
     B --> C["렉시컬 스코프의 this 사용"]
@@ -464,7 +459,6 @@ class MyComponent extends React.Component {
 `this` 손실 문제를 해결하는 세 가지 방법을 비교합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     PROBLEM["this 손실"] --> P1["클로저: self=this"]
     PROBLEM --> P2["bind: fn.bind(this)"]
@@ -568,7 +562,6 @@ console.log(calculator.addToValue(3)); // ??
 ## 11번 다이어그램 - this 결정 최종 알고리즘
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["this 결정"] -->|"화살표"| B["렉시컬 고정"]
     A -->|"new"| C["새 객체"]

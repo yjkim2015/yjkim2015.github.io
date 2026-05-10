@@ -26,7 +26,6 @@ date: 2026-05-01
 4️⃣ **Heartbeat**: 인스턴스가 살아있음을 주기적으로 알린다
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S["Service"] -->|Register| E["EurekaServer"]
     S -->|Heartbeat 10초| E
@@ -40,7 +39,6 @@ graph LR
 ## Eureka 아키텍처
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ES1["Eureka Server 1"] <-->|Peer Replication| ES2["Eureka Server 2"]
     OS["Order Service"] -->|Register/Heartbeat| ES1
@@ -163,7 +161,6 @@ Eureka Server의 중요한 특성이다. 네트워크 장애로 인해 Heartbeat
 기대 Heartbeat 수보다 실제 수신량이 85% 미만이 되면 자가 보호 모드에 진입한다. 이 모드에서는 인스턴스 만료/제거가 중단된다. 네트워크가 복구되면 자동으로 해제된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["Heartbeat 감소 감지"] --> B{"실제 수신 < 85% 임계치?"}
     B -->|"Yes"| C["자가 보호 모드 진입"]
@@ -211,7 +208,6 @@ eureka:
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ES1["Eureka 1"] <-->|Peer Replication| ES2["Eureka 2"]
     MS1["Order"] -->|Register| ES1

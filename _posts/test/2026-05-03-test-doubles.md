@@ -18,7 +18,6 @@ date: 2026-05-03
 > **비유:** 영화 촬영에서 위험한 장면에 배우 대신 투입되는 "스턴트 더블"을 떠올려보자. 스턴트 더블은 진짜 배우가 아니지만, 특정 장면에서 배우의 역할을 대신한다. 테스트 더블도 마찬가지다. 실제 객체(진짜 배우) 대신 테스트에서 사용하는 가짜 객체(스턴트 더블)다. 그런데 스턴트 더블에도 종류가 있다 — 멀리서 서 있기만 하는 엑스트라(Dummy), 정해진 대사만 하는 대역(Stub), 카메라가 몇 번 찍었는지 기록하는 감독(Spy), 대본대로 연기하는지 검증하는 감독(Mock), 실제 배우처럼 연기할 수 있는 배우 지망생(Fake).
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     TD["테스트 더블"]
     TD --> DM["Dummy"]
@@ -358,7 +357,6 @@ void BDD_스타일로_작성한_테스트() {
 > **비유:** 자동차 충돌 테스트에서 사람 대신 마네킹(Mock)을 태우는 것은 합리적이다. 마네킹은 충돌 시 어떤 힘을 받는지 측정한다. 하지만 "편안한 승차감"을 테스트하려면 마네킹이 아니라 실제 사람에 가까운 로봇(Fake)이 필요하다. 테스트하려는 것이 "충돌 충격"인지 "승차 경험"인지에 따라 적합한 더블이 달라진다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     Q1{"의존 객체가"}
     Q1 -->|"예\n(결제 API, SMS)"|  MOCK["Mock 사용"]
@@ -475,7 +473,6 @@ void 복잡한_테스트() {
 Sociable Test는 테스트 대상과 그 의존성을 함께 실행한다. Mock 대신 실제 객체나 Fake를 사용한다. Martin Fowler가 분류한 두 가지 스타일 중 하나다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Solitary] --> B[MockA]
     A --> C[MockB]

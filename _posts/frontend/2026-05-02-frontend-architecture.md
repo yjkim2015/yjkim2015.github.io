@@ -24,7 +24,6 @@ toc_label: 목차
 > 비유: 레고 블록을 생각해 보세요. 1x1 블록(원자), 2x4 블록(분자), 문 모듈(유기체), 집 설계도(템플릿), 완성된 집(페이지)처럼 계층적으로 조합됩니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ATOMS["Atoms: Button, Inp"]
     MOLECULES["Molecules: SearchB"]
@@ -39,7 +38,6 @@ graph LR
 컴포넌트를 분리할지 말지 헷갈릴 때 사용하는 체크리스트입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["컴포넌트 분리 고려"] --> B{"재사용 가능한가?"}
     B -->|"예"| C["분리 — 다른 곳에서도 쓸 수 있"]
@@ -111,7 +109,6 @@ src/
 컴포넌트가 직접 `fetch`를 호출하는 코드는 테스트하기 어렵고, API URL이 바뀌면 모든 컴포넌트를 수정해야 합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     COMPONENT["컴포넌트"] -->|"훅 사용"| HOOKS["커스텀 훅"]
     HOOKS -->|"데이터 요청"| REACT_QUERY["React Query / SWR"]
@@ -180,7 +177,6 @@ export function useProducts(params?: { category?: string }) {
 ## 4. 상태 설계 패턴 — 상태를 분류하면 라이브러리 선택이 쉬워진다
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     STATE["상태 분류"] --> LOCAL["로컬 → useState"]
     STATE --> SHARED["공유 → Zustand"]
@@ -250,7 +246,6 @@ function App() {
 팀이 커지면 웹 앱, 모바일 앱, 관리자 페이지가 공통 컴포넌트와 타입을 공유해야 합니다. 모노레포는 이것을 하나의 저장소에서 관리하는 방식입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ROOT["root/"] --> APPS["apps/"]
     ROOT --> PKG["packages/"]
@@ -395,7 +390,6 @@ npx turbo run test --filter=...[HEAD^1]
 대규모 조직에서는 여러 팀이 하나의 프론트엔드를 동시에 개발합니다. 마이크로 프론트엔드는 각 팀이 독립적으로 개발하고 배포할 수 있게 합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     SHELL["Shell App"]
     SHELL --> AUTH["Auth MFE 팀A"]
@@ -464,7 +458,6 @@ async function fetchProduct(id: string): Promise<Product> {
 ## 9번 다이어그램 - 좋은 아키텍처의 원칙
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((좋은 아키텍처))
     관심사분리

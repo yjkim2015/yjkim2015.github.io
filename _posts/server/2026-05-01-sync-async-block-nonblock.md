@@ -47,7 +47,6 @@ date: 2026-05-01
 가장 일반적인 방식. 결과를 기다리는 동안 스레드가 멈춘다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant T as 호출자 스레드
     participant IO as I/O
@@ -89,7 +88,6 @@ ResultSet rs = ps.executeQuery(); // 쿼리 완료까지 블로킹
 I/O 시스템 콜은 즉시 반환하지만, 호출자가 직접 반복 폴링(polling)해서 결과를 확인한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     T["호출자 스레드"] -->|"I/O 요청"| IO["I/O"]
     IO -->|"EAGAIN(즉시 반환)"| T
@@ -135,7 +133,6 @@ while ((bytesRead = channel.read(buffer)) == 0) {
 드문 조합. 비동기로 요청하지만 결과를 받을 때 블로킹한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant T as 호출자 스레드
     participant BG as 별도 스레드
@@ -188,7 +185,6 @@ String r3 = f3.get();
 가장 효율적인 조합. 요청 후 즉시 반환되고, 완료 시 콜백/이벤트로 통보된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant T as 호출자 스레드
     participant IO as I/O / 커널
@@ -274,7 +270,6 @@ Unix/Linux 시스템에서 I/O는 5가지 모델로 분류된다. (W. Richard St
 ### 1. Blocking I/O
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     App["Application"] -->|"recvfrom() 호출"| K["Kernel"]
     K -->|"블로킹 대기"| K
@@ -285,7 +280,6 @@ graph LR
 ### 2. Non-blocking I/O
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     App["Application"] -->|"recvfrom()"| K["Kernel"]
     K -->|"EAGAIN(데이터 없음)"| App
@@ -300,7 +294,6 @@ graph LR
 하나의 스레드로 여러 소켓을 감시할 수 있다. Java NIO Selector가 이 방식이다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     App["Application"] -->|"select() 여러 소켓 감시"| K["Kernel"]
     K -->|"블로킹 감시 중"| K
@@ -361,7 +354,6 @@ while (true) {
 소켓이 준비되면 커널이 SIGIO 시그널을 보낸다. 잘 사용하지 않는다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     App["Application"] -->|sigaction 등록| K["Kernel"]
     K -->|즉시 반환| App
@@ -375,7 +367,6 @@ graph LR
 데이터 복사(커널 버퍼 → 유저 버퍼)까지 완료된 후 통보된다. Java의 `AsynchronousSocketChannel`이 이 방식이다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant App as Application
     participant K as Kernel

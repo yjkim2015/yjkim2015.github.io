@@ -72,7 +72,6 @@ public class MyApplication {
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[@SpringBootApplication] --> B[@SpringBootConfiguration]
     A --> C[@EnableAutoConfiguration]
@@ -133,7 +132,6 @@ org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[SpringApp] --> B[ImportSelector]
     B --> C{Conditional}
@@ -204,7 +202,6 @@ public class DataSourceAutoConfiguration {
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[DataSource평가] --> B{JDBC있음?}
     B -->|No| C[스킵]
@@ -281,7 +278,6 @@ public class AppDataSourceProperties {
 ### 6.2 환경 변수 / 설정 우선순위 — 어떤 설정이 이긴다
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["설정 우선순위 — 위로 갈수록 높"] --> B["1. 커맨드라인 인수"]
     B --> C["2. 환경변수"]
@@ -438,7 +434,6 @@ com.example.HttpClientAutoConfiguration
 > **비유:** 전통적인 방식은 레스토랑(WAS)이 있고, 음식(WAR 파일)을 가져다 놓는 것이다. 레스토랑이 먼저 열려있어야 음식을 팔 수 있다. Spring Boot 방식은 음식 트럭처럼 주방(Tomcat)과 음식(앱 코드)이 함께 다닌다. `java -jar myapp.jar`만 실행하면 서버도 뜨고 앱도 뜬다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant SA as SpringApplication
     participant TC as Tomcat
@@ -501,7 +496,6 @@ management:
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["Actuator"] --> B["/health"]
     A --> C["/metrics"]
@@ -677,7 +671,6 @@ class OrderRepositoryTest {
 ## 13. 전체 자동 구성 흐름 정리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["SpringApplication."] --> B["Environment + yml"]
     B --> C["ApplicationContext"]

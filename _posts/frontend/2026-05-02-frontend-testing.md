@@ -24,7 +24,6 @@ toc_label: 목차
 ## 1번 다이어그램 - 테스트 피라미드
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     E2E["E2E 테스트<br>느림, 비용 높"]
     INT["통합 테스트<br>중간 속도"]
@@ -359,7 +358,6 @@ describe('쇼핑 플로우', () => {
 ## 6. 테스트 작성 원칙 — 좋은 테스트 vs 나쁜 테스트
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     ROOT["테스트 원칙"]
     ROOT --> FIRST["FIRST: Fast/Isolat"]
@@ -400,7 +398,6 @@ it('증가 버튼 클릭 시 카운트 증가', async () => {
 비동기 경쟁 조건은 실제 사용자가 겪는 버그 중 재현하기 가장 어려운 종류입니다. 검색창에 빠르게 타이핑할 때 첫 번째 요청이 두 번째 요청보다 늦게 도착하면, 오래된 결과가 화면에 남는 버그가 생깁니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     U["사용자"] -->|"사과 입력"| C["SearchInput"]
     C -->|"요청1 사과"| API["API 서버"]

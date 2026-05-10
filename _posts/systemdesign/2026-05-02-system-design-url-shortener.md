@@ -150,7 +150,6 @@ def encode(num: int) -> str:
 Base62 인코딩은 "고유한 숫자"가 있어야 한다. 서버 20대가 동시에 같은 숫자를 생성하면 같은 단축 코드가 나온다. **Snowflake ID**가 이 문제를 해결한다:
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     T["41비트: 타임스탬프"] --> ID["Snowflake ID"]
     M["10비트: 머신 ID"] --> ID
@@ -165,7 +164,6 @@ graph LR
 ## 전체 아키텍처
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Client] --> B[API서버]
     B --> C[Redis]
@@ -178,7 +176,6 @@ graph LR
 ## URL 단축 흐름 (쓰기)
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Client] -->|POST /shorten| B[API]
     B --> C{중복?}
@@ -194,7 +191,6 @@ graph LR
 읽기 QPS가 116,000이다. 이 모두를 DB에서 처리하면 MySQL이 즉시 과부하된다. **캐시 히트율 80%**가 목표다:
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Browser] -->|GET /W7e| B[API]
     B --> C{Redis hit?}
@@ -259,7 +255,6 @@ URL 하나 캐시 크기 = 7B + 100B = 107B
 > **비유**: 0~360도 원형 링 위에 샤드와 키를 배치한다. 키는 시계 방향으로 가장 가까운 샤드에 할당된다. 샤드를 추가하면 그 샤드 바로 앞 구간의 키만 이동하면 된다. 전체 키의 `1/N`만 재배치된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     API["API 서버"] --> CH["Consistent Hashing"]
     CH -->|"구간 A"| S1["샤드 1"]
@@ -282,7 +277,6 @@ Consistent Hashing: 샤드 4→5개 증설 시 ~20%(1/N)의 키만 이동
 Kafka로 클릭 이벤트를 보내는 것은 시작일 뿐이다. 실제로 "어떤 링크가 얼마나 클릭됐는가"를 실시간 대시보드와 일별·시간별 집계로 제공하는 전체 파이프라인이 필요하다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Click["클릭 이벤트"] --> Kafka["Kafka"]
     Kafka --> Flink["Flink"]
@@ -335,7 +329,6 @@ CREATE TABLE click_stats (
 ## URL 만료 처리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["만료 처리 전략"] --> B["Lazy (요청 시 확인)"]
     A --> C["Eager (배치 정리)"]
@@ -365,7 +358,6 @@ def redirect(short_code: str):
 유명 방송에서 bit.ly 링크가 노출되면 순간 트래픽이 평상시 100배가 된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Traffic["순간 초당 50만 요청"] --> CDN["CDN Edge<br>301 캐싱"]
     Traffic --> LB["Auto Scaling<br>서버"]

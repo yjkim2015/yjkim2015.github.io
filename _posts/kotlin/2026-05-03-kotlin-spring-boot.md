@@ -24,7 +24,6 @@ Spring Framework는 원래 Java를 위해 설계됐다. 그런데 JetBrains가 K
 3. **코루틴 네이티브 지원** — Spring WebFlux가 코루틴의 `suspend` 함수를 직접 인식하므로 `Mono<T>` 없이 비동기 코드를 작성할 수 있다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
   K["Kotlin 소스"] -->|컴파일| B["JVM 바이트코드"]
   B -->|Spring이 리플렉션으로 처리| S["Spring Container"]
@@ -345,7 +344,6 @@ interface UserRepository : CoroutineCrudRepository<UserEntity, Long> {
 **메커니즘:** `suspend` 함수는 Spring WebFlux가 코루틴 컨텍스트를 감지해 자동으로 `Mono`로 변환한다. `Flow<T>`는 `Flux<T>`로 변환된다. 이 변환은 `kotlinx-coroutines-reactor` 라이브러리가 담당하며, 개발자는 리액티브 타입을 전혀 다루지 않아도 된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
   A["suspend fun"] -->|Spring 감지| B["Mono 변환"]
   C["Flow<T>"] -->|Spring 감지| D["Flux<T> 변환"]
@@ -432,7 +430,6 @@ fun `비동기 사용자 조회`() = runTest {
 ### 단계별 전략
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
   A["1단계: 빌드 설정 추가"] --> B["2단계: 새 파일은 Kotlin으"]
   B --> C["3단계: DTO/Model 변환"]
@@ -517,7 +514,6 @@ class LoadTestController(private val service: ExternalApiService) {
 ### 스레드 vs 코루틴 자원 비교
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
   T1["스레드당 ~1MB 스택"] --- T2["총 메모리: ~100GB"]
   C1["코루틴당 ~수KB"] --- C2["총 메모리: ~수백MB"]

@@ -16,7 +16,6 @@ toc_label: 목차
 ## 2. Spring Batch 도메인 구조
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[JobLauncher] --> B[Job]
     B --> C[Step1]
@@ -29,7 +28,6 @@ graph LR
 Spring Batch는 실행 이력을 DB에 저장합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[JOB_INSTANCE] -->|has| B[JOB_EXECUTION]
     B -->|has| C[STEP_EXECUTION]
@@ -77,7 +75,6 @@ public Job conditionalJob(JobRepository jobRepository) {
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A[Step 1] -->|COMPLETED| B[Step 2]
     A -->|FAILED| C[Failure Step]
@@ -93,7 +90,6 @@ flowchart LR
 ### 4.1 Chunk 처리 흐름
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant S as Step
     participant R as Reader/Processor
@@ -407,7 +403,6 @@ public JdbcCursorItemReader<Order> orderReader(
 ### 10.1 파티셔닝 구조
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[Master] --> B[Partitioner]
     B --> C[Worker1]
@@ -674,7 +669,6 @@ public class LargeScaleBatchConfig {
 ## 14. 전체 흐름 정리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[JobLauncher] --> B[Step]
     B --> C{Chunk?}

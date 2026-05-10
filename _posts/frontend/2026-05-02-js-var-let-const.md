@@ -24,7 +24,6 @@ toc_label: 목차
 세 키워드를 나란히 놓으면 이렇습니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     VAR["var: 함수 스코프, 호이스팅+"]
     LET["let: 블록 스코프, 호이스팅+"]
@@ -84,7 +83,6 @@ function testLet() {
 `{}`로 감싸진 어떤 블록이든, 그 안에서 선언된 let/const는 밖에서 보이지 않습니다. 의도를 코드에 정확히 반영할 수 있는 이유가 바로 이것입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     F["함수 경계(var)"] --> IF1["if블록"] --> VARX["var x: 함수 전체 접근"]
     F --> FOR["for블록"]
@@ -120,7 +118,6 @@ console.log(name); // '홍길동'
 만약 이걸 모르면 `console.log(name)`이 `undefined`를 출력했을 때 "어? 왜 에러가 안 나지?"라며 혼란스러워집니다. 에러가 안 나는 게 오히려 더 위험한 이유이기도 합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     CODE["코드"] -->|"console.log(name)"| ENGINE["JS 엔진"]
     ENGINE -->|"var name 호이스팅"| EXEC["실행"]
@@ -142,7 +139,6 @@ console.log(age); // 25
 블록에 진입하는 순간부터 let/const 선언문에 도달하기 전까지의 구간이 TDZ입니다. 이 구간에서 변수에 접근하면 에러가 발생합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["블록 진입"] --> B["TDZ 시작"]
     B --> C["선언문 도달"]
@@ -229,7 +225,6 @@ obj.age = 25;         // 가능! 새 속성 추가
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     OBJ_VAR["const obj (변수)"]
     OBJ_VAL["주소 0x1234"]
@@ -284,7 +279,6 @@ console.log(funcs[2]()); // 3 — 예상: 2
 왜 이럴까요? `var i`는 블록 스코프가 없으므로 루프가 끝나도 **하나의 `i`만 존재**합니다. 루프가 끝나면 그 `i`는 3이 됩니다. 세 함수 모두 같은 `i`를 참조하고 있으니 모두 3을 반환합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     FOR["for 루프"] -->|"i=0,1,2,3(공유)"| VAR_I["var i"]
     VAR_I -->|"실행시 최종값 3"| FOR
@@ -355,7 +349,6 @@ const sayHi = function() {
 이 차이를 모르면 "함수 선언식은 어디서 호출해도 되는데, 왜 화살표 함수는 순서가 중요하지?"라는 혼란이 생깁니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["function foo(){}"] --> A1["전체 함수 호이스팅"]
     B["var foo = function"] --> B1["var만 호이스팅 undefined"]
@@ -370,7 +363,6 @@ flowchart LR
 ## 9. 실전 가이드 — 언제 무엇을 쓸까
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 flowchart LR
     A["변수 선언"] --> B{"값이 바뀌나?"}
     B -->|"예"| C{"참조가 바뀌나?<br>vs 내용만 바뀌나?"}
@@ -477,7 +469,6 @@ const config = {
 ## 정리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 mindmap
   root((var/let/const))
     var

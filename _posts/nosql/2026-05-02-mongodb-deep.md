@@ -14,7 +14,6 @@ toc_label: 목차
 > **비유**: RDBMS는 엄격한 파일 캐비닛이다. 모든 서류가 정해진 양식에 맞아야 한다. MongoDB는 자유로운 서랍장이다. 서류든 사진이든 영수증이든 같은 서랍에 넣을 수 있고, 각 항목의 형태가 달라도 된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     DB1["MongoDB DB"] --> Col["Collection"]
     Col --> Doc["Document"]
@@ -131,7 +130,6 @@ db.users.updateOne(
 MongoDB 설계의 핵심 질문: **"이 데이터를 어떻게 조회할 것인가?"**
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Q{"함께 조회하는가?<br>독립적으로 업데이트하는가?<br>1:N 비율은?"}
     Q -->|"항상 함께 조회\n1:少"| Embed["임베딩"]
@@ -192,7 +190,6 @@ graph LR
 ## 인덱스 — 없으면 풀 스캔
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Without["인덱스 없는 쿼리"]
     Without --> Scan["전체 도큐먼트 순차 스캔"]
@@ -235,7 +232,6 @@ db.users.find({ age: { $gte: 25 } }).explain("executionStats")
 > **비유**: 공장 컨베이어 벨트와 같다. 원자재(도큐먼트)가 각 스테이션($match, $group, $sort)을 순서대로 거치면서 원하는 형태로 가공된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Input["컬렉션"] --> M["$match"] --> G["$group"] --> S["$sort"] --> L["$limit"] --> Output["결과"]
 ```
@@ -271,7 +267,6 @@ db.orders.aggregate([
 > **비유**: Replica Set은 중요한 문서를 여러 금고에 복사해 보관하는 것과 같다. Primary가 고장나면 Secondary 중 하나가 자동으로 Primary로 승격된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Client["애플리케이션"] -->|"읽기/쓰기"| P["Primary"]
     P -->|"복제"| S1["Secondary 1"]
@@ -302,7 +297,6 @@ const collection = db.collection("users", {
 단일 서버의 용량 한계를 넘을 때 데이터를 여러 서버에 분산한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Client["애플리케이션"] --> MongosRouter["mongos (라우터)"]
     MongosRouter --> Shard1["샤드 1"]
@@ -390,7 +384,6 @@ public class OrderAnalyticsService {
 ## RDBMS vs MongoDB 선택 가이드
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     Start(["데이터 특성 분석"]) --> Q1{"스키마가 자주"}
     Q1 -->|"YES"| Q2{"복잡한 트랜잭션이"}

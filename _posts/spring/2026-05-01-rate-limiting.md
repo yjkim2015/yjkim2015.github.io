@@ -21,7 +21,6 @@ API를 운영하다 보면 특정 클라이언트가 초당 수천 건의 요청
 ### 왜 필요한가?
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A1["공격자"] -->|10000 req/s| S1["서버 다운"]
     A2["공격자"] -->|10000 req/s| RL["Rate Limiter"]
@@ -42,7 +41,6 @@ graph LR
 ### Rate Limiting 적용 레벨
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     INT["Internet"]
     INT --> NW["1️⃣ Nginx / AWS WA"]
@@ -69,7 +67,6 @@ graph LR
 시간을 **고정된 윈도우(예: 1분 단위)**로 나누고, 각 윈도우 안에서 카운터를 증가시킨다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     W1["윈도우1 (0s~60s)"]
     W2["윈도우2 (60s~120s)"]
@@ -81,7 +78,6 @@ graph LR
 **경계 문제 (Boundary Burst)**: 59초에 100건, 61초에 100건을 보내면 실제로 2초 안에 200건이 처리된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     W1["윈도우1 마지막 (59s)"]
     W2["윈도우2 시작 (61s)"]
@@ -145,7 +141,6 @@ String script =
 Fixed Window와 Sliding Window Log의 **절충안**이다. 이전 윈도우의 카운터와 현재 윈도우의 카운터를 가중 평균으로 합산한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     PW["이전 윈도우 (0:59~1:00)"]
     CW["현재 윈도우 (1:00~1:01)"]
@@ -180,7 +175,6 @@ String script =
 버킷에 **일정 속도로 토큰이 채워지고**, 요청이 올 때마다 토큰을 소비한다. 버킷이 가득 차면 새 토큰은 버려진다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     GEN["토큰 생성기"]
     GEN --> BKT["버킷 (최대 10 토큰)"]
@@ -195,7 +189,6 @@ graph LR
 **실제 동작 흐름**
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     T0["t=0s: 버킷 10/10 토큰\"]
     T1["t=1s: 토큰 1개 충전 → 버"]
@@ -213,7 +206,6 @@ graph LR
 요청을 큐(버킷)에 넣고 **일정한 속도로만 처리**한다. 버킷이 가득 차면 새 요청을 거부한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     TB1["요청(불규칙)"] --> TB2["토큰 확인"]
     TB2 --> TB3["즉시 처리"]
@@ -693,7 +685,6 @@ http {
 로드밸런서가 요청을 분산시키므로, 각 서버의 인메모리 카운터는 전체 요청 수를 반영하지 못한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["클라이언트"] --> LB["로드밸런서"]
     LB --> S1["서버1"]
@@ -708,7 +699,6 @@ graph LR
 모든 서버가 Redis의 동일한 카운터를 읽고 쓴다. Lua 스크립트로 Race Condition을 방지한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["클라이언트"] --> LB["로드밸런서"]
     LB --> S1["서버1"]
@@ -912,7 +902,6 @@ public long getServerTime() {
 인기 API 엔드포인트의 Rate Limit 키가 Redis의 특정 슬롯에 집중되면 해당 노드에 과부하가 발생한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     K["rl:popular-endpoin"] --> NB["Redis 노드 B"]
     X1["기타 키들"] --> NA["Redis 노드 A"]
@@ -936,7 +925,6 @@ public String shardedKey(String key, int shards) {
 ### 시나리오 4: 분산 환경 정확도 vs 성능 트레이드오프
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["Redis Sliding Wind"]
     B["Redis Sliding Wind"]
@@ -957,7 +945,6 @@ graph LR
 ## 정리
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A{"환경"} --> B{"단일 JVM?"}
     B -->|간단| C["Guava RateLimiter"]

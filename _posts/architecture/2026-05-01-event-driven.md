@@ -23,7 +23,6 @@ date: 2026-05-01
 ### 동기 호출 방식의 문제
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     OS["Order"] -->|"결제 요청"| PS["Payment"]
     PS -.->|"타임아웃"| OS
@@ -42,7 +41,6 @@ graph LR
 ### EDA로 해결
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     OS["Order Service"] -->|"OrderCreated"| EB["Event Bus (Kafka)"]
     EB -->|"소비"| PS["Payment Service"]
@@ -138,7 +136,6 @@ public record OrderCreatedEventV2(
 ### 개념: 상태 대신 이벤트를 저장
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     DB1[("orders 테이블")] -->|"상태만 저장"| CURR["현재 상태"]
     E1["OrderCreated"] --> E2["PaymentCharged"]
@@ -283,7 +280,6 @@ public Order findById(Long orderId) {
 Event Sourcing은 CQRS와 함께 쓸 때 강력합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     CMD["Command"] --> AGG["Aggregate"]
     AGG --> ES[("Event Store")]

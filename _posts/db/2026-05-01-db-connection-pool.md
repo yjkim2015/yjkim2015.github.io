@@ -39,7 +39,6 @@ Spring Boot 2.x+의 기본 커넥션 풀. "빠른 커넥션 풀" 표방.
 > **비유:** HikariCP는 공항의 렌터카 카운터와 같습니다. 차량(커넥션)이 미리 세차·정비(초기화)된 상태로 주차장(ConcurrentBag)에 대기합니다. 고객(스레드)이 도착하면 서류 확인 없이 키만 건네주고(ThreadLocal 캐시), 반납 시 다음 고객에게 바로 넘깁니다. 차가 오래되면(maxLifetime) 신차로 교체하고, 녹슨 차(유효하지 않은 커넥션)는 정비 점검(keepalive-time)에서 걸러냅니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     POOL["HikariCP 커넥션 풀"]
     POOL --- C1["Connection 1 (대기)"]
@@ -66,7 +65,6 @@ graph LR
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     대기["대기"]
     사용중["사용중"]
@@ -167,7 +165,6 @@ TPS 기반 계산:
 ### 1. 커넥션 풀 고갈 (Pool Exhaustion)
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant T1 as 스레드1~10
     participant Pool as HikariCP
@@ -270,7 +267,6 @@ Connection leak detection triggered for
 > **비유**: 좁은 골목에서 두 트럭이 마주 보고 진입한 상황입니다. A 트럭은 "B가 후진해줘야 내가 지나간다"고 기다리고, B 트럭도 "A가 먼저 비켜야 한다"고 기다립니다. 아무도 양보하지 않으면 둘 다 영원히 멈춰 있습니다. 커넥션 풀 데드락도 정확히 이 구조입니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant TA as 스레드A
     participant Pool as HikariCP

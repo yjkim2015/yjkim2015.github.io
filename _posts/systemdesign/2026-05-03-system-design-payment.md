@@ -132,7 +132,6 @@ toc_label: 목차
 > **비유:** 결제 시스템은 은행 창구와 같습니다. 고객(사용자)이 창구(API Gateway)에 오면, 은행원(결제 서비스)이 카드사(PG사)에 승인을 요청하고, 장부(원장)에 기록한 뒤, 나중에 가맹점(판매자)에게 입금(정산)합니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[클라이언트] --> B[API GW] --> C[결제서비스]
     C --> D[PG 연동] --> G[PG사]
@@ -160,7 +159,6 @@ graph LR
 > **비유:** 결제 흐름은 레스토랑 계산서 처리와 같습니다. 손님이 카드를 내밀면(결제 요청), 직원이 단말기에 긁고(PG 요청), 카드사가 승인하면(PG 승인), 영수증이 나옵니다(결제 완료). 중간에 통신이 끊기면 재시도해야 하는데, 이때 이중 결제가 발생할 수 있습니다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant U as 사용자
     participant PS as 결제서비스
@@ -402,7 +400,6 @@ Saga 패턴은 각 서비스가 로컬 트랜잭션만 수행하고, 실패 시 
 ### 결제 Saga 흐름
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[주문 생성] --> B[결제 처리]
     B --> C[재고 차감]
@@ -477,7 +474,6 @@ class PaymentSaga:
 ### 환불 흐름
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant U as 사용자
     participant RS as 환불서비스
@@ -706,7 +702,6 @@ CURRENCY_PRECISION = {
 ### 다중 PG 라우팅 설계
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[결제] --> B{라우터}
     B --> C[PG A 60%]
@@ -785,7 +780,6 @@ PCI DSS(Payment Card Industry Data Security Standard)는 카드 데이터를 다
 ### 토큰화 흐름
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A[사용자] -->|카드입력| B[PG SDK]
     B -->|토큰반환| A

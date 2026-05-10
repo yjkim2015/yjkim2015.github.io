@@ -18,7 +18,6 @@ toc_label: 목차
 파티셔닝과 샤딩의 핵심 차이를 구조적으로 이해하는 것이 중요하다. 파티셔닝은 하나의 서버 안에서 테이블을 물리적으로 분리하므로 CPU, 메모리, 디스크를 여전히 하나의 서버가 공유한다. 반면 샤딩은 각 샤드가 독립된 서버이므로 자원을 완전히 분리한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     S["MySQL Server"] --> P0["Partition 0"]
     S --> P1["Partition 1"]
@@ -55,7 +54,6 @@ graph LR
 샤딩은 최후의 수단이다. 도입 전에 더 단순한 방법들을 모두 시도해야 한다. 인덱스 최적화와 쿼리 튜닝만으로도 수십 배의 성능 향상이 가능하고, 읽기 복제와 캐싱은 대부분의 읽기 부하를 해결한다. 파티셔닝은 단일 서버 내 대용량 테이블 관리에 효과적이다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["성능 문제"] --> B{"튜닝/캐싱"}
     B -->|"해결"| Z["완료"]
@@ -73,7 +71,6 @@ graph LR
 샤드 키의 값 범위를 기준으로 데이터를 분배한다. user_id 1부터 1000만까지는 Shard 0, 1000만1부터 2000만까지는 Shard 1과 같이 명확한 경계를 가진다. 라우팅 로직이 단순하고 범위 쿼리가 특정 샤드 내에서 완결될 수 있다는 장점이 있다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     R["라우터"] --> SH0["Shard 0"]
     R --> SH1["Shard 1"]
@@ -89,7 +86,6 @@ graph LR
 샤드 키에 해시 함수를 적용하여 샤드를 결정한다. `shard_id = hash(user_id) % num_shards` 공식으로 데이터를 균등하게 분포시키므로 핫스팟 문제가 적다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     K["user_id"] -->|"hash % N"| SH0["Shard 0"]
     K -->|"hash % N"| SH1["Shard 1"]
@@ -107,7 +103,6 @@ Consistent Hashing은 노드(샤드) 추가/제거 시 최소한의 데이터만
 노드를 추가하면 전체 데이터의 1/N만 이동하면 된다. 예를 들어 N0, N1, N2가 있을 때 N3을 N0과 N1 사이에 추가하면, N1이 담당하던 범위 중 일부만 N3으로 이동한다. 나머지 데이터는 변경이 없다. 반면 단순 모듈러 해싱은 전체 데이터의 약 75%가 이동해야 한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     N0["Node 0(50)"] --- N1["Node 1(150)"]
     N1 --- N2["Node 2(250)"]
@@ -126,7 +121,6 @@ graph LR
 실제 노드 3개(N0, N1, N2)가 있을 때 각 노드에 100개의 가상 노드를 할당한다. 링 위에는 N0_vn1, N1_vn47, N2_vn91과 같이 300개의 점이 배치되며, 모두 실제 노드에 매핑된다. 이를 통해 링 위 분포가 균등해지고 노드별 부하도 균등해진다. 또한 고성능 서버에는 200개, 저성능 서버에는 100개의 가상 노드를 할당하여 성능 비율대로 부하를 분배할 수 있다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     RING["해시 링"] --> N0["Node 0"]
     RING --> N1["Node 1"]
@@ -139,7 +133,6 @@ graph LR
 별도의 **라우팅 테이블(Lookup Table)**에 각 키가 어느 샤드에 있는지 기록한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["클라이언트"] --> DS["Shard Directory Se"]
     DS --> SA["Shard A"]
@@ -155,7 +148,6 @@ graph LR
 사용자의 지리적 위치를 기준으로 샤드를 배치한다. 데이터 주권(Data Sovereignty) 규제 준수에 필수적이다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     U1["KR 사용자"] --> SR["Seoul Region Shard"]
     U2["US 사용자"] --> UR["US-East Region Sha"]
@@ -226,7 +218,6 @@ public class UserStatsService {
 트랜잭션 코디네이터(TC)가 모든 샤드에게 준비(Prepare)를 요청하고, 모두 OK 응답을 받으면 커밋(Commit)을 지시하는 방식이다. 이론적으로 완전한 원자성을 보장하지만, TC 장애 시 모든 샤드가 PREPARED 상태로 블로킹되고 레이턴시가 2번의 네트워크 왕복만큼 증가한다. 하나의 샤드라도 응답이 없으면 전체가 블로킹된다는 가용성 문제도 있다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     TC["TC"] -->|"PREPARE"| SA["Shard A"]
     TC -->|"PREPARE"| SB["Shard B"]
@@ -383,7 +374,6 @@ public class ShardedUserRepository {
 YouTube에서 MySQL 스케일링을 위해 개발한 오픈소스 미들웨어다. 애플리케이션은 MySQL 프로토콜로 VTGate에 연결하면 되고, 샤딩 로직은 VTGate와 VTTablet이 처리한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     APP["Application"] --> VTG["VTGate (프록시)"]
     VTG --> VT0["VTTablet"]
@@ -504,7 +494,6 @@ public class SnowflakeIdGenerator {
 성능 문제가 발생했을 때 바로 샤딩을 선택하면 안 된다. 단계별로 더 단순한 해결책을 시도해야 한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["성능 문제"] --> B{"읽기 과부하?"}
     B -->|"YES"| C["캐싱 → Read Replica"]
@@ -640,7 +629,6 @@ public class UserService {
 근본 원인이 **Celebrity Problem**(팔로워 1000만 명인 인플루언서의 게시물 조회 폭발)이라면 해당 사용자의 데이터를 전용 샤드에 격리하거나 CDN/캐시 레이어로 DB 부하를 차단한다. 샤드 키 선택 자체가 오류라면 재샤딩을 검토해야 한다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     A["핫 샤드 감지"] --> B{"원인 분석"}
     B -->|"샤드 키 선택 오류"| C["재샤딩 검토"]
@@ -658,7 +646,6 @@ graph LR
 샤드 4개에서 8개로 확장할 때 무중단으로 진행하는 절차다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     P1["Phase 1"] --> P2["Phase 2"]
     P2 --> P3["Phase 3"]

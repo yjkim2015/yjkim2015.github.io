@@ -50,7 +50,6 @@ toc_label: 목차
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     R["1️⃣ 요구사항"] --> H["2️⃣ 고수준 설계"]
     H --> D["3️⃣ 상세 설계"]

@@ -16,7 +16,6 @@ toc_label: 목차
 Redis 복제는 **마스터(Master)** 노드의 데이터를 하나 이상의 **레플리카(Replica)** 노드에 실시간으로 복사하는 기능이다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     C["Client"] -->|"쓰기/읽기"| M["Master"]
     M -->|"복제 (읽기 전용)"| R1["Replica 1"]
@@ -61,7 +60,6 @@ REPLICAOF NO ONE
 레플리카가 **최초 연결**되거나 **오랫동안 끊겼다가 재연결**될 때 수행된다. 마스터의 전체 데이터를 RDB 스냅샷으로 받는다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant Rep as "Replica"
     participant M as "Master"
@@ -82,7 +80,6 @@ sequenceDiagram
 연결이 **잠시 끊겼다가** 재연결되면, 끊긴 부분부터 이어서 동기화한다. 전체를 다시 받을 필요가 없다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant Rep as "Replica"
     participant M as "Master"
@@ -107,7 +104,6 @@ repl-backlog-ttl 3600   # 레플리카가 없어도 1시간 backlog 유지
 동기화 완료 후, 마스터의 모든 쓰기 명령어가 **실시간으로** 레플리카에 전파된다.
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant C as Client
     participant M as Master
@@ -127,7 +123,6 @@ sequenceDiagram
 ### 스타 복제 (기본)
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     M["Master"] --> RA["Replica A"]
     M --> RB["Replica B"]
@@ -139,7 +134,6 @@ graph LR
 ### 체인 복제 (Cascading)
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     M["Master"] --> RA["Replica A"]
     RA --> RB["Replica B"]
@@ -153,7 +147,6 @@ Replica A가 B에게, B가 C에게 전파. 마스터 부하는 줄지만, 전파
 ## 비동기 복제의 한계 — 데이터 유실 시나리오
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 sequenceDiagram
     participant C as "Client"
     participant M as "Master"
@@ -188,7 +181,6 @@ min-replicas-max-lag 10    # 레플리카 지연 10초 이내여야 함
 ```
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     M1["Master"] <-->|연결됨| R1["Replica"]
     M1 --> W1["쓰기 허용"]
@@ -215,7 +207,6 @@ graph LR
 Redis Cluster는 **샤딩 + 복제**를 결합한다:
 
 ```mermaid
-%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '12px', 'nodePadding': '4px'}} }%%
 graph LR
     MA["마스터 A (슬롯 0~5460)"] -->|"복제"| RA["레플리카 A"]
     MB["마스터 B (슬롯 5461~109"] -->|"복제"| RB["레플리카 B"]
