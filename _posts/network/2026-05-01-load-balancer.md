@@ -243,18 +243,12 @@ def ip_hash_select(client_ip: str, servers: list) -> str:
 L7 로드밸런서에서 SSL을 종료하면 백엔드 서버는 암호화 부담 없이 HTTP 평문으로 통신한다. 인증서를 로드밸런서 한 곳에서만 관리하면 되므로 운영이 간편하다.
 
 ```mermaid
-sequenceDiagram
-    participant C as 클라이언트
-    participant LB as L7 로드밸런서
-    participant S as 백엔드 서버
-    Note over C,LB: HTTPS (암호화)
-    C->>LB: HTTPS 요청 (암호화됨)
-    LB->>LB: SSL 복호화 (인증서 보유)
-    Note over LB,S: HTTP (평문, 내부망)
-    LB->>S: HTTP 요청 (평문으로 전달)
-    S-->>LB: HTTP 응답
-    LB->>LB: SSL 암호화
-    LB-->>C: HTTPS 응답
+graph LR
+    C["클라이언트"] -->|"HTTPS(암호화)"| LB["L7 로드밸런서"]
+    LB -->|"SSL 복호화"| LB
+    LB -->|"HTTP(평문)"| S["백엔드 서버"]
+    S -->|"HTTP 응답"| LB
+    LB -->|"SSL 암호화→HTTPS"| C
 ```
 
 L4 로드밸런서는 SSL Passthrough 방식으로, IP:Port만 보고 전달할 뿐 SSL 내용을 모른다. 백엔드가 직접 복호화해야 한다.

@@ -144,15 +144,13 @@ WebSocket 연결 수: DAU의 30% 동시 접속 = 1억 5천만 연결
 기존 HTTP는 **우체국** 방식입니다. 내가 편지를 보내야(요청) 답장이 옵니다(응답). 하지만 채팅은 **전화** 방식이어야 합니다. 상대방이 말하면 즉시 내 귀에 들려야 합니다.
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
-    C->>S: GET /messages (Short Poll)
-    S-->>C: empty
-    C->>S: GET /messages (Long Poll)
-    S-->>C: 메시지 도착
-    C->>S: HTTP Upgrade (WS)
-    S-->>C: 101 Switching
+graph LR
+    C["Client"] -->|"Short Poll"| S["Server"]
+    S -->|"empty"| C
+    C -->|"Long Poll"| S
+    S -->|"메시지 도착"| C
+    C -->|"HTTP Upgrade(WS)"| S
+    S -->|"101 Switching"| C
 ```
 
 | 방식 | 지연시간 | 서버 부하 | 실시간성 | 사용 케이스 |
@@ -388,12 +386,9 @@ graph LR
 ### 1:1 채팅 메시지 완전 흐름
 
 ```mermaid
-sequenceDiagram
-    participant A as UserA
-    participant S as 채팅서버
-    participant B as UserB
-    A->>S: WS 메시지
-    S->>B: WS/Push 전달
+graph LR
+    A["UserA"] -->|"WS 메시지"| S["채팅서버"]
+    S -->|"WS/Push 전달"| B["UserB"]
 ```
 
 ### 서버 간 메시지 라우팅 문제

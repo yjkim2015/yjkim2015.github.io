@@ -152,15 +152,13 @@ public class MemoryMemberRepository implements MemberRepository {
 ### 테스트 실행 흐름
 
 ```mermaid
-sequenceDiagram
-    participant T as JUnit
-    participant R as Repository
-    T->>R: save(member)
-    R-->>T: member 반환
-    T->>T: assertThat 검증
-    T->>R: findByName()
-    R-->>T: Optional 반환
-    T->>T: @AfterEach 정리
+graph LR
+    T["JUnit"] -->|"save(member)"| R["Repository"]
+    R -->|"member 반환"| T
+    T -->|"assertThat 검증"| T
+    T -->|"findByName()"| R
+    R -->|"Optional 반환"| T
+    T -->|"@AfterEach 정리"| T
 ```
 
 ### JUnit 테스트 코드

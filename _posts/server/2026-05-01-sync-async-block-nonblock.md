@@ -88,16 +88,13 @@ ResultSet rs = ps.executeQuery(); // 쿼리 완료까지 블로킹
 I/O 시스템 콜은 즉시 반환하지만, 호출자가 직접 반복 폴링(polling)해서 결과를 확인한다.
 
 ```mermaid
-sequenceDiagram
-    participant T as 호출자 스레드
-    participant IO as I/O
-    T->>IO: 요청
-    IO-->>T: EAGAIN (즉시 반환)
-    T->>IO: 폴링
-    IO-->>T: EAGAIN (즉시 반환)
-    T->>IO: 폴링
-    IO-->>T: 완료! 결과 반환
-    Note over T: 다음 작업 진행
+graph LR
+    T["호출자 스레드"] -->|"I/O 요청"| IO["I/O"]
+    IO -->|"EAGAIN(즉시 반환)"| T
+    T -->|"폴링"| IO
+    IO -->|"EAGAIN"| T
+    T -->|"폴링"| IO
+    IO -->|"완료! 결과 반환"| T
 ```
 
 ```java
@@ -273,29 +270,23 @@ Unix/Linux 시스템에서 I/O는 5가지 모델로 분류된다. (W. Richard St
 ### 1. Blocking I/O
 
 ```mermaid
-sequenceDiagram
-    participant App as Application
-    participant K as Kernel
-    App->>K: recvfrom() 호출
-    Note over App,K: 데이터 없음 — 대기 (블로킹)
-    Note over K: 데이터 도착\n커널 버퍼 → 유저 버퍼 복사
-    K-->>App: OK, 데이터 반환
-    Note over App: 애플리케이션 재개
+graph LR
+    App["Application"] -->|"recvfrom() 호출"| K["Kernel"]
+    K -->|"블로킹 대기"| K
+    K -->|"데이터 도착→복사"| K
+    K -->|"OK, 데이터 반환"| App
 ```
 
 ### 2. Non-blocking I/O
 
 ```mermaid
-sequenceDiagram
-    participant App as Application
-    participant K as Kernel
-    App->>K: recvfrom()
-    K-->>App: EAGAIN (즉시 반환 — 데이터 없음)
-    App->>K: recvfrom() (폴링)
-    K-->>App: EAGAIN (즉시 반환 — 데이터 없음)
-    App->>K: recvfrom() (폴링)
-    Note over K: 데이터 도착! 복사 중
-    K-->>App: OK, 데이터 반환
+graph LR
+    App["Application"] -->|"recvfrom()"| K["Kernel"]
+    K -->|"EAGAIN(데이터 없음)"| App
+    App -->|"폴링"| K
+    K -->|"EAGAIN"| App
+    App -->|"폴링"| K
+    K -->|"데이터 도착→OK 반환"| App
 ```
 
 ### 3. I/O Multiplexing (select/poll/epoll)
@@ -303,15 +294,12 @@ sequenceDiagram
 하나의 스레드로 여러 소켓을 감시할 수 있다. Java NIO Selector가 이 방식이다.
 
 ```mermaid
-sequenceDiagram
-    participant App as Application
-    participant K as Kernel
-    App->>K: select() — 여러 소켓 감시 시작
-    Note over App,K: 블로킹 — 감시 중...
-    Note over K: 소켓 중 하나 준비됨
-    K-->>App: 준비된 소켓 반환
-    App->>K: recvfrom()
-    K-->>App: 데이터 반환
+graph LR
+    App["Application"] -->|"select() 여러 소켓 감시"| K["Kernel"]
+    K -->|"블로킹 감시 중"| K
+    K -->|"소켓 준비→반환"| App
+    App -->|"recvfrom()"| K
+    K -->|"데이터 반환"| App
 ```
 
 **epoll (Linux 고성능 방식)**

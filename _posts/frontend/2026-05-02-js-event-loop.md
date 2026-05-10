@@ -67,15 +67,12 @@ sayHello();
 ```
 
 ```mermaid
-sequenceDiagram
-    participant GS as 전역 스코프
-    participant SH as sayHello()
-    participant G as greet()
-    GS->>SH: sayHello() 호출
-    SH->>G: greet('World') 호출
-    G-->>SH: 'Hello, World!' 반환
-    SH->>SH: console.log() 호출
-    SH-->>GS: 실행 완료
+graph LR
+    GS["전역 스코프"] -->|"sayHello() 호출"| SH["sayHello()"]
+    SH -->|"greet('World') 호출"| G["greet()"]
+    G -->|"'Hello, World!' 반환"| SH
+    SH -->|"console.log() 호출"| SH
+    SH -->|"실행 완료"| GS
 ```
 
 만약 이 스택이 꽉 차면 어떻게 될까요? **스택 오버플로우**가 발생합니다.

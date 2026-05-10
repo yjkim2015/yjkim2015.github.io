@@ -260,16 +260,13 @@ Spring AOP의 핵심은 **프록시 패턴**이다. 클라이언트가 `OrderSer
 4️⃣ **결과 반환**: After Advice, Around Advice의 뒷부분이 실행된 후 결과를 반환한다
 
 ```mermaid
-sequenceDiagram
-    participant C as "클라이언트"
-    participant P as "Proxy Object (Spring 자동 생성)"
-    participant R as "Real OrderService (실제 Bean)"
-    C->>P: orderService.createOrder(dto) 호출
-    P->>P: Before Advice 실행
-    P->>R: joinPoint.proceed() - 실제 메서드 위임
-    R-->>P: 결과 반환
-    P->>P: After Advice 실행
-    P-->>C: 최종 결과 반환
+graph LR
+    C["클라이언트"] -->|"createOrder(dto)"| P["Proxy Object"]
+    P -->|"Before Advice"| P
+    P -->|"joinPoint.proceed()"| R["Real OrderService"]
+    R -->|"결과 반환"| P
+    P -->|"After Advice"| P
+    P -->|"최종 결과"| C
 ```
 
 ### JDK Dynamic Proxy

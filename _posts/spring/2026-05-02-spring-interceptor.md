@@ -324,43 +324,33 @@ public void afterCompletion(HttpServletRequest request,
 ### 정상 흐름 Sequence Diagram
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant DS as DispatcherServlet
-    participant CT as Controller
-    C->>DS: HTTP 요청
-    DS->>DS: preHandle()
-    DS->>CT: 핸들러 실행
-    CT-->>DS: ModelAndView
-    DS->>DS: postHandle()
-    DS-->>C: HTTP 응답
+graph LR
+    C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
+    DS -->|"preHandle()"| DS
+    DS -->|"핸들러 실행"| CT["Controller"]
+    CT -->|"ModelAndView"| DS
+    DS -->|"postHandle()→응답"| C
 ```
 
 ### preHandle에서 false 반환 시 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant DS as DispatcherServlet
-    participant I1 as Interceptor1
-    C->>DS: HTTP 요청
-    DS->>I1: preHandle() → false
-    DS->>I1: afterCompletion()
-    DS-->>C: 401 응답
+graph LR
+    C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
+    DS -->|"preHandle()→false"| I1["Interceptor1"]
+    DS -->|"afterCompletion()"| I1
+    DS -->|"401 응답"| C
 ```
 
 ### 예외 발생 시 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant DS as DispatcherServlet
-    participant I1 as Interceptor1
-    C->>DS: HTTP 요청
-    DS->>I1: preHandle()
-    DS->>DS: 핸들러 실행
-    DS->>I1: afterCompletion(ex)
-    DS-->>C: 에러 응답
+graph LR
+    C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
+    DS -->|"preHandle()"| I1["Interceptor1"]
+    DS -->|"핸들러 실행→예외"| DS
+    DS -->|"afterCompletion(ex)"| I1
+    DS -->|"에러 응답"| C
 ```
 
 ### 다중 Interceptor 실행 순서 요약

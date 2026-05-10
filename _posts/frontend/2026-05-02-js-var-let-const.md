@@ -279,14 +279,11 @@ console.log(funcs[2]()); // 3 — 예상: 2
 왜 이럴까요? `var i`는 블록 스코프가 없으므로 루프가 끝나도 **하나의 `i`만 존재**합니다. 루프가 끝나면 그 `i`는 3이 됩니다. 세 함수 모두 같은 `i`를 참조하고 있으니 모두 3을 반환합니다.
 
 ```mermaid
-sequenceDiagram
-    participant FOR as for 루프
-    participant VAR_I as var i (공유)
-    participant LET_J as let j (반복별)
-    FOR->>VAR_I: i = 0,1,2,3 (하나)
-    VAR_I-->>FOR: 실행시 최종값 3
-    FOR->>LET_J: j_0=0, j_1=1, j_2=2
-    LET_J-->>FOR: 각각 0, 1, 2
+graph LR
+    FOR["for 루프"] -->|"i=0,1,2,3(공유)"| VAR_I["var i"]
+    VAR_I -->|"실행시 최종값 3"| FOR
+    FOR -->|"j_0=0,j_1=1,j_2=2"| LET_J["let j(반복별)"]
+    LET_J -->|"각각 0, 1, 2"| FOR
 ```
 
 `let`을 쓰면 **각 반복마다 새로운 바인딩**이 생성됩니다. 즉, 반복마다 독립적인 `j`가 존재합니다.

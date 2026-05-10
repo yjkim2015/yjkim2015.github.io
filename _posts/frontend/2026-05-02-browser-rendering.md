@@ -234,15 +234,11 @@ for (const el of elements) {
 ```
 
 ```mermaid
-sequenceDiagram
-    participant JS as JavaScript
-    participant LAYOUT as 레이아웃 엔진
-    loop 각 요소마다
-        JS->>LAYOUT: offsetWidth 읽기 (리플로우 강제)
-        LAYOUT-->>JS: 값 반환
-        JS->>LAYOUT: style.width 쓰기 (레이아웃 무효화)
-    end
-    Note over LAYOUT: 100개 요소 = 100번 리플로우!
+graph LR
+    JS["JavaScript"] -->|"offsetWidth 읽기"| LAYOUT["레이아웃 엔진"]
+    LAYOUT -->|"값 반환"| JS
+    JS -->|"style.width 쓰기"| LAYOUT
+    LAYOUT -->|"→100번 리플로우!"| JS
 ```
 
 만약 이걸 안 하면? 100개 요소가 있는 리스트를 이렇게 처리하면 브라우저가 100번 레이아웃을 강제 계산해서 심각한 버벅임이 생깁니다.

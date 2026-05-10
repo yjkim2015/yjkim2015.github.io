@@ -107,17 +107,14 @@ Using generated security password: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 Spring Security 의존성을 추가하면 내부적으로 어떤 일이 일어나는지 살펴보겠습니다.
 
 ```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant F as FilterChain
-    participant C as Controller
-    B->>F: GET /home
-    F-->>B: 미인증→/login 리다이렉트
-    B->>F: POST /login
-    F->>F: 인증 처리(UserDetailsService)
-    F-->>B: 인증 성공→세션 생성→/home 리다이렉트
-    B->>C: GET /home(세션 쿠키)
-    C-->>B: 홈 페이지 응답
+graph LR
+    B["Browser"] -->|"GET /home"| F["FilterChain"]
+    F -->|"미인증→/login 리다이렉트"| B
+    B -->|"POST /login"| F
+    F -->|"인증 처리"| F
+    F -->|"세션 생성→/home 리다이렉트"| B
+    B -->|"GET /home(세션 쿠키)"| C["Controller"]
+    C -->|"홈 페이지 응답"| B
 ```
 
 ## 왜 이게 중요한가?

@@ -63,16 +63,13 @@ SET resource_lock <unique_value> NX EX 30
 ### 락 획득 ~ 해제 전체 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant R as Redis
-    participant DB as Database
-    C->>R: SET lock NX EX 30
-    R-->>C: OK
-    C->>DB: UPDATE stock
-    DB-->>C: 1 row affected
-    C->>R: EVAL Lua 해제
-    R-->>C: 1 (성공)
+graph LR
+    C["Client"] -->|"SET lock NX EX 30"| R["Redis"]
+    R -->|"OK"| C
+    C -->|"UPDATE stock"| DB["Database"]
+    DB -->|"1 row affected"| C
+    C -->|"EVAL Lua 해제"| R
+    R -->|"1(성공)"| C
 ```
 
 ### 락 획득 코드
@@ -343,18 +340,13 @@ sequenceDiagram
 Redisson은 leaseTime을 지정하지 않으면 **Watchdog**을 통해 락 TTL을 자동으로 연장한다.
 
 ```mermaid
-sequenceDiagram
-    participant App as Application
-    participant WD as Watchdog
-    participant R as Redis
-    App->>R: lock() 획득 (TTL=30s)
-    R-->>App: OK
-    WD->>R: TTL 갱신 (10s 경과)
-    R-->>WD: 리셋 → 30s
-    WD->>R: TTL 갱신 (20s 경과)
-    R-->>WD: 리셋 → 30s
-    App->>R: unlock() → 키 삭제
-    Note over WD: Watchdog 자동 중단
+graph LR
+    App["Application"] -->|"lock() TTL=30s"| R["Redis"]
+    R -->|"OK"| App
+    WD["Watchdog"] -->|"10s마다 TTL 갱신"| R
+    R -->|"리셋→30s"| WD
+    App -->|"unlock()→키 삭제"| R
+    R -->|"Watchdog 자동 중단"| WD
 ```
 
 **Watchdog 동작 원리:**
@@ -606,18 +598,15 @@ Martin Kleppmann(DDIA 저자)은 Redlock의 안전성에 의문을 제기했다:
 **상황**: 서버 A가 락을 잡고 주문 처리 중에 갑자기 OOM으로 프로세스가 죽었다.
 
 ```mermaid
-sequenceDiagram
-    participant A as ProcessA
-    participant B as ProcessB
-    participant R as Redis
-    A->>R: SET lock NX EX 30
-    R-->>A: OK
-    Note over A: 크래시
-    B->>R: SET lock NX EX 30
-    R-->>B: FAIL(락 존재)
-    Note over R: 30s 후 TTL 만료
-    B->>R: SET lock NX EX 30
-    R-->>B: OK
+graph LR
+    A["ProcessA"] -->|"SET lock NX EX 30"| R["Redis"]
+    R -->|"OK"| A
+    A -->|"크래시"| A
+    B["ProcessB"] -->|"SET lock NX EX 30"| R
+    R -->|"FAIL(락 존재)"| B
+    R -->|"30s 후 TTL 만료"| R
+    B -->|"SET lock NX EX 30"| R
+    R -->|"OK"| B
 ```
 
 **해결**: TTL이 자동으로 만료시킨다. **TTL이 없으면 영원히 데드락**이다. TTL은 반드시 설정해야 한다.
@@ -629,17 +618,14 @@ sequenceDiagram
 **상황**: 쿠팡 대용량 주문 처리 중 외부 결제 API가 응답을 늦게 줬다. 락 TTL은 30초였는데 작업이 35초 걸렸다.
 
 ```mermaid
-sequenceDiagram
-    participant A as ProcessA
-    participant B as ProcessB
-    participant R as Redis
-    A->>R: SET lock NX EX 30
-    R-->>A: OK
-    Note over R: TTL 만료
-    B->>R: SET lock NX EX 30
-    R-->>B: OK
-    A->>R: DEL lock (Lua 없이)
-    Note over A,R: B의 락 삭제! 노출
+graph LR
+    A["ProcessA"] -->|"SET lock NX EX 30"| R["Redis"]
+    R -->|"OK"| A
+    R -->|"TTL 만료"| R
+    B["ProcessB"] -->|"SET lock NX EX 30"| R
+    R -->|"OK"| B
+    A -->|"DEL lock(Lua 없이)"| R
+    R -->|"B의 락 삭제! 위험"| B
 ```
 
 **해결 1**: Lua 스크립트로 `value` 비교 후 삭제 (UUID 확인 후 DEL)

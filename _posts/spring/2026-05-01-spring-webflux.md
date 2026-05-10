@@ -101,16 +101,12 @@ public interface Processor<T, R> extends Subscriber<T>, Publisher<R> {
 동작 흐름은 다음과 같습니다.
 
 ```mermaid
-sequenceDiagram
-    participant P as Publisher
-    participant S as Subscriber
-    S->>P: subscribe(subscriber)
-    P->>S: onSubscribe(sub)
-    S->>P: sub.request(N) - N개 데이터 요청
-    P->>S: onNext(item1)
-    P->>S: onNext(item2)
-    P->>S: onNext(itemN)
-    P->>S: onComplete() 또는 onError()
+graph LR
+    S["Subscriber"] -->|"subscribe()"| P["Publisher"]
+    P -->|"onSubscribe(sub)"| S
+    S -->|"request(N)"| P
+    P -->|"onNext(item1~N)"| S
+    P -->|"onComplete/onError"| S
 ```
 
 ### 배압(Backpressure) 개념

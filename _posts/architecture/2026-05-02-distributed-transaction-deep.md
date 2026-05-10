@@ -106,17 +106,11 @@ graph LR
 ### 방식 1: Choreography (안무) Saga — 각자 알아서
 
 ```mermaid
-sequenceDiagram
-    participant OS as 주문
-    participant K as Kafka
-    participant PS as 결제
-    OS->>K: OrderCreated
-    K->>PS: 결제 처리
-    alt 성공
-        PS->>K: Completed
-    else 실패
-        K->>OS: 주문취소
-    end
+graph LR
+    OS["주문"] -->|"OrderCreated"| K["Kafka"]
+    K -->|"결제 처리"| PS["결제"]
+    PS -->|"성공→Completed"| K
+    K -->|"실패→주문취소"| OS
 ```
 
 안무 방식은 "공연 지시자 없이 무용수들이 서로의 동작을 보고 반응하며 춤추는 것"과 같습니다. 중앙 조율자가 없어 결합도가 낮습니다. 하지만 전체 흐름을 추적하기 어렵습니다. "결제는 됐는데 배송 요청이 안 됐다"는 버그를 찾으려면 여러 서비스의 로그를 모두 뒤져야 합니다.
@@ -175,15 +169,12 @@ public class PaymentService {
 ### 방식 2: Orchestration (오케스트레이션) Saga — 중앙 지휘자가 조율
 
 ```mermaid
-sequenceDiagram
-    participant Orch as Orch
-    participant PS as 결제
-    participant IS as 재고
-    Orch->>PS: 결제 요청
-    PS-->>Orch: 결제 완료
-    Orch->>IS: 재고 차감
-    IS-->>Orch: 재고 부족
-    Orch->>PS: 결제 취소
+graph LR
+    Orch["Orch"] -->|"결제 요청"| PS["결제"]
+    PS -->|"결제 완료"| Orch
+    Orch -->|"재고 차감"| IS["재고"]
+    IS -->|"재고 부족"| Orch
+    Orch -->|"결제 취소"| PS
 ```
 
 오케스트레이션 방식은 "지휘자가 악기별로 언제 어떻게 연주할지 지시하는 것"과 같습니다. 전체 흐름이 오케스트레이터 한 곳에 집중되어 디버깅이 쉽습니다. 단, 오케스트레이터가 단일 장애점이 될 수 있습니다.

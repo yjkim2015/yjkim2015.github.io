@@ -193,16 +193,12 @@ Custom ClassLoader (사용자 정의)
 비유: 군대에서 새로운 명령이 내려오면 말단 병사가 독자적으로 처리하기 전에 위로 보고하는 것과 같습니다. 상급자가 처리할 수 없는 경우에만 하급자가 직접 처리합니다.
 
 ```mermaid
-sequenceDiagram
-    participant App as Application CL
-    participant Ext as Extension/Platform CL
-    participant Boot as Bootstrap CL
-    App->>Ext: "1. MyClass 로드해줘"
-    Ext->>Boot: "2. MyClass 로드해줘"
-    Boot-->>Ext: "3. 모름 (핵심 라이브러리 아님)"
-    Ext-->>App: "4. 모름 (확장 라이브러리 아님)"
-    App->>App: "5. 클래스패스에서 직접 로드"
-    App-->>App: "6. 로드 성공"
+graph LR
+    App["Application CL"] -->|"MyClass 로드 위임"| Ext["Extension CL"]
+    Ext -->|"위임"| Boot["Bootstrap CL"]
+    Boot -->|"모름"| Ext
+    Ext -->|"모름"| App
+    App -->|"클래스패스에서 직접 로드"| App
 ```
 
 **부모 위임 모델의 장점:**

@@ -276,17 +276,13 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 ### Group Coordinator와 리밸런싱 프로토콜
 
 ```mermaid
-sequenceDiagram
-    participant C1 as Consumer(Leader)
-    participant C2 as Consumer
-    participant GC as GroupCoordinator
-    C1->>GC: JoinGroup
-    C2->>GC: JoinGroup
-    GC-->>C1: Leader 선정
-    C1->>GC: SyncGroup(할당계획)
-    C2->>GC: SyncGroup
-    GC-->>C1: 파티션 할당
-    GC-->>C2: 파티션 할당
+graph LR
+    C1["Consumer(Leader)"] -->|"JoinGroup"| GC["GroupCoordinator"]
+    C2["Consumer"] -->|"JoinGroup"| GC
+    GC -->|"Leader 선정"| C1
+    C1 -->|"SyncGroup(할당계획)"| GC
+    GC -->|"파티션 할당"| C1
+    GC -->|"파티션 할당"| C2
 ```
 
 ---
@@ -296,14 +292,11 @@ sequenceDiagram
 ### At-Most-Once (최대 한 번)
 
 ```mermaid
-sequenceDiagram
-    participant C as Consumer
-    participant K as Kafka
-    participant DB as 처리 대상
-    C->>K: poll() → 메시지 수신
-    C->>K: Offset 커밋 (처리 완료로 기록)
-    C->>DB: 처리 중... 장애 발생!
-    Note over C,K: 재시작 시 커밋된 offset 이후부터 읽음 → 메시지 유실!
+graph LR
+    C["Consumer"] -->|"poll() 수신"| K["Kafka"]
+    C -->|"Offset 커밋(먼저)"| K
+    C -->|"처리 중 장애!"| DB["처리 대상"]
+    K -->|"재시작→메시지 유실"| C
 ```
 
 ```java
@@ -320,14 +313,11 @@ for (ConsumerRecord<String, String> record : records) {
 ### At-Least-Once (최소 한 번)
 
 ```mermaid
-sequenceDiagram
-    participant C as Consumer
-    participant K as Kafka
-    participant DB as 처리 대상
-    C->>K: poll() → 메시지 수신
-    C->>DB: 처리 완료
-    Note over C: Offset 커밋 전 장애 발생!
-    Note over C,K: 재시작 시 이전 offset부터 다시 읽음 → 동일 메시지 중복 처리!
+graph LR
+    C["Consumer"] -->|"poll() 수신"| K["Kafka"]
+    C -->|"처리 완료"| DB["처리 대상"]
+    C -->|"커밋 전 장애!"| C
+    K -->|"재시작→중복 처리"| C
 ```
 
 ```java
@@ -344,16 +334,11 @@ consumer.commitSync();  // 커밋 (장애 시 재처리 발생)
 ### Exactly-Once (정확히 한 번)
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant K as Kafka
-    participant C as Consumer
-    P->>K: 트랜잭션 begin
-    P->>K: 토픽에 쓰기
-    P->>K: Consumer offset 커밋 (동일 트랜잭션)
-    P->>K: 트랜잭션 commit
-    K-->>C: 커밋된 메시지 읽기 가능
-    Note over P,K: 실패 시: 트랜잭션 롤백 → 재시도
+graph LR
+    P["Producer"] -->|"begin→쓰기→offset커밋"| K["Kafka"]
+    P -->|"commit"| K
+    K -->|"커밋된 메시지"| C["Consumer"]
+    P -->|"실패시 rollback→재시도"| K
 ```
 
 ---
@@ -365,18 +350,13 @@ sequenceDiagram
 동일 메시지를 여러 번 보내도 한 번만 저장되도록 보장한다.
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant B as Broker
-    Note over P,B: 멱등성 없음
-    P->>B: msg(seq=1)
-    B-->>P: ACK(손실) → P->>B: 재전송
-    Note over B: 중복 저장!
-    Note over P,B: 멱등성 있음
-    P->>B: msg(PID=100,seq=1)
-    B-->>P: ACK(손실) → P->>B: 재전송
-    Note over B: seq=1 중복 무시
-    B-->>P: ACK
+graph LR
+    P["Producer"] -->|"msg(seq=1)"| B1["Broker(멱등성 없음)"]
+    B1 -->|"ACK 손실→재전송"| P
+    P -->|"중복 저장!"| B1
+    P2["Producer"] -->|"msg(PID=100,seq=1)"| B2["Broker(멱등성 있음)"]
+    B2 -->|"ACK 손실→재전송"| P2
+    B2 -->|"seq=1 중복 무시→ACK"| P2
 ```
 
 Broker는 각 프로듀서(PID)마다 최근 5개의 시퀀스 번호를 기억한다.
@@ -430,17 +410,13 @@ public class OrderTransactionalService {
 **트랜잭션 내부 동작:**
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant TC as TxCoordinator
-    participant PL as PartitionLeader
-    P->>TC: initTransactions()
-    TC-->>P: PID+epoch
-    P->>PL: send()(uncommitted)
-    P->>TC: sendOffsetsToTransaction()
-    P->>TC: commitTransaction()
-    TC->>PL: COMMITTED 마커
-    Note over P,TC: 실패시 abortTransaction()→ABORTED
+graph LR
+    P["Producer"] -->|"initTransactions()"| TC["TxCoordinator"]
+    TC -->|"PID+epoch"| P
+    P -->|"send(uncommitted)"| PL["PartitionLeader"]
+    P -->|"commitTransaction()"| TC
+    TC -->|"COMMITTED 마커"| PL
+    P -->|"실패시 abortTransaction()"| TC
 ```
 
 ### Exactly-Once Semantics (EOS) 전체 그림

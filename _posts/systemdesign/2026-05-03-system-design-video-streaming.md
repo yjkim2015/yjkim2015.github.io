@@ -174,18 +174,13 @@ flowchart LR
 > **비유:** 이사할 때 가구 전체를 한 번에 들고 가지 않고, 박스 단위로 나눠 옮기는 것과 같습니다. 하나가 떨어져도 그 박스만 다시 가져오면 됩니다.
 
 ```mermaid
-sequenceDiagram
-    participant C as 클라이언트
-    participant A as API 서버
-    participant S as S3
-    C->>A: POST /upload/init (파일 크기, 포맷)
-    A-->>C: upload_id, presigned_urls[]
-    C->>S: PUT chunk_1 (0~5MB)
-    C->>S: PUT chunk_2 (5~10MB)
-    C->>S: PUT chunk_N (마지막)
-    C->>A: POST /upload/complete (upload_id)
-    A->>S: S3 Multipart Complete
-    A-->>C: video_id 반환
+graph LR
+    C["클라이언트"] -->|"POST /upload/init"| A["API 서버"]
+    A -->|"upload_id, presigned_urls"| C
+    C -->|"PUT chunk_1~N"| S["S3"]
+    C -->|"POST /upload/complete"| A
+    A -->|"S3 Multipart Complete"| S
+    A -->|"video_id 반환"| C
 ```
 
 청크 크기는 보통 **5MB~25MB**로 설정합니다. 각 청크에 순번과 체크섬(MD5)을 붙여 순서 보장 및 무결성을 검증합니다.
@@ -195,17 +190,13 @@ sequenceDiagram
 API 서버를 거쳐 업로드하면 서버가 병목이 됩니다. 대신 **Presigned URL**을 사용해 클라이언트가 S3에 직접 업로드합니다.
 
 ```mermaid
-sequenceDiagram
-    participant C as 클라이언트
-    participant A as API 서버
-    participant S as AWS S3
-    C->>A: 업로드 요청 (인증 토큰 포함)
-    A->>S: Presigned URL 생성 요청
-    S-->>A: 시간 제한 URL (15분 유효)
-    A-->>C: Presigned URL 반환
-    C->>S: 직접 업로드 (API 서버 우회)
-    S-->>C: 업로드 완료
-    S->>A: 완료 이벤트 (S3 Event Notification)
+graph LR
+    C["클라이언트"] -->|"업로드 요청"| A["API 서버"]
+    A -->|"Presigned URL 요청"| S["AWS S3"]
+    S -->|"15분 유효 URL"| A
+    A -->|"Presigned URL"| C
+    C -->|"직접 업로드(API 우회)"| S
+    S -->|"완료 이벤트"| A
 ```
 
 장점:

@@ -246,17 +246,14 @@ redis-cli --cluster create \
 센티넬과 달리 클러스터는 **노드들이 직접 투표**한다:
 
 ```mermaid
-sequenceDiagram
-    participant MB as MasterB
-    participant MC as MasterC
-    participant RA as ReplicaA(후보)
-    MB->>MB: MasterA PING 무응답→FAIL 선언
-    MC->>MC: 동의
-    RA->>MB: 투표 요청
-    RA->>MC: 투표 요청
-    MB-->>RA: 승인
-    MC-->>RA: 승인
-    Note over RA: 새 마스터 승격, 슬롯 0~5460 인계
+graph LR
+    MB["MasterB"] -->|"MasterA FAIL 선언"| MB
+    MC["MasterC"] -->|"동의"| MC
+    RA["ReplicaA"] -->|"투표 요청"| MB
+    RA -->|"투표 요청"| MC
+    MB -->|"승인"| RA
+    MC -->|"승인"| RA
+    RA -->|"새 마스터 승격"| RA
 ```
 
 ---

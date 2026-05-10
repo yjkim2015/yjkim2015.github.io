@@ -522,28 +522,22 @@ graph LR
 ### Zombie Leader 문제
 
 ```mermaid
-sequenceDiagram
-    participant PA as Producer A
-    participant B1 as Broker1(zombie)
-    participant B2 as Broker2(new leader)
-    PA->>B1: 쓰기 수락!
-    Note over B1,B2: Split Brain — 두 리더 모두 쓰기
-    Note over B1: 복구 후 B1 메시지 폐기
+graph LR
+    PA["Producer A"] -->|"쓰기 시도"| B1["Broker1(zombie)"]
+    B1 -->|"Split Brain"| B2["Broker2(new leader)"]
+    B1 -->|"복구 후 메시지 폐기"| B1
 ```
 
 ### Kafka의 방어 메커니즘
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant B1 as Broker1(epoch 5)
-    participant CTL as Controller
-    P->>B1: 쓰기 시도
-    B1->>CTL: 리더 확인
-    CTL-->>B1: epoch 5 구 리더
-    B1-->>P: NotLeaderException
-    P->>CTL: 새 리더 조회
-    CTL-->>P: Broker2(epoch 6)
+graph LR
+    P["Producer"] -->|"쓰기 시도"| B1["Broker1(epoch 5)"]
+    B1 -->|"리더 확인"| CTL["Controller"]
+    CTL -->|"epoch 5 구 리더"| B1
+    B1 -->|"NotLeaderException"| P
+    P -->|"새 리더 조회"| CTL
+    CTL -->|"Broker2(epoch 6)"| P
 ```
 
 ### 네트워크 파티션 시나리오별 영향
