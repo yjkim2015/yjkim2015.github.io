@@ -1187,3 +1187,53 @@ multiLock.lock();
 ```
 
 **실무 적용 기준:** 결제·재고처럼 중복 실행이 금전적 손해로 이어지는 경우 Redlock 도입. 일반 중복 방지(알림 중복 발송 등)는 단일 노드 락 + 멱등성 DB 체크 조합으로 충분합니다.
+
+---
+
+## 비판적 결론 — 분산 락의 진짜 현실
+
+### Watchdog은 쓰지 마라
+
+Watchdog은 편리하지만 **모든 위험 시나리오의 공통 원인**이다:
+
+- GC STW → Watchdog이 TTL 갱신 → 다른 프로세스 무한 대기
+- 네트워크 파티션 → Watchdog이 TTL 갱신 → 교착
+- unlock() 누락 → Watchdog이 TTL 갱신 → 영구 락
+
+**leaseTime을 생략하면 Watchdog이 활성화된다**는 Redisson의 설계가 문제다. 대부분의 개발자가 `lock.lock()`만 호출하고 Watchdog의 위험을 모른다.
+
+```java
+// ❌ 이렇게 쓰지 마라
+lock.lock(); // Watchdog 활성화 — 위의 모든 위험에 노출
+
+// ✅ 항상 leaseTime 명시
+lock.tryLock(3, 10, TimeUnit.SECONDS); // 최대 10초 후 반드시 해제
+```
+
+### Named Lock도 답이 아니다
+
+Named Lock은 Redis 없이 DB만으로 분산 락을 구현할 수 있어 매력적이지만:
+
+- 커넥션 풀 고갈: 락 전용 DataSource를 분리해야 하는 운영 부담
+- `GET_LOCK('key', -1)`: Watchdog과 동일한 무한 대기 문제
+- 트랜잭션 롤백해도 락 유지: try-finally 빠뜨리면 영구 락
+- DB 장애 = 락 전체 중단: Redis보다 SPOF 위험이 더 큼
+
+### 그래서 정답은?
+
+**어떤 분산 락도 100% 안전하지 않다.** 이것을 인정하는 것이 시작이다.
+
+| 계층 | 역할 | 수단 |
+|------|------|------|
+| 1. 분산 락 | 동시 요청 직렬화 (성능) | Redis `tryLock(3, 10, SECONDS)` |
+| 2. DB 비관적 락 | 크리티컬 구간 보호 | `SELECT FOR UPDATE` |
+| 3. WHERE 방어 | 음수/초과 방지 | `WHERE quantity >= :amount` |
+| 4. UNIQUE 제약 | 이중 처리 방지 (멱등성) | `UNIQUE(idempotency_key)` |
+
+```
+분산 락이 깨져도 → DB 비관적 락이 막고
+DB 비관적 락이 깨져도 → WHERE 조건이 막고  
+WHERE 조건을 우회해도 → UNIQUE 제약이 막는다
+```
+
+> **락은 성능 최적화일 뿐, 정합성의 최종 보장은 DB가 한다.** Watchdog에 의존하지 마라. leaseTime을 명시하고, DB에 최종 방어선을 걸어라. 이 원칙을 지키면 Redis가 죽든, GC가 30초 멈추든, 마스터가 장애를 일으키든 데이터는 안전하다.
