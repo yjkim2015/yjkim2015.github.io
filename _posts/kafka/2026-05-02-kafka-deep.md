@@ -609,8 +609,10 @@ graph LR
     K1["Kafka 브로커1"] --> ZK["Zookeeper 3대"]
     K2["Kafka 브로커2"] --> ZK
     K3["Kafka 브로커3"] --> ZK
-    KR1["Kafka 1 (Controlle"] <--> KR2["Kafka 2 (Controlle"]
-    KR2 <--> KR3["Kafka 3 (Broker)"]
+    KR1["Kafka 1 (Controlle"] --> KR2["Kafka 2 (Controlle"]
+    KR2["Kafka 2 (Controlle"] --> KR1["Kafka 1 (Controlle"]
+    KR2 --> KR3["Kafka 3 (Broker)"]
+    KR3["Kafka 3 (Broker)"] --> KR2
     ZK -.->|"기존 구조"| ZK
     KR1 -.->|"KRaft 구조"| KR1
 ```

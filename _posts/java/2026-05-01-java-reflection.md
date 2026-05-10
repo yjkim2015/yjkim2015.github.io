@@ -1028,7 +1028,9 @@ try {
 
 ```mermaid
 graph LR
-    REFLECT["java.lang.reflect"] --> CLASS["Class&lt;T&gt; (fo"]
+    REFLECT["java.lang.reflect"] --> CLASS["Class
+    REFLECT["java.lang.reflect"] --> lt;T
+    REFLECT["java.lang.reflect"] --> gt; (fo"]
     CLASS --> FIELD["Field (get/set, se"]
     CLASS --> METHOD["Method (invoke, se"]
     CLASS --> CONSTRUCTOR["Constructor (newIn"]

@@ -62,9 +62,9 @@ sequenceDiagram
     participant S as 서버
     C->>S: 1️⃣ SYN seq=x
     Note over C: SYN_SENT 상태
-    S-->>C: 2️⃣ SYN-ACK seq=y, ack=x+1
+    S-->>C: 2️⃣ SYN-ACK seq=y, ack=x_1
     Note over S: SYN_RECEIVED 상태
-    C->>S: 3️⃣ ACK ack=y+1
+    C->>S: 3️⃣ ACK ack=y_1
     Note over C,S: ESTABLISHED — 데이터 전송 가능
 ```
 
@@ -100,10 +100,10 @@ sequenceDiagram
     participant C as Client
     participant S as Server
     C->>S: FIN seq=u
-    S-->>C: ACK ack=u+1
+    S-->>C: ACK ack=u_1
     Note over S: CLOSE_WAIT
     S-->>C: FIN seq=v
-    C->>S: ACK ack=v+1
+    C->>S: ACK ack=v_1
     Note over C: TIME_WAIT
     Note over S: CLOSED
 ```

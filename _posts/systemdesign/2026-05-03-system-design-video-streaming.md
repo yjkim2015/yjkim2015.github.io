@@ -386,8 +386,8 @@ master.m3u8 (마스터 플레이리스트)
 sequenceDiagram
     M->>BUF: 호출
     BUF->>ALG: 호출
-    ALG->>UP: 버퍼 &gt; 15초
-    ALG->>DN: 버퍼 &lt; 5초
+    ALG->>UP: 버퍼 > 15초
+    ALG->>DN: 버퍼 < 5초
     ALG->>KP: 정상
 ```
 

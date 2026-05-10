@@ -486,7 +486,7 @@ sequenceDiagram
     participant C as Container
     participant O as 원본 빈
     participant BPP as BeanPostProcessor
-    C->>O: new + 의존주입
+    C->>O: new _ 의존주입
     C->>BPP: postProcessAfter_
     BPP->>C: 프록시 빈 등록
 ```

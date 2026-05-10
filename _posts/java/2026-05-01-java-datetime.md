@@ -188,7 +188,7 @@ sequenceDiagram
     participant S as ZonedDateTime(Seoul)
     participant N as ZonedDateTime(NewYork)
     Note over I: 2026-05-01T05:30:00Z
-    I->>S: atZone_Asia/Seoul → +09:00
+    I->>S: atZone_Asia/Seoul → _09:00
     I->>N: atZone_America/New_York → -04:00
     Note over S: 2026-05-01T14:30:00+09:00
     Note over N: 2026-05-01T01:30:00-04:00

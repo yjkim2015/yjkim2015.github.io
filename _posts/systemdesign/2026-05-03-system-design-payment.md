@@ -782,7 +782,7 @@ PCI DSS(Payment Card Industry Data Security Standard)는 카드 데이터를 다
 ```mermaid
 sequenceDiagram
     B->>A: 토큰반환
-    A->>C: 토큰+결제요청
+    A->>C: 토큰_결제요청
     C->>B: 승인요청
     B->>C: 승인결과
 ```

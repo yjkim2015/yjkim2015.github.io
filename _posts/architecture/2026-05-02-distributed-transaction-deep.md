@@ -593,9 +593,9 @@ sequenceDiagram
     서비스_수->>흐름_복잡도: 4개 이상
     흐름_복잡도->>Choreography_Saga: 단순
     흐름_복잡도->>Orchestration_Saga: 복잡
-    Choreography_Saga->>+_Outbox_패턴: 이벤트 유실 우려
-    Orchestration_Saga->>+_Outbox_패턴: 이벤트 유실 우려
-    Orchestration_Saga->>+_Event_Sourcing_/: 감사 로그 필요
+    Choreography_Saga->>__Outbox_패턴: 이벤트 유실 우려
+    Orchestration_Saga->>__Outbox_패턴: 이벤트 유실 우려
+    Orchestration_Saga->>__Event_Sourcing_/: 감사 로그 필요
 ```
 
 | 패턴 | 일관성 | 가용성 | 복잡도 | 추천 상황 |

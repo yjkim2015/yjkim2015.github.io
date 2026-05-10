@@ -203,7 +203,8 @@ eureka:
 
 ```mermaid
 graph LR
-    ES1["Eureka 1"] <-->|Peer Replication| ES2["Eureka 2"]
+    ES1["Eureka 1"] -->|Peer Replication| ES2["Eureka 2"]
+    ES2["Eureka 2"] -->|Peer Replication| ES1["Eureka 1"]
     MS1["Order"] -->|Register| ES1
     MS2["User"] -->|Register| ES2
     MS1 -->|Discovery| ES1

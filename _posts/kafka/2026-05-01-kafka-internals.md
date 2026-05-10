@@ -405,7 +405,7 @@ public class OrderTransactionalService {
 
 ```mermaid
 sequenceDiagram
-    TxCoordinator->>Producer: PID+epoch
+    TxCoordinator->>Producer: PID_epoch
     Producer->>PartitionLeader: send_uncommitted
     Producer->>TxCoordinator: commitTransaction_
     TxCoordinator->>PartitionLeader: COMMITTED 마커

@@ -26,7 +26,8 @@ Java 스레드와 동시성 프로그래밍의 핵심 개념부터 실무 패턴
 ```mermaid
 graph LR
     PA["프로세스A"] --> SHARED["공유 Heap"]
-    PA --> T1["Thread1 Stack"] & T2["Thread2 Stack"]
+    PA --> T1["Thread1 Stack"]
+    PA --> T2["Thread2 Stack"]
     PB["프로세스B"] --> SB["독립 Heap"]
 ```
 
@@ -393,8 +394,10 @@ graph LR
   F1["코어1 캐시: flag=true"]
   F2["코어2 캐시: flag=false"]
   MM["메인 메모리: flag=true"]
-  F1 <--> MM
-  F2 <--> MM
+  F1 --> MM
+  MM --> F1
+  F2 --> MM
+  MM --> F2
 ```
 
 ```java

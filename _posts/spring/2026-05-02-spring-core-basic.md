@@ -523,9 +523,9 @@ sequenceDiagram
     participant Prototype
     Note over Singleton,Prototype: 초기화 시 1회만 주입(고정)
     Client->>Singleton: logic_ 요청1
-    Singleton->>Prototype: count++ = 1
+    Singleton->>Prototype: count__ = 1
     Client->>Singleton: logic_ 요청2
-    Singleton->>Prototype: count++ = 2 새 인스턴스 아님!
+    Singleton->>Prototype: count__ = 2 새 인스턴스 아님!
 ```
 
 싱글톤 빈이 생성될 때 프로토타입 빈이 주입됩니다. 이후 싱글톤 빈은 계속 살아있고, 그 안의 프로토타입 빈도 계속 같은 인스턴스를 참조합니다. 프로토타입 빈이 "요청마다 새 인스턴스"라는 의미가 완전히 사라집니다.

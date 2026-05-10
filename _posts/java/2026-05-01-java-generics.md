@@ -638,7 +638,7 @@ System.out.println(stringList.getClass()); // class java.util.ArrayList
 
 ```mermaid
 graph LR
-    SRC["List&lt;String&gt;"] --> CHECK["1. 타입 검사"]
+    SRC["List String"] --> CHECK["1. 타입 검사"]
     CHECK --> ERASE["2. 타입 소거"]
     ERASE --> CAST["3. 캐스팅 삽입"]
     CAST --> BC["List list 바이트코드"]

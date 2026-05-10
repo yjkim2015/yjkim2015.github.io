@@ -19,9 +19,12 @@ graph LR
     Col --> Doc["Document"]
     DB2["RDBMS DB"] --> Table["테이블"]
     Table --> Row["행 Row"]
-    DB1 <-->|대응| DB2
-    Col <-->|대응| Table
-    Doc <-->|대응| Row
+    DB1 -->|대응| DB2
+    DB2 -->|대응| DB1
+    Col -->|대응| Table
+    Table -->|대응| Col
+    Doc -->|대응| Row
+    Row -->|대응| Doc
 ```
 
 ```json

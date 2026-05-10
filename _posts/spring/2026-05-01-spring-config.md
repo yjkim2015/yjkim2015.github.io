@@ -160,7 +160,7 @@ sequenceDiagram
     participant DEV as Dev
     participant CS as ConfigServer
     participant SVC as Services
-    DEV->>CS: push + bus-refresh
+    DEV->>CS: push _ bus-refresh
     CS->>SVC: 이벤트 발행
     SVC->>CS: 새 설정 fetch
     Note over SVC: 재배포 없이 적용

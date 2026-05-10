@@ -103,7 +103,7 @@ sequenceDiagram
     participant F as AuthFilter
     participant SC as SecurityContext
     C->>F: POST /login
-    F->>F: loadUser+비밀번호검증
+    F->>F: loadUser_비밀번호검증
     F->>SC: Authentication 저장
     F-->>C: 성공 응답
 ```

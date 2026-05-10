@@ -182,7 +182,8 @@ min-replicas-max-lag 10    # 레플리카 지연 10초 이내여야 함
 
 ```mermaid
 graph LR
-    M1["Master"] <-->|연결됨| R1["Replica"]
+    M1["Master"] -->|연결됨| R1["Replica"]
+    R1["Replica"] -->|연결됨| M1["Master"]
     M1 --> W1["쓰기 허용"]
     M2["Master"] -. 연결 끊김 .- R2["Replica"]
     M2 --> W2["쓰기 거부"]

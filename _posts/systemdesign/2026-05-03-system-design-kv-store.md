@@ -684,7 +684,8 @@ graph LR
     B --> C[HashRing]
     C --> D[노드1]
     C --> E[노드2]
-    D <-->|Gossip| E
+    D -->|Gossip| E
+    E -->|Gossip| D
 ```
 
 **요청 흐름**:

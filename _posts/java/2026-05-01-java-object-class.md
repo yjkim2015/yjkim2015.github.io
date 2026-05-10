@@ -19,7 +19,11 @@ Java는 **단일 루트 계층(Single Root Hierarchy)** 을 채택합니다. 모
 
 ```mermaid
 graph LR
-    Object --> String & Integer & ArrayList & MyClass["MyCustomClass"] & Etc["... (모든 클래스)"]
+    Object --> String
+    Object --> Integer
+    Object --> ArrayList
+    Object --> MyClass["MyCustomClass"]
+    Object --> Etc["... (모든 클래스)"]
 ```
 
 ```java

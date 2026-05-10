@@ -255,10 +255,13 @@ CompletableFuture<User> future = CompletableFuture
 
 ```mermaid
 sequenceDiagram
-    api1_&_api2_&_api3->>allOf_완료대기: 호출
+    api1_->>allOf_완료대기: 호출
+    _api2_->>allOf_완료대기: 호출
+    _api3->>allOf_완료대기: 호출
     api2->>allOf_완료대기: 호출
     api3->>allOf_완료대기: 호출
-    us-east_&_eu-west->>anyOf_첫완료: 호출
+    us-east_->>anyOf_첫완료: 호출
+    _eu-west->>anyOf_첫완료: 호출
     eu->>anyOf_첫완료: 호출
 ```
 

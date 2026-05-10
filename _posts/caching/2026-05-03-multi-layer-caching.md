@@ -347,7 +347,7 @@ sequenceDiagram
     participant SA as 서버A
     participant Redis as Redis
     participant SB as 서버B/C
-    SA->>SA: 데이터 변경 + L1 삭제
+    SA->>SA: 데이터 변경 _ L1 삭제
     SA->>Redis: PUBLISH l1:invalidate
     Redis-->>SB: L1 삭제
 ```

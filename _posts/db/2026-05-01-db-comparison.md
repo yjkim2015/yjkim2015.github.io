@@ -296,7 +296,8 @@ Oracle은 Bitmap Index가 핵심 차별점이다. 카디널리티(선택도)가 
 graph LR
     RU["READ UNCOMMITTED"] -->|"허용"| ALL["Dirty/NR/Phantom"]
     RC["READ COMMITTED"] -->|"방지"| DR["Dirty Read"]
-    RR["REPEATABLE READ"] -->|"방지"| DR & NR["NR/Phantom"]
+    RR["REPEATABLE READ"] -->|"방지"| DR
+    RR["REPEATABLE READ"] -->|"방지"| NR["NR/Phantom"]
     SE["SERIALIZABLE"] -->|"방지"| ALL2["모든 이상현상"]
 ```
 
@@ -354,7 +355,8 @@ graph LR
     S["Source"] -->|"BinLog"| R["Replica"]
     S -->|"비동기"| CL1["Client"]
     S -->|"ACK 후 커밋"| CL2["Client(반동기)"]
-    N1["Node1"] <-->|"Paxos"| N2["Node2/3"]
+    N1["Node1"] -->|"Paxos"| N2["Node2/3"]
+    N2["Node2/3"] -->|"Paxos"| N1["Node1"]
 ```
 
 **MySQL 복제 포맷:**

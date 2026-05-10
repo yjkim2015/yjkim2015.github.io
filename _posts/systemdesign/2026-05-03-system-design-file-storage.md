@@ -290,7 +290,7 @@ sequenceDiagram
     participant API
     participant CDN
     C->>API: GET /file/id/metadata
-    API-->>C: 블록목록+CDN URL
+    API-->>C: 블록목록_CDN URL
     C->>CDN: GET hash_캐시히트
     CDN-->>C: 블록 반환 후 재조립
 ```

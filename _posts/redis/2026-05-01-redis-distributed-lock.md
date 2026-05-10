@@ -325,7 +325,7 @@ sequenceDiagram
     ThreadA->>Redis: SET NX EX 락 획득
     ThreadB->>Redis: tryLock → FAIL
     ThreadB->>Redis: SUBSCRIBE 대기
-    ThreadA->>Redis: unlock + PUBLISH
+    ThreadA->>Redis: unlock _ PUBLISH
     Redis-->>ThreadB: 이벤트 수신 → 락 획득
 ```
 

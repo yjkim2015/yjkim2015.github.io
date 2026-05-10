@@ -94,7 +94,7 @@ sequenceDiagram
     participant S as Step
     participant R as Reader/Processor
     participant W as Writer
-    S->>R: read_+process_
+    S->>R: read__process_
     S->>W: write_chunk
     W-->>S: 완료/커밋
 ```
