@@ -25,13 +25,12 @@ toc_label: 목차
 자바스크립트 런타임은 여러 구성 요소가 협력하는 시스템입니다. 각 역할을 이해해야 "왜 Promise가 setTimeout보다 먼저 실행되는가"를 설명할 수 있습니다.
 
 ```mermaid
-graph TB
-    CS["콜 스택"] -->|"비동기 위임"| WA["Web APIs"]
-    WA -->|"Promise"| MQ["마이크로태스크 큐"]
-    WA -->|"타이머/이벤트"| TQ["태스크 큐"]
-    EL["이벤트 루프"] -->|"1순위"| MQ
-    EL -->|"2순위"| TQ
-    MQ & TQ -->|"실행"| CS
+sequenceDiagram
+    Web_APIs->>마이크로태스크_큐: Promise
+    Web_APIs->>태스크_큐: 타이머/이벤트
+    이벤트_루프->>태스크_큐: 2순위
+    마이크로태스크_큐->>콜_스택: 실행
+    태스크_큐->>콜_스택: 실행
 ```
 
 각 구성 요소의 역할을 정리하면 이렇습니다.
@@ -67,12 +66,11 @@ sayHello();
 ```
 
 ```mermaid
-graph LR
-    GS["전역 스코프"] -->|"sayHello() 호출"| SH["sayHello()"]
-    SH -->|"greet('World') 호출"| G["greet()"]
-    G -->|"'Hello, World!' 반환"| SH
-    SH -->|"console.log() 호출"| SH
-    SH -->|"실행 완료"| GS
+sequenceDiagram
+    sayHello()->>greet(): greet('World') 호출
+    greet()->>sayHello(): 'Hello, World!' 반환
+    sayHello()->>sayHello(): console.log() 호출
+    sayHello()->>전역_스코프: 실행 완료
 ```
 
 만약 이 스택이 꽉 차면 어떻게 될까요? **스택 오버플로우**가 발생합니다.
@@ -159,13 +157,12 @@ console.log('4. 끝');
 ```
 
 ```mermaid
-graph LR
-    CS["CallStack"] -->|"log(1.시작)"| CS
-    CS -->|"setTimeout 등록"| TQ["태스크큐"]
-    CS -->|"Promise.then 등록"| MQ["마이크로태스크"]
-    CS -->|"log(4.끝)"| CS
-    MQ -->|"log(3.Promise)"| CS
-    TQ -->|"log(2.setTimeout)"| CS
+sequenceDiagram
+    CallStack->>태스크큐: setTimeout 등록
+    CallStack->>마이크로태스크: Promise.then 등록
+    CallStack->>CallStack: log(4.끝)
+    마이크로태스크->>CallStack: log(3.Promise)
+    태스크큐->>CallStack: log(2.setTimeout)
 ```
 
 출력 결과:

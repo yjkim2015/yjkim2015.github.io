@@ -331,12 +331,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 ### 5.4 액세스/리프레시 토큰 갱신 전략 — RTR (Refresh Token Rotation)
 
 ```mermaid
-graph LR
-    A[Client] -->|유효토큰| B[Server]
-    B -->|200| A
-    A -->|만료→401| B
-    A -->|refresh요청| B
-    B -->|신규토큰| A
+sequenceDiagram
+    B->>A: 200
+    A->>B: 만료→401
+    A->>B: refresh요청
+    B->>A: 신규토큰
 ```
 
 **RTR(Refresh Token Rotation)을 쓰는 이유:** 리프레시 토큰을 한 번 쓰면 새것으로 교체합니다. 만약 탈취된 리프레시 토큰을 공격자가 사용하면, 정상 사용자가 다음에 갱신을 시도할 때 "이미 사용된 토큰"임을 감지합니다. 리프레시 토큰이 Redis에 저장되는 이유는 서버 재시작 시에도 토큰이 유지되어야 하고, 강제 로그아웃(토큰 즉시 무효화)도 가능해야 하기 때문입니다.
@@ -352,12 +351,11 @@ graph LR
 > 왜 이렇게 복잡한가? 사용자의 비밀번호를 우리 서버에서 직접 보지 않기 위해서다. 카카오 비밀번호는 카카오만 안다. 우리는 카카오가 "이 사람 인증됐어요"라는 확인서(토큰)만 받는다.
 
 ```mermaid
-graph LR
-    A[사용자] -->|로그인| B[카카오]
-    B -->|AuthCode| A
-    A -->|Code전달| C[우리앱]
-    C -->|Token교환| B
-    C -->|JWT발급| A
+sequenceDiagram
+    B->>A: AuthCode
+    A->>C: Code전달
+    C->>B: Token교환
+    C->>A: JWT발급
 ```
 
 **Authorization Code를 직접 토큰으로 교환하는 이유:** 4번 단계에서 Authorization Code가 브라우저 URL에 노출됩니다. 만약 여기서 바로 액세스 토큰을 주면 토큰이 URL에 노출됩니다. 브라우저 히스토리, 서버 로그, 프록시 로그에 남을 수 있습니다. Authorization Code는 짧은 유효 시간을 가진 일회용 코드이므로, 설령 노출되더라도 즉시 무효화됩니다. 6번 단계에서 서버 간 통신으로 토큰을 교환하기 때문에 토큰이 외부에 노출되지 않습니다.
@@ -426,14 +424,12 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 > **비유:** 사용자가 은행 사이트에 로그인한 상태에서 악성 사이트를 방문했다. 악성 사이트가 몰래 은행 사이트에 "10만원 송금" 요청을 보낸다. 브라우저는 은행 쿠키를 자동으로 포함시키기 때문에, 은행 서버는 정상 요청처럼 처리한다.
 
 ```mermaid
-graph LR
-    U["사용자"] -->|"로그인"| B["은행"]
-    B -->|"쿠키 발급"| U
-    M["악성사이트"] -->|"클릭 유도"| U
-    U -->|"POST /transfer(쿠키 자동 포함)"| B
-    B -->|"CSRF 토큰 포함 폼"| U
-    U -->|"토큰 포함 요청"| B
-    B -->|"토큰 검증 통과"| B
+sequenceDiagram
+    은행->>사용자: 쿠키 발급
+    사용자->>은행: POST /transfer(쿠키 자동 포함)
+    은행->>사용자: CSRF 토큰 포함 폼
+    사용자->>은행: 토큰 포함 요청
+    은행->>은행: 토큰 검증 통과
 ```
 
 **JWT 기반 REST API에서 CSRF를 비활성화하는 이유:** CSRF 공격의 핵심은 브라우저가 쿠키를 자동으로 보내는 것을 악용합니다. JWT를 `Authorization: Bearer <token>` 헤더로 보내면, 이 헤더는 JavaScript로만 설정할 수 있고 브라우저가 자동으로 추가하지 않습니다. 따라서 cross-site 요청으로는 이 헤더를 포함시킬 수 없고, CSRF 공격 자체가 성립하지 않습니다.

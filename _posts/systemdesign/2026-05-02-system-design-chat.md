@@ -144,13 +144,12 @@ WebSocket 연결 수: DAU의 30% 동시 접속 = 1억 5천만 연결
 기존 HTTP는 **우체국** 방식입니다. 내가 편지를 보내야(요청) 답장이 옵니다(응답). 하지만 채팅은 **전화** 방식이어야 합니다. 상대방이 말하면 즉시 내 귀에 들려야 합니다.
 
 ```mermaid
-graph LR
-    C["Client"] -->|"Short Poll"| S["Server"]
-    S -->|"empty"| C
-    C -->|"Long Poll"| S
-    S -->|"메시지 도착"| C
-    C -->|"HTTP Upgrade(WS)"| S
-    S -->|"101 Switching"| C
+sequenceDiagram
+    Server->>Client: empty
+    Client->>Server: Long Poll
+    Server->>Client: 메시지 도착
+    Client->>Server: HTTP Upgrade(WS)
+    Server->>Client: 101 Switching
 ```
 
 | 방식 | 지연시간 | 서버 부하 | 실시간성 | 사용 케이스 |

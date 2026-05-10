@@ -276,13 +276,11 @@ props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
 ### Group Coordinator와 리밸런싱 프로토콜
 
 ```mermaid
-graph LR
-    C1["Consumer(Leader)"] -->|"JoinGroup"| GC["GroupCoordinator"]
-    C2["Consumer"] -->|"JoinGroup"| GC
-    GC -->|"Leader 선정"| C1
-    C1 -->|"SyncGroup(할당계획)"| GC
-    GC -->|"파티션 할당"| C1
-    GC -->|"파티션 할당"| C2
+sequenceDiagram
+    GroupCoordinator->>Consumer(Leader): Leader 선정
+    Consumer(Leader)->>GroupCoordinator: SyncGroup(할당계획)
+    GroupCoordinator->>Consumer(Leader): 파티션 할당
+    GroupCoordinator->>Consumer: 파티션 할당
 ```
 
 ---
@@ -292,11 +290,10 @@ graph LR
 ### At-Most-Once (최대 한 번)
 
 ```mermaid
-graph LR
-    C["Consumer"] -->|"poll() 수신"| K["Kafka"]
-    C -->|"Offset 커밋(먼저)"| K
-    C -->|"처리 중 장애!"| DB["처리 대상"]
-    K -->|"재시작→메시지 유실"| C
+sequenceDiagram
+    Consumer->>Kafka: Offset 커밋(먼저)
+    Consumer->>처리_대상: 처리 중 장애!
+    Kafka->>Consumer: 재시작→메시지 유실
 ```
 
 ```java
@@ -334,11 +331,10 @@ consumer.commitSync();  // 커밋 (장애 시 재처리 발생)
 ### Exactly-Once (정확히 한 번)
 
 ```mermaid
-graph LR
-    P["Producer"] -->|"begin→쓰기→offset커밋"| K["Kafka"]
-    P -->|"commit"| K
-    K -->|"커밋된 메시지"| C["Consumer"]
-    P -->|"실패시 rollback→재시도"| K
+sequenceDiagram
+    Producer->>Kafka: commit
+    Kafka->>Consumer: 커밋된 메시지
+    Producer->>Kafka: 실패시 rollback→재시도
 ```
 
 ---
@@ -350,13 +346,11 @@ graph LR
 동일 메시지를 여러 번 보내도 한 번만 저장되도록 보장한다.
 
 ```mermaid
-graph LR
-    P["Producer"] -->|"msg(seq=1)"| B1["Broker(멱등성 없음)"]
-    B1 -->|"ACK 손실→재전송"| P
-    P -->|"중복 저장!"| B1
-    P2["Producer"] -->|"msg(PID=100,seq=1)"| B2["Broker(멱등성 있음)"]
-    B2 -->|"ACK 손실→재전송"| P2
-    B2 -->|"seq=1 중복 무시→ACK"| P2
+sequenceDiagram
+    Broker(멱등성_없음)->>Producer: ACK 손실→재전송
+    Producer->>Broker(멱등성_없음): 중복 저장!
+    Broker(멱등성_있음)->>Producer: ACK 손실→재전송
+    Broker(멱등성_있음)->>Producer: seq=1 중복 무시→ACK
 ```
 
 Broker는 각 프로듀서(PID)마다 최근 5개의 시퀀스 번호를 기억한다.
@@ -410,13 +404,12 @@ public class OrderTransactionalService {
 **트랜잭션 내부 동작:**
 
 ```mermaid
-graph LR
-    P["Producer"] -->|"initTransactions()"| TC["TxCoordinator"]
-    TC -->|"PID+epoch"| P
-    P -->|"send(uncommitted)"| PL["PartitionLeader"]
-    P -->|"commitTransaction()"| TC
-    TC -->|"COMMITTED 마커"| PL
-    P -->|"실패시 abortTransaction()"| TC
+sequenceDiagram
+    TxCoordinator->>Producer: PID+epoch
+    Producer->>PartitionLeader: send(uncommitted)
+    Producer->>TxCoordinator: commitTransaction()
+    TxCoordinator->>PartitionLeader: COMMITTED 마커
+    Producer->>TxCoordinator: 실패시 abortTransaction()
 ```
 
 ### Exactly-Once Semantics (EOS) 전체 그림
@@ -498,10 +491,9 @@ sequenceDiagram
 ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러**로 선출된다.
 
 ```mermaid
-graph LR
-    ZKA["ZK: /controller 선점"] --> ZKB["먼저 생성 = 컨트롤러"]
-    KRA["KRaft: Raft 합의"] --> KRB["quorum 투표 → Active"]
-    ZKB & KRB --> DUTIES["역할: 리더선출·ISR·토픽"]
+sequenceDiagram
+    먼저_생성_=_컨트롤러->>역할:_리더선출·ISR·토픽: 
+    quorum_투표_→_Active->>역할:_리더선출·ISR·토픽: 
 ```
 
 ---

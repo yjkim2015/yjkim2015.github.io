@@ -81,14 +81,13 @@ graph LR
 ArgoCD는 Kubernetes 네이티브 컨트롤러다. 클러스터 내부에 설치되어 Git 저장소와 클러스터 상태를 지속적으로 비교한다.
 
 ```mermaid
-graph TB
-    USER["사용자"] -->|"앱 등록/조회"| API["API Server"]
-    API --> REDIS["Redis(캐시)"]
-    API --> REPO["Repo Server"]
-    REPO -->|"Git Clone"| GIT["Git 저장소"]
-    REPO -->|"매니페스트"| CTRL["App Controller"]
-    CTRL -->|"상태 조회"| K8S["Kubernetes API"]
-    CTRL -->|"Sync"| K8S
+sequenceDiagram
+    API_Server->>Redis(캐시): 
+    API_Server->>Repo_Server: 
+    Repo_Server->>Git_저장소: Git Clone
+    Repo_Server->>App_Controller: 매니페스트
+    App_Controller->>Kubernetes_API: 상태 조회
+    App_Controller->>Kubernetes_API: Sync
 ```
 
 ### 각 컴포넌트의 역할
@@ -189,18 +188,13 @@ graph LR
 ArgoCD는 Kubernetes 리소스의 **Health Status**를 자체적으로 판단한다. 단순히 리소스가 존재하는지가 아니라, 실제로 정상 동작하는지를 확인한다.
 
 ```mermaid
-graph LR
-    Progressing["Progressing"]
-    Healthy["Healthy"]
-    Degraded["Degraded"]
-    Suspended["Suspended"]
-    Missing["Missing"]
-    Progressing -->|"모든 Pod Ready"| Healthy
-    Progressing -->|"CrashLoopBackOff"| Degraded
-    Progressing -->|"HPA/PDB 중단"| Suspended
-    Degraded -->|"재시작 성공"| Progressing
-    Healthy -->|"리소스 삭제됨"| Missing
-    Missing -->|"재생성"| Progressing
+sequenceDiagram
+    Progressing->>Healthy: 모든 Pod Ready
+    Progressing->>Degraded: CrashLoopBackOff
+    Progressing->>Suspended: HPA/PDB 중단
+    Degraded->>Progressing: 재시작 성공
+    Healthy->>Missing: 리소스 삭제됨
+    Missing->>Progressing: 재생성
 ```
 
 | 상태 | 의미 | 예시 |
@@ -464,11 +458,10 @@ argocd app rollback order-service 2
 > **비유:** Git 기반 롤백은 법적 절차를 밟아 계약을 해지하는 것이다(기록이 남고 안전). ArgoCD 자체 롤백은 구두로 "그 계약 없던 걸로"라고 하는 것이다(빠르지만 나중에 혼란 발생 가능).
 
 ```mermaid
-graph LR
-    FAIL["v2 장애"] --> DEV["개발자"]
-    DEV -->|"rollback"| ARGO["ArgoCD"]
-    ARGO -->|"v1 복원"| K8S["클러스터"]
-    DEV -->|"git revert"| ARGO
+sequenceDiagram
+    개발자->>ArgoCD: rollback
+    ArgoCD->>클러스터: v1 복원
+    개발자->>ArgoCD: git revert
 ```
 
 ---

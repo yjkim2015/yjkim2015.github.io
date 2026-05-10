@@ -47,10 +47,11 @@ graph LR
 **매핑 모델 3가지:**
 
 ```mermaid
-graph LR
-    T1["JavaThread"] -->|1:1| KT1["KernelThread"]
-    U1["UThread1"] & U2["UThread2"] -->|N:1| KU["KernelThread"]
-    VT1["VThread1"] & VT2["VThread2"] -->|M:N| KV["KT1/KT2"]
+sequenceDiagram
+    UThread1->>KernelThread: N:1
+    UThread2->>KernelThread: N:1
+    VThread1->>KT1/KT2: M:N
+    VThread2->>KT1/KT2: M:N
 ```
 
 ### JVM 스레드 모델 (1:1 매핑)
@@ -58,10 +59,12 @@ graph LR
 Java의 전통적인 Platform Thread는 OS 커널 스레드와 **1:1로 매핑**됩니다. `new Thread()`로 Java 스레드를 생성하면 OS 커널 스레드가 하나 만들어집니다.
 
 ```mermaid
-graph LR
-  JT1[Java Thread 1] & JT2[Java Thread 2] & JT3[Java Thread 3] -->|JNI| OS
-  OS --> CPU1[CPU 코어 1]
-  OS --> CPU2[CPU 코어 2]
+sequenceDiagram
+    JT1->>OS: JNI
+    JT2->>OS: JNI
+    JT3->>OS: JNI
+    OS->>CPU1: 
+    OS->>CPU2: 
 ```
 
 이 모델의 한계는 커널 스레드 생성 비용(약 1MB 스택 메모리)과 컨텍스트 스위칭 오버헤드입니다. 수만 개의 스레드를 동시에 만들기 어렵습니다.
@@ -71,12 +74,12 @@ graph LR
 Java 스레드는 `java.lang.Thread.State` 열거형으로 6가지 상태를 가집니다.
 
 ```mermaid
-graph LR
-    NEW -->|start| RUNNABLE
-    RUNNABLE -->|락 실패| BLOCKED
-    BLOCKED -->|락 획득| RUNNABLE
-    RUNNABLE -->|wait/sleep| WAITING["WAITING/TW"]
-    WAITING -->|notify/경과| RUNNABLE
+sequenceDiagram
+    NEW->>RUNNABLE: start
+    RUNNABLE->>BLOCKED: 락 실패
+    BLOCKED->>RUNNABLE: 락 획득
+    RUNNABLE->>WAITING/TW: wait/sleep
+    WAITING/TW->>RUNNABLE: notify/경과
 ```
 
 | 상태 | 설명 |
@@ -820,14 +823,14 @@ new ThreadPoolExecutor(
 **동작 흐름:**
 
 ```mermaid
-graph LR
-  SUB([작업 제출 submit/execute]) --> CHK1{현재 스레드 수 &lt; corePoolSize?}
-  CHK1 -->|YES| NEW1[새 스레드 생성]
-  CHK1 -->|NO| CHK2{workQueue 가득 참?}
-  CHK2 -->|NO| ENQUEUE[workQueue에 작업 추가]
-  CHK2 -->|YES| CHK3{현재 스레드 수 &lt; maxPoolSize?}
-  CHK3 -->|YES| NEW2[새 스레드 생성 - 초과 스레드]
-  CHK3 -->|NO| REJ[RejectedExecutionHandler 실행]
+sequenceDiagram
+    SUB->>CHK1: 
+    CHK1->>NEW1: YES
+    CHK1->>CHK2: NO
+    CHK2->>ENQUEUE: NO
+    CHK2->>CHK3: YES
+    CHK3->>NEW2: YES
+    CHK3->>REJ: NO
 ```
 
 **RejectedExecutionHandler 전략:**
@@ -1076,11 +1079,11 @@ boolean success = stampedRef.compareAndSet(
 ### LongAdder vs AtomicLong (고경합 환경)
 
 ```mermaid
-graph LR
-    TA["ThreadA"] & TB["ThreadB"] --> CELL["AtomicLong(경합)"]
-    T1["Thread1"] --> C1["Cell:3"]
-    T2["Thread2"] --> C2["Cell:7"]
-    C1 & C2 --> SUM["sum()"]
+sequenceDiagram
+    ThreadA->>AtomicLong(경합): 
+    ThreadB->>AtomicLong(경합): 
+    Cell:3->>sum(): 
+    Cell:7->>sum(): 
 ```
 
 ```java
@@ -1383,11 +1386,10 @@ Virtual Thread (Java 21+):
 ### 동작 원리 (캐리어 스레드 + 마운트/언마운트)
 
 ```mermaid
-graph LR
-    VT1["VThread1"] -->|마운트| CT["Carrier Thread"]
-    CT -->|I/O→언마운트| VT1H["VT1 힙 저장"]
-    CT -->|마운트| VT2["VThread2"]
-    VT1H -->|I/O완료| CT
+sequenceDiagram
+    Carrier_Thread->>VT1_힙_저장: I/O→언마운트
+    Carrier_Thread->>VThread2: 마운트
+    VT1_힙_저장->>Carrier_Thread: I/O완료
 ```
 
 ### 사용법과 마이그레이션 가이드

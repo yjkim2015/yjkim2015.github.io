@@ -345,15 +345,12 @@ function CreateUserForm() {
 ```
 
 ```mermaid
-flowchart LR
-    COMP["컴포넌트"] -->|useQuery| RQ["React Query"]
-    RQ -->|"캐시 확인"| CACHE["QueryCache"]
-    CACHE -->|"stale 데이터 즉시 반환"| COMP
-    RQ -->|"백그라운드 재요청"| API["API 서버"]
-    API -->|"새 데이터"| RQ
-    RQ -->|"캐시 업데이트 후 리렌더링"| COMP
-    style RQ fill:#e74c3c,color:#fff
-    style CACHE fill:#f39c12,color:#fff
+sequenceDiagram
+    React_Query->>QueryCache: 캐시 확인
+    QueryCache->>컴포넌트: stale 데이터 즉시 반환
+    React_Query->>API_서버: 백그라운드 재요청
+    API_서버->>React_Query: 새 데이터
+    React_Query->>컴포넌트: 캐시 업데이트 후 리렌더링
 ```
 
 ---

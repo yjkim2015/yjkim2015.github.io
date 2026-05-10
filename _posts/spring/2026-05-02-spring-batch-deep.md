@@ -669,12 +669,12 @@ public class LargeScaleBatchConfig {
 ## 14. 전체 흐름 정리
 
 ```mermaid
-graph LR
-    A[JobLauncher] --> B[Step]
-    B --> C{Chunk?}
-    C -->|Yes| D[Read→Write]
-    C -->|No| E[Tasklet]
-    D & E --> F[완료]
+sequenceDiagram
+    B->>C: 
+    C->>D: Yes
+    C->>E: No
+    D->>F: 
+    E->>F: 
 ```
 
 ---

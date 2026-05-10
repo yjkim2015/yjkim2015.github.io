@@ -302,12 +302,12 @@ graph LR
 ### 전체 검색 흐름
 
 ```mermaid
-graph LR
-    A[App] -->|lat,lon| B[검색서비스]
-    B --> C[Geohash변환]
-    C --> D{Redis캐시}
-    D -->|miss| E[DB쿼리]
-    D & E --> F[결과반환]
+sequenceDiagram
+    B->>C: 
+    C->>D: 
+    D->>E: miss
+    D->>F: 
+    E->>F: 
 ```
 
 ### MySQL 스키마 — Geohash 인덱스

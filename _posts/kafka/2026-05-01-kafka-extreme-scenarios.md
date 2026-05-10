@@ -527,13 +527,12 @@ graph LR
 ### Kafka의 방어 메커니즘
 
 ```mermaid
-graph LR
-    P["Producer"] -->|"쓰기 시도"| B1["Broker1(epoch 5)"]
-    B1 -->|"리더 확인"| CTL["Controller"]
-    CTL -->|"epoch 5 구 리더"| B1
-    B1 -->|"NotLeaderException"| P
-    P -->|"새 리더 조회"| CTL
-    CTL -->|"Broker2(epoch 6)"| P
+sequenceDiagram
+    Broker1(epoch_5)->>Controller: 리더 확인
+    Controller->>Broker1(epoch_5): epoch 5 구 리더
+    Broker1(epoch_5)->>Producer: NotLeaderException
+    Producer->>Controller: 새 리더 조회
+    Controller->>Producer: Broker2(epoch 6)
 ```
 
 ### 네트워크 파티션 시나리오별 영향

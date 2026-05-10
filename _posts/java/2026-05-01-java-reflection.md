@@ -751,13 +751,12 @@ public class SimpleTestRunner {
 클라이언트는 실제 객체 대신 프록시 객체를 받습니다. 프록시는 동일한 인터페이스를 구현하지만, 모든 메서드 호출이 `InvocationHandler.invoke()`를 거칩니다. 여기에 로깅, 트랜잭션, 캐싱 등의 부가 기능을 삽입합니다.
 
 ```mermaid
-graph LR
-    C["클라이언트"] -->|"findById(1L)"| P["프록시"]
-    P -->|"invoke(method, args)"| H["Handler"]
-    H -->|"부가 기능 처리"| H
-    H -->|"method.invoke(target)"| P
-    P -->|"결과 반환"| H
-    H -->|"결과 반환"| C
+sequenceDiagram
+    프록시->>Handler: invoke(method, args)
+    Handler->>Handler: 부가 기능 처리
+    Handler->>프록시: method.invoke(target)
+    프록시->>Handler: 결과 반환
+    Handler->>클라이언트: 결과 반환
 ```
 
 ```java

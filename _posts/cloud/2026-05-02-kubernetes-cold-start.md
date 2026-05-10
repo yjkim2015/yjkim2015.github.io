@@ -510,13 +510,15 @@ kubectl get pods -o json | jq -r '
 ```
 
 ```mermaid
-graph LR
-    Measure["Cold Start 측정"] --> B{"병목 원인"}
-    B -->|"이미지"| ImageOpt["멀티스테이지 빌드"]
-    B -->|"JVM"| JvmOpt["GraalVM / CDS"]
-    B -->|"Probe"| ProbeOpt["startupProbe 최적화"]
-    B -->|"트래픽 예측"| Cron["CronHPA"]
-    ImageOpt & JvmOpt & ProbeOpt & Cron --> Measure
+sequenceDiagram
+    병목_원인->>멀티스테이지_빌드: 이미지
+    병목_원인->>GraalVM_/_CDS: JVM
+    병목_원인->>startupProbe_최적화: Probe
+    병목_원인->>CronHPA: 트래픽 예측
+    멀티스테이지_빌드->>Cold_Start_측정: 
+    GraalVM_/_CDS->>Cold_Start_측정: 
+    startupProbe_최적화->>Cold_Start_측정: 
+    CronHPA->>Cold_Start_측정: 
 ```
 
 ---

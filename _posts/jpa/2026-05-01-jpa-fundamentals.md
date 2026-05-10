@@ -50,11 +50,11 @@ public interface EntityManager {
 세 가지를 혼동하는 경우가 많다. 상하 관계를 명확히 이해해야 한다.
 
 ```mermaid
-graph LR
-    SDJ["Spring Data JPA"] -->|사용| JPA["JPA 명세"]
-    JPA -->|구현| HIB["Hibernate"] & ECL["EclipseLink"]
-    HIB & ECL -->|사용| JDBC["JDBC"]
-    JDBC -->|통신| DB["Database"]
+sequenceDiagram
+    JPA_명세->>Hibernate: 구현
+    Hibernate->>JDBC: 사용
+    EclipseLink->>JDBC: 사용
+    JDBC->>Database: 통신
 ```
 
 - **JPA**: 표준 인터페이스. 어떻게 동작해야 하는지 규약만 정의한다.
@@ -141,10 +141,9 @@ System.out.println(a == b); // true — 완전히 동일한 인스턴스
 `em.persist()`를 호출할 때마다 즉시 SQL을 날리지 않는다. **쓰기 지연 SQL 저장소**에 SQL을 모아두었다가 트랜잭션 커밋 시점에 한꺼번에 DB로 전송한다.
 
 ```mermaid
-graph LR
-    PA["persist(A,B)"] --> SQL["쓰기지연 저장소"]
-    SQL --> TC["tx.commit()→flush()"]
-    TC --> DB1["INSERT A"] & DB2["INSERT B"]
+sequenceDiagram
+    쓰기지연_저장소->>tx.commit()→flush(): 
+    tx.commit()→flush()->>INSERT_A: 
 ```
 
 **핵심 포인트**: `persist()` 시점에는 DB에 아무것도 들어가지 않는다. `commit()` 직전 `flush()`가 호출될 때 비로소 SQL이 전송된다.
@@ -248,15 +247,11 @@ member.getTeam().getName(); // LazyInitializationException 발생!
 > **비유**: 사람의 고용 상태와 같다. 입사 지원서만 낸 상태(비영속), 재직 중(영속), 퇴직(준영속), 인사 말소(삭제)로 나뉜다. 재직 중인 직원(영속 상태)만 회사 시스템(영속성 컨텍스트)이 관리한다.
 
 ```mermaid
-graph LR
-    비영속["비영속"]
-    영속["영속"]
-    준영속["준영속"]
-    삭제["삭제"]
-    비영속 -->|"em.persist()"| 영속
-    영속 -->|"detach/close/clear"| 준영속
-    준영속 -->|"em.merge()"| 영속
-    영속 -->|"em.remove()"| 삭제
+sequenceDiagram
+    비영속->>영속: em.persist()
+    영속->>준영속: detach/close/clear
+    준영속->>영속: em.merge()
+    영속->>삭제: em.remove()
 ```
 
 ### 비영속 (new / transient)

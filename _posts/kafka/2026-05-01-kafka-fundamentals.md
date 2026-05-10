@@ -159,10 +159,11 @@ public class OrderConsumer {
 > **비유**: Consumer Group은 팀 프로젝트다. 팀원(컨슈머)이 많을수록 업무(파티션)를 나눠서 빨리 끝낼 수 있다. 단 한 업무를 두 팀원이 동시에 담당하는 일은 없다. 다른 팀(다른 그룹)은 같은 자료(토픽)를 독립적으로 처음부터 읽을 수 있다.
 
 ```mermaid
-graph LR
-    P0 & P1 --> A1[Group-A: C1] & B1[Group-B: C1]
-    P2 --> A2[Group-A: C2] & B2[Group-B: C2]
-    P3 --> A3[Group-A: C3] & B2
+sequenceDiagram
+    P0->>A1: 
+    P1->>A1: 
+    P2->>A2: 
+    P3->>A3: 
 ```
 
 파티션 4개, 컨슈머 3개인 Group A에서는 A1이 2개 파티션을 담당하며, Group B는 같은 토픽을 독립적으로 소비한다(브로드캐스트 효과).
@@ -173,10 +174,9 @@ graph LR
 - 파티션 수 < 컨슈머 수: 일부 컨슈머는 유휴 상태 (낭비)
 
 ```mermaid
-graph LR
-    P0 --> C1 & P1 --> C2
-    P2 --> C3 & P3 --> C4
-    IDLE["C5/C6 유휴"]
+sequenceDiagram
+    P0->>C1: 
+    P2->>C3: 
 ```
 
 ---

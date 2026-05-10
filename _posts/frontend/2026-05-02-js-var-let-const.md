@@ -118,12 +118,11 @@ console.log(name); // '홍길동'
 만약 이걸 모르면 `console.log(name)`이 `undefined`를 출력했을 때 "어? 왜 에러가 안 나지?"라며 혼란스러워집니다. 에러가 안 나는 게 오히려 더 위험한 이유이기도 합니다.
 
 ```mermaid
-graph LR
-    CODE["코드"] -->|"console.log(name)"| ENGINE["JS 엔진"]
-    ENGINE -->|"var name 호이스팅"| EXEC["실행"]
-    EXEC -->|"undefined 출력"| EXEC
-    EXEC -->|"name='홍길동' 할당"| EXEC
-    EXEC -->|"홍길동 출력"| EXEC
+sequenceDiagram
+    JS_엔진->>실행: var name 호이스팅
+    실행->>실행: undefined 출력
+    실행->>실행: name='홍길동' 할당
+    실행->>실행: 홍길동 출력
 ```
 
 ### let/const 호이스팅과 TDZ — "올라가긴 하지만 접근은 막힌다"
@@ -279,11 +278,10 @@ console.log(funcs[2]()); // 3 — 예상: 2
 왜 이럴까요? `var i`는 블록 스코프가 없으므로 루프가 끝나도 **하나의 `i`만 존재**합니다. 루프가 끝나면 그 `i`는 3이 됩니다. 세 함수 모두 같은 `i`를 참조하고 있으니 모두 3을 반환합니다.
 
 ```mermaid
-graph LR
-    FOR["for 루프"] -->|"i=0,1,2,3(공유)"| VAR_I["var i"]
-    VAR_I -->|"실행시 최종값 3"| FOR
-    FOR -->|"j_0=0,j_1=1,j_2=2"| LET_J["let j(반복별)"]
-    LET_J -->|"각각 0, 1, 2"| FOR
+sequenceDiagram
+    var_i->>for_루프: 실행시 최종값 3
+    for_루프->>let_j(반복별): j_0=0,j_1=1,j_2=2
+    let_j(반복별)->>for_루프: 각각 0, 1, 2
 ```
 
 `let`을 쓰면 **각 반복마다 새로운 바인딩**이 생성됩니다. 즉, 반복마다 독립적인 `j`가 존재합니다.

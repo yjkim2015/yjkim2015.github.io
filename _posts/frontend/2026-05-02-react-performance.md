@@ -144,15 +144,9 @@ graph LR
 번들 전체를 한 번에 다운로드하면 첫 페이지 로딩이 느립니다. 코드 스플리팅은 번들을 여러 청크로 나누어 현재 페이지에 필요한 것만 다운로드합니다.
 
 ```mermaid
-graph LR
-    BUNDLE["app.js 5MB 전부"]
-    MAIN["main.js 500KB"]
-    ROUTE1["route-home.js 100K"]
-    ROUTE2["route-admin.js 200K"]
-    BUNDLE -->|"스플리팅 후"| MAIN
-    MAIN --> ROUTE1 & ROUTE2
-    style BUNDLE fill:#e74c3c,color:#fff
-    style MAIN fill:#2ecc71,color:#fff
+sequenceDiagram
+    app.js_5MB_전부->>main.js_500KB: 스플리팅 후
+    main.js_500KB->>route-home.js_100K: 
 ```
 
 ```jsx

@@ -226,11 +226,10 @@ public class BatchController {
 전체 실행 흐름을 순서대로 정리하면 다음과 같습니다.
 
 ```mermaid
-graph LR
-    SC["스케줄러"] --> JL["JobLauncher"]
-    JL --> ST["Step"]
-    ST -->|"read→process→write 반복"| ST
-    ST -->|"완료"| JL
+sequenceDiagram
+    JobLauncher->>Step: 
+    Step->>Step: read→process→write 반복
+    Step->>JobLauncher: 완료
 ```
 
 ---

@@ -55,13 +55,12 @@ HTTP 요청이 들어오면 DispatcherServlet이 8단계를 거쳐 처리한다.
 8️⃣ **Interceptor afterCompletion**: 뷰 렌더링 후, 예외 발생 시에도 항상 실행
 
 ```mermaid
-graph LR
-    C["Client"] -->|"HTTP 요청"| DS["DispatcherServlet"]
-    DS -->|"preHandle()"| DS
-    DS -->|"컨트롤러 실행"| CM["Controller"]
-    CM -->|"ModelAndView"| DS
-    DS -->|"postHandle()/View렌더링"| DS
-    DS -->|"afterCompletion()→응답"| C
+sequenceDiagram
+    DispatcherServlet->>DispatcherServlet: preHandle()
+    DispatcherServlet->>Controller: 컨트롤러 실행
+    Controller->>DispatcherServlet: ModelAndView
+    DispatcherServlet->>DispatcherServlet: postHandle()/View렌더링
+    DispatcherServlet->>Client: afterCompletion()→응답
 ```
 
 ### HandlerMapping

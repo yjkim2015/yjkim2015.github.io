@@ -20,10 +20,9 @@ Java는 성능과 객체지향이라는 두 가지 목표를 동시에 추구했
 래퍼 클래스는 기본형을 참조형으로 포장해 두 세계를 연결하는 다리 역할을 합니다.
 
 ```mermaid
-graph LR
-    P1["int/long"] <-->|박싱/언박싱| W1["Integer/Long"]
-    P2["double/boolean"] <-->|박싱/언박싱| W2["Double/Boolean"]
-    W1 & W2 --> OBJ["Object"]
+sequenceDiagram
+    Integer/Long->>Object: 
+    Double/Boolean->>Object: 
 ```
 
 ### 메모리 저장 방식 비교

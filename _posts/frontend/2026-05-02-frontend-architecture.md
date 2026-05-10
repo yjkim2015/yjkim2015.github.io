@@ -246,11 +246,10 @@ function App() {
 팀이 커지면 웹 앱, 모바일 앱, 관리자 페이지가 공통 컴포넌트와 타입을 공유해야 합니다. 모노레포는 이것을 하나의 저장소에서 관리하는 방식입니다.
 
 ```mermaid
-graph LR
-    ROOT["root/"] --> APPS["apps/"]
-    ROOT --> PKG["packages/"]
-    APPS --> WEB["web"] & MOBILE["mobile"]
-    PKG --> UI["ui/types/utils"]
+sequenceDiagram
+    root/->>packages/: 
+    apps/->>web: 
+    packages/->>ui/types/utils: 
 ```
 
 > 비유: 한 회사의 여러 부서가 같은 복지 제도, 같은 업무 시스템을 공유하는 것과 같습니다. 각 팀은 독립적으로 일하지만, 공통 인프라는 함께 씁니다.

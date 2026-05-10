@@ -218,13 +218,12 @@ public class UserStatsService {
 트랜잭션 코디네이터(TC)가 모든 샤드에게 준비(Prepare)를 요청하고, 모두 OK 응답을 받으면 커밋(Commit)을 지시하는 방식이다. 이론적으로 완전한 원자성을 보장하지만, TC 장애 시 모든 샤드가 PREPARED 상태로 블로킹되고 레이턴시가 2번의 네트워크 왕복만큼 증가한다. 하나의 샤드라도 응답이 없으면 전체가 블로킹된다는 가용성 문제도 있다.
 
 ```mermaid
-graph LR
-    TC["TC"] -->|"PREPARE"| SA["Shard A"]
-    TC -->|"PREPARE"| SB["Shard B"]
-    SA -->|"OK"| TC
-    SB -->|"OK"| TC
-    TC -->|"COMMIT"| SA
-    TC -->|"COMMIT"| SB
+sequenceDiagram
+    TC->>Shard_B: PREPARE
+    Shard_A->>TC: OK
+    Shard_B->>TC: OK
+    TC->>Shard_A: COMMIT
+    TC->>Shard_B: COMMIT
 ```
 
 ### Saga 패턴

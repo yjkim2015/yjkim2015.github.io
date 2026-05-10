@@ -599,13 +599,9 @@ graph LR
 #### Java 8: CAS + synchronized (버킷 단위 락)
 
 ```mermaid
-graph LR
-    B0["[0] null"] & B1["[1] Node"]
-    PUT{"버킷 비어있음?"}
-    CAS["CAS로 락 없이 삽입"]
-    SYNC["버킷 head synchronized"]
-    PUT -->|"예"| CAS
-    PUT -->|"아니오"| SYNC
+sequenceDiagram
+    버킷_비어있음?->>CAS로_락_없이_삽입: 예
+    버킷_비어있음?->>버킷_head_synchronized: 아니오
 ```
 
 ```java

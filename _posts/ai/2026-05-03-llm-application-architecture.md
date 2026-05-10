@@ -390,12 +390,13 @@ public interface CustomerSupportAgent {
 복잡한 작업은 전문화된 여러 에이전트가 분업한다.
 
 ```mermaid
-graph LR
-    USER["요청"] --> ORC["오케스트레이터"]
-    ORC --> CODE["코딩"]
-    ORC --> TEST["테스트"]
-    ORC --> REV["리뷰"]
-    CODE & TEST & REV --> RESULT["통합"]
+sequenceDiagram
+    오케스트레이터->>코딩: 
+    오케스트레이터->>테스트: 
+    오케스트레이터->>리뷰: 
+    코딩->>통합: 
+    테스트->>통합: 
+    리뷰->>통합: 
 ```
 
 ```

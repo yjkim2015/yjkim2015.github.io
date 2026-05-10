@@ -112,10 +112,10 @@ Virtual Thread 스위칭:
 ### OS 스레드 매핑 차이
 
 ```mermaid
-graph LR
-    JT1["JavaThread"] --> OST1["OS Thread"]
-    VT1["VThread1"] & VT2["VThread2"] --> CT1["Carrier"]
-    CT1 --> OS1["OS Thread"]
+sequenceDiagram
+    VThread1->>Carrier: 
+    VThread2->>Carrier: 
+    Carrier->>OS_Thread: 
 ```
 
 ---
@@ -149,11 +149,10 @@ graph LR
 Virtual Thread가 블로킹 I/O를 만나면 Carrier Thread에서 **Unmount**되고, I/O가 완료되면 다시 **Mount**됩니다.
 
 ```mermaid
-graph LR
-    VA["VThread-A"] -->|마운트| C1["Carrier-1"]
-    C1 -->|I/O→언마운트| VAH["VT-A 힙 저장"]
-    C1 -->|마운트| VB["VThread-B"]
-    VAH -->|I/O완료| C1
+sequenceDiagram
+    Carrier-1->>VT-A_힙_저장: I/O→언마운트
+    Carrier-1->>VThread-B: 마운트
+    VT-A_힙_저장->>Carrier-1: I/O완료
 ```
 
 상세 동작 순서:

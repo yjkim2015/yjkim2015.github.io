@@ -89,13 +89,12 @@ let y = 20;
 JavaScript는 싱글 스레드이지만 이벤트 루프 덕분에 비동기 처리가 가능합니다.
 
 ```mermaid
-flowchart LR
-    CS["콜 스택"] -->|"비동기"| WA["Web APIs"]
-    WA -->|"Promise"| MQ["마이크로태스크 큐"]
-    WA -->|"타이머/이벤트"| TQ["태스크 큐"]
-    EL["이벤트 루프"] -->|"1순위"| MQ
-    EL -->|"2순위"| TQ
-    MQ & TQ --> CS
+sequenceDiagram
+    Web_APIs->>마이크로태스크_큐: Promise
+    Web_APIs->>태스크_큐: 타이머/이벤트
+    이벤트_루프->>태스크_큐: 2순위
+    마이크로태스크_큐->>콜_스택: 
+    태스크_큐->>콜_스택: 
 ```
 
 ```javascript

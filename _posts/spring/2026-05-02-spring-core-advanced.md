@@ -694,14 +694,14 @@ public class InternalService {
 ## 13. 전체 흐름 정리
 
 ```mermaid
-flowchart LR
-    A["Spring Boot 시작"] --> B["빈 생성 및 의존관계 주입"]
-    B --> C["postProcessAfterIn"]
-    C --> D{"Pointcut 매칭 Advisor?"}
-    D -->|"있음"| E["ProxyFactory → JDK"]
-    D -->|"없음"| F["원본 빈 등록"]
-    E & F --> G["ApplicationContext"]
-    G --> H["클라이언트 호출"]
+sequenceDiagram
+    빈_생성_및_의존관계_주입->>postProcessAfterIn: 
+    postProcessAfterIn->>Pointcut_매칭_Advisor?: 
+    Pointcut_매칭_Advisor?->>ProxyFactory_→_JDK: 있음
+    Pointcut_매칭_Advisor?->>원본_빈_등록: 없음
+    ProxyFactory_→_JDK->>ApplicationContext: 
+    원본_빈_등록->>ApplicationContext: 
+    ApplicationContext->>클라이언트_호출: 
 ```
 
 ---

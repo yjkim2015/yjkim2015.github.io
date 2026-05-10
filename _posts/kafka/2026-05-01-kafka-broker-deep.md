@@ -24,18 +24,13 @@ Kafka 브로커 내부 구조를 모르면 장애 발생 시 어디가 문제인
 Kafka 클러스터를 구성하는 개별 서버 노드다. 각 브로커는 파티션 데이터 저장, 클라이언트 요청 처리, 복제 참여를 담당한다. 브로커 여러 대가 모여 하나의 Kafka 클러스터를 이룬다.
 
 ```mermaid
-graph LR
-    ZK["ZooKeeper/KRaft"]
-    B1["Broker1(Controller"]
-    B2["Broker2: P1-Leader"]
-    B3["Broker3: P2-Leader"]
-    ZK --- B1
-    B1 -.->|"P0 복제"| B2
-    B1 -.->|"P0 복제"| B3
-    B2 -.->|"P1 복제"| B1
-    B2 -.->|"P1 복제"| B3
-    B3 -.->|"P2 복제"| B1
-    B3 -.->|"P2 복제"| B2
+sequenceDiagram
+    Broker1(Controller-->>Broker2:_P1-Leader: P0 복제
+    Broker1(Controller-->>Broker3:_P2-Leader: P0 복제
+    Broker2:_P1-Leader-->>Broker1(Controller: P1 복제
+    Broker2:_P1-Leader-->>Broker3:_P2-Leader: P1 복제
+    Broker3:_P2-Leader-->>Broker1(Controller: P2 복제
+    Broker3:_P2-Leader-->>Broker2:_P1-Leader: P2 복제
 ```
 
 각 파티션은 단 하나의 Leader와 나머지 Follower로 구성된다. Leader가 읽기/쓰기를 전담하고, Follower는 Leader로부터 데이터를 복제한다.

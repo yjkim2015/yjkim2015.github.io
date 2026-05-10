@@ -170,13 +170,12 @@ graph LR
 > **비유:** 이사할 때 가구 전체를 한 번에 들고 가지 않고, 박스 단위로 나눠 옮기는 것과 같습니다. 하나가 떨어져도 그 박스만 다시 가져오면 됩니다.
 
 ```mermaid
-graph LR
-    C["클라이언트"] -->|"POST /upload/init"| A["API 서버"]
-    A -->|"upload_id, presigned_urls"| C
-    C -->|"PUT chunk_1~N"| S["S3"]
-    C -->|"POST /upload/complete"| A
-    A -->|"S3 Multipart Complete"| S
-    A -->|"video_id 반환"| C
+sequenceDiagram
+    API_서버->>클라이언트: upload_id, presigned_urls
+    클라이언트->>S3: PUT chunk_1~N
+    클라이언트->>API_서버: POST /upload/complete
+    API_서버->>S3: S3 Multipart Complete
+    API_서버->>클라이언트: video_id 반환
 ```
 
 청크 크기는 보통 **5MB~25MB**로 설정합니다. 각 청크에 순번과 체크섬(MD5)을 붙여 순서 보장 및 무결성을 검증합니다.
@@ -186,13 +185,12 @@ graph LR
 API 서버를 거쳐 업로드하면 서버가 병목이 됩니다. 대신 **Presigned URL**을 사용해 클라이언트가 S3에 직접 업로드합니다.
 
 ```mermaid
-graph LR
-    C["클라이언트"] -->|"업로드 요청"| A["API 서버"]
-    A -->|"Presigned URL 요청"| S["AWS S3"]
-    S -->|"15분 유효 URL"| A
-    A -->|"Presigned URL"| C
-    C -->|"직접 업로드(API 우회)"| S
-    S -->|"완료 이벤트"| A
+sequenceDiagram
+    API_서버->>AWS_S3: Presigned URL 요청
+    AWS_S3->>API_서버: 15분 유효 URL
+    API_서버->>클라이언트: Presigned URL
+    클라이언트->>AWS_S3: 직접 업로드(API 우회)
+    AWS_S3->>API_서버: 완료 이벤트
 ```
 
 장점:
@@ -282,13 +280,13 @@ GPU 비용: g5.xlarge 기준 시간당 $1.006
 ### 4-1. DAG 기반 파이프라인 구조
 
 ```mermaid
-flowchart LR
-    IN[원본 영상] --> SP["GOP 단위 분할"]
-    SP --> V["코덱 변환"]
-    SP --> AU["오디오 추출"]
-    V --> R["360p·720p·1080p·4K"]
-    R & AU --> MX["세그먼트 병합"]
-    MX --> OUT["S3 저장"]
+sequenceDiagram
+    GOP_단위_분할->>코덱_변환: 
+    GOP_단위_분할->>오디오_추출: 
+    코덱_변환->>360p·720p·1080p·4K: 
+    360p·720p·1080p·4K->>세그먼트_병합: 
+    오디오_추출->>세그먼트_병합: 
+    세그먼트_병합->>S3_저장: 
 ```
 
 ### 4-2. GOP(Group of Pictures) 분할의 이유
@@ -385,13 +383,12 @@ master.m3u8 (마스터 플레이리스트)
 ### 5-4. Bandwidth Estimation (대역폭 추정)
 
 ```mermaid
-flowchart LR
-    DL[세그먼트 다운로드] --> M[속도 측정<br/>bytes/ms]
-    M --> BUF[버퍼 수준 체크<br/>현재 버퍼: N초]
-    BUF --> ALG[ABR 알고리즘<br/>BOLA / MPC]
-    ALG -->|버퍼 &gt; 15초| UP[화질 업그레이드]
-    ALG -->|버퍼 &lt; 5초| DN[화질 다운그레이드]
-    ALG -->|정상| KP[현재 화질 유지]
+sequenceDiagram
+    M->>BUF: 
+    BUF->>ALG: 
+    ALG->>UP: 버퍼 &gt; 15초
+    ALG->>DN: 버퍼 &lt; 5초
+    ALG->>KP: 정상
 ```
 
 대표 알고리즘:

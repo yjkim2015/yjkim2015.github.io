@@ -254,11 +254,12 @@ CompletableFuture<User> future = CompletableFuture
 병렬 실행과 결과 조합이 CompletableFuture의 가장 강력한 기능이다.
 
 ```mermaid
-flowchart LR
-    A1["fetchUser()"] --> C1["thenCombine"]
-    B1["fetchOrders()"] --> C1
-    A2["api1 & api2 & api3"] --> D["allOf 완료대기"]
-    A3["us-east & eu-west"] --> E["anyOf 첫완료"]
+sequenceDiagram
+    api1_&_api2_&_api3->>allOf_완료대기: 
+    api2->>allOf_완료대기: 
+    api3->>allOf_완료대기: 
+    us-east_&_eu-west->>anyOf_첫완료: 
+    eu->>anyOf_첫완료: 
 ```
 
 ### thenCombine — 두 Future 결과 합치기

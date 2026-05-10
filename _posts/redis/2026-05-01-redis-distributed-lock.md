@@ -345,10 +345,9 @@ sequenceDiagram
 Redisson은 leaseTime을 지정하지 않으면 **Watchdog**을 통해 락 TTL을 자동으로 연장한다.
 
 ```mermaid
-graph LR
-    App -->|lock| R["Redis"]
-    WD["Watchdog"] -->|10s마다 갱신| R
-    App -->|unlock| R
+sequenceDiagram
+    App->>Redis: lock
+    App->>Redis: unlock
 ```
 
 **Watchdog 동작 원리:**

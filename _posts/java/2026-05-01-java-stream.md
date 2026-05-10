@@ -682,11 +682,12 @@ Stream<Integer> sequential = numbers.parallelStream().sequential();
 병렬 스트림은 내부적으로 `ForkJoinPool.commonPool()`을 사용해 데이터를 분할하고 각 스레드가 독립적으로 처리한 뒤 결과를 합산합니다. 이 분할-처리-합산(Fork-Join) 구조가 병렬 스트림의 핵심입니다. 기본 스레드 수는 `Runtime.getRuntime().availableProcessors()`로 결정되며, 대부분의 경우 CPU 코어 수와 동일합니다.
 
 ```mermaid
-graph LR
-  DATA["전체 데이터"] -->|분할| T1["Thread 1"]
-  DATA -->|분할| T2["Thread 2"]
-  DATA -->|분할| T3["Thread 3"]
-  T1 & T2 & T3 -->|합산| FINAL["최종 결과"]
+sequenceDiagram
+    전체_데이터->>Thread_2: 분할
+    전체_데이터->>Thread_3: 분할
+    Thread_1->>최종_결과: 합산
+    Thread_2->>최종_결과: 합산
+    Thread_3->>최종_결과: 합산
 ```
 
 ```java

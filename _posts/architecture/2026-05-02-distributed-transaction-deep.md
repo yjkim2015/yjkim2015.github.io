@@ -38,13 +38,12 @@ graph LR
 2PC는 "투표하고 결정한다"는 방식입니다. 선거 관리위원회(코디네이터)가 모든 참여자에게 "지금 커밋 가능한가?" 물어보고, 모두 YES면 커밋, 하나라도 NO면 전부 롤백합니다.
 
 ```mermaid
-graph LR
-    C["코디네이터"] -->|"PREPARE"| A["DB-A"]
-    C -->|"PREPARE"| B["DB-B"]
-    A -->|"YES"| C
-    B -->|"YES"| C
-    C -->|"COMMIT"| A
-    C -->|"COMMIT"| B
+sequenceDiagram
+    코디네이터->>DB-B: PREPARE
+    DB-A->>코디네이터: YES
+    DB-B->>코디네이터: YES
+    코디네이터->>DB-A: COMMIT
+    코디네이터->>DB-B: COMMIT
 ```
 
 ### 2PC의 문제점 — 왜 잘 안 쓰이나
@@ -72,12 +71,11 @@ PREPARE 단계에서 DB_A가 잠금을 획득하고 코디네이터의 COMMIT/RO
 2PC의 블로킹 문제를 해결하기 위한 개선안입니다. CanCommit → PreCommit → DoCommit 세 단계로 나눠 타임아웃을 추가합니다.
 
 ```mermaid
-graph LR
-    C["코디네이터"] -->|"CanCommit?"| P1["참여자1"]
-    C -->|"CanCommit?"| P2["참여자2"]
-    P1 -->|"Yes"| C
-    C -->|"PreCommit→DoCommit"| P1
-    C -->|"PreCommit→DoCommit"| P2
+sequenceDiagram
+    코디네이터->>참여자2: CanCommit?
+    참여자1->>코디네이터: Yes
+    코디네이터->>참여자1: PreCommit→DoCommit
+    코디네이터->>참여자2: PreCommit→DoCommit
 ```
 
 PreCommit 단계가 추가되어 코디네이터 장애 시 참여자가 타임아웃 후 자율적으로 커밋할 수 있습니다. 하지만 **네트워크 분할 시 여전히 문제가 남습니다.** 일부 참여자는 PreCommit을 받았고 일부는 못 받은 상황에서 코디네이터가 죽으면, 받은 쪽은 커밋하고 못 받은 쪽은 롤백합니다. 데이터 불일치가 생깁니다. 이론상으로는 개선이지만 실제로는 거의 사용하지 않습니다.
@@ -102,11 +100,10 @@ graph LR
 ### 방식 1: Choreography (안무) Saga — 각자 알아서
 
 ```mermaid
-graph LR
-    OS["주문"] -->|"OrderCreated"| K["Kafka"]
-    K -->|"결제 처리"| PS["결제"]
-    PS -->|"성공→Completed"| K
-    K -->|"실패→주문취소"| OS
+sequenceDiagram
+    Kafka->>결제: 결제 처리
+    결제->>Kafka: 성공→Completed
+    Kafka->>주문: 실패→주문취소
 ```
 
 안무 방식은 "공연 지시자 없이 무용수들이 서로의 동작을 보고 반응하며 춤추는 것"과 같습니다. 중앙 조율자가 없어 결합도가 낮습니다. 하지만 전체 흐름을 추적하기 어렵습니다. "결제는 됐는데 배송 요청이 안 됐다"는 버그를 찾으려면 여러 서비스의 로그를 모두 뒤져야 합니다.
@@ -165,12 +162,11 @@ public class PaymentService {
 ### 방식 2: Orchestration (오케스트레이션) Saga — 중앙 지휘자가 조율
 
 ```mermaid
-graph LR
-    Orch["Orch"] -->|"결제 요청"| PS["결제"]
-    PS -->|"결제 완료"| Orch
-    Orch -->|"재고 차감"| IS["재고"]
-    IS -->|"재고 부족"| Orch
-    Orch -->|"결제 취소"| PS
+sequenceDiagram
+    결제->>Orch: 결제 완료
+    Orch->>재고: 재고 차감
+    재고->>Orch: 재고 부족
+    Orch->>결제: 결제 취소
 ```
 
 오케스트레이션 방식은 "지휘자가 악기별로 언제 어떻게 연주할지 지시하는 것"과 같습니다. 전체 흐름이 오케스트레이터 한 곳에 집중되어 디버깅이 쉽습니다. 단, 오케스트레이터가 단일 장애점이 될 수 있습니다.
@@ -592,14 +588,14 @@ graph LR
 ## 핵심 패턴 선택 가이드
 
 ```mermaid
-graph LR
-    Q1{"서비스 수"}
-    Q1 -->|"2~3개"| TwoPC["2PC"]
-    Q1 -->|"4개 이상"| Q2{"흐름 복잡도"}
-    Q2 -->|"단순"| Chore["Choreography Saga"]
-    Q2 -->|"복잡"| Orches["Orchestration Saga"]
-    Chore & Orches -->|"이벤트 유실 우려"| Outbox["+ Outbox 패턴"]
-    Orches -->|"감사 로그 필요"| ES["+ Event Sourcing /"]
+sequenceDiagram
+    서비스_수->>2PC: 2~3개
+    서비스_수->>흐름_복잡도: 4개 이상
+    흐름_복잡도->>Choreography_Saga: 단순
+    흐름_복잡도->>Orchestration_Saga: 복잡
+    Choreography_Saga->>+_Outbox_패턴: 이벤트 유실 우려
+    Orchestration_Saga->>+_Outbox_패턴: 이벤트 유실 우려
+    Orchestration_Saga->>+_Event_Sourcing_/: 감사 로그 필요
 ```
 
 | 패턴 | 일관성 | 가용성 | 복잡도 | 추천 상황 |

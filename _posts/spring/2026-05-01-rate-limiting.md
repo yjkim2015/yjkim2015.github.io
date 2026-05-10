@@ -78,11 +78,9 @@ graph LR
 **경계 문제 (Boundary Burst)**: 59초에 100건, 61초에 100건을 보내면 실제로 2초 안에 200건이 처리된다.
 
 ```mermaid
-graph LR
-    W1["윈도우1 마지막 (59s)"]
-    W2["윈도우2 시작 (61s)"]
-    W1 & W2 --> BURST["경계(60s) 기준 2초 안에"]
-    style BURST fill:#f88,stroke:#c00,color:#000
+sequenceDiagram
+    윈도우1_마지막_(59s)->>경계(60s)_기준_2초_안에: 
+    윈도우2_시작_(61s)->>경계(60s)_기준_2초_안에: 
 ```
 
 - 장점: 구현 단순, 메모리 사용 적음 (윈도우당 카운터 1개), Redis INCR + EXPIRE로 원자적 구현 가능
@@ -141,14 +139,10 @@ String script =
 Fixed Window와 Sliding Window Log의 **절충안**이다. 이전 윈도우의 카운터와 현재 윈도우의 카운터를 가중 평균으로 합산한다.
 
 ```mermaid
-graph LR
-    PW["이전 윈도우 (0:59~1:00)"]
-    CW["현재 윈도우 (1:00~1:01)"]
-    NOW["현재 시각: 1:00:45"]
-    CALC["예상 요청 수 계산"]
-    RESULT["한도 100 미만 → 허용"]
-    style RESULT fill:#8f8,stroke:#080,color:#000
-    PW & CW & NOW --> CALC --> RESULT
+sequenceDiagram
+    이전_윈도우_(0:59~1:00)->>예상_요청_수_계산: 
+    현재_윈도우_(1:00~1:01)->>예상_요청_수_계산: 
+    현재_시각:_1:00:45->>예상_요청_수_계산: 
 ```
 
 - 장점: 메모리 사용 적음 (윈도우당 카운터 2개), 경계 문제 대부분 해소, Redis + Lua로 구현 쉬움
@@ -685,13 +679,10 @@ http {
 로드밸런서가 요청을 분산시키므로, 각 서버의 인메모리 카운터는 전체 요청 수를 반영하지 못한다.
 
 ```mermaid
-graph LR
-    C["클라이언트"] --> LB["로드밸런서"]
-    LB --> S1["서버1"]
-    LB --> S2["서버2"]
-    LB --> S3["서버3"]
-    S1 & S2 & S3 -.->|"합산 150 req/min\n한도"| WARN["실제 허용량 초과"]
-    style WARN fill:#f88,stroke:#c00,color:#000
+sequenceDiagram
+    로드밸런서->>서버1: 
+    로드밸런서->>서버2: 
+    로드밸런서->>서버3: 
 ```
 
 ### Redis 중앙 집중식 Rate Limiting
@@ -699,13 +690,13 @@ graph LR
 모든 서버가 Redis의 동일한 카운터를 읽고 쓴다. Lua 스크립트로 Race Condition을 방지한다.
 
 ```mermaid
-graph LR
-    C["클라이언트"] --> LB["로드밸런서"]
-    LB --> S1["서버1"]
-    LB --> S2["서버2"]
-    LB --> S3["서버3"]
-    S1 & S2 & S3 --> R["Redis"]
-    style R fill:#8f8,stroke:#080,color:#000
+sequenceDiagram
+    로드밸런서->>서버1: 
+    로드밸런서->>서버2: 
+    로드밸런서->>서버3: 
+    서버1->>Redis: 
+    서버2->>Redis: 
+    서버3->>Redis: 
 ```
 
 **Lua 스크립트로 Race Condition 방지**

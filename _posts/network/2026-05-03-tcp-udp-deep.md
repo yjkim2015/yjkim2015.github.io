@@ -199,11 +199,12 @@ AIMD 규칙:
 ```
 
 ```mermaid
-graph LR
-    A["Slow Start"] -->|"cwnd≥ssthresh"| B["Congestion Avoidan"]
-    B -->|3 Dup ACK| C["Fast Recovery"]
-    C --> B
-    B & A & C -->|Timeout| D["재시작 cwnd=1"]
+sequenceDiagram
+    Congestion_Avoidan->>Fast_Recovery: 3 Dup ACK
+    Fast_Recovery->>Congestion_Avoidan: 
+    Congestion_Avoidan->>재시작_cwnd=1: Timeout
+    Slow_Start->>재시작_cwnd=1: Timeout
+    Fast_Recovery->>재시작_cwnd=1: Timeout
 ```
 
 ### Fast Retransmit — 타임아웃 전 재전송

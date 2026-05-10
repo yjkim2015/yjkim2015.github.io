@@ -114,11 +114,12 @@ public TaskExecutor taskExecutor() {
 > **비유:** 식당에서 주방(조리 Step)과 홀(세팅 Step)이 동시에 준비하는 것입니다. 주방이 끝나야 홀이 시작되는 게 아니라, 두 팀이 동시에 일합니다. 단, **서로의 결과에 의존하지 않아야** 합니다.
 
 ```mermaid
-graph LR
-    A["검증"] --> B["정산"]
-    A --> C["재고"]
-    A --> D["알림"]
-    B & C & D --> E["리포트"]
+sequenceDiagram
+    검증->>재고: 
+    검증->>알림: 
+    정산->>리포트: 
+    재고->>리포트: 
+    알림->>리포트: 
 ```
 
 Flow를 사용하여 Step 2a/2b/2c를 병렬로 실행하고, 모두 완료된 후 Step 3이 실행됩니다.
@@ -166,11 +167,12 @@ public Job parallelJob(JobRepository jobRepository,
 > **비유:** 전화번호부를 10명의 사원에게 나눠주는 것입니다. 사원 1은 "가~나", 사원 2는 "다~라"를 담당합니다. 각 사원은 자기 범위만 처리하므로 **절대 충돌하지 않습니다.** 누가 빨리 끝나든 느리게 끝나든, 다른 사원에게 영향을 주지 않습니다.
 
 ```mermaid
-graph LR
-    A["Master"] -->|"ID 1~25만"| B["Slave 1"]
-    A -->|"ID 25~50만"| C["Slave 2"]
-    A -->|"ID 50~100만"| D["Slave 3~4"]
-    B & C & D --> F["독립 처리"]
+sequenceDiagram
+    Master->>Slave_2: ID 25~50만
+    Master->>Slave_3~4: ID 50~100만
+    Slave_1->>독립_처리: 
+    Slave_2->>독립_처리: 
+    Slave_3~4->>독립_처리: 
 ```
 
 ### 4.2 Partitioner 구현
@@ -290,12 +292,13 @@ Master가 파티션 정보만 **메시지 큐(Kafka, RabbitMQ)를 통해 원격 
 > **비유:** 본사(Master)가 지사(Remote Worker)에 업무 지시서를 팩스(메시지 큐)로 보내는 것입니다. 각 지사가 독립적으로 업무를 처리하고 결과를 보고합니다.
 
 ```mermaid
-flowchart LR
-    A["Master(Partitioner"] --> B["MessageChannel(Kaf"]
-    B -->|파티션1| C["Worker1: R→P→W"]
-    B -->|파티션2| D["Worker2: R→P→W"]
-    B -->|파티션3| E["Worker3: R→P→W"]
-    C & D & E -->|완료 응답| B
+sequenceDiagram
+    MessageChannel(Kaf->>Worker1:_R→P→W: 파티션1
+    MessageChannel(Kaf->>Worker2:_R→P→W: 파티션2
+    MessageChannel(Kaf->>Worker3:_R→P→W: 파티션3
+    Worker1:_R→P→W->>MessageChannel(Kaf: 완료 응답
+    Worker2:_R→P→W->>MessageChannel(Kaf: 완료 응답
+    Worker3:_R→P→W->>MessageChannel(Kaf: 완료 응답
 ```
 
 ### 5.3 언제 Remote를 선택하는가

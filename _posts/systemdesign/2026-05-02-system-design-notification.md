@@ -111,12 +111,12 @@ SMS:          100만 건/일 →  11 QPS
 ## 전체 아키텍처
 
 ```mermaid
-graph LR
-    A[서비스] --> B[API GW]
-    B --> C[Kafka]
-    C --> D[푸시워커]
-    C --> E[SMS워커]
-    D & E -->|실패| F[DLQ]
+sequenceDiagram
+    B->>C: 
+    C->>D: 
+    C->>E: 
+    D->>F: 실패
+    E->>F: 실패
 ```
 
 ---

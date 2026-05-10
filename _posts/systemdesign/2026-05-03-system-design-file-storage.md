@@ -207,12 +207,11 @@ S3 내구성 복제:        3 AZ 동기 복제 — 추가 100~200ms
 ### 업로드 흐름 상세
 
 ```mermaid
-graph LR
-    A[Client] -->|init| B[API]
-    B --> C[메타DB조회]
-    C -->|필요블록| A
-    A -->|PUT block| B
-    A -->|complete| B
+sequenceDiagram
+    B->>C: 
+    C->>A: 필요블록
+    A->>B: PUT block
+    A->>B: complete
 ```
 
 ### 왜 SHA-256인가 — MD5·CRC32와 비교

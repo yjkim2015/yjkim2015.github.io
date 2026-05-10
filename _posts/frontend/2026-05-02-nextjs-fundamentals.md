@@ -163,11 +163,10 @@ export async function generateStaticParams() {
 ## 5번 다이어그램 - App Router 파일 컨벤션
 
 ```mermaid
-graph LR
-    ROOT["app/layout.tsx (루트"] --> HOME["page.tsx /"]
-    ROOT --> BLOG["blog/layout.tsx"]
-    BLOG --> BP["blog/page.tsx /blo"] & BD["blog/slug/page.tsx"]
-    ROOT --> SP["loading.tsx / erro"]
+sequenceDiagram
+    app/layout.tsx_(루트->>blog/layout.tsx: 
+    blog/layout.tsx->>blog/page.tsx_/blo: 
+    app/layout.tsx_(루트->>loading.tsx_/_erro: 
 ```
 
 ```
@@ -256,12 +255,11 @@ export const config = {
 SSR/SSG 페이지는 서버에서 완성된 HTML을 보내지만, 클릭이나 입력 같은 인터랙션은 자바스크립트가 붙어야 가능합니다. 이 과정을 Hydration이라고 합니다.
 
 ```mermaid
-graph LR
-    C["브라우저"] -->|"페이지 요청"| S["Next.js 서버"]
-    S -->|"서버 컴포넌트 실행"| S
-    S -->|"HTML+JS 번들"| C
-    C -->|"HTML 즉시 표시"| C
-    C -->|"Hydration 완료"| C
+sequenceDiagram
+    Next.js_서버->>Next.js_서버: 서버 컴포넌트 실행
+    Next.js_서버->>브라우저: HTML+JS 번들
+    브라우저->>브라우저: HTML 즉시 표시
+    브라우저->>브라우저: Hydration 완료
 ```
 
 ### Hydration 불일치 문제

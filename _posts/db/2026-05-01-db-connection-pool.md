@@ -39,16 +39,9 @@ Spring Boot 2.x+의 기본 커넥션 풀. "빠른 커넥션 풀" 표방.
 > **비유:** HikariCP는 공항의 렌터카 카운터와 같습니다. 차량(커넥션)이 미리 세차·정비(초기화)된 상태로 주차장(ConcurrentBag)에 대기합니다. 고객(스레드)이 도착하면 서류 확인 없이 키만 건네주고(ThreadLocal 캐시), 반납 시 다음 고객에게 바로 넘깁니다. 차가 오래되면(maxLifetime) 신차로 교체하고, 녹슨 차(유효하지 않은 커넥션)는 정비 점검(keepalive-time)에서 걸러냅니다.
 
 ```mermaid
-graph LR
-    POOL["HikariCP 커넥션 풀"]
-    POOL --- C1["Connection 1 (대기)"]
-    POOL --- C2["Connection 2 (대기)"]
-    POOL --- C3["Connection 3 (사용중)"]
-    POOL --- C4["Connection 4 (대기)"]
-    T1["스레드 1"] -->|getConnection| POOL
-    POOL -->|대여| T1
-    T1 -->|close(반납)| POOL
-    T2["스레드 2"] -->|대기중| POOL
+sequenceDiagram
+    HikariCP_커넥션_풀->>스레드_1: 대여
+    스레드_1->>HikariCP_커넥션_풀: close(반납)
 ```
 
 ### 커넥션 생명주기
@@ -65,15 +58,12 @@ graph LR
 ```
 
 ```mermaid
-graph LR
-    대기["대기"]
-    사용중["사용중"]
-    폐기["폐기"]
-    대기 -->|"getConnection()"| 사용중
-    사용중 -->|"close() 반납"| 대기
-    대기 -->|"idleTimeout/헬스체크 실패"| 폐기
-    사용중 -->|"maxLifetime 초과"| 폐기
-    폐기 -->|"minimumIdle 미달"| 대기
+sequenceDiagram
+    대기->>사용중: getConnection()
+    사용중->>대기: close() 반납
+    대기->>폐기: idleTimeout/헬스체크 실패
+    사용중->>폐기: maxLifetime 초과
+    폐기->>대기: minimumIdle 미달
 ```
 
 ---

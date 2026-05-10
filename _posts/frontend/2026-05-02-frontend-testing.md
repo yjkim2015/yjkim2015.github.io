@@ -398,13 +398,12 @@ it('증가 버튼 클릭 시 카운트 증가', async () => {
 비동기 경쟁 조건은 실제 사용자가 겪는 버그 중 재현하기 가장 어려운 종류입니다. 검색창에 빠르게 타이핑할 때 첫 번째 요청이 두 번째 요청보다 늦게 도착하면, 오래된 결과가 화면에 남는 버그가 생깁니다.
 
 ```mermaid
-graph LR
-    U["사용자"] -->|"사과 입력"| C["SearchInput"]
-    C -->|"요청1 사과"| API["API 서버"]
-    U -->|"바나나로 변경"| C
-    C -->|"요청2 바나나"| API
-    API -->|"바나나 먼저 반환"| C
-    API -->|"사과로 덮어씌워짐!"| C
+sequenceDiagram
+    SearchInput->>API_서버: 요청1 사과
+    사용자->>SearchInput: 바나나로 변경
+    SearchInput->>API_서버: 요청2 바나나
+    API_서버->>SearchInput: 바나나 먼저 반환
+    API_서버->>SearchInput: 사과로 덮어씌워짐!
 ```
 
 ```javascript

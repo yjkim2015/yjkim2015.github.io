@@ -249,12 +249,11 @@ public class OrderController {
 > **비유:** 컨트롤러 메서드는 주방장이다. "재료 주세요"라고 하면 ArgumentResolver가 HTTP 요청의 여러 곳(URL, 헤더, 바디, 세션...)에서 재료를 찾아 손질해서 건네준다. 주방장은 재료가 어디서 왔는지 알 필요 없다.
 
 ```mermaid
-graph LR
-    A["컨트롤러 메서드"] --> B{"파라미터 순회"}
-    B -->|"지원"| C["resolveArgument()"]
-    B -->|"미지원"| D["다음 Resolver"]
-    C --> E["파라미터 준비 완료"]
-    D --> B
+sequenceDiagram
+    파라미터_순회->>resolveArgument(): 지원
+    파라미터_순회->>다음_Resolver: 미지원
+    resolveArgument()->>파라미터_준비_완료: 
+    다음_Resolver->>파라미터_순회: 
 ```
 
 ```java

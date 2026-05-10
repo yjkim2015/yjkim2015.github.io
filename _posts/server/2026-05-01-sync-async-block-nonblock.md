@@ -88,13 +88,12 @@ ResultSet rs = ps.executeQuery(); // 쿼리 완료까지 블로킹
 I/O 시스템 콜은 즉시 반환하지만, 호출자가 직접 반복 폴링(polling)해서 결과를 확인한다.
 
 ```mermaid
-graph LR
-    T["호출자 스레드"] -->|"I/O 요청"| IO["I/O"]
-    IO -->|"EAGAIN(즉시 반환)"| T
-    T -->|"폴링"| IO
-    IO -->|"EAGAIN"| T
-    T -->|"폴링"| IO
-    IO -->|"완료! 결과 반환"| T
+sequenceDiagram
+    I/O->>호출자_스레드: EAGAIN(즉시 반환)
+    호출자_스레드->>I/O: 폴링
+    I/O->>호출자_스레드: EAGAIN
+    호출자_스레드->>I/O: 폴링
+    I/O->>호출자_스레드: 완료! 결과 반환
 ```
 
 ```java
@@ -270,23 +269,21 @@ Unix/Linux 시스템에서 I/O는 5가지 모델로 분류된다. (W. Richard St
 ### 1. Blocking I/O
 
 ```mermaid
-graph LR
-    App["Application"] -->|"recvfrom() 호출"| K["Kernel"]
-    K -->|"블로킹 대기"| K
-    K -->|"데이터 도착→복사"| K
-    K -->|"OK, 데이터 반환"| App
+sequenceDiagram
+    Kernel->>Kernel: 블로킹 대기
+    Kernel->>Kernel: 데이터 도착→복사
+    Kernel->>Application: OK, 데이터 반환
 ```
 
 ### 2. Non-blocking I/O
 
 ```mermaid
-graph LR
-    App["Application"] -->|"recvfrom()"| K["Kernel"]
-    K -->|"EAGAIN(데이터 없음)"| App
-    App -->|"폴링"| K
-    K -->|"EAGAIN"| App
-    App -->|"폴링"| K
-    K -->|"데이터 도착→OK 반환"| App
+sequenceDiagram
+    Kernel->>Application: EAGAIN(데이터 없음)
+    Application->>Kernel: 폴링
+    Kernel->>Application: EAGAIN
+    Application->>Kernel: 폴링
+    Kernel->>Application: 데이터 도착→OK 반환
 ```
 
 ### 3. I/O Multiplexing (select/poll/epoll)
@@ -294,12 +291,11 @@ graph LR
 하나의 스레드로 여러 소켓을 감시할 수 있다. Java NIO Selector가 이 방식이다.
 
 ```mermaid
-graph LR
-    App["Application"] -->|"select() 여러 소켓 감시"| K["Kernel"]
-    K -->|"블로킹 감시 중"| K
-    K -->|"소켓 준비→반환"| App
-    App -->|"recvfrom()"| K
-    K -->|"데이터 반환"| App
+sequenceDiagram
+    Kernel->>Kernel: 블로킹 감시 중
+    Kernel->>Application: 소켓 준비→반환
+    Application->>Kernel: recvfrom()
+    Kernel->>Application: 데이터 반환
 ```
 
 **epoll (Linux 고성능 방식)**
@@ -354,12 +350,11 @@ while (true) {
 소켓이 준비되면 커널이 SIGIO 시그널을 보낸다. 잘 사용하지 않는다.
 
 ```mermaid
-graph LR
-    App["Application"] -->|sigaction 등록| K["Kernel"]
-    K -->|즉시 반환| App
-    App -->|다른 작업| App
-    K -->|SIGIO 시그널| App
-    App -->|recvfrom| K
+sequenceDiagram
+    Kernel->>Application: 즉시 반환
+    Application->>Application: 다른 작업
+    Kernel->>Application: SIGIO 시그널
+    Application->>Kernel: recvfrom
 ```
 
 ### 5. Asynchronous I/O (aio_read)

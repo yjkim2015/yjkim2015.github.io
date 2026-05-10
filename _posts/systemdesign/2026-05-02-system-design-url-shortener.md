@@ -176,12 +176,12 @@ graph LR
 ## URL 단축 흐름 (쓰기)
 
 ```mermaid
-graph LR
-    A[Client] -->|POST /shorten| B[API]
-    B --> C{중복?}
-    C -->|존재| D[기존코드반환]
-    C -->|신규| E[Base62+INSERT]
-    D & E --> F[shortUrl]
+sequenceDiagram
+    B->>C: 
+    C->>D: 존재
+    C->>E: 신규
+    D->>F: 
+    E->>F: 
 ```
 
 ---

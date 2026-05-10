@@ -185,14 +185,12 @@ public class ChatMessageListener implements MessageListener {
 서버가 여러 대일 때 각 서버의 WebSocket 사용자들에게 메시지를 전달하는 문제를 해결한다:
 
 ```mermaid
-graph LR
-    U1["사용자 A"] -->|"WebSocket"| SA["서버 1"]
-    U2["사용자 B"] -->|"WebSocket"| SB["서버 2"]
-    SA -->|"PUBLISH chat:room1"| R[("Redis")]
-    R -->|"브로드캐스트"| SA
-    R -->|"브로드캐스트"| SB
-    SA -->|"WebSocket"| U3["같은 방 사용자 C"]
-    SB -->|"WebSocket"| U2
+sequenceDiagram
+    서버_1->>R: PUBLISH chat:room1
+    R->>서버_1: 브로드캐스트
+    R->>서버_2: 브로드캐스트
+    서버_1->>같은_방_사용자_C: WebSocket
+    서버_2->>사용자_B: WebSocket
 ```
 
 사용자 A가 메시지를 보내면:
