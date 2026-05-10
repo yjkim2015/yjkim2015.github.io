@@ -174,6 +174,105 @@ Phase 4 (MAU 1억): Cloudflare Enterprise + 다층 WAF + ML 이상탐지
    - 효과: 봇이 차단당한 줄 모르고 오염된 데이터 수집
 ```
 
+**각 단계 구체적 구현 사례**:
+
+**1단계 — Nginx UA 차단 (nginx.conf)**:
+```nginx
+# 알려진 봇 UA 차단
+if ($http_user_agent ~* "(python-requests|curl|scrapy|wget|Go-http-client)") {
+    return 403;
+}
+```
+
+**2단계 — 허니팟 트랩 (HTML + Spring Boot)**:
+```html
+<!-- 사용자는 안 보이지만 봇은 크롤링하는 숨겨진 링크 -->
+<a href="/trap/hidden-page" style="display:none" aria-hidden="true">secret</a>
+```
+```java
+@RestController
+public class HoneypotController {
+    private final Set<String> blacklist = ConcurrentHashMap.newKeySet();
+
+    @GetMapping("/trap/**")
+    public ResponseEntity<Void> trap(HttpServletRequest req) {
+        String ip = req.getRemoteAddr();
+        blacklist.add(ip); // 이 링크에 접근한 IP = 100% 봇
+        log.warn("BOT DETECTED via honeypot: {}", ip);
+        return ResponseEntity.status(403).build();
+    }
+}
+```
+
+**3단계 — 쿠키 기반 검증 (Spring Filter)**:
+```java
+@Component
+public class BotCookieFilter extends OncePerRequestFilter {
+    private static final String COOKIE_NAME = "_bv";
+    private static final String SECRET = "bot-verify-secret-key";
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req,
+            HttpServletResponse res, FilterChain chain) throws Exception {
+        Cookie[] cookies = req.getCookies();
+        boolean hasValidCookie = false;
+
+        if (cookies != null) {
+            for (Cookie c : cookies) {
+                if (COOKIE_NAME.equals(c.getName()) && verify(c.getValue())) {
+                    hasValidCookie = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasValidCookie) {
+            // 첫 방문: HMAC 서명된 쿠키 발급 후 리다이렉트
+            String token = System.currentTimeMillis() + ":" +
+                hmacSha256(String.valueOf(System.currentTimeMillis()), SECRET);
+            res.addCookie(new Cookie(COOKIE_NAME, token));
+            res.setStatus(302);
+            res.setHeader("Location", req.getRequestURI());
+            return; // 쿠키 못 저장하는 봇은 무한 302 루프
+        }
+        chain.doFilter(req, res);
+    }
+}
+```
+
+**4단계 — IP Rate Limit + 패턴 분석 (Redis)**:
+```java
+public boolean isPagePatternSuspicious(String sessionId) {
+    String key = "page_pattern:" + sessionId;
+    Long total = redis.opsForHash().size(key);
+    Long detailCount = redis.opsForHash().get(key, "detail");
+    if (total > 50 && detailCount / total > 0.9) {
+        return true; // 상세 페이지만 90% 이상 접근 = 봇
+    }
+    return false;
+}
+```
+
+**5단계 — 허니팟 + JS Challenge 조합 (프론트)**:
+```javascript
+// 정상 브라우저만 실행하는 검증 스크립트
+(function() {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl');
+    const fingerprint = gl ? gl.getParameter(gl.RENDERER) : 'none';
+    fetch('/api/verify-browser', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            fp: fingerprint,
+            screen: window.screen.width + 'x' + window.screen.height,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        })
+    });
+})();
+// Headless Chrome은 WebGL 렌더러가 "SwiftShader"로 나옴 → 봇 탐지
+```
+
 **봇 방어 기법 전체 정리**:
 
 | 기법 | 구현 난이도 | 효과 | 우회 가능성 | 정상 사용자 영향 |
