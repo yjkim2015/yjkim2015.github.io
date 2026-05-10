@@ -106,26 +106,74 @@ graph LR
     DB -->|"CDC"| Kafka --> Consumer
 ```
 
-방법 B와 C 모두 DB와 Kafka 사이의 불일치 문제를 완전히 해결하지 못합니다. DB 트랜잭션 안에서 Outbox 테이블에 이벤트를 함께 저장하고, CDC(Debezium)가 Outbox 테이블의 변경을 감지해서 Kafka로 발행합니다.
+방법 B와 C 모두 DB와 Kafka 사이의 불일치를 해결하지 못합니다. Outbox 패턴은 **DB 트랜잭션 안에서 이벤트를 Outbox 테이블에 함께 저장**하고, CDC(Debezium)가 감지해서 Kafka로 발행합니다. 멀티 토픽 시나리오에서는 **하나의 비즈니스 액션에 여러 이벤트 타입을 Outbox에 넣고, Debezium EventRouter가 토픽별로 라우팅**합니다.
+
+**Step 1: Outbox 테이블 설계**
+
+```sql
+CREATE TABLE outbox_events (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    aggregate_id VARCHAR(64) NOT NULL,    -- 파티션 키 (orderId)
+    event_type  VARCHAR(100) NOT NULL,    -- 토픽 라우팅 키
+    payload     JSON NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    published   BOOLEAN DEFAULT FALSE
+);
+```
+
+**Step 2: 하나의 트랜잭션에서 멀티 이벤트 저장**
 
 ```java
-// 1. 비즈니스 로직과 Outbox를 같은 DB 트랜잭션으로
 @Transactional
 public void completeOrder(Order order) {
-    orderRepository.save(order);  // 주문 저장
-    outboxRepository.save(new OutboxEvent(
-        "order.completed",        // 토픽
-        order.getId(),            // 파티션 키
-        objectMapper.writeValueAsString(order)  // 페이로드
-    ));
-    // DB 커밋 시 둘 다 저장되거나 둘 다 롤백 → 불일치 불가능
-}
+    order.setStatus(OrderStatus.COMPLETED);
+    orderRepository.save(order);
 
-// 2. Debezium이 outbox 테이블 변경 감지 → Kafka 발행
-// docker-compose.yml 또는 Kafka Connect 설정
-// connector: io.debezium.connector.mysql.MySqlConnector
-// transforms: outbox (io.debezium.transforms.outbox.EventRouter)
+    String orderId = order.getId();
+    String orderJson = objectMapper.writeValueAsString(order);
+
+    // 하나의 DB 트랜잭션에서 4개 이벤트를 Outbox에 저장
+    outboxRepository.save(new OutboxEvent(orderId, "payment.requested", orderJson));
+    outboxRepository.save(new OutboxEvent(orderId, "inventory.deduct",  orderJson));
+    outboxRepository.save(new OutboxEvent(orderId, "notification.send", orderJson));
+    outboxRepository.save(new OutboxEvent(orderId, "analytics.track",   orderJson));
+
+    // DB 커밋 → 4개 이벤트가 원자적으로 저장
+    // DB 롤백 → 4개 이벤트 모두 사라짐
+    // Kafka와 무관하게 DB 레벨에서 일관성 100% 보장
+}
 ```
+
+**Step 3: Debezium이 Outbox 테이블 변경 감지 → 토픽별 라우팅**
+
+```json
+{
+  "name": "outbox-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "db-host",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "password",
+    "database.server.id": "1",
+    "table.include.list": "orders.outbox_events",
+    "transforms": "outbox",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.outbox.route.topic.replacement": "${routedByValue}",
+    "transforms.outbox.table.field.event.type": "event_type",
+    "transforms.outbox.table.field.event.key": "aggregate_id",
+    "transforms.outbox.table.field.event.payload": "payload"
+  }
+}
+```
+
+이 설정으로 Debezium이 `event_type` 컬럼 값을 보고 자동으로 토픽을 결정합니다:
+- `event_type=payment.requested` → `payment.requested` 토픽
+- `event_type=inventory.deduct` → `inventory.deduct` 토픽
+- `event_type=notification.send` → `notification.send` 토픽
+- `event_type=analytics.track` → `analytics.track` 토픽
+
+**왜 이 방식이 완전한가**: `orderRepository.save()`와 `outboxRepository.save()`가 같은 `@Transactional` 안에 있으므로, DB 커밋/롤백이 원자적입니다. Kafka가 죽어있어도 Outbox 테이블에는 이벤트가 남아있고, Debezium이 복구 후 밀린 이벤트를 순서대로 발행합니다.
 
 ### 트레이드오프 비교
 
