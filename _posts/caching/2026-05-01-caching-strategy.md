@@ -576,6 +576,94 @@ public void recordClick(Long postId) {
 
 ---
 
+## 캐시를 쓰면 빠르다는 착각
+
+캐시를 도입하면 시스템이 안정적으로 빨라진다고 믿는다. 하지만 캐시는 잘못 쓰면 DB보다 더 위험한 장애 원인이 된다.
+
+**함정 1: 캐시 스탬피드 — 인기 키 만료 시 DB가 죽는다**
+
+```
+t=0: "popular-product:1" TTL 만료
+t=0~0.1s: 동시 요청 500개 → 전부 Cache Miss
+→ 500개 DB 쿼리 동시 발생
+→ DB CPU 100% → 응답 지연 → 더 많은 요청 적체 → DB 다운
+→ 캐시가 DB를 보호하러 들어왔다가 오히려 DB를 죽인 상황
+```
+
+```java
+// 잘못된 Cache-Aside: 스탬피드에 무방비
+public Product getProduct(Long id) {
+    Product cached = redis.get("product:" + id);
+    if (cached != null) return cached;
+    // 여기서 500개 스레드가 동시에 DB를 조회한다
+    Product product = db.findById(id);
+    redis.set("product:" + id, product, Duration.ofMinutes(10));
+    return product;
+}
+```
+
+**함정 2: 캐시-DB 불일치 — 삭제 후 구값이 재캐싱된다**
+
+```
+Thread A: DB 업데이트 → 캐시 삭제 (여기까지 정상)
+Thread B: 캐시 Miss → DB에서 구값 조회 시작 (타이밍 문제)
+Thread A: 완료
+Thread B: 조회한 구값을 캐시에 저장 → 캐시 오염!
+→ TTL이 끝날 때까지 구값이 계속 서빙됨
+```
+
+```java
+// 이 순서도 안전하지 않다
+@Transactional
+public void updateProduct(Long id, ProductRequest req) {
+    productRepository.save(product);  // DB 업데이트
+    redis.delete("product:" + id);    // 캐시 삭제
+    // Thread B가 이 사이에 구값을 캐시에 써버릴 수 있다
+}
+```
+
+**최종 방어선: 분산 락 + TTL 지터 + Write-Through**
+
+```java
+// 방어선 1: 분산 락으로 스탬피드 차단
+public Product getProduct(Long id) {
+    String key = "product:" + id;
+    Product cached = redis.get(key);
+    if (cached != null) return cached;
+
+    String lockKey = "lock:" + key;
+    // 한 스레드만 DB 조회, 나머지는 락 해제 후 캐시 재조회
+    Boolean acquired = redis.setIfAbsent(lockKey, "1", Duration.ofSeconds(5));
+    if (Boolean.TRUE.equals(acquired)) {
+        try {
+            Product product = db.findById(id);
+            // 방어선 2: TTL 지터로 동시 만료 방지
+            Duration ttl = Duration.ofMinutes(10).plusSeconds(new Random().nextInt(60));
+            redis.set(key, product, ttl);
+            return product;
+        } finally {
+            redis.delete(lockKey);
+        }
+    }
+    // 락 획득 실패한 스레드는 잠시 대기 후 캐시 재조회
+    Thread.sleep(50);
+    return getProduct(id);
+}
+
+// 방어선 3: Write-Through로 캐시-DB 불일치 원천 차단
+@Transactional
+public void updateProduct(Long id, ProductRequest req) {
+    product.update(req);
+    productRepository.save(product);
+    // 삭제가 아닌 즉시 갱신 → 불일치 창이 없음
+    redis.set("product:" + id, product, Duration.ofMinutes(10));
+}
+```
+
+캐시는 DB 보호막이 아니라 단일 장애 지점이 될 수 있다. 스탬피드와 불일치 패턴을 모르고 Cache-Aside만 추가하면, 트래픽 피크 때 오히려 캐시가 없을 때보다 더 심한 장애가 발생한다.
+
+---
+
 ## 면접 포인트
 
 **Q1. Cache-Aside와 Read-Through의 차이점은?**

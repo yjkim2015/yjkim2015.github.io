@@ -992,6 +992,91 @@ graph LR
 100K TPS에서는 GC 튜닝 이전에 애플리케이션 코드에서 불필요한 객체 생성을 줄이는 것이 선행되어야 합니다. JFR(Java Flight Recorder)로 어느 코드가 가장 많은 객체를 생성하는지 프로파일링한 후 최적화하는 순서가 효과적입니다.
 
 ---
+## G1 GC면 충분하다는 착각
+
+Java 9 이후 G1이 기본 GC이므로 아무 설정 없이 두면 최적이라고 생각한다. 하지만 워크로드에 따라 G1은 명백히 잘못된 선택이 될 수 있다.
+
+**함정 1: P99 지연이 중요한 서비스 — G1도 Mixed GC 시 수십 ms STW가 발생한다**
+
+```bash
+# G1 GC 로그에서 이런 줄을 발견했다면:
+[2026-05-07T10:23:41.123] GC(42) Pause Mixed (G1 Evacuation Pause) 45ms
+[2026-05-07T10:24:15.891] GC(43) Pause Mixed (G1 Evacuation Pause) 78ms
+[2026-05-07T10:25:02.334] GC(44) Pause Full (Ergonomics) 3240ms  ← Full GC 발생
+
+# 초당 1만 건 처리 중 78ms STW = 780건 요청이 지연됨
+# P99 응답시간이 100ms 목표인데 GC 하나가 78ms를 잡아먹음
+# MaxGCPauseMillis=200을 설정해도 "목표"일 뿐, 보장이 아니다
+```
+
+```java
+// 이런 서비스에서 G1을 그냥 쓰면 안 된다
+// - 결제 처리 (응답 지연 = 사용자 불안)
+// - 실시간 경매 (50ms 지연 = 낙찰 기회 손실)
+// - 게임 서버 (100ms STW = 플레이어가 느끼는 렉)
+// - 증권 주문 (수십 ms 지연 = 체결 가격 차이)
+```
+
+**함정 2: 대용량 힙(32GB 이상) — G1보다 ZGC/Shenandoah가 적합하다**
+
+```bash
+# G1 + 힙 64GB 환경에서 Full GC 발생 시:
+[GC(10)] Pause Full (Ergonomics) 18432ms  # 18초 STW!
+
+# G1은 힙이 클수록 Full GC 한 번의 STW가 길어진다
+# 힙 4GB → Full GC 수백 ms
+# 힙 32GB → Full GC 수 초
+# 힙 64GB → Full GC 수십 초
+
+# 같은 환경에서 ZGC:
+# [GC(10)] Pause Mark Start 0.8ms  ← 힙 크기와 무관하게 1ms 미만
+```
+
+**함정 3: G1 설정만 바꾼다고 해결되지 않는 경우**
+
+```bash
+# MaxGCPauseMillis를 아무리 낮춰도 Full GC는 막을 수 없다
+-XX:MaxGCPauseMillis=50   # 목표 50ms
+
+# Full GC 발생 조건:
+# 1. Concurrent Mark가 Evacuation을 따라잡지 못할 때
+# 2. Humongous 객체가 많을 때
+# 3. Old Generation이 예비 공간 없이 꽉 찰 때
+
+# 이 상황에서 G1은 어쩔 수 없이 Full STW로 전환한다
+# MaxGCPauseMillis는 이를 막지 못한다
+```
+
+**최종 방어선: 실제 워크로드로 GC 로그를 분석한 후 GC를 선택한다**
+
+```bash
+# 1단계: GC 로그를 수집한다
+java -Xms8g -Xmx8g \
+     -XX:+UseG1GC \
+     -Xlog:gc*:file=gc.log:time,uptime:filecount=5,filesize=20m \
+     -jar app.jar
+
+# 2단계: GCEasy(https://gceasy.io)로 분석한다
+# 확인 항목:
+# - Full GC 발생 빈도와 STW 시간
+# - P99 STW 시간이 SLA를 초과하는가?
+# - Old Generation 증가 추세 (메모리 누수 징후)
+
+# 3단계: 판단 기준
+# STW P99 > 100ms + 힙 > 8GB → ZGC 전환 검토
+java -Xms8g -Xmx8g -XX:+UseZGC -jar app.jar
+
+# STW P99 > 10ms + 힙 > 16GB → ZGC가 거의 확실한 선택
+java -Xms32g -Xmx32g -XX:+UseZGC -XX:+ZGenerational -jar app.jar
+
+# 배치 처리, 처리량 최우선 → Parallel GC가 G1보다 나을 수 있다
+java -XX:+UseParallelGC -jar batch-app.jar
+
+# GC를 선택하기 전에 측정하지 않는 것이 가장 큰 실수다
+```
+
+---
+
 ## 정리
 
 ```mermaid

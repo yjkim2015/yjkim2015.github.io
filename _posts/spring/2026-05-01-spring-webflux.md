@@ -1851,6 +1851,88 @@ Flux.range(1, Integer.MAX_VALUE)
 
 ---
 
+## WebFlux면 성능이 좋다는 착각
+
+WebFlux를 도입하면 자동으로 성능이 향상된다고 기대한다. 하지만 잘못 쓰면 MVC보다 훨씬 나쁜 결과가 나온다.
+
+**함정 1: JPA/JDBC를 그대로 쓰면 EventLoop가 멈춘다**
+
+```java
+// 이 코드는 WebFlux를 도입한 의미가 없다. 오히려 더 위험하다.
+@GetMapping("/users/{id}")
+public Mono<User> getUser(@PathVariable Long id) {
+    // JPA는 블로킹 I/O다.
+    // EventLoop 스레드(보통 CPU 코어 수 = 8개)에서 블로킹이 발생하면
+    // 해당 EventLoop가 담당하는 모든 요청이 동시에 멈춘다.
+    User user = userJpaRepository.findById(id).orElseThrow(); // 블로킹!
+    return Mono.just(user);
+}
+// MVC였다면 스레드 하나만 멈춤
+// WebFlux에서는 EventLoop 하나 전체가 멈춤 → 수백 요청 동시 지연
+```
+
+```java
+// 탐지: BlockHound를 개발 환경에서 반드시 활성화한다
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        BlockHound.install(); // EventLoop 블로킹 시 즉시 예외 발생
+        SpringApplication.run(Application.class, args);
+    }
+}
+// 블로킹 코드가 있으면 즉시 BlockingOperationError로 알려준다
+```
+
+**함정 2: 디버깅 지옥 — 스택 트레이스가 읽을 수 없다**
+
+```
+// 일반 MVC에서 NPE 발생 시:
+java.lang.NullPointerException
+    at com.example.OrderService.createOrder(OrderService.java:42)
+    at com.example.OrderController.postOrder(OrderController.java:28)
+// 원인 즉시 파악 가능
+
+// WebFlux 리액티브 체인에서 NPE 발생 시:
+java.lang.NullPointerException
+    at reactor.core.publisher.FluxMap$MapSubscriber.onNext(FluxMap.java:106)
+    at reactor.core.publisher.FluxFlatMap$FlatMapMain.tryEmit(FluxFlatMap.java:588)
+    at reactor.core.publisher.FluxFlatMap$FlatMapInner.onNext(FluxFlatMap.java:982)
+    at reactor.core.publisher.FluxMergeSequential$MergeSequentialInner.onNext(...)
+    ... (Reactor 내부 코드 수십 줄)
+// 실제 코드 위치가 보이지 않는다
+// 장애 상황에서 원인 파악에 수십 분~수 시간이 걸릴 수 있다
+```
+
+```java
+// 방어: checkpoint()로 최소한의 위치 정보를 확보한다
+userService.findById(userId)
+    .checkpoint("userService.findById")     // 이 지점 이후 오류 발생 위치 표시
+    .flatMap(user -> orderService.create(user, req))
+    .checkpoint("orderService.create")
+    .subscribe();
+```
+
+**최종 방어선: JPA/JDBC를 쓰면 WebFlux를 쓰지 마라**
+
+```
+판단 기준:
+┌─ 기존 JPA/JDBC 코드가 있는가?
+│   └─ YES → WebFlux 도입 효과 없음. Virtual Thread(Java 21)가 답이다.
+│            spring.threads.virtual.enabled=true 한 줄로 동시성 문제 해결.
+│            코드 변경 없이 MVC 그대로 사용.
+│
+└─ R2DBC + Reactive MongoDB 등 전체 스택이 논블로킹인가?
+    └─ YES + 팀이 Reactor에 익숙한가?
+        └─ YES → WebFlux 도입 타당
+        └─ NO  → 학습 곡선 + 디버깅 난이도 비용이 성능 이득을 초과할 수 있음
+
+"WebFlux는 블로킹 코드가 하나도 없을 때만 효과가 있다.
+ 블로킹 코드가 하나라도 섞이면 EventLoop 전체가 멈추고,
+ MVC보다 더 나쁜 상황이 된다."
+```
+
+---
+
 ## 정리
 
 Spring WebFlux는 강력하지만 올바르게 사용하기 어려운 프레임워크입니다.

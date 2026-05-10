@@ -350,6 +350,65 @@ flowchart LR
 
 ---
 
+## acks=all이면 안전하다는 착각
+
+`acks=all`을 설정했다고 메시지 유실이 없다고 믿으면 안 된다. 이 설정은 생각보다 훨씬 쉽게 무력화된다.
+
+**함정 1: min.insync.replicas=1이면 acks=all이 의미 없다**
+
+```properties
+# 이 조합은 사실상 acks=1과 동일하다
+acks=all
+min.insync.replicas=1   # ISR에 리더 하나만 있어도 쓰기 성공
+```
+
+리더 하나만 확인하면 되므로, 리더가 죽는 순간 아직 팔로워에 복제되지 않은 메시지는 유실된다. 브로커 로그에 성공으로 찍혔어도 데이터는 사라진다.
+
+**함정 2: unclean.leader.election.enable=true면 복제 설정이 모두 무력화된다**
+
+```bash
+# 이 설정이 true이면
+unclean.leader.election.enable=true
+
+# 시나리오:
+# 1. ISR = {Leader, F1, F2}
+# 2. F1, F2가 과부하로 ISR에서 탈락
+# 3. Leader 장애 발생
+# 4. ISR 비어 있음 → Out-of-Sync인 F1이 리더로 선출됨
+# 5. F1이 놓친 메시지는 영구 유실
+# → acks=all + min.insync.replicas=2가 아무 의미 없었음
+```
+
+**함정 3: 네트워크 분할(Split Brain) 상황**
+
+```
+브로커1(리더)이 브로커2,3과 일시적으로 단절됨
+→ 브로커2가 새 리더로 선출됨
+→ 브로커1은 자신이 아직 리더라고 생각하고 프로듀서 요청을 받음
+→ acks=all을 리턴했지만 해당 메시지는 브로커1에만 존재
+→ 브로커1이 재합류하면 epoch 불일치로 이 메시지들이 truncate됨 → 유실
+```
+
+**최종 방어선: 설정 세 개가 모두 맞아야 한다**
+
+```properties
+# 프로듀서
+acks=all
+retries=2147483647
+enable.idempotence=true
+
+# 브로커 (이 두 줄이 핵심)
+min.insync.replicas=2              # acks=all의 실질적 보장
+unclean.leader.election.enable=false   # 데이터 있는 리더만 선출
+
+# 컨슈머 측 방어
+# 중복 처리 가능성은 항상 존재 → 멱등성 처리 필수
+```
+
+`acks=all`은 필요조건이지 충분조건이 아니다. `min.insync.replicas`와 `unclean` 설정을 함께 검토하지 않으면 운영 중 데이터가 사라진 뒤에야 이 사실을 알게 된다.
+
+---
+
 ## 왜 Kafka 복제를 알아야 하는가?
 
 `replication.factor`, `min.insync.replicas`, `acks`의 조합이 내구성과 가용성의 균형을 결정한다. 이 세 가지를 잘못 설정하면 브로커 한 대 장애에도 쓰기가 전부 차단되거나, 반대로 데이터가 유실된다. 복제 내부를 이해하면 ISR 축소 알림이 왔을 때 올바른 판단을 내릴 수 있다.

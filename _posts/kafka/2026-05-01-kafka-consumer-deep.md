@@ -437,6 +437,77 @@ flowchart LR
 
 ---
 
+## auto.commit을 끄면 정확히 한 번 처리된다는 착각
+
+수동 커밋으로 전환하면 "이제 메시지가 정확히 한 번 처리된다"고 믿는 경우가 많다. 이는 틀렸다.
+
+**함정 1: 수동 커밋도 at-least-once다**
+
+```java
+@KafkaListener(topics = "orders")
+public void processOrder(ConsumerRecord<String, String> record, Acknowledgment ack) {
+    orderService.process(record.value()); // 처리 완료
+    // 여기서 컨슈머가 죽으면?
+    ack.acknowledge();                    // 커밋 전 장애 → 재시작 후 같은 메시지 재소비
+}
+```
+
+처리는 완료됐지만 커밋 전에 프로세스가 죽으면, 재시작 후 같은 메시지를 다시 처리한다. DB에 중복 주문이 생성된다. 수동 커밋은 유실을 막을 뿐, 중복을 막지 못한다.
+
+**함정 2: commitSync()도 커밋 직전 죽으면 동일한 문제**
+
+```java
+// 이 코드도 at-least-once다
+consumer.poll(Duration.ofMillis(100)).forEach(record -> {
+    process(record);           // 처리 완료
+    consumer.commitSync();     // 커밋 전 장애 → 재처리
+});
+// "처리+커밋"은 원자적이지 않다. 둘 사이에 항상 틈이 존재한다.
+```
+
+**함정 3: exactly-once는 Kafka 트랜잭션 API를 써도 어렵다**
+
+```java
+// Kafka Streams의 exactly-once는 Kafka→Kafka 파이프라인에서만 완전히 동작한다
+// Kafka → 외부 DB 쓰기는 여전히 at-least-once
+producer.initTransactions();
+producer.beginTransaction();
+producer.send("output-topic", result);
+consumer.commitSync(offsets);  // Kafka 내부는 원자적
+producer.commitTransaction();
+// 하지만 DB INSERT는 이 트랜잭션 밖에 있다
+```
+
+**최종 방어선: 컨슈머 멱등성 설계**
+
+```java
+@Transactional
+public void processOrder(String orderId, String payload) {
+    // 중복 방어: UNIQUE constraint 또는 처리 여부 확인
+    if (processedEventRepository.existsByEventId(orderId)) {
+        log.info("이미 처리된 이벤트, 스킵: {}", orderId);
+        return;
+    }
+
+    orderService.create(payload);
+
+    // 처리 완료 기록 (DB UNIQUE constraint가 중복 방어선)
+    processedEventRepository.save(new ProcessedEvent(orderId));
+}
+```
+
+```sql
+-- DB 레벨 방어선: 이 제약이 없으면 멱등성 보장 불가
+CREATE TABLE processed_events (
+    event_id VARCHAR(100) PRIMARY KEY,  -- UNIQUE constraint
+    processed_at DATETIME
+);
+```
+
+수동 커밋은 유실을 줄여주는 도구다. 중복을 막는 것은 애플리케이션의 멱등성 설계다. 이 두 가지를 혼동하면 중복 결제, 중복 주문 같은 실제 장애가 발생한다.
+
+---
+
 ## 왜 Consumer 내부를 알아야 하는가?
 
 Consumer Lag, Rebalancing, 중복 처리는 Kafka 운영에서 가장 자주 마주치는 문제다. `max.poll.interval.ms`, `session.timeout.ms`, `auto.offset.reset`의 의미를 모르면 장애 원인을 찾지 못하고 잘못된 설정으로 메시지를 유실하거나 무한 중복 처리에 빠진다.

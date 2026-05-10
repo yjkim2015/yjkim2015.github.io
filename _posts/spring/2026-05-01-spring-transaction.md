@@ -405,6 +405,100 @@ public void transfer() throws InsufficientFundsException {
 **해결**: `@Transactional(rollbackFor = Exception.class)` 또는 `RuntimeException`을 상속한 예외를 사용한다.
 
 ---
+## @Transactional만 붙이면 안전하다는 착각
+
+`@Transactional`을 붙였으니 이제 트랜잭션이 보장된다고 믿는 순간, 조용히 데이터가 깨지기 시작한다.
+
+**함정 1: private 메서드 — 트랜잭션이 아예 걸리지 않는다**
+
+```java
+@Service
+public class OrderService {
+
+    // @Transactional을 붙여도 동작하지 않는다
+    @Transactional
+    private void createOrderInternal() {
+        orderRepository.save(order);
+        throw new RuntimeException("오류");
+        // 프록시는 private 메서드를 오버라이드할 수 없으므로
+        // 트랜잭션이 적용되지 않는다. 예외가 터져도 롤백 없이 저장됨.
+    }
+}
+```
+
+**함정 2: 내부 호출(self-invocation) — 프록시를 우회한다**
+
+```java
+@Service
+public class OrderService {
+
+    public void process() {
+        createOrder();  // this.createOrder() → 프록시를 거치지 않음
+        // @Transactional이 붙어 있어도 트랜잭션이 시작되지 않는다
+    }
+
+    @Transactional
+    public void createOrder() {
+        orderRepository.save(order);
+        throw new RuntimeException("오류");
+        // 롤백되지 않는다. 저장이 그대로 커밋됨.
+    }
+}
+// 해결: createOrder()를 별도 Bean으로 분리
+```
+
+**함정 3: checked exception — 기본적으로 롤백되지 않는다**
+
+```java
+@Transactional  // rollbackFor 없음
+public void transfer() throws InsufficientFundsException {
+    accountRepository.debit(fromAccount, amount);   // 출금 완료
+
+    if (balance < 0) {
+        throw new InsufficientFundsException();     // Checked Exception!
+    }
+    // InsufficientFundsException은 RuntimeException이 아니므로 롤백 안 됨
+    // 출금만 되고 입금 안 된 채로 커밋됨 → 돈이 사라짐
+}
+
+// 반드시 명시해야 한다
+@Transactional(rollbackFor = Exception.class)
+public void transfer() throws InsufficientFundsException { ... }
+```
+
+**최종 방어선: 통합 테스트에서 롤백 여부를 반드시 확인한다**
+
+```java
+@SpringBootTest
+@Transactional  // 테스트 후 자동 롤백
+class OrderServiceIntegrationTest {
+
+    @Test
+    void 예외_발생_시_저장_안_됨() {
+        assertThatThrownBy(() -> orderService.createOrder(invalidRequest))
+            .isInstanceOf(RuntimeException.class);
+
+        // 실제로 DB에 저장되지 않았는지 확인
+        // 이 검증이 없으면 트랜잭션이 동작 안 해도 테스트가 통과됨
+        assertThat(orderRepository.count()).isEqualTo(0);
+    }
+
+    @Test
+    void checked_예외는_rollbackFor_없으면_커밋됨() {
+        // 이 테스트가 실패해야 문제를 인지할 수 있다
+        assertThatThrownBy(() -> orderService.transfer(request))
+            .isInstanceOf(InsufficientFundsException.class);
+
+        // rollbackFor 없으면 출금 레코드가 남아있다
+        assertThat(accountRepository.findBalance(fromAccount)).isLessThan(0);
+    }
+}
+```
+
+`@Transactional`은 선언만으로 완성되지 않는다. private 메서드 여부, 호출 경로, 예외 타입을 모두 검토하고, 통합 테스트로 실제 롤백을 확인해야 한다. 단위 테스트는 프록시를 거치지 않으므로 트랜잭션 문제를 잡지 못한다.
+
+---
+
 ## 정리
 
 | 개념 | 핵심 |
