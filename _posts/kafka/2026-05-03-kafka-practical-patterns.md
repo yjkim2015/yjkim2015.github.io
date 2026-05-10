@@ -31,7 +31,17 @@ public void completeOrder(Order order) {
 }
 ```
 
-3번째 발행에서 Kafka 브로커가 잠깐 불안정해서 실패했다고 가정합니다. 결제와 재고는 이미 처리 중인데 알림과 분석에는 이벤트가 없습니다. DB `@Transactional`은 DB 연산에만 적용되고, Kafka 발행은 **DB 트랜잭션 경계 바깥**에 있습니다.
+3번째 발행에서 Kafka 브로커가 잠깐 불안정해서 실패했다고 가정합니다.
+
+```mermaid
+graph LR
+    Svc["주문서비스"] --> T1["결제 토픽 ✅"]
+    Svc --> T2["재고 토픽 ✅"]
+    Svc --> T3["알림 토픽 ❌"]
+    Svc --> T4["분석 토픽 ❌"]
+```
+
+결제와 재고는 이미 처리 중인데 알림과 분석에는 이벤트가 없습니다. DB `@Transactional`은 DB 연산에만 적용되고, Kafka 발행은 **DB 트랜잭션 경계 바깥**에 있습니다.
 
 ### 방법 B: Kafka 트랜잭션 — 원자적 멀티 토픽 발행
 
@@ -63,7 +73,15 @@ public void completeOrder(Order order) {
 }
 ```
 
-단, Kafka 트랜잭션은 **Kafka 내부만 보장**합니다. DB 저장과 Kafka 발행을 하나의 원자 단위로 묶지는 못합니다. DB가 커밋됐는데 Kafka 발행이 실패하면 여전히 불일치가 생깁니다.
+단, Kafka 트랜잭션은 **Kafka 내부만 보장**합니다.
+
+```mermaid
+graph LR
+    Svc["주문서비스"] --> TX["Kafka TX"]
+    TX --> T1["결제"] & T2["재고"] & T3["알림"] & T4["분석"]
+```
+
+DB 저장과 Kafka 발행을 하나의 원자 단위로 묶지는 못합니다. DB가 커밋됐는데 Kafka 발행이 실패하면 여전히 불일치가 생깁니다.
 
 ### 방법 C: 팬아웃 패턴 — 단일 이벤트 + 하류 구독
 
@@ -81,6 +99,12 @@ graph LR
 이 패턴의 단점은 모든 하류 서비스가 전체 이벤트 페이로드를 처리해야 한다는 것입니다. 결제 서비스에 불필요한 배송지 정보가 섞여 들어옵니다. 이를 보완하는 게 **이벤트 라우터 패턴**입니다. 라우터 컨슈머가 `order.completed`를 소비해서 각 서비스에 맞게 변환 후 재발행합니다.
 
 ### 방법 D: Outbox 패턴 — DB와 이벤트의 완전한 일관성
+
+```mermaid
+graph LR
+    Svc["주문서비스"] -->|"TX 커밋"| DB["DB + Outbox"]
+    DB -->|"CDC"| Kafka --> Consumer
+```
 
 방법 B와 C 모두 DB와 Kafka 사이의 불일치 문제를 완전히 해결하지 못합니다. 이 문제의 정석 해법은 Outbox 패턴입니다. 자세한 구현은 [Kafka Outbox 패턴과 CDC 활용](/kafka/kafka-outbox-cdc) 포스트를 참고하세요.
 
