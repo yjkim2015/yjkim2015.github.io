@@ -295,6 +295,26 @@ lock.lock(); // 무기한 보유, Watchdog이 TTL 연장
 
 Redisson의 가장 큰 장점은 락 대기 방식이다. 스핀락이 아닌 Pub/Sub 이벤트로 대기한다.
 
+**왜 Pub/Sub이 효율적인가 — TCP 동작 원리**:
+
+Redis Pub/Sub은 **TCP 커넥션 위에서 동작**한다. SUBSCRIBE 명령을 보내면 클라이언트는 해당 TCP 커넥션을 "구독 모드"로 전환한다. 이 상태에서는:
+
+1. **클라이언트 → Redis**: 추가 요청 안 보냄 (TCP 커넥션은 열려있지만 데이터 전송 없음)
+2. **Redis → 클라이언트**: PUBLISH가 발생하면 Redis가 **해당 TCP 커넥션으로 push** (서버가 먼저 보냄)
+3. **OS 레벨**: 클라이언트 스레드는 `epoll_wait`/`select`로 TCP 소켓의 읽기 이벤트를 대기 → **CPU 사용 0%**
+
+반면 스핀락은:
+1. 100ms마다 `SET NX` 명령을 TCP로 보냄 → Redis가 응답 → 실패면 다시 100ms 후 전송
+2. 스레드 10개가 경쟁하면 초당 100건의 TCP 요청-응답 왕복
+3. 락 해제 시점과 다음 폴링 사이 최대 100ms 지연
+
+```
+스핀락: [요청]→[응답]→[sleep]→[요청]→[응답]→... (CPU + 네트워크 낭비)
+Pub/Sub: [SUBSCRIBE]→ ... 대기(CPU 0%) ... →[PUBLISH 수신] (즉시 반응)
+```
+
+즉 Pub/Sub은 **TCP의 전이중(Full-duplex) 특성**을 활용한다. 하나의 TCP 커넥션에서 클라이언트가 데이터를 안 보내도 서버가 먼저 보낼 수 있다. 이것이 WebSocket과 같은 원리이며, HTTP 폴링과 근본적으로 다른 이유다.
+
 ```mermaid
 graph LR
     A["ThreadA"] -->|SET NX EX| R["Redis"]
