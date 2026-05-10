@@ -1192,22 +1192,34 @@ multiLock.lock();
 
 ## 비판적 결론 — 분산 락의 진짜 현실
 
-### Watchdog은 쓰지 마라
+### Watchdog — 존재 이유와 위험을 둘 다 이해하라
 
-Watchdog은 편리하지만 **모든 위험 시나리오의 공통 원인**이다:
+Watchdog이 있는 이유는 **leaseTime의 딜레마** 때문이다:
+- leaseTime 너무 짧게 → 작업 중 락 만료 → **이중 진입 (더 위험)**
+- leaseTime 너무 길게 → 장애 시 락이 오래 안 풀림
+
+Watchdog은 이 딜레마를 "작업 중이면 자동 연장"으로 해결한다. **나쁜 기능이 아니라 필요한 기능이다.** 하지만 위험을 모르고 쓰면 사고가 난다:
 
 - GC STW → Watchdog이 TTL 갱신 → 다른 프로세스 무한 대기
-- 네트워크 파티션 → Watchdog이 TTL 갱신 → 교착
-- unlock() 누락 → Watchdog이 TTL 갱신 → 영구 락
+- unlock() 누락 → Watchdog이 영원히 갱신 → 영구 락
 
-**leaseTime을 생략하면 Watchdog이 활성화된다**는 Redisson의 설계가 문제다. 대부분의 개발자가 `lock.lock()`만 호출하고 Watchdog의 위험을 모른다.
+| 상황 | 권장 |
+|------|------|
+| 작업 시간 예측 가능 (99%) | `tryLock(3, 10, SECONDS)` — leaseTime 명시 |
+| 작업 시간 예측 불가 (외부 API) | Watchdog 사용 + **반드시 try-finally** |
+| 어떤 경우든 | **DB 최종 방어선 필수** |
 
 ```java
-// ❌ 이렇게 쓰지 마라
-lock.lock(); // Watchdog 활성화 — 위의 모든 위험에 노출
+// 작업 시간 예측 가능: leaseTime 명시 (Watchdog 비활성)
+lock.tryLock(3, 10, TimeUnit.SECONDS);
 
-// ✅ 항상 leaseTime 명시
-lock.tryLock(3, 10, TimeUnit.SECONDS); // 최대 10초 후 반드시 해제
+// 작업 시간 예측 불가: Watchdog + try-finally 필수
+lock.lock();
+try {
+    callExternalApi(); // 시간 예측 불가
+} finally {
+    if (lock.isHeldByCurrentThread()) lock.unlock();
+}
 ```
 
 ### Named Lock도 답이 아니다
