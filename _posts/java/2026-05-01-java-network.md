@@ -881,9 +881,9 @@ String data = StandardCharsets.UTF_8.decode(buffer).toString();  // 정상 데�
 
 ```mermaid
 sequenceDiagram
-    Java_네트워크->>java.net: 
-    java.net->>소규모_TCP: 
-    java.nio->>대규모_NIO: 
+    Java_네트워크->>java.net:
+    java.net->>소규모_TCP:
+    java.nio->>대규모_NIO:
 ```
 
 ---

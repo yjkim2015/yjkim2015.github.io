@@ -419,9 +419,9 @@ class TokenBucket:
 
 ```mermaid
 sequenceDiagram
-    participant C as "현재 시각 01:15"
-    participant P as "이전 윈도우 (00:00~01:00)"
-    participant N as "현재 윈도우 (01:00~02:00)"
+    participant C as 현재 시각 01:15
+    participant P as 이전 윈도우 (00:00~01:00)
+    participant N as 현재 윈도우 (01:00~02:00)
     Note over C,N: 현재 시각이 현재 윈도우의 25% 경과
     Note over P: 이전 윈도우: 50건
     Note over N: 현재 윈도우: 30건

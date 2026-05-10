@@ -303,11 +303,11 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    B->>C: 
-    C->>D: 
+    B->>C:
+    C->>D:
     D->>E: miss
-    D->>F: 
-    E->>F: 
+    D->>F:
+    E->>F:
 ```
 
 ### MySQL 스키마 — Geohash 인덱스
@@ -434,7 +434,7 @@ sequenceDiagram
     participant Rider as 라이더 앱
     participant WS as 위치 서버
     participant Redis as Redis
-    Rider->>WS: WS {lat, lon}
+    Rider->>WS: WS (lat, lon)
     WS->>Redis: HSET rider 위치
     WS->>Redis: PUBLISH 위치정보
     Redis->>Rider: 실시간 푸시

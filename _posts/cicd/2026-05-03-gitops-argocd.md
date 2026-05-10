@@ -82,8 +82,8 @@ ArgoCD는 Kubernetes 네이티브 컨트롤러다. 클러스터 내부에 설치
 
 ```mermaid
 sequenceDiagram
-    API_Server->>Redis(캐시): 
-    API_Server->>Repo_Server: 
+    API_Server->>Redis(캐시):
+    API_Server->>Repo_Server:
     Repo_Server->>Git_저장소: Git Clone
     Repo_Server->>App_Controller: 매니페스트
     App_Controller->>Kubernetes_API: 상태 조회

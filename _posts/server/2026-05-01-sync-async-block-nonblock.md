@@ -368,7 +368,7 @@ sequenceDiagram
     App->>K: aio_read()
     K-->>App: 즉시 반환
     Note over App: 다른 작업 진행
-    Note over K: 데이터 도착\n커널 버퍼 → 유저 버퍼 복사 완료
+    Note over K: 데이터 도착 커널 버퍼 → 유저 버퍼 복사 완료
     K-->>App: 완료 시그널/콜백
     Note over App: 데이터 이미 유저 버퍼에 있음
 ```

@@ -112,9 +112,9 @@ SMS:          100만 건/일 →  11 QPS
 
 ```mermaid
 sequenceDiagram
-    B->>C: 
-    C->>D: 
-    C->>E: 
+    B->>C:
+    C->>D:
+    C->>E:
     D->>F: 실패
     E->>F: 실패
 ```
@@ -135,9 +135,9 @@ sequenceDiagram
     API->>K: 발행(비동기)
     K->>W: 소비
     alt iOS
-        W->>APNs: HTTP/2 → 200 OK
+    W->>APNs: HTTP/2 → 200 OK
     else Android
-        W->>FCM: HTTP → success
+    W->>FCM: HTTP → success
     end
 ```
 
@@ -154,10 +154,10 @@ sequenceDiagram
     participant N as Nexmo
     W->>T: SMS 발송
     alt 성공
-        T-->>W: 200 OK
+    T-->>W: 200 OK
     else 3회 실패
-        W->>N: 대체 발송
-        N-->>W: 결과
+    W->>N: 대체 발송
+    N-->>W: 결과
     end
 ```
 

@@ -670,11 +670,11 @@ public class LargeScaleBatchConfig {
 
 ```mermaid
 sequenceDiagram
-    B->>C: 
+    B->>C:
     C->>D: Yes
     C->>E: No
-    D->>F: 
-    E->>F: 
+    D->>F:
+    E->>F:
 ```
 
 ---

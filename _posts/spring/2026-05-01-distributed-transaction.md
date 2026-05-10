@@ -214,9 +214,9 @@ sequenceDiagram
     participant SVC as 주문/재고/결제
     CO->>SVC: Phase1 Try (PENDING, 임시 차감, 금액 잠금)
     alt 모두 성공
-        CO->>SVC: Phase2 Confirm (확정)
+    CO->>SVC: Phase2 Confirm (확정)
     else 실패
-        CO->>SVC: Phase2 Cancel (복원)
+    CO->>SVC: Phase2 Cancel (복원)
     end
 ```
 

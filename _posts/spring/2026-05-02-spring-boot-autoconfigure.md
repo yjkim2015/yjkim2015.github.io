@@ -497,10 +497,10 @@ management:
 
 ```mermaid
 sequenceDiagram
-    Actuator->>/metrics: 
-    Actuator->>/loggers: 
-    Actuator->>/env: 
-    Actuator->>/beans_&_/mappings: 
+    Actuator->>/metrics:
+    Actuator->>/loggers:
+    Actuator->>/env:
+    Actuator->>/beans_&_/mappings:
 ```
 
 **`/actuator/loggers`가 특히 유용한 이유:** 운영 중에 특정 클래스의 로그가 갑자기 많이 필요해졌습니다. 재배포 없이 `curl -X POST /actuator/loggers/com.example.OrderService -d '{"configuredLevel":"DEBUG"}'`로 즉시 DEBUG 레벨로 전환할 수 있습니다. 문제 해결 후 다시 INFO로 복구합니다.

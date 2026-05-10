@@ -177,11 +177,11 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    B->>C: 
+    B->>C:
     C->>D: 존재
     C->>E: 신규
-    D->>F: 
-    E->>F: 
+    D->>F:
+    E->>F:
 ```
 
 ---

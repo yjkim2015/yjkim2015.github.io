@@ -142,8 +142,8 @@ System.out.println(a == b); // true — 완전히 동일한 인스턴스
 
 ```mermaid
 sequenceDiagram
-    쓰기지연_저장소->>tx.commit()→flush(): 
-    tx.commit()→flush()->>INSERT_A: 
+    쓰기지연_저장소->>tx.commit()→flush():
+    tx.commit()→flush()->>INSERT_A:
 ```
 
 **핵심 포인트**: `persist()` 시점에는 DB에 아무것도 들어가지 않는다. `commit()` 직전 `flush()`가 호출될 때 비로소 SQL이 전송된다.

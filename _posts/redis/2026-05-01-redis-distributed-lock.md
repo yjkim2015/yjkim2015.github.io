@@ -215,8 +215,8 @@ public class OrderService {
 ```mermaid
 sequenceDiagram
     loop 100ms마다 반복
-        ThreadB->>Redis: SET NX
-        Redis-->>ThreadB: FAIL
+    ThreadB->>Redis: SET NX
+    Redis-->>ThreadB: FAIL
     end
     Note over Redis: ThreadA가 unlock
     ThreadB->>Redis: SET NX

@@ -255,11 +255,11 @@ CompletableFuture<User> future = CompletableFuture
 
 ```mermaid
 sequenceDiagram
-    api1_&_api2_&_api3->>allOf_완료대기: 
-    api2->>allOf_완료대기: 
-    api3->>allOf_완료대기: 
-    us-east_&_eu-west->>anyOf_첫완료: 
-    eu->>anyOf_첫완료: 
+    api1_&_api2_&_api3->>allOf_완료대기:
+    api2->>allOf_완료대기:
+    api3->>allOf_완료대기:
+    us-east_&_eu-west->>anyOf_첫완료:
+    eu->>anyOf_첫완료:
 ```
 
 ### thenCombine — 두 Future 결과 합치기

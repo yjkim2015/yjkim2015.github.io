@@ -252,8 +252,8 @@ public class OrderController {
 sequenceDiagram
     파라미터_순회->>resolveArgument(): 지원
     파라미터_순회->>다음_Resolver: 미지원
-    resolveArgument()->>파라미터_준비_완료: 
-    다음_Resolver->>파라미터_순회: 
+    resolveArgument()->>파라미터_준비_완료:
+    다음_Resolver->>파라미터_순회:
 ```
 
 ```java

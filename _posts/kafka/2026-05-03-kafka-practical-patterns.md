@@ -35,8 +35,8 @@ public void completeOrder(Order order) {
 
 ```mermaid
 sequenceDiagram
-    주문->>결제_✅: 
-    주문->>알림_❌: 
+    주문->>결제_✅:
+    주문->>알림_❌:
 ```
 
 결제와 재고는 이미 처리 중인데 알림과 분석에는 이벤트가 없습니다. DB `@Transactional`은 DB 연산에만 적용되고, Kafka 발행은 **DB 트랜잭션 경계 바깥**에 있습니다.

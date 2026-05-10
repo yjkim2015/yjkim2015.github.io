@@ -189,7 +189,7 @@ sequenceDiagram
 sequenceDiagram
     participant C as Consumer
     participant GC as Group Coordinator (Broker)
-    C->>GC: Heartbeat (주기적으로 "나 살아있어" 신호)
+    C->>GC: Heartbeat (주기적으로 나 살아있어 신호)
     GC-->>C: HeartbeatResponse
     Note over C,GC: session.timeout.ms 동안 heartbeat 없으면
     Note over GC: 컨슈머 사망으로 판단 → 리밸런싱 시작!
@@ -492,8 +492,8 @@ ZooKeeper 모드에서는 클러스터 내 **하나의 브로커가 컨트롤러
 
 ```mermaid
 sequenceDiagram
-    먼저_생성_=_컨트롤러->>역할:_리더선출·ISR·토픽: 
-    quorum_투표_→_Active->>역할:_리더선출·ISR·토픽: 
+    먼저_생성_=_컨트롤러->>역할:_리더선출·ISR·토픽:
+    quorum_투표_→_Active->>역할:_리더선출·ISR·토픽:
 ```
 
 ---

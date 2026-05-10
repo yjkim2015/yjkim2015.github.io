@@ -195,10 +195,10 @@ sequenceDiagram
     participant L2 as L2(Redis)
     App->>L1: GET key
     alt Hit
-        L1-->>App: 100ns
+    L1-->>App: 100ns
     else Miss
-        App->>L2: GET key
-        L2-->>App: Hit(1ms)/Miss→DB
+    App->>L2: GET key
+    L2-->>App: Hit(1ms)/Miss→DB
     end
 ```
 

@@ -515,10 +515,10 @@ sequenceDiagram
     병목_원인->>GraalVM_/_CDS: JVM
     병목_원인->>startupProbe_최적화: Probe
     병목_원인->>CronHPA: 트래픽 예측
-    멀티스테이지_빌드->>Cold_Start_측정: 
-    GraalVM_/_CDS->>Cold_Start_측정: 
-    startupProbe_최적화->>Cold_Start_측정: 
-    CronHPA->>Cold_Start_측정: 
+    멀티스테이지_빌드->>Cold_Start_측정:
+    GraalVM_/_CDS->>Cold_Start_측정:
+    startupProbe_최적화->>Cold_Start_측정:
+    CronHPA->>Cold_Start_측정:
 ```
 
 ---

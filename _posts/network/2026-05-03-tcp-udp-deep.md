@@ -58,8 +58,8 @@ TCP 연결을 맺는 3단계 과정이다. 단순히 "연결한다"는 의미를
 
 ```mermaid
 sequenceDiagram
-    participant C as "클라이언트"
-    participant S as "서버"
+    participant C as 클라이언트
+    participant S as 서버
     C->>S: 1️⃣ SYN (seq=x)
     Note over C: SYN_SENT 상태
     S-->>C: 2️⃣ SYN-ACK (seq=y, ack=x+1)
@@ -201,7 +201,7 @@ AIMD 규칙:
 ```mermaid
 sequenceDiagram
     Congestion_Avoidan->>Fast_Recovery: 3 Dup ACK
-    Fast_Recovery->>Congestion_Avoidan: 
+    Fast_Recovery->>Congestion_Avoidan:
     Congestion_Avoidan->>재시작_cwnd=1: Timeout
     Slow_Start->>재시작_cwnd=1: Timeout
     Fast_Recovery->>재시작_cwnd=1: Timeout

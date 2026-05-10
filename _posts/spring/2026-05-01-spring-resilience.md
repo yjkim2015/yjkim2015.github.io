@@ -241,9 +241,9 @@ public Result callService(Request request) {
 
 ```mermaid
 sequenceDiagram
-    Bulkhead->>Circuit_Breaker: 
-    Circuit_Breaker->>Retry: 
-    Retry->>서비스_호출: 
+    Bulkhead->>Circuit_Breaker:
+    Circuit_Breaker->>Retry:
+    Retry->>서비스_호출:
     서비스_호출->>Retry: 실패
     Circuit_Breaker->>OPEN: 임계치 초과
 ```

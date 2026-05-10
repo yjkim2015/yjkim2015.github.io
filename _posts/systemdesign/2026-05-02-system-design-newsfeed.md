@@ -118,9 +118,9 @@ DAU 1억명, 평균 팔로잉 200명
 
 ```mermaid
 sequenceDiagram
-    participant A as "게시자"
-    participant Worker as "팬아웃 워커"
-    participant Cache as "Redis 피드 캐시"
+    participant A as 게시자
+    participant Worker as 팬아웃 워커
+    participant Cache as Redis 피드 캐시
     A->>Worker: 게시글 작성
     Worker->>Cache: LPUSH feed:follower1 post_id
     Worker->>Cache: LPUSH feed:follower2 post_id
@@ -152,8 +152,8 @@ graph LR
 sequenceDiagram
     B->>C: 일반
     B->>D: 셀럽
-    C->>E: 
-    D->>E: 
+    C->>E:
+    D->>E:
 ```
 
 대부분의 읽기는 캐시에서 빠르게, 셀럽 게시글만 읽기 시 동적으로 가져온다.
@@ -195,13 +195,13 @@ sequenceDiagram
     participant App
     participant C as Redis
     participant DB as MySQL
-    App->>C: LRANGE feed:{uid}
+    App->>C: LRANGE feed:(uid)
     alt 캐시 히트
-        C-->>App: [post_id...]
-        App->>DB: SELECT IN(ids)
+    C-->>App: (post_id...)
+    App->>DB: SELECT IN(ids)
     else 캐시 미스
-        App->>DB: 팔로잉 최신글
-        App->>C: 재구성
+    App->>DB: 팔로잉 최신글
+    App->>C: 재구성
     end
 ```
 

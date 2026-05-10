@@ -21,8 +21,8 @@ Java는 성능과 객체지향이라는 두 가지 목표를 동시에 추구했
 
 ```mermaid
 sequenceDiagram
-    Integer/Long->>Object: 
-    Double/Boolean->>Object: 
+    Integer/Long->>Object:
+    Double/Boolean->>Object:
 ```
 
 ### 메모리 저장 방식 비교

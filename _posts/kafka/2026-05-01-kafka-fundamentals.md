@@ -160,10 +160,10 @@ public class OrderConsumer {
 
 ```mermaid
 sequenceDiagram
-    P0->>A1: 
-    P1->>A1: 
-    P2->>A2: 
-    P3->>A3: 
+    P0->>A1:
+    P1->>A1:
+    P2->>A2:
+    P3->>A3:
 ```
 
 파티션 4개, 컨슈머 3개인 Group A에서는 A1이 2개 파티션을 담당하며, Group B는 같은 토픽을 독립적으로 소비한다(브로드캐스트 효과).
@@ -175,8 +175,8 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    P0->>C1: 
-    P2->>C3: 
+    P0->>C1:
+    P2->>C3:
 ```
 
 ---

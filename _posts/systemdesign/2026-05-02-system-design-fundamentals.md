@@ -254,12 +254,12 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    LB_(Nginx/ALB)->>서버1_CPU30%: 
-    LB_(Nginx/ALB)->>서버2_CPU80%: 
-    LB_(Nginx/ALB)->>서버3_CPU15%: 
-    서버1_CPU30%->>DB: 
-    서버2_CPU80%->>DB: 
-    서버3_CPU15%->>DB: 
+    LB_(Nginx/ALB)->>서버1_CPU30%:
+    LB_(Nginx/ALB)->>서버2_CPU80%:
+    LB_(Nginx/ALB)->>서버3_CPU15%:
+    서버1_CPU30%->>DB:
+    서버2_CPU80%->>DB:
+    서버3_CPU15%->>DB:
 ```
 
 ### 로드밸런싱 알고리즘 상세 비교

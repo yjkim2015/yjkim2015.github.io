@@ -61,8 +61,8 @@ REPLICAOF NO ONE
 
 ```mermaid
 sequenceDiagram
-    participant Rep as "Replica"
-    participant M as "Master"
+    participant Rep as Replica
+    participant M as Master
     Rep->>M: PSYNC ? -1 (처음 연결, 아이디 없음)
     Note over M: 1. BGSAVE 실행 (RDB 스냅샷 생성 시작)
     Note over M: 2. 스냅샷 생성 중 들어오는<br>새 쓰기는 replication buffer에 저장
@@ -81,8 +81,8 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant Rep as "Replica"
-    participant M as "Master"
+    participant Rep as Replica
+    participant M as Master
     Note over M: replication backlog (원형 버퍼)<br>cmd1, cmd2, cmd3, cmd4, cmd5
     Rep->>M: PSYNC replId 12345 (offset 12345까지 받았음)
     Note over M: backlog에 12345 이후 데이터 있는지 확인
@@ -108,9 +108,9 @@ sequenceDiagram
     participant C as Client
     participant M as Master
     participant R1 as Replica
-    C->>M: SET user:1 "Kim"
+    C->>M: SET user:1 Kim
     M-->>C: OK
-    M--)R1: SET user:1 "Kim"
+    M-->>R1: SET user:1 Kim
     Note over R1: Replication Lag
 ```
 
@@ -148,13 +148,13 @@ Replica A가 B에게, B가 C에게 전파. 마스터 부하는 줄지만, 전파
 
 ```mermaid
 sequenceDiagram
-    participant C as "Client"
-    participant M as "Master"
-    participant Rep as "Replica"
-    C->>M: SET important:data "critical"
+    participant C as Client
+    participant M as Master
+    participant Rep as Replica
+    C->>M: SET important:data critical
     M-->>C: OK (클라이언트는 저장됐다고 믿음)
-    M--)Rep: 전파 시도 (비동기)...
-    Note over M: 💀 크래시 (전파 완료 전)
+    M-->>Rep: 전파 시도 (비동기)...
+    Note over M:  크래시 (전파 완료 전)
     Note over Rep: 승격 → 새 마스터 (important:data 없음!)
     Note over C,Rep: 클라이언트는 OK를 받았지만 데이터 유실!
 ```
