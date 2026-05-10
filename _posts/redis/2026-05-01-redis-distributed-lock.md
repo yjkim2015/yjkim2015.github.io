@@ -1222,6 +1222,107 @@ try {
 }
 ```
 
+**leaseTime vs Watchdog — 프로세스 상태별 비교**:
+
+| 상황 | leaseTime=10초 | Watchdog (TTL 30초) |
+|------|---------------|-------------------|
+| 정상 완료 (5초) | 5초에 unlock → 즉시 해제 | 5초에 unlock → 즉시 해제 |
+| 프로세스 죽음 (5초에) | 10초에 TTL 만료 → 자동 해제 | 30초에 TTL 만료 → 자동 해제 (복구 느림) |
+| 작업이 느림 (15초 걸림) | **10초에 락 만료 → 이중 진입!** | TTL 연장 → 15초에 완료 → 안전 |
+| GC STW (30초) | 10초에 락 만료 → 이중 진입 | TTL 갱신 → 다른 프로세스 30초 대기 |
+
+> **결론**: leaseTime은 "프로세스 죽음"에 강하고, Watchdog은 "프로세스 느림"에 강하다. 둘 다 완벽하지 않으므로 **DB 최종 방어선이 반드시 필요하다.** 프로세스가 죽는 건 leaseTime이든 Watchdog이든 TTL 만료로 해결되지만, 프로세스가 느린 건 Watchdog만 해결할 수 있다.
+
+### 영구 락 감지와 복구 — Watchdog을 쓰든 안 쓰든 필요하다
+
+Watchdog + try-finally를 완벽히 지켜도 **프로세스가 kill -9로 죽으면 finally 블록이 실행 안 된다**. Watchdog 스레드도 같이 죽으므로 TTL이 갱신 안 되어 leaseTime 후 만료되긴 하지만, leaseTime을 생략했다면? Redisson의 기본 lockWatchdogTimeout(30초) 후 만료된다. 하지만 **JVM은 죽었는데 Redis 커넥션이 TIME_WAIT로 남아있으면** Watchdog이 죽었는지 Redis가 모른다.
+
+**1단계: 모니터링 — 오래된 락 알림**
+
+```java
+// 스케줄러: 5분 이상 보유된 락 감지
+@Scheduled(fixedRate = 60000)
+public void detectStaleLocks() {
+    Set<String> keys = redis.keys("lock:*");
+    for (String key : keys) {
+        Long ttl = redis.ttl(key);
+        // Watchdog이 갱신 중이면 TTL이 항상 20~30초 범위
+        // TTL이 -1(영구)이면 Watchdog 없이 락이 걸린 것 → 위험
+        if (ttl == -1) {
+            alert.send("영구 락 감지: " + key);
+        }
+        // TTL이 있지만 값이 오래된 프로세스 ID면 → 좀비 락
+        String holder = redis.get(key);
+        if (!isProcessAlive(holder)) {
+            alert.send("좀비 락: " + key + " holder=" + holder);
+        }
+    }
+}
+```
+
+**2단계: 자동 복구 — 좀비 프로세스의 락 강제 해제**
+
+```java
+// 락 값에 "processId:threadId:timestamp"를 저장
+// 일정 시간(예: 10분) 이상 된 락은 강제 해제
+public void forceReleaseStaleLocks(Duration maxAge) {
+    Set<String> keys = redis.keys("lock:*");
+    for (String key : keys) {
+        String value = redis.get(key);
+        if (value == null) continue;
+
+        long lockTime = extractTimestamp(value);
+        if (System.currentTimeMillis() - lockTime > maxAge.toMillis()) {
+            String holder = extractProcessId(value);
+            if (!isProcessAlive(holder)) {
+                redis.del(key); // 강제 해제
+                log.warn("좀비 락 강제 해제: key={}, holder={}, age={}min",
+                    key, holder, (System.currentTimeMillis() - lockTime) / 60000);
+            }
+        }
+    }
+}
+
+// 프로세스 생존 확인: 헬스체크 엔드포인트 호출
+private boolean isProcessAlive(String processId) {
+    try {
+        restTemplate.getForEntity(
+            "http://" + processId + "/actuator/health", String.class);
+        return true;
+    } catch (Exception e) {
+        return false; // 응답 없음 = 죽은 프로세스
+    }
+}
+```
+
+**3단계: 운영 도구 — 수동 강제 해제 (최후의 수단)**
+
+> **경고**: 수동 강제 해제는 **매우 위험**합니다. 락 보유자가 느리게 살아있을 수 있습니다. 강제 해제 → 원래 프로세스 + 새 프로세스 동시 실행 → 데이터 불일치. 반드시 **락 보유 프로세스가 죽었음을 확인한 후**에만 실행하세요.
+
+```java
+@DeleteMapping("/admin/locks/{key}")
+@PreAuthorize("hasRole('ADMIN')")
+public ResponseEntity<String> forceUnlock(@PathVariable String key) {
+    String value = redis.opsForValue().get("lock:" + key);
+    if (value == null) return ResponseEntity.ok("키 없음");
+
+    String holder = extractProcessId(value);
+
+    // 안전장치: 프로세스 생존 확인
+    if (isProcessAlive(holder)) {
+        return ResponseEntity.status(409)
+            .body("프로세스 " + holder + " 아직 살아있음. 강제 해제 불가.");
+    }
+
+    // 프로세스 죽음 확인 후에만 삭제
+    redis.delete("lock:" + key);
+    auditLog.log("FORCE_UNLOCK", key, getCurrentAdmin(), holder);
+    return ResponseEntity.ok("해제됨 (죽은 프로세스: " + holder + ")");
+}
+```
+
+> **핵심**: "try-finally를 잘 쓰면 영구 락 안 생긴다"는 착각이다. kill -9, OOM Kill, 하드웨어 장애는 finally를 실행하지 않는다. **모니터링 + 자동 복구** 2단계가 있어야 하고, 수동 해제는 프로세스 사망 확인 후 최후의 수단으로만 사용한다.
+
 ### Named Lock도 답이 아니다
 
 Named Lock은 Redis 없이 DB만으로 분산 락을 구현할 수 있어 매력적이지만:
