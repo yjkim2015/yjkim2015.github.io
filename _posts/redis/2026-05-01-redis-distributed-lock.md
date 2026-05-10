@@ -360,7 +360,41 @@ Config config = new Config();
 config.setLockWatchdogTimeout(60000); // 60초
 ```
 
-**주의:** leaseTime을 명시적으로 설정하면 Watchdog이 비활성화된다. 장시간 작업이라면 leaseTime을 생략해 Watchdog에 맡기는 것이 안전하다.
+**주의:** leaseTime을 명시적으로 설정하면 Watchdog이 비활성화된다.
+
+### Watchdog의 단점과 위험성
+
+Watchdog이 편리하지만 **맹목적으로 신뢰하면 안 되는 이유**:
+
+| 위험 시나리오 | 상황 | 결과 |
+|-------------|------|------|
+| GC STW | Full GC 30초 동안 Watchdog이 TTL 갱신, 실제 작업은 멈춤 | 다른 프로세스 영원히 대기 |
+| 네트워크 파티션 | 앱↔Redis는 정상, 앱↔DB는 끊김 | 락은 잡고 있지만 작업 불가 (교착) |
+| 마스터 장애 | 마스터에서 Watchdog 갱신 중 마스터 죽음 → 레플리카 승격 | 레플리카에 락 없음 → 이중 락 |
+| unlock() 누락 | 예외 처리 빠뜨려서 unlock() 안 호출 | Watchdog이 영원히 갱신 → 영구 락 |
+| 리소스 낭비 | 동시 락 1000개 × 10초마다 PEXPIRE | 초당 100건 Redis 명령 추가 |
+
+**실무 권장 설정**:
+
+```java
+// 1. Watchdog 대신 leaseTime 명시 (대부분의 경우 이게 안전)
+lock.tryLock(3, 10, TimeUnit.SECONDS); // 3초 대기, 10초 후 자동 해제
+
+// 2. Watchdog 쓸 때는 반드시 try-finally로 unlock 보장
+lock.lock();
+try {
+    doWork();
+} finally {
+    if (lock.isHeldByCurrentThread()) {
+        lock.unlock(); // Watchdog 자동 중단
+    }
+}
+
+// 3. Watchdog 타임아웃을 짧게 (기본 30초 → 10초)
+config.setLockWatchdogTimeout(10000);
+```
+
+> **핵심**: Watchdog은 "작업 시간을 예측할 수 없을 때"만 사용하고, 예측 가능하면 **leaseTime을 명시**하는 게 안전하다. Watchdog에 맡기면 편하지만, 위 5가지 위험을 감수해야 한다.
 
 ---
 
