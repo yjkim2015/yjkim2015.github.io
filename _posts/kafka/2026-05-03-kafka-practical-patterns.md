@@ -106,18 +106,53 @@ graph LR
     DB -->|"CDC"| Kafka --> Consumer
 ```
 
-방법 B와 C 모두 DB와 Kafka 사이의 불일치 문제를 완전히 해결하지 못합니다. 이 문제의 정석 해법은 Outbox 패턴입니다. 자세한 구현은 [Kafka Outbox 패턴과 CDC 활용](/kafka/kafka-outbox-cdc) 포스트를 참고하세요.
+방법 B와 C 모두 DB와 Kafka 사이의 불일치 문제를 완전히 해결하지 못합니다. DB 트랜잭션 안에서 Outbox 테이블에 이벤트를 함께 저장하고, CDC(Debezium)가 Outbox 테이블의 변경을 감지해서 Kafka로 발행합니다.
+
+```java
+// 1. 비즈니스 로직과 Outbox를 같은 DB 트랜잭션으로
+@Transactional
+public void completeOrder(Order order) {
+    orderRepository.save(order);  // 주문 저장
+    outboxRepository.save(new OutboxEvent(
+        "order.completed",        // 토픽
+        order.getId(),            // 파티션 키
+        objectMapper.writeValueAsString(order)  // 페이로드
+    ));
+    // DB 커밋 시 둘 다 저장되거나 둘 다 롤백 → 불일치 불가능
+}
+
+// 2. Debezium이 outbox 테이블 변경 감지 → Kafka 발행
+// docker-compose.yml 또는 Kafka Connect 설정
+// connector: io.debezium.connector.mysql.MySqlConnector
+// transforms: outbox (io.debezium.transforms.outbox.EventRouter)
+```
 
 ### 트레이드오프 비교
 
 | 방법 | 구현 복잡도 | 일관성 | 처리량 | 적합한 경우 |
 |------|-----------|--------|--------|------------|
 | 순차 전송 | 낮음 | 부분 실패 가능 | 높음 | 멱등성 보장되는 시스템 |
-| Kafka 트랜잭션 | 중간 | Kafka 내 원자적 | 20~30% 오버헤드 | 멀티 토픽 정합성 필요 |
+| Kafka 트랜잭션 | 중간 | Kafka 내 원자적 | 20~30% 감소 | 멀티 토픽 정합성 필요 |
 | 팬아웃 패턴 | 낮음 | 하류 서비스 책임 | 가장 높음 | 서비스 결합도 낮춰야 할 때 |
-| Outbox + CDC | 높음 | 완전 보장 | 낮음(지연 수백ms) | 금융, 결제처럼 무결결성 필수 |
+| Outbox + CDC | 높음 | 완전 보장 | 지연 수백ms | 금융, 결제 무결성 필수 |
 
-Kafka 트랜잭션의 20~30% 처리량 감소는 어디서 올까요? 트랜잭션 코디네이터에게 `beginTransaction`, `commitTransaction` 요청을 추가로 보내야 하고, 컨슈머 측에서 `isolation.level=read_committed`로 설정된 경우 커밋된 메시지만 읽기 때문에 대기 시간이 생깁니다.
+### 그래서 뭘 써야 하는가?
+
+```
+Phase 1 (스타트업 초기): 팬아웃 패턴 (방법 C)
+  → 단일 토픽에 발행하고 하류가 알아서 구독
+  → 가장 단순하고 확장성 좋음
+
+Phase 2 (서비스 성장): Kafka 트랜잭션 (방법 B)
+  → 멀티 토픽 발행이 필요해지면 전환
+  → 20~30% 오버헤드를 감당할 수 있을 때
+
+Phase 3 (결제/금융): Outbox + CDC (방법 D)
+  → DB와 이벤트의 100% 일관성이 필수일 때
+  → Debezium 운영 부담을 감당할 팀이 있을 때
+```
+
+> **핵심**: "어떤 방법이 최선이냐"가 아니라 "현재 단계에서 감당 가능한 복잡도와 요구되는 일관성 수준이 얼마인가"로 결정한다. 대부분의 서비스는 팬아웃 패턴으로 시작해서 충분하다.
 
 ---
 
