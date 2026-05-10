@@ -76,18 +76,14 @@ public boolean equals(Object o) {
 ```
 
 ```mermaid
-sequenceDiagram
-    participant Dev as 개발자
-    participant Compiler as 컴파일러
-    participant Runtime as 런타임
-    Dev->>Compiler: equals(Bigram b) 작성 (@Override 없음)
-    Compiler->>Runtime: 컴파일 통과 (다중정의로 인식)
-    Runtime-->>Dev: Set.size() = 260 (버그 발견 — 늦음)
-    Dev->>Compiler: @Override 추가 후 재컴파일
-    Compiler-->>Dev: 즉시 오류 — supertype 메서드 없음
-    Dev->>Compiler: equals(Object o)로 수정
-    Compiler->>Runtime: 컴파일 통과
-    Runtime-->>Dev: Set.size() = 26 (정상)
+graph LR
+    Dev["개발자"] -->|"equals(Bigram) 작성"| C["컴파일러"]
+    C -->|"다중정의 통과"| R["런타임"]
+    R -->|"size()=260(버그)"| Dev
+    Dev -->|"@Override 추가"| C
+    C -->|"즉시 컴파일 오류"| Dev
+    Dev -->|"equals(Object) 수정"| C
+    C -->|"size()=26(정상)"| R
 ```
 
 ---

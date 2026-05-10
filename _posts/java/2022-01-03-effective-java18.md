@@ -63,17 +63,12 @@ System.out.println(s.getAddCount());  // 예상: 3, 실제: 6!
 **왜 6이 나오는가?**
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant IHS as InstrumentedHashSet
-    participant AC as AbstractCollection
-    C->>IHS: addAll([A,B,C])
-    IHS->>IHS: addCount+=3 (=3)
-    IHS->>AC: super.addAll([A,B,C])
-    AC->>IHS: add(A) → addCount++ (=4)
-    AC->>IHS: add(B) → addCount++ (=5)
-    AC->>IHS: add(C) → addCount++ (=6)
-    Note over C: getAddCount()==6 (버그!)
+graph LR
+    C["Client"] -->|"addAll([A,B,C])"| IHS["InstrumentedHashSet"]
+    IHS -->|"addCount+=3"| IHS
+    IHS -->|"super.addAll()"| AC["AbstractCollection"]
+    AC -->|"add(A),add(B),add(C)"| IHS
+    IHS -->|"addCount=6(버그!)"| C
 ```
 
 `HashSet.addAll()`은 내부적으로 `add()`를 반복 호출합니다. 재정의된 `add()`가 매번 `addCount`를 증가시키므로 3 + 3 = 6이 됩니다. 이것이 **자기 사용(self-use)** 문제입니다.

@@ -142,17 +142,13 @@ public final class Sub extends Super {
 **왜 이런 일이 생기나?**
 
 ```mermaid
-sequenceDiagram
-    participant Client as main()
-    participant Sub as Sub 생성자
-    participant Super as Super 생성자
-    Client->>Sub: new Sub() 호출
-    Sub->>Super: super() 자동 호출
-    Super->>Super: overrideMe() 호출
-    Note over Super: instant는 아직 null!
-    Super-->>Sub: Super 생성자 완료
-    Sub->>Sub: instant = Instant.now()
-    Sub-->>Client: Sub 객체 완성
+graph LR
+    C["main()"] -->|"new Sub()"| Sub["Sub 생성자"]
+    Sub -->|"super() 호출"| Super["Super 생성자"]
+    Super -->|"overrideMe() 호출(instant=null!)"| Super
+    Super -->|"완료"| Sub
+    Sub -->|"instant = Instant.now()"| Sub
+    Sub -->|"완성"| C
 ```
 
 상위 클래스 생성자가 **항상 하위 클래스 생성자보다 먼저** 실행됩니다. 생성자에서 재정의 가능한 메서드를 호출하면, 하위 클래스의 초기화가 끝나기 전에 그 메서드가 실행됩니다.

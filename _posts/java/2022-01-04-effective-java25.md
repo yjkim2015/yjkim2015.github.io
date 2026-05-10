@@ -55,18 +55,11 @@ class Dessert {
 ## 2. 컴파일 순서에 따른 동작 차이
 
 ```mermaid
-sequenceDiagram
-    participant Dev as 개발자
-    participant Javac as 컴파일러
-    participant Result as 결과
-    Dev->>Javac: javac Main.java Utensil.java
-    Javac->>Javac: Main.java 처리 → Utensil 참조 발견
-    Javac->>Javac: Utensil.java 로드 (pan, cake)
-    Javac-->>Result: 출력: pancake
-    Dev->>Javac: javac Dessert.java Main.java
-    Javac->>Javac: Dessert.java 처리 → pot, pie 로드
-    Javac->>Javac: Main.java 처리
-    Javac-->>Result: 출력: potpie ← 같은 코드, 다른 결과!
+graph LR
+    Dev["개발자"] -->|"javac Main Utensil"| JC1["컴파일러"]
+    JC1 -->|"출력: pancake"| R1["결과"]
+    Dev -->|"javac Dessert Main"| JC2["컴파일러"]
+    JC2 -->|"출력: potpie(다른 결과!)"| R2["결과"]
 ```
 
 **만약 이 상태에서 계속 개발하면?** 로컬에서는 `pancake`가 나오고, CI 서버에서는 `potpie`가 나오는 상황이 생깁니다. 원인을 찾기가 매우 어렵습니다.

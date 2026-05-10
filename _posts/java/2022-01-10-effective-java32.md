@@ -42,17 +42,12 @@ static void dangerous(List<String>... stringLists) {
 ```
 
 ```mermaid
-sequenceDiagram
-    participant Caller as 호출자
-    participant Method as dangerous()
-    participant Heap as 힙
-    Caller->>Method: dangerous(List<String>을 담은 배열)
-    Method->>Heap: List<Integer>를 Object[]에 저장
-    Note over Heap: stringLists[0]은 실제로 List<Integer>
-    Method->>Heap: stringLists[0].get(0) 호출
-    Heap-->>Method: Integer 42 반환
-    Method->>Method: (String) 42 형변환 시도
-    Method-->>Caller: ClassCastException!
+graph LR
+    C["호출자"] -->|"dangerous() 호출"| M["dangerous()"]
+    M -->|"List<Integer> 저장"| H["힙"]
+    M -->|"get(0) 호출"| H
+    H -->|"Integer 42 반환"| M
+    M -->|"(String)42 → ClassCastException!"| C
 ```
 
 형변환 코드가 눈에 보이지 않는데도 런타임에 터집니다. 이런 이유로 **제네릭 varargs 배열에 값을 저장하는 것은 안전하지 않습니다.**

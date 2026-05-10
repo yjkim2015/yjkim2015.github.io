@@ -56,16 +56,13 @@ Swimmable swimmer = new Duck(); // Duck을 Swimmable 타입으로
 **요구사항 시나리오:**
 
 ```mermaid
-sequenceDiagram
-    participant Dev as 개발자
-    participant PM as 기획자
-    PM->>Dev: 1️⃣ "파일에서 데이터 읽어 암호화 해주세요"
-    Dev->>Dev: FileDataReader 사용해서 구현
-    PM->>Dev: 2️⃣ "HTTP로도 읽어야 해요"
-    Dev->>Dev: if/else 추가... DataFlowController 수정
-    PM->>Dev: 3️⃣ "소켓에서도 읽어야 해요"
-    Dev->>Dev: if/else 또 추가... DataFlowController 또 수정
-    Note over Dev: 요구사항 추가마다 DataFlowController를 계속 수정!
+graph LR
+    PM["기획자"] -->|"파일 읽기"| Dev["개발자"]
+    Dev -->|"FileDataReader 구현"| Dev
+    PM -->|"HTTP도 필요"| Dev
+    Dev -->|"if/else 추가"| Dev
+    PM -->|"소켓도 필요"| Dev
+    Dev -->|"if/else 또 추가"| Dev
 ```
 
 ```java
