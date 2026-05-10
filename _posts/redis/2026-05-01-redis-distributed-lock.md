@@ -374,6 +374,283 @@ Watchdog이 편리하지만 **맹목적으로 신뢰하면 안 되는 이유**:
 | unlock() 누락 | 예외 처리 빠뜨려서 unlock() 안 호출 | Watchdog이 영원히 갱신 → 영구 락 |
 | 리소스 낭비 | 동시 락 1000개 × 10초마다 PEXPIRE | 초당 100건 Redis 명령 추가 |
 
+**시나리오 1: GC STW — 락 보유자가 멈춰도 Watchdog은 갱신**
+
+```java
+// 서버 A: 재고 차감 중 Full GC 발생
+lock.lock(); // Watchdog 활성화
+try {
+    int stock = stockRepository.findById(productId); // stock = 1
+    // ← 여기서 Full GC 30초 발생. 코드 멈춤.
+    // ← 하지만 Watchdog 스레드는 GC 대상이 아니라 TTL 계속 갱신!
+    // ← 서버 B는 락 획득 불가 → 30초간 대기
+    stockRepository.update(productId, stock - 1); // GC 끝나고 실행
+} finally {
+    lock.unlock();
+}
+// 결과: 서버 B는 30초간 불필요하게 블로킹됨
+// leaseTime=5초였다면? GC 중 락 만료 → B가 처리 → A가 깨어나서 덮어씀 (더 위험)
+```
+
+**시나리오 2: unlock() 누락 — 영구 락**
+
+```java
+// 잘못된 코드: 예외 시 unlock 안 됨
+lock.lock(); // Watchdog 활성화
+Order order = orderService.create(request); // ← RuntimeException 발생!
+lock.unlock(); // 여기 도달 못함 → Watchdog이 영원히 갱신 → 영구 락
+
+// 올바른 코드: try-finally 필수
+lock.lock();
+try {
+    Order order = orderService.create(request);
+} finally {
+    if (lock.isHeldByCurrentThread()) {
+        lock.unlock();
+    }
+}
+```
+
+**시나리오 3: 마스터 장애 — 이중 락**
+
+```java
+// t=0: 서버 A가 마스터에서 락 획득 + Watchdog 갱신 중
+// t=1: 마스터 죽음. 레플리카가 승격. 레플리카에는 락 키가 복제 안 됨
+// t=2: 서버 B가 새 마스터(구 레플리카)에서 같은 키로 락 획득 성공!
+// t=3: 서버 A와 B 둘 다 락을 보유 → 재고 동시 차감 → 오버셀링
+
+// 방어: Redlock (5개 독립 Redis에서 과반 획득) 또는 펜싱 토큰
+RLock lock1 = redisson1.getLock("stock:" + productId);
+RLock lock2 = redisson2.getLock("stock:" + productId);
+RLock lock3 = redisson3.getLock("stock:" + productId);
+RedissonRedLock redLock = new RedissonRedLock(lock1, lock2, lock3);
+redLock.lock(); // 3개 중 2개 이상 성공해야 락 획득
+```
+
+**시나리오 4: 네트워크 파티션 — 교착**
+
+```java
+lock.lock(); // 앱↔Redis 정상, Watchdog 갱신 정상
+try {
+    // 앱↔DB 네트워크 끊김
+    stockRepository.update(productId, newStock);
+    // ← DB 타임아웃 30초 대기 중
+    // ← Watchdog은 Redis에 TTL 계속 갱신 중
+    // ← 다른 서버들은 락 획득 불가 → 전부 대기
+    // 결과: DB 타임아웃 + 락 보유 = 서비스 전체 정지
+} finally {
+    lock.unlock();
+}
+
+// 방어: 작업 자체에 타임아웃 설정
+CompletableFuture.supplyAsync(() -> stockRepository.update(productId, newStock))
+    .get(5, TimeUnit.SECONDS); // 5초 안에 안 끝나면 포기
+```
+
+### 어떤 분산 락도 완벽하지 않다 — 최종 방어선이 필수
+
+Redis 분산 락, DB Named Lock, Zookeeper 락 **전부 깨질 수 있습니다**. 네트워크 파티션, GC STW, 마스터 장애 등 어떤 상황에서든 이중 락이 발생할 가능성이 있습니다. 따라서 **락은 성능 최적화(동시 요청 직렬화)일 뿐, 데이터 정합성의 최종 보장 수단이 아닙니다**.
+
+**최종 방어선: DB 레벨 제약**
+
+```java
+// 1. 비관적 락 — SELECT FOR UPDATE (최종 방어선)
+@Query("SELECT s FROM Stock s WHERE s.productId = :id")
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+Stock findByIdForUpdate(@Param("id") Long id);
+
+// 2. 낙관적 락 — @Version (충돌 감지)
+@Entity
+public class Stock {
+    @Version
+    private Long version; // UPDATE 시 version 불일치면 OptimisticLockException
+    private int quantity;
+}
+
+// 3. UNIQUE 제약 — 멱등성 보장 (이중 결제 방지)
+// payment_idempotency_keys 테이블에 UNIQUE(idempotency_key)
+// 같은 키로 두 번 INSERT 시도 → DuplicateKeyException → 두 번째 무시
+
+// 4. WHERE 조건 방어 — 음수 재고 방지
+@Modifying
+@Query("UPDATE Stock SET quantity = quantity - :amount WHERE id = :id AND quantity >= :amount")
+int decreaseStock(@Param("id") Long id, @Param("amount") int amount);
+// 영향받은 행 0이면 재고 부족 → 비즈니스 예외
+```
+
+**실무 아키텍처: 락 + 최종 방어선 조합**
+
+```
+[요청] → [Redis 분산 락: 동시 요청 직렬화] → [비즈니스 로직]
+                                               ↓
+                                        [DB WHERE 방어: quantity >= amount]
+                                               ↓
+                                        [UNIQUE 제약: 이중 처리 방지]
+```
+
+- **Redis 락**: 99.9%의 동시 요청을 직렬화해서 DB 부하를 줄이는 **성능 최적화**
+- **DB WHERE 방어**: 락이 깨져도 음수 재고가 절대 안 생기는 **정합성 보장**
+- **UNIQUE 제약**: 이중 결제/이중 주문이 절대 안 생기는 **멱등성 보장**
+
+> **핵심**: "분산 락만 걸면 안전하다"는 착각이 가장 위험하다. 락은 트래픽 보호막이고, **데이터 정합성은 DB가 최종 보장**해야 한다.
+
+### MySQL Named Lock도 완벽하지 않다
+
+| 문제 | 상황 | 결과 |
+|------|------|------|
+| 커넥션 풀 고갈 | Named Lock은 별도 커넥션이 필요 — 락 보유 중 커넥션 반납 불가 | 동시 락 100개 = 커넥션 100개 점유 |
+| 타임아웃 무한 대기 | `GET_LOCK('key', -1)`로 무한 대기 설정 시 | 데드락과 같은 효과 |
+| 트랜잭션과 무관 | Named Lock은 DB 트랜잭션과 별개 — 트랜잭션 롤백해도 락은 유지 | unlock 누락 시 영구 락 |
+| 단일 DB 의존 | Redis와 달리 DB가 SPOF | DB 장애 = 락 시스템 전체 중단 |
+| 성능 한계 | 락 획득마다 DB 왕복 (수 ms) | Redis (~0.5ms) 대비 5~10배 느림 |
+
+```java
+// Named Lock 위험한 사용
+@Transactional
+public void process(Long id) {
+    jdbc.execute("SELECT GET_LOCK('stock:' + id, 10)");
+    // 비즈니스 로직...
+    // ← 여기서 예외 발생하면?
+    // @Transactional은 롤백하지만 Named Lock은 해제 안 됨!
+    jdbc.execute("SELECT RELEASE_LOCK('stock:' + id)");
+}
+
+// 안전한 사용: 별도 커넥션 + try-finally
+public void processSafe(Long id) {
+    DataSource lockDs = separateLockDataSource; // 락 전용 커넥션 풀
+    Connection conn = lockDs.getConnection();
+    try {
+        conn.createStatement().execute("SELECT GET_LOCK('stock:" + id + "', 5)");
+        try {
+            businessService.doWork(id); // @Transactional은 여기서
+        } finally {
+            conn.createStatement().execute("SELECT RELEASE_LOCK('stock:" + id + "')");
+        }
+    } finally {
+        conn.close(); // 락 전용 커넥션 반납
+    }
+}
+```
+
+<details>
+<summary><b>Named Lock 위험 시나리오 전체 (클릭해서 펼치기)</b></summary>
+
+**시나리오 1: 커넥션 풀 고갈**
+
+```java
+// Named Lock은 락 보유 중 커넥션을 반납할 수 없다
+// HikariCP 기본 10개 커넥션 → 동시 락 10개면 풀 고갈
+@Service
+public class StockService {
+    @Autowired private JdbcTemplate jdbc;
+
+    public void decrease(Long id) {
+        jdbc.execute("SELECT GET_LOCK('stock:" + id + "', 10)");
+        // ← 이 커넥션은 RELEASE_LOCK까지 반납 불가
+        // ← 동시에 11번째 요청이 오면 커넥션 대기 → 타임아웃 → 서비스 장애
+
+        stockRepository.decreaseStock(id); // 이것도 커넥션 필요 → 같은 풀에서 가져감
+
+        jdbc.execute("SELECT RELEASE_LOCK('stock:" + id + "')");
+    }
+}
+// 결과: 락 커넥션 10개 + 비즈니스 커넥션 10개 = 20개 필요
+// HikariCP 10개 → 데드락! (락 잡은 스레드가 비즈니스 커넥션을 기다리고,
+//                           비즈니스 커넥션은 락 커넥션이 반납될 때까지 안 나옴)
+
+// 해결: 락 전용 DataSource 분리
+@Bean("lockDataSource")
+public DataSource lockDataSource() {
+    HikariConfig config = new HikariConfig();
+    config.setMaximumPoolSize(20); // 락 전용 풀
+    config.setPoolName("lock-pool");
+    return new HikariDataSource(config);
+}
+```
+
+**시나리오 2: 트랜잭션 롤백해도 락 유지**
+
+```java
+@Transactional
+public void riskyProcess(Long id) {
+    jdbc.execute("SELECT GET_LOCK('stock:" + id + "', 5)");
+
+    stockRepository.decrease(id);
+    paymentService.charge(orderId); // ← RuntimeException 발생!
+
+    // @Transactional이 롤백 → DB 변경은 취소됨
+    // BUT Named Lock은 트랜잭션과 무관 → 락은 그대로 유지!
+    // 이 커넥션이 풀로 반환되면? 락이 자동 해제됨 (커넥션 종료 시)
+    // 그런데 커넥션 풀은 커넥션을 종료하지 않고 재사용함!
+    // → 다른 스레드가 이 커넥션을 받으면 이전 락이 붙어있음
+
+    jdbc.execute("SELECT RELEASE_LOCK('stock:" + id + "')"); // 도달 못함
+}
+
+// 해결: try-finally + 별도 커넥션
+public void safeProcess(Long id) {
+    Connection lockConn = lockDataSource.getConnection();
+    try {
+        lockConn.createStatement().execute("SELECT GET_LOCK('stock:" + id + "', 5)");
+        try {
+            transactionalService.doBusinessLogic(id); // 별도 @Transactional
+        } finally {
+            lockConn.createStatement().execute("SELECT RELEASE_LOCK('stock:" + id + "')");
+        }
+    } finally {
+        lockConn.close(); // 락 커넥션 명시적 반환
+    }
+}
+```
+
+**시나리오 3: 동일 커넥션에서 중복 GET_LOCK**
+
+```java
+// MySQL Named Lock은 같은 커넥션에서 같은 이름으로 GET_LOCK 하면 즉시 성공
+// → 재진입 가능하지만, 다른 이름의 락을 잡으면 이전 락이 해제됨! (MySQL 5.7 미만)
+
+// MySQL 5.7 미만:
+conn.execute("SELECT GET_LOCK('lock_A', 5)"); // lock_A 획득
+conn.execute("SELECT GET_LOCK('lock_B', 5)"); // lock_B 획득, lock_A 자동 해제!
+// lock_A를 보유 중이라 생각하지만 실제로는 해제됨 → 다른 스레드가 lock_A 획득
+
+// MySQL 5.7+: 여러 Named Lock 동시 보유 가능 (수정됨)
+// 하지만 RELEASE_LOCK을 각각 호출해야 함
+```
+
+**시나리오 4: DB 장애 = 락 시스템 전체 중단**
+
+```java
+// Named Lock은 DB에 의존 → DB 장애 시 락 획득 불가
+// Redis 분산 락은 Redis 장애 시에도 Fail-open(허용) 정책 가능
+// Named Lock은 Fail-open이 불가능 — DB 없이 GET_LOCK을 할 수 없으므로
+
+// DB 이중화(Master-Slave)를 해도:
+// - Named Lock은 Master에서만 동작
+// - Master 장애 → Slave 승격 → 기존 Named Lock 전부 유실
+// - Redis 마스터 장애와 동일한 이중 락 문제 발생
+```
+
+**시나리오 5: 성능 — DB 왕복 비용**
+
+```java
+// Named Lock: GET_LOCK + RELEASE_LOCK = DB 왕복 2회
+// 각 왕복 2~5ms (같은 AZ) / 10~30ms (다른 AZ)
+// 초당 1000건 처리 시: 2000~5000ms의 DB 시간 소모
+
+// Redis: SET NX + DEL = Redis 왕복 2회
+// 각 왕복 0.1~0.5ms
+// 초당 1000건: 200~1000ms
+
+// 비교:
+// Named Lock: ~3ms × 1000 = 3초/초 (DB 부하)
+// Redis Lock: ~0.3ms × 1000 = 0.3초/초 (10배 빠름)
+```
+
+</details>
+
+> **Named Lock도 최종 방어선 필요**: Redis든 Named Lock이든, 락이 깨지는 상황은 반드시 존재한다. **DB 제약(WHERE, UNIQUE, VERSION)**이 마지막 보루다.
+
 **실무 권장 설정**:
 
 ```java
