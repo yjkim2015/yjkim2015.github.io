@@ -705,8 +705,8 @@ pre.mermaid {
   min-height: 60px;
 
   svg {
-    width: 100% !important;
-    max-width: none !important;
+    width: auto !important;
+    max-width: 100% !important;
     height: auto !important;
     min-height: 40px;
     font-size: 11px !important;
