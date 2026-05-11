@@ -161,6 +161,19 @@ L1(Caffeine 로컬 캐시, TTL 5분) → L2(Redis, TTL 30분) → Elasticsearch(
 **미디어 처리 서비스 (Media Service)**
 클라이언트가 리뷰 이미지/동영상 업로드를 요청하면 S3 Pre-signed URL을 발급하고 즉시 반환합니다. 클라이언트는 해당 URL로 S3에 직접 업로드하므로 리뷰 서버는 대용량 바이너리 전송 부담이 없습니다. 업로드 완료 시 S3 Event가 Lambda를 트리거하여 이미지 썸네일(200×200, WebP)과 동영상 트랜스코딩(360p/720p)을 비동기로 생성합니다. 변환 완료 후 CDN에 배포하고 리뷰 DB에 CDN URL을 기록합니다.
 
+**스팸 탐지 파이프라인 흐름:**
+
+```mermaid
+sequenceDiagram
+    participant K as Kafka
+    participant R as 규칙엔진
+    participant M as ML모델
+    K->>R: review.created 이벤트
+    R->>R: IP빈도/MinHash 검사
+    R->>M: 규칙 통과 → ML 판정
+    M-->>K: 스팸점수 → 공개/차단/검토
+```
+
 ---
 
 ### 3-1. 평점 집계: 베이지안 평균
