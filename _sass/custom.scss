@@ -1493,6 +1493,58 @@ nav.pagination,
 }
 
 /* ============================================
+   사이드바 광고 + 모바일 반응형
+   ============================================ */
+.sidebar-ad {
+  width: 160px;
+  flex-shrink: 0;
+}
+.sidebar-ad--left { margin-right: 2em; }
+.sidebar-ad--right { margin-left: 2em; }
+
+/* 테이블 모바일 가로 스크롤 */
+.page__content table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
+}
+
+@media (max-width: 1200px) {
+  /* 태블릿: 사이드바 광고 숨김, TOC 숨김 */
+  .sidebar-ad { display: none !important; }
+  .page-toc-right { display: none !important; }
+  .main-container { max-width: 100% !important; }
+}
+
+@media (max-width: 768px) {
+  /* 모바일: 본문 여백 최적화, 코드 블록 스크롤 */
+  .single-layout-flex { padding: 1em 0.5em !important; }
+
+  .page__content pre {
+    font-size: 13px !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .page__content table {
+    font-size: 14px;
+  }
+
+  /* 접기/펼치기 터치 영역 확대 */
+  .page__content details summary {
+    padding: 0.8em 0;
+    cursor: pointer;
+  }
+
+  /* in-article 광고 최대 너비 */
+  .page__content .adsbygoogle {
+    max-width: 100% !important;
+    overflow: hidden;
+  }
+}
+
+/* ============================================
    인쇄 스타일
    ============================================ */
 @media print {

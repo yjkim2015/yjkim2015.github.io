@@ -110,7 +110,7 @@ toc_label: 목차
 
 ## 2. 고수준 아키텍처
 
-게스트는 번호표(guestId)로 임시 사물함(Redis)을 쓰고, 회원이 되면 영구 사물함(RDB)으로 짐을 옮기는 **물품 보관함** 구조입니다.
+> **비유:** 게스트는 번호표(guestId)로 임시 사물함(Redis)을 쓰고, 회원이 되면 영구 사물함(RDB)으로 짐을 옮기는 **물품 보관함** 구조입니다.
 
 ```mermaid
 graph LR
@@ -186,6 +186,8 @@ cart:user:12345 → Hash { "P001": "2", "P002": "1", "P003": "3" }
 
 ### 병합 알고리즘 (Guest → Login)
 
+> **왜 Redis Lua 스크립트로 병합하는가?** Java 코드로 개별 명령을 순서대로 실행하면 동시에 두 기기에서 로그인 시 같은 게스트 장바구니를 두 번 합산해 수량이 2배로 부풀어오릅니다. Lua 스크립트는 읽기-합산-삭제를 단일 원자 연산으로 실행해 이중 합산을 원천 차단합니다.
+
 ```java
 @Service
 public class CartMergeService {
@@ -254,6 +256,8 @@ public void addToCart(String cartKey, String productId, int quantity) {
 
 ### 장바구니 조회 API (재고·가격 통합)
 
+> **왜 Bulk API로 한 번에 조회하는가?** 장바구니 상품이 20개일 때 각 productId마다 별도 API를 호출하면 네트워크 왕복이 20회입니다. P99 100ms 목표는 이 구조로는 불가능합니다. productId 목록을 모아 단일 요청으로 처리해 왕복을 1회로 줄입니다.
+
 ```java
 @GetMapping("/cart")
 public CartResponse getCart(
@@ -316,6 +320,8 @@ CREATE TABLE cart_price_snapshots (
 `UNIQUE KEY uq_user_product`는 같은 사용자가 같은 상품을 중복 INSERT할 때 자동으로 막습니다.
 
 ### 결제 시 재고 Hard Lock
+
+> **왜 productId 오름차순으로 정렬 후 락을 잡는가?** Thread 1이 상품 A→B, Thread 2가 B→A 순서로 락을 잡으면 서로 상대방의 락을 영원히 기다리는 교착 상태가 발생합니다. 항상 동일한 순서(오름차순)로 잡으면 두 스레드 모두 A를 먼저 시도하므로 하나만 진행하고 나머지는 대기합니다.
 
 ```java
 @Transactional
@@ -401,29 +407,14 @@ Kafka로 병합 이벤트를 처리해 멱등성을 보장합니다.
 
 ## 각 컴포넌트 동작원리 상세
 
-### API Gateway — guestId 주입 및 인증 분기
-
-요청이 도착하면 Gateway는 쿠키에서 guestId를 추출합니다. guestId가 없으면 UUID v4를 발급해 `Set-Cookie: guestId=...; Max-Age=604800; HttpOnly; SameSite=Lax`로 응답 헤더에 삽입합니다. Authorization 헤더가 있으면 JWT를 검증해 userId를 추출하고, 없으면 guestId만으로 라우팅합니다. 두 값을 모두 downstream 헤더(`X-User-Id`, `X-Guest-Id`)에 전달해 Cart Service가 어느 키를 쓸지 결정하게 합니다.
-
-### Cart Service — Write-Through 캐시 코디네이터
-
-Cart Service는 Redis를 1차, RDB를 2차 저장소로 운영합니다. 상품 추가/수정 요청이 오면 먼저 Redis HSET으로 즉시 응답하고, 이후 RDB에 `INSERT ... ON DUPLICATE KEY UPDATE`를 동기 또는 비동기로 반영합니다. 조회 시 Redis Hit이면 RDB 접근 없이 반환합니다. 로그인 이벤트를 수신하면 병합 워커를 호출하고, 결제 요청 시에는 재고 서비스에 Hard Lock 요청을 위임합니다.
-
-### Redis Hash — O(1) 상품 단위 원자 조작
-
-`cart:user:{userId}` 또는 `cart:guest:{guestId}` 키 아래 Hash 자료구조로 `{productId} → {qty}` 쌍을 저장합니다. `HSET`으로 특정 상품 수량만 교체하고, `HINCRBY`로 수량을 원자적으로 증감합니다. `HGETALL`로 전체 장바구니를 단일 네트워크 왕복에 가져옵니다. 게스트 키는 `EXPIRE 604800`(7일)을 매 활동마다 갱신해 비활성 게스트의 메모리를 자동 회수합니다.
-
-### MySQL — 회원 영구 장바구니 원본
-
-`cart_items` 테이블은 `UNIQUE KEY(user_id, product_id)`로 중복 행을 막고, Redis 장애 시 회원 장바구니의 Fallback 원본 역할을 합니다. Redis가 복구되면 이 테이블을 읽어 캐시를 재워밍합니다. `cart_price_snapshots`는 담을 당시 가격을 기록해 가격 변동 비교와 CS 문의 대응에 사용합니다.
-
-### Product Service — 일괄 가격·재고 조회
-
-장바구니 조회 시 Cart Service는 productId 목록을 모아 단일 Bulk API(`GET /products?ids=P001,P002,...`)를 호출합니다. N+1 쿼리를 방지하는 핵심 설계입니다. Product Service는 인기 상품 Top 1000의 가격·재고를 자체 Redis에 30초 TTL로 캐싱해 반복 DB 조회를 흡수합니다. 품절 이벤트가 발생하면 즉시 캐시를 무효화해 장바구니에 품절 상태가 반영됩니다.
-
-### Merge Worker — 로그인 시 비동기 게스트 병합
-
-로그인 완료 이벤트를 Kafka `cart.merge` 토픽에서 수신합니다. Redis Lua 스크립트로 게스트 Hash 읽기 → 회원 Hash 수량 합산 → 게스트 키 삭제를 원자적으로 실행해 멀티 디바이스 동시 로그인 시 이중 합산을 방지합니다. 처리 완료 후 `merge_log` 테이블에 기록하고 Kafka 오프셋을 커밋합니다. 서버 재시작 시 미커밋 메시지를 재처리해도 merge_log로 중복을 방지합니다.
+| 컴포넌트 | 핵심 역할 | 내부 동작 흐름 |
+|----------|----------|--------------|
+| **API Gateway** | guestId 주입 + 인증 분기 | 쿠키 확인 → guestId 없으면 UUID 발급 → JWT 검증 후 `X-User-Id` / `X-Guest-Id` 헤더에 주입 |
+| **Cart Service** | Write-Through 캐시 코디네이터 | Redis HSET 즉시 응답 → RDB `INSERT ... ON DUPLICATE KEY UPDATE` 동기/비동기 반영 |
+| **Redis Hash** | O(1) 상품 단위 원자 조작 | `HSET` 수량 교체, `HINCRBY` 원자 증감, `HGETALL` 단일 왕복 조회, 7일 `EXPIRE` 자동 갱신 |
+| **MySQL** | 회원 영구 장바구니 원본 | `UNIQUE KEY(user_id, product_id)` 중복 방지 + Redis 장애 시 Fallback 원본 역할 |
+| **Product Service** | 일괄 가격·재고 조회 | productId 목록 모아 단일 Bulk API 호출 → N+1 방지, 인기 Top 1000 Redis 30초 캐싱 |
+| **Merge Worker** | 비동기 게스트 병합 | Kafka `cart.merge` 수신 → Lua 원자 병합 → `merge_log` 기록 → 오프셋 커밋 |
 
 ---
 

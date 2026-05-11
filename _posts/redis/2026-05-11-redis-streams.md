@@ -141,6 +141,8 @@ Streams 이전에도 메시지를 전달할 수 있는 Redis 구조가 있었습
 - 발행(PUBLISH) 순간에 연결된 구독자만 받습니다
 - 연결이 끊긴 사이에 온 메시지는 영원히 사라집니다
 
+세 구조의 기능 차이를 한 눈에 비교하면 다음과 같습니다.
+
 | 구조 | 저장 | 멀티 컨슈머 | ACK | 과거 재생 |
 |------|------|:---:|:---:|:---:|
 | **List** | ✅ | ❌ (꺼내면 삭제) | ❌ | ❌ |
@@ -152,6 +154,17 @@ Streams 이전에도 메시지를 전달할 수 있는 Redis 구조가 있었습
 ---
 
 ## 2. 핵심 명령어 동작원리
+
+아래 표는 Streams의 5대 핵심 명령어와 역할을 정리한 것입니다.
+
+| 명령어 | 역할 | 핵심 옵션 |
+|--------|------|---------|
+| `XADD` | 스트림에 메시지 추가 | `MAXLEN ~` 근사 트리밍 |
+| `XREAD` | 단순 읽기 (fan-out) | `BLOCK`, `$` (새 메시지만) |
+| `XGROUP CREATE` | Consumer Group 생성 | `MKSTREAM`, `$` / `0` |
+| `XREADGROUP` | 그룹 내 분산 읽기 | `>` (미전달), `0` (PEL 재처리) |
+| `XACK` | 처리 완료 확인 (PEL 제거) | — |
+| `XAUTOCLAIM` | 죽은 컨슈머 메시지 재할당 | `min-idle-time` |
 
 ### XADD — 메시지 추가
 
@@ -310,6 +323,8 @@ public void start() {
 
 ### Producer
 
+주문 이벤트를 스트림에 발행합니다. `StreamRecords.newRecord()`로 필드-값 맵을 구성해 `orders` 스트림에 추가합니다.
+
 ```java
 @Service
 public class OrderEventProducer {
@@ -329,6 +344,8 @@ public class OrderEventProducer {
 ```
 
 ### Consumer + DLQ 패턴
+
+처리 실패 시 재시도 횟수를 PEL에서 확인하고, 3회 이상이면 `orders:dlq` 스트림으로 이동합니다. 3회 미만이면 ACK를 보내지 않아 PEL에 남기고 XAUTOCLAIM 대상이 됩니다.
 
 ```java
 @Service
@@ -375,7 +392,7 @@ public class OrderEventConsumer {
 
 ### 죽은 컨슈머 메시지 재할당
 
-컨슈머 장애 시 PEL에 메시지가 쌓입니다. XAUTOCLAIM으로 살아있는 컨슈머가 가져가 재처리합니다.
+컨슈머 장애 시 PEL에 메시지가 쌓입니다. XAUTOCLAIM으로 살아있는 컨슈머가 가져가 재처리합니다. `min-idle-time`은 평균 처리시간 × 3 이상으로 설정해야 정상 처리 중인 메시지를 빼앗지 않습니다.
 
 ```mermaid
 sequenceDiagram
@@ -508,20 +525,13 @@ used_memory > maxmemory × 0.9 → PagerDuty P0 (즉시 MAXLEN 강제 트리밍)
 
 ## 실무 실수 Top 5
 
-**실수 1: MAXLEN 없이 스트림 운영**
-`XADD mystream * ...`만 쓰고 MAXLEN을 지정하지 않으면 스트림이 무한 증가합니다. Redis 메모리가 가득 차면 `OOM command not allowed` 에러와 함께 모든 쓰기가 거부됩니다. 항상 `XADD mystream MAXLEN ~ 100000 * ...` 형태로 사용하세요. 물결표(`~`)는 노드 경계에서 삭제해 O(1)에 가까운 비용으로 트리밍합니다.
-
-**실수 2: 재시작 시 `>` 로만 읽기**
-컨슈머 재시작 후 곧바로 `>`(새 메시지)만 읽으면 장애 전 PEL에 쌓여있던 미확인 메시지가 영구히 처리되지 않습니다. 반드시 재시작 직후 `0`으로 PEL을 먼저 소진한 다음 `>`로 전환하는 2단계 패턴을 사용하세요.
-
-**실수 3: MAXLEN을 PEL보다 작게 설정**
-`MAXLEN 1000`인데 컨슈머가 느려 PEL에 2,000개가 쌓이면, 스트림에서 오래된 메시지가 삭제되어 PEL에만 ID가 남는 **좀비 PEL**이 발생합니다. XAUTOCLAIM으로 재처리하려 해도 실제 데이터가 없어 영원히 처리 불가합니다. MAXLEN은 항상 예상 최대 PEL 크기의 10배 이상으로 설정하세요.
-
-**실수 4: min-idle-time 너무 짧게 설정**
-`XAUTOCLAIM orders g1 consumer-2 1000 0-0`처럼 idle time을 1초로 설정하면, 정상적으로 처리 중인 메시지(처리에 2~3초 소요)를 다른 컨슈머가 빼앗아 **중복 처리**가 발생합니다. min-idle-time은 `평균 처리시간 × 3` 이상으로, 처리 시간이 3초라면 최소 9,000ms(9초)로 설정하세요.
-
-**실수 5: Consumer Group MKSTREAM 없이 선 읽기 시도**
-스트림이 아직 존재하지 않는 상태에서 `XGROUP CREATE nonexistent-stream g1 $` 명령을 날리면 `ERR The XGROUP subcommand requires the key to exist`로 실패합니다. `MKSTREAM` 옵션을 붙이거나, 스트림을 먼저 생성한 후 그룹을 만드세요. 프로듀서가 뜨기 전에 컨슈머가 먼저 초기화되는 환경에서 자주 발생합니다.
+| # | 실수 | 결과 | 올바른 방법 |
+|---|------|------|-----------|
+| 1 | MAXLEN 없이 스트림 운영 | 메모리 풀 → `OOM command not allowed`, 모든 쓰기 거부 | `XADD stream MAXLEN ~ 100000 *` 항상 설정 |
+| 2 | 재시작 시 `>` 로만 읽기 | PEL 미처리 메시지 영구 유실 | 재시작 직후 `0`으로 PEL 소진 → `>` 전환 2단계 패턴 |
+| 3 | MAXLEN을 PEL보다 작게 설정 | 스트림에서 삭제된 메시지가 PEL에만 남는 좀비 PEL 발생, 재처리 불가 | MAXLEN은 예상 최대 PEL 크기의 10배 이상 |
+| 4 | min-idle-time 너무 짧게 설정 | 처리 중인 메시지를 다른 컨슈머가 빼앗아 중복 처리 | `평균 처리시간 × 3` 이상 (처리 3초 → 최소 9,000ms) |
+| 5 | MKSTREAM 없이 선 읽기 시도 | `ERR The XGROUP subcommand requires the key to exist` | `XGROUP CREATE ... MKSTREAM` 옵션 추가 |
 
 ---
 

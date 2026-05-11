@@ -142,24 +142,21 @@ sequenceDiagram
 
 ### 각 컴포넌트 동작원리 상세
 
-**쿠폰 발급 서비스 (Issue Service)**
-요청이 들어오면 먼저 어뷰징 탐지 서비스에 IP·디바이스 지문·계정 연령을 전달해 의심 여부를 확인합니다. 통과 시 Redis Lua 스크립트를 원자 실행해 중복 확인 → 잔여 수량 감소 → 발급자 집합 등록을 한 번에 처리합니다. 성공 결과는 즉시 사용자에게 반환하고, Kafka `coupon.issued` 토픽으로 이벤트를 발행합니다. DB 기록은 Kafka Consumer가 비동기로 처리해 발급 API 레이턴시를 DB I/O에서 분리합니다.
-
-**Redis 카운터 레이어**
-`coupon:remaining:{couponId}` 키에 잔여 수량을 STRING으로 저장하고, `coupon:members:{couponId}` 키에 발급받은 사용자 ID를 SET으로 저장합니다. Redis 단일 스레드 특성상 Lua 스크립트 내부에서는 명령 순서가 보장됩니다. 서비스 시작 시 DB에서 실제 발급 건수를 조회해 `SET NX`로 카운터를 복원합니다. Redis Sentinel 구성으로 단일 장애점을 제거하며, 마스터 장애 시 10초 내 슬레이브 승격이 이루어집니다.
-
-**룰 엔진 (Rule Engine)**
-쿠폰 규칙을 JSON DSL로 DB에 저장하고, 서비스 기동 시 전체 규칙을 로컬 캐시(Caffeine)에 적재합니다. 캐시 TTL은 5분으로 설정해 마케팅팀이 콘솔에서 규칙을 변경하면 5분 내에 반영됩니다. 할인 계산 요청이 들어오면 캐시에서 규칙을 읽어 조건 평가 → 금액 계산 → 상한 적용 순서로 처리합니다. BigDecimal로 정확한 소수점 계산을 보장합니다.
-
-**어뷰징 탐지 서비스 (Abuse Detection Service)**
-IP 버스트, 디바이스 멀티 계정, 신규 계정 세 가지 시그널을 Redis에서 읽어 종합 판정합니다. 즉시 차단 대신 소프트 차단(CAPTCHA 요구)을 기본 전략으로 채택해 오탐으로 인한 정상 사용자 차단을 방지합니다. 고가치 쿠폰(할인율 30% 이상)은 CI 검증 완료 계정에만 허용하는 별도 규칙을 적용합니다. 탐지 이벤트는 Kafka로 발행해 실시간 어뷰징 현황 대시보드에 반영합니다.
-
-**만료 처리 스케줄러 (Expiry Scheduler)**
-쿠폰 발급 시 `expiry_queue` 테이블에 `(coupon_id, user_id, expires_at)` 레코드를 삽입합니다. 스케줄러가 1분마다 `expires_at <= NOW()` 조건으로 소량(1,000건)씩 읽어 `user_coupon` 테이블 상태를 `EXPIRED`로 전환합니다. 전체 5억 건을 풀 스캔하지 않고 `expires_at` 인덱스를 활용해 효율적으로 처리합니다. 만료 처리 지연이 10분 초과 시 알림을 발송합니다.
+| 컴포넌트 | 핵심 역할 | 내부 동작 흐름 |
+|----------|----------|--------------|
+| **발급 서비스** | 쿠폰 발급 + 중복 방지 | 어뷰징 탐지 → Redis Lua 원자 실행 → Kafka 이벤트 발행 → DB 비동기 기록 |
+| **Redis 카운터** | 동시 요청에서 잔여 수량 보호 | `coupon:remaining:{id}` STRING + `coupon:members:{id}` SET, SET NX 복원, Sentinel 고가용성 |
+| **룰 엔진** | 배포 없이 할인 규칙 즉시 적용 | JSON DSL을 DB 저장 → Caffeine TTL 5분 캐시 → 조건 평가 → 금액 계산 → 상한 적용 |
+| **어뷰징 탐지** | IP·디바이스·계정 복합 판정 | Redis에서 시그널 3종 조회 → 종합 판정 → CAPTCHA 소프트 차단 (오탐 최소화) |
+| **만료 스케줄러** | 5억 건 쿠폰 효율적 무효화 | 발급 시 `expiry_queue` 등록 → 1분 주기 1,000건씩 `EXPIRED` 전환 → 지연 10분 초과 시 알림 |
 
 ### 3-1. Redis DECR + Lua 스크립트로 원자적 발급
 
+> **비유**: DECR 단독으로 잔금을 빼는 건 "금고를 열어보고 → 꺼내는" 두 단계입니다. 그 사이에 다른 사람이 열면 같은 돈이 두 번 빠져나갑니다. Lua 스크립트는 금고 안에서 확인과 인출을 동시에 처리해 절대 끼어들 수 없게 만듭니다.
+
 "잔여 수량 확인 → 감소 → 중복 발급 확인"처럼 여러 Redis 명령을 연속 실행하면 그 사이에 다른 요청이 끼어들 수 있습니다. Lua 스크립트는 Redis 서버에서 인터럽트 없이 실행되므로 세 작업 전체가 하나의 원자 단위가 됩니다.
+
+아래 스크립트는 중복 확인(-1), 재고 소진(0), 발급 성공(1) 세 경우를 하나의 원자 단위로 처리합니다.
 
 ```java
 private static final String ISSUE_SCRIPT = """
@@ -198,7 +195,11 @@ public IssueResult issueCoupon(Long userId, Long couponId) {
 
 ### 3-2. JSON DSL 기반 룰 엔진
 
+> **비유**: 하드코딩은 요리사가 레시피를 머릿속에만 넣어두는 것, JSON DSL은 레시피 카드를 서랍에 보관하는 것입니다. 레시피를 바꿀 때 요리사를 교체(배포)할 필요가 없습니다.
+
 쿠폰 규칙을 코드가 아닌 데이터로 표현합니다. DB에 저장하면 서버 재시작 없이 즉시 적용됩니다.
+
+아래는 "패션·뷰티 카테고리, 신규·실버 등급, 3만 원 이상 주문 시 20% 할인 (최대 1만 원)" 규칙의 DSL 표현입니다.
 
 ```json
 {
@@ -215,6 +216,8 @@ public IssueResult issueCoupon(Long userId, Long couponId) {
   "stackGroup": "CART_COUPON"
 }
 ```
+
+JSON DSL을 읽어 조건을 평가하고 할인 금액을 계산합니다. `BigDecimal`로 금전 오차를 방지합니다.
 
 ```java
 public DiscountResult calculate(CouponRule rule, OrderContext order) {
@@ -247,6 +250,15 @@ public DiscountResult calculate(CouponRule rule, OrderContext order) {
 
 같은 `stackGroup`은 1장만, 다른 그룹은 중복 허용합니다. 그룹별 최선 쿠폰만 선택하므로 쿠폰 수에 관계없이 그룹 수만큼만 계산합니다 — O(N).
 
+| stackGroup | 허용 장수 | 예시 |
+|-----------|---------|------|
+| PRODUCT_COUPON | 1장 | 상품 5% 할인 쿠폰 |
+| CART_COUPON | 1장 | 장바구니 3,000원 쿠폰 |
+| SHIPPING_COUPON | 1장 | 무료 배송 쿠폰 |
+| 서로 다른 그룹 | 중복 허용 | 상품 + 장바구니 동시 적용 가능 |
+
+그룹별 최선 쿠폰을 선택한 뒤 합산 할인액에 `MAX_TOTAL_DISCOUNT` 상한을 적용합니다.
+
 ```java
 public long calculateStackedDiscount(List<CouponRule> coupons, OrderContext order) {
     Map<String, CouponRule> bestByGroup = new LinkedHashMap<>();
@@ -273,6 +285,14 @@ public long calculateStackedDiscount(List<CouponRule> coupons, OrderContext orde
 ### 3-4. 어뷰징 탐지 (멀티 어카운트 차단)
 
 세 가지 시그널을 조합합니다.
+
+| 시그널 | 판단 기준 | Redis 키 |
+|--------|---------|---------|
+| IP 버스트 | 동일 IP에서 분당 5건 초과 | `abuse:ip:{ip}:{couponId}` |
+| 디바이스 멀티 계정 | 동일 지문에서 3개 이상 계정 시도 | `abuse:device:{fingerprint}` SET |
+| 신규 계정 | 계정 생성 후 24시간 이내 고가치 쿠폰 요청 | `user:created:{userId}` |
+
+플래그가 2개 이상이면 `suspicious` 판정 → CAPTCHA 요구(소프트 차단). 즉시 차단 대신 소프트 차단으로 오탐 정상 사용자 피해를 줄입니다.
 
 ```java
 public AbuseCheckResult check(Long userId, String ipAddress, String deviceFingerprint, Long couponId) {
@@ -372,7 +392,7 @@ sequenceDiagram
 
 ### 시나리오 1: Redis 장애 — 카운터 소실
 
-Redis 재시작 시 잔여 수량 카운터가 사라집니다.
+Redis 재시작 시 잔여 수량 카운터가 사라집니다. 아래 코드는 애플리케이션 기동 시 DB에서 실제 발급 건수를 집계해 카운터를 안전하게 복원합니다(`SET NX` — 이미 키가 있으면 덮어쓰지 않음).
 
 ```java
 @EventListener(ApplicationReadyEvent.class)
@@ -406,7 +426,7 @@ Redis DECR 성공 후 DB INSERT가 타임아웃되면 Redis에는 "발급됨"이
 
 ### 시나리오 4: 쿠폰 사용 후 주문 취소 — 쿠폰 복원
 
-Saga 보상 트랜잭션으로 쿠폰 상태를 `USED` → `RESTORED`로 복원합니다.
+Saga 보상 트랜잭션으로 쿠폰 상태를 `USED` → `RESTORED`로 복원합니다. 단, 어뷰징 판정 취소는 복원 대상에서 제외해 재사용을 차단합니다.
 
 ```java
 @EventListener
@@ -429,20 +449,13 @@ public void onOrderCancelled(OrderCancelledEvent event) {
 
 ## 5. 실무 실수 Top 5
 
-**실수 1: DB SELECT FOR UPDATE로 동시성 제어**
-`SELECT remaining FROM coupon WHERE id=? FOR UPDATE`로 잔여 수량을 확인하면 행 잠금이 발생합니다. 선착순 이벤트에서 10만 TPS가 동시에 같은 행에 잠금을 요청하면 대기 큐가 폭발하고 DB 커넥션 풀이 고갈됩니다. Redis 원자 연산으로 이 레이어를 분리해야 합니다.
-
-**실수 2: 할인 금액을 double 또는 long 나눗셈으로 계산**
-`long discount = orderAmount * discountRate / 100`에서 정수 나눗셈은 소수점을 버립니다. 30% 할인에 99,999원 주문이면 `99999 * 30 / 100 = 29999`가 되어 1원 오차가 발생합니다. 수억 건이 쌓이면 정산 불일치가 수천만 원에 달할 수 있습니다. 반드시 `BigDecimal`로 처리해야 합니다.
-
-**실수 3: 쿠폰 복원 없이 주문 취소 처리**
-주문 취소 이벤트 핸들러에서 쿠폰 복원 로직을 누락하면, 사용자는 쿠폰을 썼는데 취소 후 쿠폰이 사라지는 사태가 발생합니다. Saga 보상 트랜잭션에서 쿠폰 복원을 명시적으로 구현하고, 어뷰징 판정 취소는 복원 대상에서 제외하는 조건을 반드시 추가해야 합니다.
-
-**실수 4: 만료 처리를 전체 테이블 스캔 배치로 구현**
-`UPDATE user_coupon SET status='EXPIRED' WHERE expires_at < NOW()`를 매일 자정에 한 번 실행하면, 쿠폰 5억 건 테이블을 풀 스캔하는 과정에서 수십 분간 DB 쓰기 성능이 급락합니다. `expires_at` 인덱스 기반 파티셔닝된 만료 큐로 분산 처리해야 합니다.
-
-**실수 5: Redis 장애를 대비하지 않은 발급 흐름**
-Redis 장애 시 Circuit Breaker 없이 발급 API가 Redis 응답을 무한 대기하면, 타임아웃이 적재되어 전체 API 서버 스레드 풀이 고갈됩니다. Redis 장애 감지 즉시 발급 API를 "일시 중단" 상태로 전환하고, 복구 후 DB에서 실제 발급 건수를 집계해 카운터를 재설정하는 절차를 반드시 준비해야 합니다.
+| # | 실수 | 결과 | 올바른 방법 |
+|---|------|------|-----------|
+| 1 | DB SELECT FOR UPDATE로 동시성 제어 | 10만 TPS 환경에서 락 대기 큐 폭발, 커넥션 풀 고갈 | Redis 원자 연산(Lua)으로 동시성 레이어 분리 |
+| 2 | 할인 금액을 long 나눗셈으로 계산 | 30% × 99,999원 = 1원 오차, 수억 건 누적 시 수천만 원 불일치 | 반드시 `BigDecimal`로 처리 |
+| 3 | 주문 취소 시 쿠폰 복원 누락 | 사용자가 취소 후 쿠폰 사라짐, CS 폭주 | Saga 보상 트랜잭션에서 명시적 복원 + 어뷰징 취소는 복원 제외 |
+| 4 | 만료 처리를 전체 테이블 풀 스캔 배치로 구현 | 5억 건 스캔으로 수십 분간 DB 쓰기 성능 급락 | `expiry_queue` + `expires_at` 인덱스 기반 분산 처리 |
+| 5 | Redis 장애 대비 없는 발급 흐름 | 무한 대기로 스레드 풀 고갈, API 서버 전체 장애 전파 | Circuit Breaker로 즉시 차단 + 복구 후 카운터 재설정 절차 준비 |
 
 ---
 

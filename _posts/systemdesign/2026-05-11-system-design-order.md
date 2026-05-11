@@ -34,8 +34,10 @@ toc_label: 목차
 | 이벤트 소싱 | 전체 이력 추적, 시점 복원 가능 | 구현 복잡도 매우 높음, 조회 시 스냅샷 필요 | 금융·감사 요구 극히 엄격한 경우 |
 
 **우리의 선택: 상태 머신 (FSM)**
-- 취소된 주문에 배송 처리가 들어오는 버그를 코드 레벨에서 원천 차단합니다. 상태 전이 시 이벤트를 발행하므로 다운스트림 서비스(알림·포인트·배송)가 자동 처리됩니다.
-- 안 하면: 서비스가 성장하면서 `order.setStatus("COMPLETED")`를 여기저기 호출하고, 결국 어디서 상태를 바꾸는지 아무도 모르는 코드가 됩니다.
+
+- 취소된 주문에 배송 처리가 들어오는 버그를 코드 레벨에서 원천 차단합니다.
+- 상태 전이 시 이벤트를 발행하므로 다운스트림 서비스(알림·포인트·배송)가 자동 처리됩니다.
+- **안 하면**: 서비스가 성장하면서 `order.setStatus("COMPLETED")`를 여기저기 호출하고, 결국 어디서 상태를 바꾸는지 아무도 모르는 코드가 됩니다.
 
 ### 결정 2: 분산 트랜잭션 — 동기식 vs Saga vs Outbox
 
@@ -48,8 +50,11 @@ toc_label: 목차
 | Transactional Outbox | DB 트랜잭션과 이벤트 발행 원자성 보장 | 폴러 추가 운영, 최종 일관성 | 이벤트 유실 절대 안 되는 경우 |
 
 **우리의 선택: Saga + Transactional Outbox 조합**
-- 결제 서비스는 외부 PG사 HTTP API를 호출하므로 DB 트랜잭션에 묶을 수 없습니다. Saga는 각 서비스가 로컬 트랜잭션만 처리하고 실패 시 보상 트랜잭션으로 롤백합니다. Outbox 패턴은 "DB 저장 성공 후 Kafka 발행 실패" 문제를 해결합니다.
-- 안 하면: 블프 피크에 결제 서버 응답 대기로 주문 서버 스레드 풀 전체가 블로킹되고, 신규 주문이 타임아웃됩니다.
+
+- 결제 서비스는 외부 PG사 HTTP API를 호출하므로 DB 트랜잭션에 묶을 수 없습니다.
+- Saga는 각 서비스가 로컬 트랜잭션만 처리하고 실패 시 보상 트랜잭션으로 롤백합니다.
+- Outbox 패턴은 "DB 저장 성공 후 Kafka 발행 실패" 문제를 해결합니다.
+- **안 하면**: 블프 피크에 결제 서버 응답 대기로 주문 서버 스레드 풀 전체가 블로킹되고, 신규 주문이 타임아웃됩니다.
 
 ### 결정 3: 주문번호 생성 — AUTO_INCREMENT vs UUID vs Snowflake
 
@@ -62,8 +67,10 @@ toc_label: 목차
 | Snowflake ID | 64비트, 시간순 정렬, 분산 생성 | 서버 간 시계 동기화 필요 | 대규모 분산 시스템 |
 
 **우리의 선택: Snowflake ID (내부) + 가독성 주문번호 (외부) 이중 구조**
-- Snowflake ID를 PK로 사용하면 시간순 INSERT로 B-Tree 단편화가 없고 DB 없이 분산 생성됩니다. 고객 노출용은 `20260511-A1B2C3` 형태로 별도 생성합니다.
-- 안 하면: UUID를 PK로 쓰면 피크 시 INSERT가 랜덤 위치에 들어가 초당 1만 건 피크에서 주문 테이블 INSERT가 2~3배 느려집니다.
+
+- Snowflake ID를 PK로 사용하면 시간순 INSERT로 B-Tree 단편화가 없고 DB 없이 분산 생성됩니다.
+- 고객 노출용은 `20260511-A1B2C3` 형태로 별도 생성합니다.
+- **안 하면**: UUID를 PK로 쓰면 피크 시 INSERT가 랜덤 위치에 들어가 초당 1만 건 피크에서 주문 테이블 INSERT가 2~3배 느려집니다.
 
 ### 결정 4: 주문 데이터 저장 — 단일 RDB vs CQRS vs 이벤트 스토어
 
@@ -76,8 +83,10 @@ toc_label: 목차
 | 이벤트 스토어 | 완전한 이력, Replay 가능 | 운영 복잡도 매우 높음 | 감사·복원이 핵심인 금융 |
 
 **우리의 선택: CQRS — MySQL(쓰기) + Elasticsearch(읽기)**
-- 주문 생성·상태 업데이트는 MySQL 트랜잭션으로 처리하고, 목록 조회·검색·통계는 Elasticsearch에서 처리합니다. 읽기:쓰기 비율이 100:1이므로 읽기를 독립 확장하면 비용 대비 효율이 큽니다.
-- 안 하면: 날짜별·상태별 필터 쿼리의 Full Scan이 주문 생성 트랜잭션과 DB 자원을 두고 경합해 블프 피크에 쓰기 TPS가 절반으로 떨어집니다.
+
+- 주문 생성·상태 업데이트는 MySQL 트랜잭션으로 처리하고, 목록 조회·검색·통계는 Elasticsearch에서 처리합니다.
+- 읽기:쓰기 비율이 100:1이므로 읽기를 독립 확장하면 비용 대비 효율이 큽니다.
+- **안 하면**: 날짜별·상태별 필터 쿼리의 Full Scan이 주문 생성 트랜잭션과 DB 자원을 두고 경합해 블프 피크에 쓰기 TPS가 절반으로 떨어집니다.
 
 ---
 
@@ -134,20 +143,13 @@ graph LR
 
 ### 핵심 컴포넌트 역할
 
-**API Gateway**
-인증(JWT 검증), 레이트 리미팅(사용자별 초당 10건), SSL 종료를 처리합니다. 주문 생성·취소 같은 쓰기 요청은 Order Service로, 목록 조회·검색은 Query Service(ES 앞단)로 라우팅해 읽기·쓰기 경로를 물리적으로 분리합니다. 블프 피크에는 레이트 리미팅 임계값을 동적으로 조정해 DB 과부하를 선제 차단합니다.
-
-**주문 서비스 (Order Service)**
-FSM(Finite State Machine)으로 허용된 상태 전이만 실행합니다. `PAID → SHIPPED` 전이는 허용되지만 `CANCELLED → PREPARING`은 예외를 던지므로 잘못된 상태 변경이 코드 레벨에서 원천 차단됩니다. 각 전이 시 로컬 트랜잭션 안에서 orders 테이블 업데이트와 order_outbox 이벤트 기록을 동시에 처리해 원자성을 보장합니다.
-
-**Kafka + Outbox Relay**
-주문 서비스가 DB 트랜잭션 내에 order_outbox 테이블에 이벤트를 기록하면, Relay 프로세스가 주기적으로 `published=false` 레코드를 조회해 Kafka에 발행하고 `published=true`로 마킹합니다. "DB 저장 성공 후 Kafka 발행 실패"로 인한 이벤트 유실이 원천 차단됩니다. Relay는 at-least-once 발행이므로 다운스트림 Consumer는 멱등성을 보장해야 합니다.
-
-**결제/재고/배송 서비스**
-각 서비스는 Kafka 이벤트를 구독해 완전히 독립적으로 동작합니다. 결제 서비스가 `OrderCreated`를 수신하면 PG사에 승인 요청을 보내고 결과에 따라 `PaymentCompleted` 또는 `PaymentFailed`를 발행합니다. 실패 시 각 서비스가 보상 이벤트를 발행해 Saga 체인이 역방향으로 롤백됩니다. 보상도 실패하면 DLQ(Dead Letter Queue)에 적재해 운영팀이 수동 처리합니다.
-
-**Query Service + Elasticsearch**
-주문 상태 변경 이벤트를 구독해 ES 인덱스를 동기화합니다. 목록 조회·날짜별 필터·상태별 집계는 ES에서 처리합니다. 주문 직후 "내 주문 확인" 화면은 ES 동기화 지연(수백 ms)을 피해 MySQL 읽기 레플리카에서 직접 조회하고, 그 이후의 반복 조회는 ES 캐시에서 응답합니다.
+| 컴포넌트 | 핵심 역할 | 내부 동작 흐름 |
+|----------|----------|--------------|
+| **API Gateway** | 인증 + 읽기·쓰기 경로 분리 | JWT 검증 → 쓰기는 Order Service, 읽기는 Query Service(ES)로 라우팅 |
+| **주문 서비스** | FSM 상태 전이 + Outbox 원자 기록 | 허용된 전이만 실행 → orders UPDATE + order_outbox INSERT 단일 트랜잭션 |
+| **Kafka + Outbox Relay** | 이벤트 유실 원천 차단 | `published=false` 레코드 폴링 → Kafka 발행 → `published=true` 마킹 |
+| **결제/재고/배송 서비스** | Kafka 기반 완전 독립 동작 | 이벤트 구독 → 로컬 트랜잭션 처리 → 성공/실패 이벤트 발행 |
+| **Query Service + ES** | 읽기 전용 CQRS 모델 | 주문 직후는 MySQL 레플리카, 반복 조회는 ES 캐시에서 응답 |
 
 **주문 생성 정상 흐름 (Saga)**
 
@@ -255,6 +257,8 @@ CREATE TABLE order_status_history (
 
 ### 3-3. Snowflake ID 생성
 
+> **왜 Snowflake ID인가?** AUTO_INCREMENT는 단일 DB가 병목이 되고 경쟁사에 주문 건수가 노출됩니다. UUID는 랜덤 삽입으로 B-Tree 단편화가 심합니다. Snowflake는 시간순 정렬 + 분산 생성 + 64비트 정수라는 세 조건을 동시에 만족합니다.
+
 41비트 타임스탬프 + 10비트 워커 ID + 12비트 시퀀스. 밀리초당 4,096개, 초당 410만 개 생성 가능합니다.
 
 ```java
@@ -307,6 +311,8 @@ public class SnowflakeIdGenerator {
 ```
 
 ### 3-4. 주문 생성 — Transactional Outbox 적용
+
+> **왜 Outbox 패턴인가?** `@Transactional` 안에서 Kafka를 직접 호출하면 DB 커밋 성공 후 Kafka 발행이 실패할 때 이벤트가 영구 유실됩니다. Outbox 테이블에 이벤트를 DB 트랜잭션과 함께 기록하면 Relay가 반드시 한 번 이상 발행을 보장합니다.
 
 ```java
 @Service
@@ -370,6 +376,8 @@ public class OrderService {
 
 ### 3-5. Saga — 주문 → 결제 → 재고 → 배송 흐름
 
+> **왜 Saga인가?** 결제 서비스는 외부 PG사 HTTP API를 호출하므로 DB 트랜잭션에 묶을 수 없습니다. 각 서비스가 로컬 트랜잭션만 처리하고 실패 시 보상 이벤트로 역방향 롤백하는 Saga 패턴이 분산 트랜잭션의 현실적 해법입니다.
+
 ```
 정상 흐름:
   OrderCreated → [결제서비스] PaymentCompleted
@@ -413,6 +421,8 @@ public void handlePaymentFailed(PaymentFailedEvent event) {
 ```
 
 ### 3-6. 재고 선점 — 동시성 제어
+
+> **왜 낙관적 락 + Redis 2단계인가?** 비관적 락(SELECT FOR UPDATE)은 피크 시 DB 커넥션 전체를 락 대기 상태로 묶습니다. 낙관적 락으로 충돌 빈도가 낮은 일반 주문을 처리하고, 피크 대응은 Redis `DECRBY` 원자 연산이 DB 앞에서 재고를 먼저 걸러냅니다.
 
 ```java
 @Retryable(value = OptimisticLockException.class, maxAttempts = 3)
@@ -466,6 +476,8 @@ public boolean tryReserveWithRedis(long productId, int quantity) {
 
 주문 서비스는 무상태(Stateless)로 수평 확장이 쉽습니다. HPA를 CPU 70% 기준으로 설정하되, 블프 같은 계획된 이벤트는 미리 증설합니다.
 
+> **비유:** Auto Scaling은 불이 난 뒤 소방차를 부르는 것입니다. 계획된 이벤트는 불이 나기 전에 소방차를 배치해 두는 것이 맞습니다.
+
 ```
 D-1 오후 11시: 서버 10대 → 30대 예비 증설
 D-day 자정:   HPA 30대 → 최대 100대
@@ -474,7 +486,13 @@ D-day 오전 2시: 트래픽 감소 → 자동 스케일 인
 
 ### 5-2. DB 샤딩
 
-단일 MySQL 한계(~5,000 TPS)를 넘어서면 `user_id % N` 샤딩을 적용합니다. 주문 목록 조회가 항상 특정 사용자 주문만 조회하므로 크로스-샤드 쿼리 없이 깔끔하게 분산됩니다. `user_id % 16` 샤딩 시 80,000 TPS까지 확장 가능합니다.
+> **왜 `user_id` 기준 샤딩인가?** 주문 목록 조회는 항상 특정 사용자의 주문만 조회하므로, `user_id % N`으로 샤딩하면 크로스-샤드 쿼리가 발생하지 않습니다.
+
+| 샤딩 수 | 최대 TPS | 적용 시점 |
+|---------|---------|---------|
+| 단일 MySQL | ~5,000 | Phase 1~2 |
+| 4 샤드 | ~20,000 | Phase 3 |
+| 16 샤드 | ~80,000 | Phase 4 (글로벌) |
 
 ### 5-3. 주문 아카이빙
 
