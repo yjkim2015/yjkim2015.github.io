@@ -930,6 +930,213 @@ public LoginResult login(String email, String password, String ip) {
 
 ---
 
+## 공격자 관점 — 내가 봇 개발자라면 이렇게 뚫는다
+
+방어를 설계하려면 공격자의 사고방식을 알아야 합니다. 위에서 설명한 모든 방어를 갖춘 서비스를 공격한다고 가정하겠습니다.
+
+### 공격 1단계: 정찰 — 방어 체계 파악
+
+방어를 뚫기 전에 **뭐가 걸려있는지** 먼저 파악합니다.
+
+```python
+# 공격자의 정찰 스크립트
+import requests, time
+
+target = "https://target.com/api/products"
+
+# 1. Rate Limit 헤더 확인 — 한도와 리셋 시간 노출
+r = requests.get(target)
+print(r.headers.get('X-RateLimit-Limit'))      # "100" → 분당 100건
+print(r.headers.get('X-RateLimit-Remaining'))   # "99"
+print(r.headers.get('Retry-After'))             # 429일 때 대기 시간
+
+# 2. 차단 기준 파악 — IP인지 쿠키인지 세션인지
+# 쿠키 없이 요청 → 302 리다이렉트? → 쿠키 검증 있음
+# 100건 보내고 429 → IP 기반 제한
+# VPN 바꿔서 다시 100건 → 통과 → IP 기반 확정
+
+# 3. JS Challenge 유무 — curl로 접근
+r = requests.get(target, headers={"User-Agent": "Mozilla/5.0..."})
+if "challenge" in r.text or r.status_code == 403:
+    print("JS Challenge 감지")
+
+# 4. TLS 핑거프린팅 유무 — python-requests vs Chrome 비교
+# 같은 IP에서 requests로 차단, Chrome으로 통과 → JA3 체크 있음
+```
+
+> **방어측 교훈**: `X-RateLimit-Limit` 헤더가 한도를 정확히 노출합니다. 공격자는 이 값을 읽고 "분당 99건까지 안전"이라고 판단합니다. **헤더에 정확한 한도를 노출하지 않는 것도 전략**입니다 — `Remaining`만 반환하고 `Limit`는 숨기는 서비스도 있습니다.
+
+### 공격 2단계: Rate Limit 우회 — 한도 이하로 늦추기
+
+가장 단순한 우회: **그냥 느리게 보냅니다.** 분당 100건 한도면 분당 95건씩 보냅니다. 하루에 136,800건.
+
+```python
+# 공격자의 "착한 봇" — Rate Limit 한도 이하로 동작
+import time, random
+
+for product_id in range(1, 1_000_000):
+    response = session.get(f"https://target.com/api/products/{product_id}")
+    # 분당 95건 = 0.63초 간격 + 랜덤 지터
+    time.sleep(0.63 + random.uniform(0, 0.3))
+```
+
+**왜 이게 문제인가**: Rate Limiter가 "분당 100건 이하 = 정상"으로 판단합니다. IP 1개로 하루 13만 건을 가져갈 수 있습니다.
+
+> **방어측 대응**:
+> - **일일 누적 한도** 추가 — 분당 100건이어도 일일 5,000건 초과 시 차단
+> - **세션 총 요청 수** 추적 — 한 세션에서 1,000페이지 이상 조회 시 봇 의심
+> - **데이터 접근 패턴 분석** — 상품 ID 1부터 순차 접근은 100% 봇
+
+### 공격 3단계: 핑거프린트 우회 — 사람처럼 보이기
+
+```python
+# 공격자의 Playwright 봇 — 진짜 Chrome을 띄워서 모든 브라우저 체크 통과
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(
+        headless=False,  # headless=True면 WebGL이 SwiftShader → 탐지됨
+        args=[
+            '--disable-blink-features=AutomationControlled',  # navigator.webdriver 숨김
+            '--window-size=1920,1080',
+        ]
+    )
+    context = browser.new_context(
+        viewport={'width': 1920, 'height': 1080},
+        locale='ko-KR',
+        timezone_id='Asia/Seoul',
+        geolocation={'latitude': 37.5665, 'longitude': 126.9780},
+    )
+    page = context.new_page()
+
+    # JS Challenge 통과 — 진짜 Chrome이니까
+    page.goto("https://target.com")
+    time.sleep(3)  # Cloudflare 체크 대기
+
+    # 사람처럼 마우스 움직이기 — 엔트로피 체크 우회
+    page.mouse.move(100, 200)
+    page.mouse.move(300, 400, steps=20)  # 20단계로 곡선 이동
+    page.mouse.wheel(0, 500)  # 스크롤
+
+    # 쿠키, 세션, 모든 JS 실행 → 방어 체계에 "정상 사용자"로 인식
+    data = page.content()
+```
+
+**왜 이게 문제인가**: 진짜 Chrome이 실행되므로 JS Challenge, Canvas 핑거프린트, WebGL, TLS(JA3) 전부 정상입니다. `navigator.webdriver`도 패치하면 Selenium 탐지도 안 됩니다.
+
+> **방어측 대응**:
+> - **행동 시퀀스 ML** — 마우스 궤적의 베지어 곡선 패턴, 스크롤 가속도, 클릭 위치 분포를 학습. Playwright 가짜 마우스는 직선적이거나 완벽한 곡선이라 사람과 다릅니다.
+> - **세션 내 인터랙션 깊이** — 사람은 검색→필터→정렬→상세→뒤로가기→다른 상세. 봇은 상세 페이지만 순차 방문.
+> - **시간대 패턴** — 새벽 3시에 8시간 연속 요청하는 "사람"은 없습니다. 사람의 활동 시간대 분포를 프로파일링합니다.
+
+### 공격 4단계: 스케일 아웃 — 프록시 + 계정 팜
+
+단일 봇의 한계를 넘으려면 **병렬화**합니다.
+
+```python
+# 공격자의 병렬 스크래핑 인프라
+from concurrent.futures import ThreadPoolExecutor
+
+# Bright Data 레지덴셜 프록시 — 월 $500으로 수백만 IP 사용
+proxies = [
+    "http://user:pass@brd.superproxy.io:22225",  # 자동 IP 로테이션
+]
+
+# 다크웹에서 구매한 계정 1만 개 — 계정당 한도 별도 적용
+accounts = load_accounts("stolen_accounts.csv")
+
+def scrape_worker(product_id, account, proxy):
+    session = create_session(proxy, account)
+    session.cookies.update(account.cookies)
+    # 각 계정 + 각 IP로 분당 5건씩만 → Rate Limit 안 걸림
+    # 계정 1만 × 분당 5건 = 분당 50,000건
+    return session.get(f"https://target.com/api/products/{product_id}")
+
+with ThreadPoolExecutor(max_workers=100) as executor:
+    for i, pid in enumerate(product_ids):
+        account = accounts[i % len(accounts)]
+        executor.submit(scrape_worker, pid, account, proxies[0])
+```
+
+**왜 이게 문제인가**: 계정 1만 개 × IP 수백만 개 조합이면 모든 Rate Limit 계층을 통과합니다. 각 계정/IP가 한도 이하니까요.
+
+> **방어측 대응** — 이 단계에서는 단일 기법으로 막을 수 없습니다. **복합 시그널 스코어링**이 필요합니다:
+
+```java
+// 복합 위협 스코어 — 단일 지표로 안 걸려도 점수 합산으로 차단
+public double calculateThreatScore(RequestContext ctx) {
+    double score = 0.0;
+
+    // 1. 세션 내 상세 페이지 비율 (정상: 30~50%, 봇: 90%+)
+    double detailRatio = ctx.getDetailPageRatio();
+    if (detailRatio > 0.8) score += 30;
+    else if (detailRatio > 0.6) score += 15;
+
+    // 2. 요청 간격 엔트로피 (정상: 높음, 봇: 낮음)
+    double intervalEntropy = ctx.getRequestIntervalEntropy();
+    if (intervalEntropy < 1.0) score += 25;  // 매우 균일
+    else if (intervalEntropy < 2.0) score += 10;
+
+    // 3. 세션 지속 시간 (정상: 5~30분, 봇: 수시간)
+    if (ctx.getSessionMinutes() > 120) score += 20;
+
+    // 4. 일일 누적 페이지뷰 (정상: 50~200, 봇: 1000+)
+    if (ctx.getDailyPageViews() > 1000) score += 25;
+    else if (ctx.getDailyPageViews() > 500) score += 10;
+
+    // 5. 동일 디바이스 핑거프린트의 IP 변경 횟수
+    if (ctx.getDistinctIpsForFingerprint() > 5) score += 20;
+
+    // 6. 접근 시간대 (새벽 2~6시 연속 활동)
+    if (ctx.isNighttimeActivity()) score += 15;
+
+    // 7. Referer 체인 깊이 (정상: 2~4단계, 봇: 0 직접 접근)
+    if (ctx.getAvgRefererDepth() < 1) score += 15;
+
+    return score;
+    // 50점 이상: CAPTCHA 요구
+    // 70점 이상: 속도 제한 (응답 5초 지연)
+    // 90점 이상: 차단 + 가짜 데이터 반환
+}
+```
+
+### 공격 5단계: 최종 병기 — 사람을 고용한다
+
+모든 자동화 탐지를 뚫는 궁극의 방법: **실제 사람이 스크래핑합니다.**
+
+Amazon Mechanical Turk, 크라우드소싱 플랫폼에서 사람을 고용해 수동으로 데이터를 복사하게 합니다. 또는 CAPTCHA 풀이 서비스 + 사람 클릭 서비스를 조합합니다.
+
+**왜 이게 문제인가**: 진짜 사람이므로 행동 분석, 마우스 패턴, 세션 패턴이 모두 "정상"입니다.
+
+> **방어측 최종 대응 — 이 단계에서 기술적 방어는 한계가 있습니다:**
+>
+> | 전략 | 원리 |
+> |------|------|
+> | **워터마킹** | API 응답에 사용자별 고유 워터마크를 삽입. 유출된 데이터에서 누가 가져갔는지 역추적 |
+> | **법적 대응** | Terms of Service에 스크래핑 금지 명시, CFAA(컴퓨터 사기 및 남용법) 기반 소송 — LinkedIn vs hiQ Labs 판례 |
+> | **데이터 가치 분산** | 핵심 데이터(가격, 재고)를 이미지로 렌더링하여 OCR 비용 강제 부여 |
+> | **허니팟 데이터** | 가짜 상품을 섞어놓고, 해당 데이터가 경쟁사 사이트에 나타나면 스크래핑 증거로 활용 |
+> | **접근 비용 부과** | 로그인 + 유료 플랜에서만 상세 데이터 제공. 무료 사용자에겐 제한된 정보만 |
+
+### 공격자 관점 방어 체크리스트
+
+방어 설계 후 이 질문에 "예"라고 답할 수 있어야 합니다:
+
+| # | 질문 | "아니오"면 뚫린다 |
+|---|------|-----------------|
+| 1 | Rate Limit 한도를 헤더로 정확히 노출하고 있지 않은가? | 공격자가 한도 직전까지 최적화 |
+| 2 | 분당 한도뿐 아니라 **일일/주간 누적 한도**가 있는가? | 느린 봇이 하루 13만 건 수집 |
+| 3 | IP뿐 아니라 **디바이스 핑거프린트** 기반 추적이 있는가? | 레지덴셜 프록시 우회 |
+| 4 | 순차적 ID 접근(1,2,3,4...)을 탐지하는가? | 전수 스크래핑 |
+| 5 | 상세 페이지만 접근하는 패턴을 탐지하는가? | 목록 안 거치는 봇 |
+| 6 | 새벽 시간대 장시간 연속 활동을 탐지하는가? | 24시간 봇 |
+| 7 | 요청 간격의 **엔트로피**(불규칙성)를 측정하는가? | 봇의 균일 간격 |
+| 8 | 동일 핑거프린트가 **IP를 자주 바꾸는 것**을 탐지하는가? | 프록시 로테이션 |
+| 9 | **복합 스코어**(단일 지표가 아닌 가중 합산)로 판정하는가? | 각 지표를 개별 우회 |
+| 10 | 차단 시 **가짜 데이터를 반환**하는 옵션이 있는가? | 봇이 차단 사실을 모르게 |
+
+---
+
 ## 보안 고려사항
 
 > **비유**: 놀이공원 회전문은 한 명씩만 통과시킨다. 그런데 100명이 다른 회전문으로 동시에 들어오면? 분산 봇넷은 정확히 이 방식으로 Rate Limiter를 우회한다.
