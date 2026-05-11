@@ -652,6 +652,284 @@ class AdaptiveRateLimiter:
 
 ---
 
+## 극악의 봇 시나리오 — 현실에서 실제로 일어나는 공격
+
+위의 8단계 방어를 다 갖춰도 뚫리는 공격들이 있습니다. 2024년 이후 봇 시장은 **산업화**되었고, 공격 도구가 SaaS로 판매됩니다.
+
+### 시나리오 A: 레지덴셜 프록시 — IP 차단이 무력화되는 순간
+
+**상황**: 공격자가 Bright Data, Oxylabs 같은 레지덴셜 프록시 서비스를 이용합니다. 전 세계 일반 가정의 공유기 IP(수백만 개)를 경유해 요청을 보냅니다. 각 IP는 진짜 가정용이라 IP 평판 DB에도 "정상"으로 등록되어 있습니다.
+
+**왜 기존 방어가 안 되는가:**
+- IP Rate Limit: 각 IP에서 요청 1~2건만 보내므로 한도 이하
+- IP 평판 DB (Cloudflare): 가정용 IP라 "clean" 판정
+- ASN 차단: 일반 ISP(KT, SKT, LG U+)를 차단할 수 없음
+- TLS 핑거프린팅: 진짜 브라우저를 경유하므로 JA3 정상
+
+**방어 전략:**
+
+| 기법 | 원리 | 효과 |
+|------|------|------|
+| **디바이스 핑거프린팅** | Canvas/WebGL/AudioContext 해시 조합으로 기기 식별 — 같은 기기가 IP를 바꿔도 동일 핑거프린트 | 높음 |
+| **행동 시퀀스 분석** | 정상 사용자: 홈→목록→상세→장바구니 흐름. 봇: 상세 페이지만 직접 접근 | 높음 |
+| **마우스 엔트로피** | 프론트에서 마우스 궤적을 수집, Shannon 엔트로피 계산. 봇은 직선/없음, 사람은 곡선 | 중간 |
+| **요청 간 세션 일관성** | 같은 세션에서 IP가 5분마다 바뀌면 프록시 의심 | 중간 |
+
+```java
+// 디바이스 핑거프린트 기반 Rate Limiting
+public boolean checkDeviceFingerprint(String fingerprint, String ip) {
+    // 동일 핑거프린트가 다른 IP로 분당 10회 이상 → 프록시 사용 확정
+    String key = "fp_ips:" + fingerprint;
+    redis.sadd(key, ip);
+    redis.expire(key, 300); // 5분 윈도우
+    long distinctIps = redis.scard(key);
+
+    if (distinctIps > 10) {
+        redis.sadd("banned_fingerprints", fingerprint);
+        return false; // 차단
+    }
+    return true;
+}
+```
+
+### 시나리오 B: CAPTCHA 풀이 서비스 — JS Challenge도 돈으로 뚫린다
+
+**상황**: Cloudflare JS Challenge나 reCAPTCHA를 설정했는데도 봇이 통과합니다. 공격자가 2Captcha, Anti-Captcha 같은 서비스를 이용해 실제 사람이 CAPTCHA를 풀어줍니다. 건당 $0.001~$0.003, 초당 수천 건 처리 가능.
+
+**왜 기존 방어가 안 되는가:**
+- JS Challenge: 실제 브라우저가 실행하므로 통과
+- reCAPTCHA v2: 사람이 직접 풀어서 통과
+- hCaptcha: 동일하게 사람이 풀기
+
+**방어 전략:**
+
+| 기법 | 원리 | 효과 |
+|------|------|------|
+| **reCAPTCHA v3 (점수 기반)** | 사용자 인터랙션 없이 행동 점수(0~1) 산출, 0.3 이하면 봇 | 높음 — 풀이 서비스가 우회 불가 |
+| **Proof of Work** | 클라이언트에게 해시 계산 과제 부여 (100ms 소요). 봇은 대량 요청 시 CPU 비용 폭발 | 매우 높음 |
+| **경제성 파괴** | CAPTCHA 난이도를 의심 점수에 비례하여 동적 조절. 고점수 봇은 건당 30초짜리 CAPTCHA → 풀이 비용 100배 증가 | 높음 |
+| **CAPTCHA 응답 시간 분석** | 사람: 3~15초, 풀이 서비스: 20~60초 (큐 대기). 응답 시간이 일정하면 서비스 이용 의심 | 중간 |
+
+```python
+# Proof of Work — 클라이언트가 해시 퍼즐을 풀어야 API 접근 가능
+import hashlib, secrets
+
+def generate_challenge():
+    """서버: 난이도 4 (앞 4비트가 0인 해시를 찾아라)"""
+    nonce = secrets.token_hex(16)
+    return {"nonce": nonce, "difficulty": 4}
+
+def verify_solution(nonce, solution, difficulty):
+    """서버: 클라이언트가 제출한 답 검증"""
+    hash_result = hashlib.sha256(f"{nonce}{solution}".encode()).hexdigest()
+    return hash_result[:difficulty] == "0" * difficulty
+    # 난이도 4 → 클라이언트가 평균 65,536번 해시 계산 필요 (~100ms)
+    # 정상 사용자: 100ms 대기 (체감 안 됨)
+    # 봇 초당 1만 건: 1만 × 100ms = CPU 1,000초 필요 (불가능)
+```
+
+### 시나리오 C: 계정 탈취 후 합법 토큰 악용
+
+**상황**: 크리덴셜 스터핑으로 탈취한 수만 개의 실제 계정으로 로그인합니다. 각 계정의 합법적인 JWT 토큰으로 API를 호출합니다. 사용자 ID 기반 Rate Limiting도 각 계정당 한도 이하입니다.
+
+**왜 기존 방어가 안 되는가:**
+- IP Rate Limit: 레지덴셜 프록시와 결합하면 무력
+- 사용자 ID Rate Limit: 계정당 요청 수가 정상 범위
+- 인증: 탈취된 실제 JWT 토큰이라 유효
+
+**방어 전략:**
+
+| 기법 | 원리 | 효과 |
+|------|------|------|
+| **로그인 이상 탐지** | 평소 한국에서 접속하던 계정이 갑자기 러시아 IP로 → MFA 강제 | 높음 |
+| **계정 행동 클러스터링** | 수만 개 계정이 동일 시간대에 동일 API를 호출 → 비정상 집단 행동 탐지 | 매우 높음 |
+| **API 호출 패턴 프로파일링** | 각 사용자의 평소 API 호출 빈도/패턴을 학습, 3σ 이상 벗어나면 차단 | 높음 |
+| **동시 세션 제한** | 계정당 활성 세션 3개로 제한, 초과 시 가장 오래된 세션 강제 만료 | 중간 |
+
+```java
+// 집단 행동 탐지 — 같은 시간에 같은 API를 호출하는 계정 클러스터 식별
+@Scheduled(fixedRate = 60_000) // 1분마다
+public void detectCoordinatedAbuse() {
+    // 최근 1분간 /api/products 호출한 사용자 목록
+    Set<String> recentUsers = redis.smembers("api_users:products:last_1m");
+
+    if (recentUsers.size() > 1000) { // 평소 대비 10배 이상
+        // 이 사용자들의 IP 분포, 요청 간격 분포 분석
+        double intervalStdDev = calculateIntervalStdDev(recentUsers);
+
+        if (intervalStdDev < 0.5) { // 요청 간격이 너무 균일 → 봇 집단
+            recentUsers.forEach(userId ->
+                redis.setex("suspicious:" + userId, 3600, "coordinated_abuse"));
+            alertSecurityTeam("Coordinated abuse detected: " + recentUsers.size() + " accounts");
+        }
+    }
+}
+```
+
+### 시나리오 D: Slowloris / Low-and-slow — 탐지 안 되는 느린 공격
+
+**상황**: 봇이 HTTP 연결을 열고 헤더를 극도로 느리게 보냅니다 (10초마다 1바이트). 서버는 연결이 완료되길 기다리며 스레드/커넥션을 점유합니다. 초당 요청 수는 0건이라 Rate Limiter에 안 걸립니다.
+
+**왜 기존 방어가 안 되는가:**
+- QPS Rate Limit: 완성된 요청이 0건이므로 카운터에 안 잡힘
+- IP Rate Limit: 연결만 열고 있을 뿐 요청을 완성하지 않음
+- WAF: 정상적인 HTTP 헤더를 보내고 있어 패턴 매칭 불가
+
+**방어 전략:**
+
+| 기법 | 설정 | 효과 |
+|------|------|------|
+| **연결 타임아웃 단축** | Nginx `client_header_timeout 10s` | 10초 내 헤더 미완성 시 강제 종료 |
+| **동시 연결 수 제한** | Nginx `limit_conn_zone` IP당 최대 50개 | 연결 독점 방지 |
+| **최소 전송률** | Apache `RequestReadTimeout header=20-40,MinRate=500` | 초당 500바이트 미만이면 끊기 |
+| **리버스 프록시 버퍼링** | Nginx가 요청을 완전히 수신한 후 백엔드로 전달 | 백엔드 서버 보호 |
+
+```nginx
+# Nginx Slowloris 방어 설정
+http {
+    # IP당 동시 연결 50개로 제한
+    limit_conn_zone $binary_remote_addr zone=conn_limit:10m;
+    limit_conn conn_limit 50;
+
+    # 헤더 수신 타임아웃 10초, 바디 수신 타임아웃 30초
+    client_header_timeout 10s;
+    client_body_timeout 30s;
+
+    # Keep-alive 연결 최대 100개, 타임아웃 30초
+    keepalive_timeout 30s;
+    keepalive_requests 100;
+}
+```
+
+### 시나리오 E: GraphQL 쿼리 폭탄 — 단일 요청으로 서버를 죽인다
+
+**상황**: GraphQL API가 있으면 공격자가 깊이 중첩된 쿼리 하나로 서버를 다운시킬 수 있습니다. 요청 1건이라 Rate Limiter에 안 걸리지만, 서버에서 수백만 행을 조인합니다.
+
+```graphql
+# 한 번의 요청으로 DB를 죽이는 쿼리
+query {
+  users(first: 1000) {
+    orders(first: 100) {
+      items(first: 50) {
+        product {
+          reviews(first: 100) {
+            author { orders { items { product { name } } } }
+          }
+        }
+      }
+    }
+  }
+}
+# 1000 × 100 × 50 × 100 = 5억 행 조회 시도
+```
+
+**방어 전략:**
+
+| 기법 | 원리 | 구현 |
+|------|------|------|
+| **쿼리 깊이 제한** | depth > 5 거부 | `graphql-depth-limit` 라이브러리 |
+| **쿼리 복잡도 점수** | 각 필드에 가중치, 합산 > 1000 거부 | 커스텀 validation rule |
+| **쿼리 비용 기반 Rate Limit** | 요청 1건이 아니라 "비용"으로 카운팅 | Redis에 비용 합산 저장 |
+| **타임아웃** | 쿼리 실행 5초 초과 시 강제 취소 | `DataFetcherTimeout` 설정 |
+| **Persisted Queries** | 사전 등록된 쿼리만 허용, 임의 쿼리 거부 | Apollo Server `persistedQueries` |
+
+```java
+// 쿼리 복잡도 기반 Rate Limiting
+public class QueryCostAnalyzer {
+    public int calculateCost(GraphQLQuery query) {
+        int cost = 0;
+        for (Field field : query.getFields()) {
+            int multiplier = field.getArgument("first", 1); // pagination 크기
+            cost += multiplier * (1 + calculateCost(field.getSubFields()));
+        }
+        return cost;
+    }
+}
+
+// Rate Limiter에서 요청 수가 아니라 "비용"으로 제한
+public boolean allowRequest(String userId, int queryCost) {
+    String key = "graphql_cost:" + userId;
+    long totalCost = redis.incrBy(key, queryCost);
+    redis.expire(key, 60); // 분당 윈도우
+    return totalCost <= 10_000; // 분당 비용 한도
+}
+```
+
+### 시나리오 F: 크리덴셜 스터핑 — 분당 10만 로그인 시도
+
+**상황**: 다크웹에서 유출된 이메일/비밀번호 조합 1억 건을 로그인 API에 쏟아붓습니다. 봇넷 1만 대에서 분산 실행하므로 IP당 요청 수는 분당 10건.
+
+**왜 위험한가:**
+- 성공률 0.1%만 돼도 10만 계정 탈취
+- 탈취된 계정으로 포인트 도용, 개인정보 유출
+- 로그인 API가 병목 → 정상 사용자도 로그인 불가
+
+**방어 전략:**
+
+| 계층 | 기법 | 효과 |
+|------|------|------|
+| **1차: 속도** | 로그인 실패 5회 후 30초 딜레이 (IP 무관, 계정 기준) | 봇 속도 100배 감소 |
+| **2차: 인증** | 실패 10회 후 CAPTCHA 강제 | 자동화 차단 |
+| **3차: 차단** | 실패 30회 후 계정 잠금 + 이메일 알림 | 완전 차단 |
+| **4차: 탐지** | 로그인 시도 IP의 지리적 분포 분석 — 전 세계에서 동시 시도면 스터핑 확정 | 사전 차단 |
+| **5차: 예방** | Have I Been Pwned API로 유출 비밀번호 사전 차단 | 근본 해결 |
+
+```java
+// 크리덴셜 스터핑 다층 방어
+public LoginResult login(String email, String password, String ip) {
+    String accountKey = "login_fail:" + email;
+    String ipKey = "login_fail_ip:" + ip;
+
+    int accountFails = redis.incr(accountKey);
+    redis.expire(accountKey, 1800); // 30분 윈도우
+
+    // 계층 1: 속도 제한
+    if (accountFails > 5) {
+        Thread.sleep(Math.min(accountFails * 1000, 30_000)); // 최대 30초 딜레이
+    }
+
+    // 계층 2: CAPTCHA
+    if (accountFails > 10) {
+        if (!captchaVerified) return LoginResult.CAPTCHA_REQUIRED;
+    }
+
+    // 계층 3: 계정 잠금
+    if (accountFails > 30) {
+        lockAccount(email);
+        sendLockNotification(email);
+        return LoginResult.ACCOUNT_LOCKED;
+    }
+
+    // 계층 4: 글로벌 스터핑 탐지
+    int globalFailRate = redis.incr("global_login_fail");
+    if (globalFailRate > 10_000) { // 분당 1만 실패 → 스터핑 공격 중
+        enableEmergencyCaptchaForAll();
+        alertSecurityTeam("Credential stuffing detected: " + globalFailRate + " fails/min");
+    }
+
+    // 실제 인증 로직
+    return authenticate(email, password);
+}
+```
+
+### 봇 방어 최종 정리 — 비용 vs 효과 매트릭스
+
+| 공격 유형 | 난이도 | 방어 비용 | 핵심 방어 기법 |
+|----------|--------|----------|--------------|
+| 초보 스크래퍼 (requests/curl) | ⭐ | 무료 | UA 차단 + 쿠키 검증 |
+| Headless Chrome 봇 | ⭐⭐ | 무료~$20/월 | JS Challenge + TLS 핑거프린팅 |
+| 레지덴셜 프록시 봇 | ⭐⭐⭐ | $100/월 | 디바이스 핑거프린팅 + 행동 분석 |
+| CAPTCHA 풀이 서비스 | ⭐⭐⭐ | $50/월 | Proof of Work + reCAPTCHA v3 |
+| 계정 탈취 + API 악용 | ⭐⭐⭐⭐ | $500/월 | 집단 행동 탐지 + 이상 세션 감지 |
+| Slowloris | ⭐⭐ | 무료 | Nginx 타임아웃 + 연결 수 제한 |
+| GraphQL 폭탄 | ⭐⭐ | 무료 | 깊이 제한 + 비용 기반 Rate Limit |
+| 대규모 크리덴셜 스터핑 | ⭐⭐⭐⭐ | $200/월 | 다층 로그인 방어 + HIBP |
+| 국가급 DDoS (L3/L4) | ⭐⭐⭐⭐⭐ | $3,000+/월 | Cloudflare Enterprise + Anycast |
+
+> **현실**: 봇 방어는 **군비 경쟁**입니다. 100% 차단은 불가능하고, 공격 비용을 수익보다 높게 만드는 것이 목표입니다. 스크래핑 1건당 $0.001의 비용이 들게 만들면, 100만 건 수집에 $1,000이 필요합니다. 우리 데이터의 가치가 $1,000 미만이면 공격자가 포기합니다.
+
+---
+
 ## 보안 고려사항
 
 > **비유**: 놀이공원 회전문은 한 명씩만 통과시킨다. 그런데 100명이 다른 회전문으로 동시에 들어오면? 분산 봇넷은 정확히 이 방식으로 Rate Limiter를 우회한다.
