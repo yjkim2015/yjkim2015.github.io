@@ -9,9 +9,9 @@ toc_label: 목차
 
 > **한 줄 요약**: 주문 시스템의 핵심은 상태 머신으로 주문 흐름을 제어하고, Saga 패턴으로 분산 트랜잭션을 보상하며, CQRS로 읽기·쓰기 부하를 분리하는 것이다.
 
-## 실제 문제: 쿠팡 블랙프라이데이 장애
+## 실제 문제: 대규모 할인 행사 당일의 주문 시스템 장애
 
-2023년 11월 쿠팡 블랙프라이데이 행사 당일, 자정 직후 초당 주문 건수가 평소의 30배 이상으로 치솟으면서 주문 서비스가 단속적으로 장애를 일으켰습니다. 일부 사용자는 결제가 완료됐음에도 주문 목록에서 주문이 보이지 않는 현상을 겪었고, 일부는 재고 소진 상품을 주문하는 데 성공했습니다. 두 가지 모두 같은 원인에서 비롯됐습니다. **주문 생성, 재고 차감, 결제 요청이 단일 동기 트랜잭션으로 묶여 있었고, 피크 트래픽에서 DB 락 경합이 폭발했기 때문**입니다.
+2023년 11월 국내 A 커머스 플랫폼의 대규모 할인 행사 당일, 자정 직후 초당 주문 건수가 평소의 30배 이상으로 치솟으면서 주문 서비스가 단속적으로 장애를 일으켰습니다. 일부 사용자는 결제가 완료됐음에도 주문 목록에서 주문이 보이지 않는 현상을 겪었고, 일부는 재고 소진 상품을 주문하는 데 성공했습니다. 두 가지 모두 같은 원인에서 비롯됐습니다. **주문 생성, 재고 차감, 결제 요청이 단일 동기 트랜잭션으로 묶여 있었고, 피크 트래픽에서 DB 락 경합이 폭발했기 때문**입니다.
 
 쿠팡만의 문제가 아닙니다. 배달의민족은 치킨 주문 피크인 금요일 저녁 6~9시에, 마켓컬리는 새벽 배송 마감 직전 11~12시에 동일한 압력을 받습니다. 이 시스템들이 공통으로 풀어야 하는 문제는 세 가지입니다.
 
@@ -274,8 +274,9 @@ public class SnowflakeIdGenerator {
 
         // 시계가 뒤로 가는 경우 — NTP 보정 시 발생 가능
         if (timestamp < lastTimestamp) {
-            throw new RuntimeException("Clock moved backwards by "
-                + (lastTimestamp - timestamp) + "ms");
+            throw new ClockMovedBackwardsException(
+                "시계가 " + (lastTimestamp - timestamp) + "ms 역행했습니다. " +
+                "짧은 대기 후 재시도하세요.");
         }
 
         if (timestamp == lastTimestamp) {
@@ -323,7 +324,9 @@ public class OrderService {
 
     @Transactional
     public OrderResult createOrder(CreateOrderRequest req) {
-        // 1. 재고 선점 (낙관적 락 — 실패 시 예외)
+        // 1단계: 주문 생성 + Redis 재고 선점 (동기) — 빠른 재고 확인용
+        // 2단계: OrderCreated 이벤트 발행 → Saga로 DB 재고 확정 (비동기)
+        // Redis 선점은 "빠른 검증"이고, 실제 DB 차감은 Saga 스텝에서 수행
         validateAndReserveInventory(req.getItems());
 
         // 2. 주문 엔티티 생성
@@ -486,6 +489,8 @@ public boolean tryReserveWithRedis(long productId, int quantity) {
 }
 ```
 
+> **정합성 복구**: Redis 선점 후 서비스가 죽으면 Redis와 MySQL이 불일치합니다. 이를 방지하기 위해 (1) Redis 예약에 TTL(15분)을 설정하여 미확정 예약을 자동 만료시키고, (2) 매 시간 배치로 Redis 잔여 수량과 MySQL `available` 컬럼을 대조하여 차이가 발생하면 MySQL 기준으로 Redis를 리셋합니다.
+
 ---
 
 ## 4. 장애 시나리오와 대응
@@ -499,6 +504,7 @@ public boolean tryReserveWithRedis(long productId, int quantity) {
 | 재고 서비스 장애 | 재고 선점 실패 | 5xx rate | Redis 재고 카운터가 버퍼로 동작, 재고 서비스 복구 후 MySQL 동기화 |
 | Elasticsearch 장애 | 주문 목록 조회 불가 | Search 5xx | MySQL 읽기 레플리카로 Fallback (성능 저하지만 조회 가능) |
 | 블프 트래픽 30배 | 전체 서버 부하 | CPU/메모리 알림 | 오토스케일링 사전 예열 (트래픽 예측 시 미리 스케일 아웃) |
+| Outbox Relay 프로세스 다운 | 이벤트 발행 완전 중단, 하위 서비스 미동작 | Relay 하트비트 알림 | Relay를 2대 이상 배포하고 ShedLock으로 리더 선출, 폴링 간격 500ms, at-least-once 보장 후 컨슈머에서 멱등 처리 |
 
 ---
 

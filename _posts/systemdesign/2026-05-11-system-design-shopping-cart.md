@@ -127,14 +127,12 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    Client([브라우저/앱]) --> GW[API Gateway]
-    GW --> CartSvc[Cart Service]
-    CartSvc --> Redis[(Redis\nHash)]
-    CartSvc --> MySQL[(MySQL\n회원 장바구니)]
-    CartSvc --> ProdSvc[Product Service\n재고·가격]
-    CartSvc --> MergeQ[Merge Queue\nKafka]
-    MergeQ --> MergeWorker[Merge Worker]
-    MergeWorker --> MySQL
+    GW[API Gateway] --> CartSvc[Cart Service]
+    CartSvc --> Redis[(Redis)]
+    CartSvc --> MySQL[(MySQL)]
+    CartSvc --> ProdSvc[Product Service]
+    CartSvc --> Merge[병합큐 및 Worker]
+    Merge --> MySQL
 ```
 
 **각 컴포넌트의 역할:**
@@ -193,6 +191,17 @@ public class CartMergeService {
     // 병합 전략: 수량 합산 (상품이 양쪽에 있으면 더함)
     // 대안: 로그인 우선 (로그인 장바구니가 있으면 게스트 무시)
     // 대안: 게스트 우선 (방금 담은 것이 더 최신이라는 관점)
+
+    // ⚠️ 동시 로그인(멀티 디바이스) 시 이중 합산 방지
+    // Redis Lua 스크립트로 guestKey 읽기 + userKey 병합 + guestKey 삭제를 원자적으로 실행
+    //
+    // Lua 스크립트 예시:
+    // local items = redis.call('HGETALL', KEYS[1])   -- guestKey 읽기
+    // for i=1, #items, 2 do
+    //   redis.call('HINCRBY', KEYS[2], items[i], items[i+1])  -- userKey에 합산
+    // end
+    // redis.call('DEL', KEYS[1])                     -- guestKey 원자적 삭제
+    // return 1
     public void mergeGuestCartToUser(String guestId, Long userId) {
         String guestKey = "cart:guest:" + guestId;
         String userKey  = "cart:user:" + userId;
@@ -229,6 +238,23 @@ public class CartMergeService {
 ```
 
 병합 전략을 "수량 합산"으로 선택한 이유: 게스트로 2개, 로그인 계정에 1개 있을 때 사용자 입장에서는 최소한 3개를 원한다고 볼 수 있습니다. 실수로 중복 담은 경우 사용자가 직접 수정하는 것이 강제 덮어쓰기보다 낫습니다. SSG닷컴과 올리브영이 이 방식을 씁니다.
+
+### 장바구니 상품 추가 (상한 체크 포함)
+
+```java
+private static final int MAX_CART_ITEMS = 200;
+
+public void addToCart(String cartKey, String productId, int quantity) {
+    // 장바구니 상품 수 상한 체크
+    long currentSize = redisTemplate.opsForHash().size(cartKey);
+    if (currentSize >= MAX_CART_ITEMS) {  // MAX_CART_ITEMS = 200
+        throw new CartLimitExceededException("장바구니는 최대 200개 상품까지 담을 수 있습니다.");
+    }
+
+    // 수량 합산 (이미 있는 상품이면 HINCRBY로 누적)
+    redisTemplate.opsForHash().increment(cartKey, productId, quantity);
+}
+```
 
 ### 장바구니 조회 API (재고·가격 통합)
 
@@ -304,6 +330,8 @@ CREATE TABLE cart_price_snapshots (
 `UNIQUE KEY uq_user_product`는 같은 사용자가 같은 상품을 중복 INSERT할 때 자동으로 막습니다. 애플리케이션 레벨 중복 체크 없이도 데이터 정합성이 보장됩니다.
 
 ### 결제 시 재고 Hard Lock
+
+> 실무에서는 장바구니 전체가 아닌 선택된 상품만 결제하는 "부분 체크아웃"이 일반적입니다. `productIds` 파라미터로 선택 상품만 받고, 결제 완료 후 해당 상품만 장바구니에서 제거하며 나머지는 유지합니다.
 
 ```java
 @Transactional

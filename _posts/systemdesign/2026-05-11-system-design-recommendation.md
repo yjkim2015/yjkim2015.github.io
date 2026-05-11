@@ -11,7 +11,7 @@ toc_label: 목차
 
 ## 실제 문제: 추천 정확도와 매출의 직접적 관계
 
-아마존 전체 매출의 **35%는 추천 시스템이 만들어냅니다.** "이 상품을 구매한 고객이 함께 구매한 상품"이라는 단 한 줄의 UI가 연간 수십조 원의 매출을 책임집니다. 넷플릭스는 사용자가 시청하는 콘텐츠의 80%가 추천을 통해 발견된다고 밝혔습니다.
+아마존 매출의 35%가 추천에서 발생하고(2013년 McKinsey 보고서), 넷플릭스 시청의 80%가 추천 기반입니다(2016년 넷플릭스 발표). "이 상품을 구매한 고객이 함께 구매한 상품"이라는 단 한 줄의 UI가 연간 수십조 원의 매출을 책임집니다.
 
 국내로 눈을 돌리면, **쿠팡**의 "로켓배송 맞춤 추천"은 첫 화면 클릭률(CTR)을 비추천 대비 3배 높이고, **네이버쇼핑** 개인화 피드는 구매 전환율을 2.5배 개선했습니다. **당근마켓**은 지역 기반 추천으로 "내 주변 관심 카테고리" 상품을 보여줌으로써 채팅 연결률을 40% 끌어올렸습니다.
 
@@ -55,6 +55,8 @@ toc_label: 목차
 **우리의 선택: 2단계 파이프라인 (배치 후보 생성 + 실시간 정밀 랭킹)**
 - 이유: 1단계에서 수억 개 상품을 수천 개로 줄이는 것은 배치로 사전계산한다. 2단계에서 수천 개를 실시간으로 정밀 스코어링한다. YouTube, 쿠팡, 넷플릭스가 모두 이 구조를 씁니다.
 - 안 하면: 1억 개 상품에 딥러닝 모델을 실시간으로 돌리면 요청 1건에 100초가 걸린다. 사전계산만 하면 1시간 전에 본 상품이 아직 추천 목록에 남아 있다.
+
+배치로 임베딩을 갱신하면 갱신 주기(보통 1일) 동안 등록된 신규 상품이 CF 후보에서 제외됩니다. 신규 상품은 콘텐츠 기반(CB) 임베딩을 실시간으로 생성하여 ANN 인덱스에 **인크리멘탈 추가**하고, CF 임베딩은 다음 배치에서 갱신합니다.
 
 ### 결정 3: 피처 스토어 — 인메모리 vs Redis vs 전용 피처 스토어
 
@@ -129,8 +131,7 @@ graph LR
     B --> D[랭킹 서비스]
     C --> E[임베딩 DB]
     D --> F[피처 스토어]
-    G[행동 수집기] --> H[이벤트 스트림]
-    H --> F
+    G[이벤트수집] --> F
 ```
 
 **각 컴포넌트 역할:**
@@ -140,8 +141,7 @@ graph LR
 - **랭킹 서비스**: 2,000개 → 20개로 정밀 스코어링 (실시간 ML 모델)
 - **임베딩 DB**: 상품·사용자 벡터 저장 (Faiss / Pinecone)
 - **피처 스토어**: 실시간 피처 제공 (Redis)
-- **행동 수집기**: 클릭·구매·조회 이벤트 수집
-- **이벤트 스트림**: Kafka, 피처 스토어로 실시간 반영
+- **이벤트수집**: 행동 수집기(클릭·구매·조회)와 Kafka 이벤트 스트림을 통해 피처 스토어로 실시간 반영
 
 ---
 
@@ -211,23 +211,44 @@ public class CandidateGeneratorService {
 
     public List<Long> generateCandidates(long userId, UserContext ctx) {
         // 병렬 후보 생성
-        CompletableFuture<List<Long>> cfFuture =
-            CompletableFuture.supplyAsync(() ->
-                embeddingClient.searchSimilarItems(userId, 1000));
+        CompletableFuture<List<Long>> cfFuture = CompletableFuture
+            .supplyAsync(() -> embeddingClient.searchSimilarItems(userId, 1000), executor)
+            .exceptionally(ex -> {
+                log.warn("CF 후보 생성 실패, 빈 리스트 반환: {}", ex.getMessage());
+                return Collections.emptyList();
+            });
 
-        CompletableFuture<List<Long>> itemSimFuture =
-            CompletableFuture.supplyAsync(() ->
-                itemSimClient.getSimilarToRecent(ctx.getRecentItemIds(), 500));
+        CompletableFuture<List<Long>> itemSimFuture = CompletableFuture
+            .supplyAsync(() -> itemSimClient.getSimilarToRecent(ctx.getRecentItemIds(), 500), executor)
+            .exceptionally(ex -> {
+                log.warn("ItemSim 후보 생성 실패, 빈 리스트 반환: {}", ex.getMessage());
+                return Collections.emptyList();
+            });
 
-        CompletableFuture<List<Long>> trendingFuture =
-            CompletableFuture.supplyAsync(() ->
-                trendingClient.getTopByCategory(ctx.getPreferredCategories(), 300));
+        CompletableFuture<List<Long>> trendingFuture = CompletableFuture
+            .supplyAsync(() -> trendingClient.getTopByCategory(ctx.getPreferredCategories(), 300), executor)
+            .exceptionally(ex -> {
+                log.warn("Trending 후보 생성 실패, 빈 리스트 반환: {}", ex.getMessage());
+                return Collections.emptyList();
+            });
 
         // 합집합으로 중복 제거
         Set<Long> candidates = new LinkedHashSet<>();
-        candidates.addAll(cfFuture.get(50, TimeUnit.MILLISECONDS));
-        candidates.addAll(itemSimFuture.get(30, TimeUnit.MILLISECONDS));
-        candidates.addAll(trendingFuture.get(20, TimeUnit.MILLISECONDS));
+        try {
+            candidates.addAll(cfFuture.get(50, TimeUnit.MILLISECONDS));
+        } catch (TimeoutException | ExecutionException | InterruptedException e) {
+            log.warn("CF 후보 타임아웃, 스킵: {}", e.getMessage());
+        }
+        try {
+            candidates.addAll(itemSimFuture.get(30, TimeUnit.MILLISECONDS));
+        } catch (TimeoutException | ExecutionException | InterruptedException e) {
+            log.warn("ItemSim 후보 타임아웃, 스킵: {}", e.getMessage());
+        }
+        try {
+            candidates.addAll(trendingFuture.get(20, TimeUnit.MILLISECONDS));
+        } catch (TimeoutException | ExecutionException | InterruptedException e) {
+            log.warn("Trending 후보 타임아웃, 스킵: {}", e.getMessage());
+        }
 
         // 이미 구매한 상품 제거
         candidates.removeAll(ctx.getPurchasedItemIds());
@@ -478,6 +499,8 @@ public List<Long> getFallbackRecommendations(long userId, List<Long> candidates,
 ---
 
 ## 5. 확장 포인트
+
+**ANN 인덱스 메모리 한계**: 5억 상품 × 128차원 × 4byte(float32) = 256GB로 단일 Faiss 인스턴스에 적재가 불가능합니다. **IVF+PQ 압축**으로 벡터당 메모리를 1/32로 줄이거나(256GB → 8GB), **샤딩**으로 카테고리별 인덱스를 분리합니다. 디스크 기반 ANN(DiskANN, ScaNN)도 대안입니다.
 
 ### 멀티 목적 최적화 (Multi-Objective Ranking)
 

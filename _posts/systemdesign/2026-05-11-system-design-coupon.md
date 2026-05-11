@@ -251,8 +251,17 @@ public class DiscountRuleEngine {
         }
 
         // 할인 금액 계산
+        // ❌ 정수 나눗셈 — 14,950원 × 15 / 100 = 2,242원 (실제 2,242.5원, 반올림 정책 모호)
+        // ✅ BigDecimal — 정확한 금전 계산
         long discount = switch (rule.getDiscountType()) {
-            case PERCENT -> order.getTotalAmount() * rule.getDiscountValue() / 100;
+            case PERCENT -> {
+                BigDecimal amount = BigDecimal.valueOf(order.getTotalAmount());
+                BigDecimal rate = BigDecimal.valueOf(rule.getDiscountValue())
+                    .divide(BigDecimal.valueOf(100));
+                BigDecimal discountVal = amount.multiply(rate)
+                    .setScale(0, RoundingMode.HALF_UP);  // 원 단위 반올림
+                yield discountVal.longValue();
+            }
             case FIXED   -> rule.getDiscountValue();
         };
 
@@ -273,6 +282,8 @@ public class DiscountRuleEngine {
     }
 }
 ```
+
+> ⚠️ **금전 계산은 반드시 `BigDecimal`을 사용합니다.** `long`이나 `double`의 정수/부동소수점 나눗셈은 반올림 오류를 유발하며, 대량 거래에서 누적되면 수백만 원의 차이가 발생합니다. 반올림 정책(`RoundingMode`)도 비즈니스 요구사항에 따라 명시해야 합니다.
 
 ### 3-3. 쿠폰 스태킹 로직
 
@@ -440,6 +451,14 @@ public void onOrderCancelled(OrderCancelledEvent event) {
     }
 }
 ```
+
+### 3-6. 프로모션 코드 설계
+
+기능 요구사항에 "코드 입력 방식"을 포함했으므로 코드 생성/검증 설계가 필요합니다.
+
+**코드 생성**: 8~12자 영숫자 랜덤 생성, `SecureRandom` 사용. 충돌 확률을 낮추기 위해 생성 시 DB UNIQUE 제약으로 중복 체크합니다. 욕설·혼동 문자(O/0, I/1/l)를 제외한 문자셋을 사용합니다.
+
+**무차별 대입 방어**: 코드 검증 API에 IP당 분당 10회 Rate Limit + 5회 연속 실패 시 CAPTCHA를 적용합니다. Redis Sliding Window로 구현합니다.
 
 ---
 

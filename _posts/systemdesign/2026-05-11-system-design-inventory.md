@@ -267,12 +267,15 @@ end
 redis.call('HINCRBY', key, 'available', -qty)
 redis.call('HINCRBY', key, 'reserved', qty)
 
--- 예약 만료 추적을 위한 별도 키 설정
-local reservation_key = key .. ':rsv'
-redis.call('SET', reservation_key, qty, 'EX', ttl)
+-- 주문별 예약을 Hash로 관리
+local reservation_key = KEYS[3]  -- inventory:reservation:{sku_id}
+redis.call('HSET', reservation_key, order_id, qty)
+redis.call('EXPIRE', reservation_key, 900)  -- 15분 TTL
 
 return available - qty
 ```
+
+예약을 Hash 구조(`HSET inventory:reservation:{sku_id} {order_id} {qty}`)로 관리하면 주문별 예약 수량을 추적할 수 있고, 만료 시 어떤 주문의 예약을 해제해야 하는지 명확합니다.
 
 ```java
 // Spring Boot + Lettuce 클라이언트 구현
@@ -409,7 +412,10 @@ public class ReservationExpiryScheduler {
     private final InventoryReservationRepository reservationRepo;
     private final InventoryRepository inventoryRepo;
 
-    @Scheduled(fixedDelay = 60_000) // 1분마다 실행
+    // ⚠️ 서버 다중 인스턴스 환경에서 중복 실행 방지를 위해 ShedLock 사용
+    // ShedLock이 DB/Redis 기반 분산 락으로 하나의 인스턴스만 실행하도록 보장
+    @Scheduled(fixedRate = 60_000)
+    @SchedulerLock(name = "expireReservations", lockAtLeastFor = "50s", lockAtMostFor = "55s")
     @Transactional
     public void expireStaleReservations() {
         LocalDateTime now = LocalDateTime.now();
@@ -533,7 +539,9 @@ public ReservationResult reserve(long skuId, int warehouseId, int quantity) {
 
 1. **주기적 정합성 검증**: 매 1시간마다 Redis와 DB 재고를 비교하는 배치 잡 실행. 불일치 발견 시 알럿 발송 후 DB를 진실의 원천으로 Redis를 보정합니다.
 2. **이벤트 로그 재생**: DB 재고 수치가 의심스러울 경우 inventory_event 로그를 처음부터 재생해 현재 재고를 재계산해 검증합니다.
-3. **보수적 방향**: 불일치 시 항상 낮은 수치를 채택합니다. 초과판매가 품절 표시보다 낫기 때문입니다.
+3. **보수적 방향**: 불일치 시 항상 낮은 수치를 채택합니다. 품절 표시가 초과판매보다 낫기 때문입니다.
+
+> **운영 주의**: 500만 SKU × 50개 창고 = 2억 5천만 행을 매시간 풀 스캔하면 DB 부하가 과도합니다. 실무에서는 `updated_at >= NOW() - INTERVAL 2 HOUR` 조건으로 **변경된 항목만 증분 대조**하거나, 전체 대조는 새벽 시간대에 1일 1회만 수행합니다.
 
 ```java
 @Scheduled(cron = "0 0 * * * *") // 매 정각

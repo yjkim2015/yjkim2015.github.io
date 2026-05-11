@@ -143,13 +143,10 @@ graph LR
     A[클라이언트] --> B[API Gateway]
     B --> C[리뷰 작성 서비스]
     B --> D[리뷰 조회 서비스]
-    C --> E[스팸 탐지 파이프라인]
-    C --> F[(MySQL Primary)]
-    D --> G[(Redis 캐시)]
-    D --> H[Elasticsearch]
-    F --> I[CDC Kafka]
-    I --> G
-    I --> H
+    C --> E[(MySQL Primary)]
+    D --> F[(Redis/ES 조회)]
+    E --> G[CDC Kafka]
+    G --> F
 ```
 
 ### 핵심 설계 원칙
@@ -303,6 +300,8 @@ public class RuleBasedSpamFilter {
 }
 ```
 
+> **MinHash**는 두 문서의 Jaccard 유사도를 O(1)로 근사하는 해시 기법입니다. 단순 해시(SHA-256 등)는 한 글자만 달라도 완전히 다른 값을 반환하지만, MinHash는 문장 순서 변경이나 일부 단어 치환에도 유사한 해시값을 생성합니다. 이를 통해 "배송 빠르고 좋아요"와 "배송 좋고 빨라요"를 유사 리뷰로 탐지할 수 있습니다.
+
 **2차: ML 스코어링 (비동기, Kafka Consumer)**
 
 텍스트 임베딩 기반 유사도 클러스터링, 작성 패턴(시간대, 간격, 길이), 계정 행동 그래프 분석(같은 셀러 여러 상품에 리뷰 패턴)을 결합한 앙상블 모델을 사용합니다.
@@ -423,7 +422,10 @@ public PresignedUrlResponse getPresignedUrl(
 @Service
 public class ReviewReadService {
 
-    // L1: 로컬 카페인 캐시 (서버 메모리, ~10ms)
+    // 2계층 캐시 전략:
+    // L1: Caffeine (JVM 로컬, 5분 TTL, 용량 10,000)
+    // L2: Redis (분산, 30분 TTL)
+    // 조회 순서: L1 → L2 → DB, 적재는 역순 (DB → L2 → L1)
     @Cacheable(cacheNames = "productRating", key = "#productId")
     public RatingSummary getRatingSummary(long productId) {
         // L2: Redis (클러스터, ~1ms)
