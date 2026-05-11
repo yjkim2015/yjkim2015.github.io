@@ -488,6 +488,174 @@ spring:
 
 ---
 
+## 핵심 메트릭
+
+Redis 운영에서 이 숫자들이 정상 범위이면 인스턴스가 안정적으로 동작하고 있다. 특히 Sentinel과 Cluster 환경에서는 복제 상태 지표를 반드시 함께 확인해야 한다.
+
+| 메트릭 | 정상 기준 | 이상 신호 | 원인 가설 |
+|--------|---------|---------|---------|
+| **`used_memory` / `maxmemory`** | 75% 이하 | 90% 초과 | TTL 미설정 키 누적, 예상보다 많은 데이터, AOF 버퍼 팽창 |
+| **`mem_fragmentation_ratio`** | 1.0 ~ 1.5 | 2.0 초과 또는 1.0 미만 | 2.0 초과: 메모리 단편화(BGREWRITEAOF 필요), 1.0 미만: 스왑 발생(즉시 대응) |
+| **`master_link_status`** | `up` | `down` | 네트워크 단절, 마스터 장애, repl_backlog 오버플로 |
+| **`master_repl_offset` - `slave_repl_offset`** (lag) | 0 ~ 수백 바이트 | 수 MB 이상 지속 | 네트워크 대역폭 부족, 마스터 쓰기 폭주, replica 느린 디스크 |
+| **`connected_clients`** | `maxclients` × 0.7 이하 | `maxclients` × 0.9 초과 | 커넥션 풀 누수, 클라이언트 증가, `maxclients` 설정값 낮음 |
+| **`blocked_clients`** | 0 (BLPOP 등 정상 용도 제외) | 지속적으로 0 초과 | O(N) 명령 실행 중, 느린 Lua 스크립트, `WAIT` 명령 대기 |
+| **`instantaneous_ops_per_sec`** | 설계 피크 TPS의 70% 이하 | 피크 TPS 근접 지속 | 트래픽 폭증, 핫키 집중, 클라이언트 재시도 루프 |
+| **`rdb_last_bgsave_status`** | `ok` | `err` | 디스크 공간 부족, fork 실패(메모리 부족), 파일 권한 오류 |
+
+**Sentinel 전용 추가 지표**
+
+| 메트릭 | 정상 기준 | 이상 신호 |
+|--------|---------|---------|
+| Sentinel 활성 수 | 3개 이상 (홀수) | 2개 이하 (quorum 형성 불가) |
+| `sentinel_masters` 상태 | `ok` | `odown` 또는 `sdown` |
+| 페일오버 횟수 (`sentinel_failover_count`) | 낮은 증가율 | 단기간 급증 |
+
+**알람 설정 예시**
+
+```
+used_memory > maxmemory × 0.9 → PagerDuty P0 (즉시 maxmemory 증설 또는 eviction 확인)
+mem_fragmentation_ratio < 1.0 → PagerDuty P0 (스왑 발생, 즉시 메모리 확보)
+master_link_status = down → PagerDuty P1 (복제 단절 원인 조사)
+repl lag > 10MB → Slack 경고 (네트워크/쓰기 부하 확인)
+connected_clients > maxclients × 0.9 → Slack 경고 (커넥션 누수 조사)
+```
+
+---
+
+## 실무 실수 Top 5
+
+**실수 1: Sentinel 없이 복제만 구성하고 가용성을 믿는다**
+마스터-레플리카 복제를 구성해 두고 "HA가 됐다"고 생각하는 경우가 많습니다. 복제는 데이터 복사일 뿐이고, 마스터 장애 시 자동 페일오버는 Sentinel 또는 Cluster 없이는 불가능합니다. Sentinel 없는 복제 구성에서 마스터가 죽으면 수동으로 레플리카를 `SLAVEOF NO ONE`으로 승격시켜야 합니다. 운영자가 자는 새벽에 장애가 나면 다운타임이 수십 분에 달할 수 있습니다.
+
+**실수 2: Cluster에서 해시 태그 없이 MGET 사용**
+`MGET user:1001:profile user:1001:orders` 명령이 개발 환경(Standalone)에서는 잘 작동하다가 Cluster로 전환하면 `CROSSSLOT Keys in request don't hash to the same slot` 에러가 발생합니다. Cluster에서 Multi-key 명령을 사용하려면 관련 키를 `{user:1001}:profile`, `{user:1001}:orders` 형태의 해시 태그로 통일하거나, 개별 GET을 파이프라이닝으로 묶어야 합니다.
+
+**실수 3: `maxmemory-policy`를 `noeviction`으로 두고 캐시 운영**
+캐시 용도 Redis에 `noeviction`을 설정하면 메모리가 가득 찼을 때 모든 쓰기 명령이 `OOM command not allowed` 에러를 반환합니다. 애플리케이션 전체가 캐시 쓰기 실패로 장애로 이어집니다. 순수 캐시라면 `allkeys-lru`를 사용하고, 일부 키는 절대 퇴거하면 안 된다면 `volatile-lru`와 TTL 정책을 조합하세요.
+
+**실수 4: `repl-backlog-size` 기본값(1MB) 유지**
+네트워크 순단이 잦거나 쓰기 트래픽이 높은 환경에서 레플리카가 1~2초 연결이 끊어졌다 복구될 때 `repl_backlog`(1MB)에 누락 구간 데이터가 없으면 전체 재동기화(Full PSYNC)가 발생합니다. RDB 덤프 생성 → 전송 과정에서 마스터 CPU와 네트워크가 급상승하고, 대형 인스턴스에서는 수 분간 부하가 지속됩니다. 고쓰기 환경에서는 `repl-backlog-size 256mb` 이상으로 설정하세요.
+
+**실수 5: Cluster 노드 수를 짝수로 구성**
+마스터 2개 + 레플리카 2개 구성은 마스터 한 대가 장애날 때 나머지 마스터 1개가 quorum 투표에서 과반수를 확보하지 못해 페일오버가 일어나지 않을 수 있습니다. Redis Cluster는 마스터를 홀수(최소 3개)로 구성해야 과반수 투표가 안전하게 동작합니다. 최소 구성은 마스터 3 + 레플리카 3 = 6노드입니다.
+
+---
+
+## 극한 시나리오
+
+### 극한 시나리오 1: Sentinel 환경 — Split-Brain 후 데이터 유실
+
+새벽 3시 네트워크 스위치 장애로 마스터 노드가 Sentinel들과 격리됐습니다. Sentinel들은 ODOWN으로 판정하고 레플리카를 새 마스터로 승격시켰습니다. 애플리케이션 서버 중 일부는 네트워크 경로 차이로 구 마스터에 계속 쓰기를 보냈고, 나머지는 새 마스터에 썼습니다. 20분 뒤 스위치가 복구되자 구 마스터가 새 마스터의 레플리카로 편입되면서, 구 마스터에 기록된 20분치 데이터 전체가 롤백되어 유실됐습니다.
+
+**문제점:**
+- 구 마스터가 격리 중에도 클라이언트 쓰기를 정상 수락
+- 격리된 마스터에 기록된 데이터는 복구 불가
+- 클라이언트 연결 풀이 `+switch-master` 이벤트를 늦게 감지
+
+**대응 전략:**
+
+1️⃣ **`min-replicas-to-write 1` 설정**: 레플리카가 최소 1개 이상 연결된 경우에만 쓰기를 허용합니다. 격리된 마스터는 쓰기를 거부해 유실을 방지합니다.
+
+2️⃣ **`min-replicas-max-lag 10` 설정**: 레플리카 응답이 10초 이상 지연되면 쓰기를 거부합니다. 두 설정을 함께 사용해야 효과적입니다.
+
+3️⃣ **클라이언트 Sentinel 이벤트 구독**: Lettuce는 `+switch-master` 이벤트를 수신하면 커넥션 풀을 자동으로 갱신합니다. `enableAllAdaptiveRefreshTriggers()` 설정을 확인하세요.
+
+4️⃣ **애플리케이션 레벨 버전 번호**: 쓰기 시 타임스탬프 또는 버전 번호를 함께 저장해, Split-Brain 복구 후 어느 쪽 데이터가 최신인지 애플리케이션이 판단할 수 있도록 합니다.
+
+5️⃣ **중요 데이터는 Redis 단독 의존 금지**: 유실이 허용되지 않는 데이터는 DB에 먼저 쓰고 Redis에 캐싱하는 방식으로 Redis를 캐시로만 사용합니다. Redis 장애 시 DB 폴백이 자동으로 동작하도록 설계합니다.
+
+### 극한 시나리오 2: Cluster 핫 슬롯 — 특정 마스터 CPU 100%
+
+플래시 세일 이벤트 당일 `product:9999:stock`에 초당 5만 건의 DECR 요청이 집중됐습니다. 이 키는 슬롯 14,723에 배정되어 M3 노드에서 처리됩니다. M3의 CPU가 100%에 달하고 응답시간이 수십 밀리초로 치솟았습니다. 나머지 M1, M2는 한가한 상태였지만 키를 분산할 방법이 없었습니다.
+
+**문제점:**
+- Cluster 샤딩은 키를 분산하지만 단일 키 자체의 핫 문제는 해결하지 못함
+- 읽기는 레플리카로 분산 가능하지만 DECR(쓰기)은 마스터에만 가능
+- 해시 태그 변경은 운영 중 불가 (모든 클라이언트 코드 수정 필요)
+
+**대응 전략:**
+
+1️⃣ **읽기 분산**: 재고 조회(GET)는 `ReadFrom.REPLICA_PREFERRED`로 레플리카에서 처리해 마스터 부하를 즉시 절반으로 줄입니다.
+
+2️⃣ **로컬 캐시 + 배치 차감**: JVM 레벨 Caffeine 캐시(TTL 500ms)로 조회를 흡수하고, 실제 DECR은 100ms 간격으로 배치 처리합니다. 초당 5만 건 → 초당 200건으로 줄어듭니다.
+
+3️⃣ **키 샤딩 (사전 설계)**: 재고 키를 `product:9999:stock:{0}` ~ `product:9999:stock:{N-1}`으로 N개로 나눕니다. 차감 시 랜덤 샤드를 선택하고, 전체 재고는 N개 합산으로 계산합니다. 이 패턴은 사전에 설계되어야 적용 가능합니다.
+
+4️⃣ **핫 슬롯 사전 탐지**: `redis-cli --hotkeys` (LFU 정책 필요)로 핫키를 미리 찾아 이벤트 전에 샤딩을 적용합니다.
+
+5️⃣ **임시 슬롯 마이그레이션**: `CLUSTER SETSLOT`으로 핫 슬롯을 부하가 낮은 노드로 이전합니다. 다만 마이그레이션 중 ASK 리디렉션이 발생해 클라이언트 응답시간이 일시적으로 증가합니다.
+
+### 극한 시나리오 3: Full PSYNC 폭풍 — 레플리카 동시 재연결
+
+AWS AZ 전환으로 Cluster 레플리카 3대가 동시에 약 30초간 연결이 끊어졌다가 복구됐습니다. `repl-backlog-size`가 기본값 1MB였고, 30초 동안 발생한 쓰기가 각 마스터당 50MB였습니다. 레플리카 3대가 동시에 Full PSYNC를 시작했고, 각 마스터는 `fork()`로 RDB를 생성하면서 메모리 사용량이 2배로 치솟았습니다. 두 마스터가 OOM Kill되어 Cluster 전체가 불안정 상태에 빠졌습니다.
+
+**문제점:**
+- Full PSYNC = fork() = 메모리 순간 2배 (CoW 방식)
+- 여러 레플리카가 동시에 Full PSYNC를 요청하면 CPU와 메모리 모두 폭발
+- OOM Kill된 마스터 슬롯의 레플리카도 Full PSYNC 중이라 승격 불가
+
+**대응 전략:**
+
+1️⃣ **`repl-backlog-size` 증설**: 예상 네트워크 단절 시간 × 초당 쓰기량으로 계산합니다. 60초 단절, 초당 5MB 쓰기라면 최소 300MB. 여유있게 1GB로 설정합니다.
+
+2️⃣ **`repl-diskless-sync yes`**: 디스크에 RDB를 쓰지 않고 소켓으로 직접 스트리밍합니다. 디스크 I/O를 제거해 Full PSYNC 비용을 줄이고, SSD가 없는 환경에서 특히 효과적입니다.
+
+3️⃣ **`repl-diskless-sync-delay 5`**: 여러 레플리카가 동시에 Full PSYNC를 요청할 경우 5초 대기 후 한 번에 전송합니다. fork() 횟수를 줄여 마스터 부하를 경감합니다.
+
+4️⃣ **`overcommit_memory=1` 설정**: OS 레벨에서 메모리 오버커밋을 허용해 fork() 시 즉시 OOM Kill되는 것을 방지합니다. `echo 1 > /proc/sys/vm/overcommit_memory`
+
+5️⃣ **레플리카 재연결 지터(jitter) 도입**: 모든 레플리카가 동시에 재연결하지 않도록 재연결 타이밍에 무작위 지연을 추가합니다. Kubernetes 환경이라면 파드별 `REDIS_RECONNECT_DELAY=$((RANDOM % 30))` 환경변수를 활용합니다.
+
+---
+
+## 실제 장애 사례
+
+### 사례 1: 국내 커머스 플랫폼 — Sentinel 없는 복제 구성으로 4분 다운타임
+
+**상황**: 국내 중형 커머스 플랫폼이 Redis 마스터 1대 + 레플리카 2대 구성으로 운영 중이었다. 플래시 세일 당일 마스터에 OOM이 발생해 프로세스가 종료됐다. 레플리카는 정상이었지만 Sentinel이 없어 자동 페일오버가 불가능했다. 모니터링 알람을 받은 운영자가 수동으로 레플리카에 `SLAVEOF NO ONE`을 실행하고 애플리케이션 설정을 변경하기까지 4분이 걸렸다. 그 4분간 주문 서비스가 완전히 중단됐다.
+
+**근본 원인**: "레플리카가 있으니 안전하다"는 오해. 복제는 데이터 이중화이고, 가용성은 Sentinel/Cluster의 역할이다.
+
+**해결책**:
+- Sentinel 3대 즉시 도입 (`down-after-milliseconds 5000`, quorum 2)
+- `maxmemory 48gb` + `maxmemory-policy allkeys-lru` 설정으로 OOM 원인 해소
+- `min-replicas-to-write 1`로 레플리카 연결 없을 때 마스터 쓰기 거부
+- 페일오버 절차 런북(Runbook) 작성 및 분기별 드릴 실시
+
+**교훈**: 복제와 가용성은 다른 개념이다. 레플리카가 있어도 Sentinel/Cluster 없이는 수동 개입 없이 장애를 복구할 수 없다. 가용성 SLA가 99.9%(연간 8.7시간) 이상이라면 Sentinel은 선택이 아닌 필수다.
+
+### 사례 2: 글로벌 게임사 — Cluster CROSSSLOT으로 대규모 롤백
+
+**상황**: 국내 대형 게임사가 Redis Standalone에서 Cluster로 마이그레이션했다. 마이그레이션 전 QA에서는 문제가 없었지만, 프로덕션 전환 직후 유저 랭킹 갱신 API에서 `CROSSSLOT` 에러가 폭발적으로 발생했다. 원인은 랭킹 갱신 Lua 스크립트가 `user:1001:score`, `user:1001:rank`, `leaderboard:global`을 하나의 스크립트에서 동시에 조작했기 때문이었다. 이 키들이 서로 다른 슬롯에 있었다. 서비스를 Standalone으로 롤백하는 데 45분이 걸렸고, 그 사이 랭킹 데이터가 일부 유실됐다.
+
+**근본 원인**: Cluster에서 Lua 스크립트는 단일 슬롯 키만 다룰 수 있다는 제약을 QA 환경에서 검증하지 않았다. QA 환경이 Standalone이었기 때문이다.
+
+**해결책**:
+- QA 환경을 Cluster와 동일하게 구성 (최소 마스터 3 + 레플리카 3)
+- 해시 태그 도입: `{user:1001}:score`, `{user:1001}:rank`로 통일 (leaderboard는 별도 처리)
+- Lua 스크립트 내 Multi-key 사용 부분을 애플리케이션 코드로 분리
+- Cluster 마이그레이션 체크리스트에 "Multi-key 명령 전수 조사" 항목 추가
+
+**교훈**: Cluster 마이그레이션 전에 반드시 프로덕션과 동일한 Cluster 환경에서 전체 명령 세트를 검증해야 한다. Multi-key 명령과 Lua 스크립트는 특히 주의가 필요하다.
+
+### 사례 3: 핀테크 플랫폼 — Full PSYNC 폭풍으로 Sentinel 페일오버 연쇄
+
+**상황**: 핀테크 플랫폼이 Sentinel 환경에서 마스터 1 + 레플리카 2로 운영 중이었다. 데이터센터 네트워크 점검으로 15초간 레플리카 2대가 모두 연결이 끊어졌다. `repl-backlog-size`가 1MB였고 15초 동안 30MB의 쓰기가 발생해 부분 재동기화가 불가능했다. 두 레플리카가 동시에 Full PSYNC를 시작했고, 마스터가 fork()를 두 번 수행하면서 메모리 사용량이 maxmemory를 초과했다. 마스터가 OOM Kill되자 Sentinel이 레플리카를 새 마스터로 승격시켰지만, 새 마스터도 Full PSYNC 중이어서 복구에 3분이 걸렸다.
+
+**근본 원인**: `repl-backlog-size` 기본값(1MB)이 실제 트래픽에 비해 턱없이 작았다. 여러 레플리카의 동시 Full PSYNC가 마스터 메모리를 폭발시키는 시나리오를 운영 계획에 포함하지 않았다.
+
+**해결책**:
+- `repl-backlog-size` 를 300MB로 증설 (초당 2MB 쓰기 × 최대 단절 150초 기준)
+- `repl-diskless-sync yes` + `repl-diskless-sync-delay 5` 설정으로 동시 Full PSYNC 비용 절감
+- `maxmemory`를 물리 메모리의 60%로 낮춰 fork() 시 CoW 여유 공간 확보
+- `echo 1 > /proc/sys/vm/overcommit_memory` OS 설정 적용
+- 레플리카 재연결 jitter 설정으로 동시 재연결 방지
+
+**교훈**: Full PSYNC는 마스터에 극심한 부하를 준다. `repl-backlog-size`는 "이 정도면 충분하겠지"가 아니라 최악의 단절 시간과 쓰기 트래픽을 기반으로 계산해야 한다. 메모리 여유 공간은 항상 fork() 비용을 포함해 계획해야 한다.
+
+---
+
 ## 8. 면접 포인트
 
 ### 면접 포인트 1️⃣ "Redis가 단일 스레드임에도 빠른 이유는?"
