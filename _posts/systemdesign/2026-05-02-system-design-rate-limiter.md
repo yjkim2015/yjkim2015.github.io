@@ -692,6 +692,180 @@ public boolean checkDeviceFingerprint(String fingerprint, String ip) {
 }
 ```
 
+---
+
+**1단계: 분석 — 왜 뚫리는가**
+
+IP Rate Limit은 "IP 주소 = 사람"이라는 가정 위에 서 있습니다. 레지덴셜 프록시는 이 가정을 정면으로 깨뜨립니다. Bright Data 기준 전 세계 7,200만 개의 실제 가정용 IP를 보유하고 있으며, 요청마다 자동으로 IP를 교체합니다. 각 IP는 진짜 KT·SKT·LG U+ 가입자 공유기에서 나오기 때문에 ISP ASN도 정상입니다. 공격자가 악용하는 취약점은 두 가지입니다.
+
+첫째, IP 기반 Rate Limit은 "동일 사람이 여러 IP를 쓰는 경우"를 식별하지 못합니다. 둘째, IP 평판 DB(Cloudflare Threat Score, MaxMind 등)는 과거 기록 기반이라 "지금 이 순간 프록시로 쓰이고 있는 가정용 IP"를 실시간으로 알 수 없습니다.
+
+**2단계: 탐지 — 어떻게 발견하는가**
+
+핵심 지표는 "동일 디바이스 핑거프린트가 짧은 시간 안에 여러 AS번호(ASN)에서 출현하는가"입니다. 실제 사용자가 셀룰러(SKT AS9644)에서 WiFi(KT AS4766)로 전환하는 경우도 있지만, 5분 안에 3개 이상의 서로 다른 ASN에서 같은 핑거프린트가 나타나는 것은 불가능합니다.
+
+```python
+# Prometheus 기반 모니터링 쿼리
+# 5분 윈도우 안에 동일 핑거프린트에서 3개 이상 ASN 변경이 감지된 수
+rate(fingerprint_asn_distinct_count{count>="3"}[5m]) > 0
+
+# 알람 조건
+# 1분간 레지덴셜 프록시 의심 핑거프린트 수가 100개를 초과하면 PagerDuty 알람
+sum(fingerprint_proxy_suspect_total) > 100
+```
+
+Redis에서 실시간으로 수집하는 방법:
+
+```python
+import redis
+import requests
+
+def track_fingerprint_asn(redis_client, fingerprint, ip):
+    """IP의 ASN을 조회해 핑거프린트별로 누적"""
+    # ipinfo.io API로 ASN 조회 (캐시 필수)
+    asn_key = f"asn_cache:{ip}"
+    asn = redis_client.get(asn_key)
+    if not asn:
+        resp = requests.get(f"https://ipinfo.io/{ip}/org", timeout=1)
+        asn = resp.text.strip()  # 예: "AS4766 Korea Telecom"
+        redis_client.setex(asn_key, 86400, asn)  # 24시간 캐시
+
+    # 핑거프린트별 ASN Set에 추가
+    fp_asn_key = f"fp_asn:{fingerprint}"
+    redis_client.sadd(fp_asn_key, asn)
+    redis_client.expire(fp_asn_key, 300)  # 5분 윈도우
+    return redis_client.scard(fp_asn_key)  # 고유 ASN 수 반환
+```
+
+**3단계: 검증 — 정말 봇인가 확인**
+
+오탐의 주요 원인은 "모바일 로밍 사용자"와 "VPN 사용자"입니다. 이를 구분하기 위해 "의심" 단계와 "확정" 단계를 분리합니다.
+
+| 조건 | 판정 | 근거 |
+|------|------|------|
+| 5분 내 ASN 2개 이하 변경 | 정상 | 셀룰러↔WiFi 전환 가능 |
+| 5분 내 ASN 3~4개 변경 | **의심** — 추가 검증 요청 | 해외 로밍 중일 수 있음 |
+| 5분 내 ASN 5개 이상 변경 | **확정 봇** — 즉시 차단 | 물리적으로 불가능한 이동 속도 |
+| IP 위치 간 직선 거리 > 1,000km / 5분 | **확정 봇** | 광속 이동 불가 |
+
+```python
+from geopy.distance import geodesic
+
+def is_impossible_travel(redis_client, fingerprint, current_lat, current_lon):
+    """연속된 두 위치 간 이동이 물리적으로 불가능한지 확인"""
+    prev_key = f"fp_location:{fingerprint}"
+    prev_location = redis_client.get(prev_key)
+
+    if prev_location:
+        prev_lat, prev_lon, prev_ts = prev_location.decode().split(",")
+        elapsed_minutes = (time.time() - float(prev_ts)) / 60
+        distance_km = geodesic(
+            (float(prev_lat), float(prev_lon)),
+            (current_lat, current_lon)
+        ).km
+
+        # 비행기 최고속도 1,000km/h = 16.7km/분
+        # 이를 초과하면 물리적으로 불가능
+        if elapsed_minutes > 0 and distance_km / elapsed_minutes > 16.7:
+            return True  # 불가능한 이동 = 봇 확정
+
+    redis_client.setex(
+        prev_key, 300,
+        f"{current_lat},{current_lon},{time.time()}"
+    )
+    return False
+```
+
+**4단계: 차단 — 어떻게 막는가**
+
+점진적 대응으로 오탐 피해를 최소화합니다.
+
+```java
+public RateLimitDecision enforceByFingerprint(
+        String fingerprint, String ip, HttpServletRequest req) {
+
+    long asnCount = trackFingerprintAsn(fingerprint, ip);
+
+    // 1단계: ASN 3개 이상 — 조용한 속도 제한 (사용자는 모름)
+    if (asnCount >= 3 && asnCount < 5) {
+        String throttleKey = "fp_throttle:" + fingerprint;
+        long count = redis.incr(throttleKey);
+        redis.expire(throttleKey, 60);
+        if (count > 10) { // 1분에 10건으로 제한
+            return RateLimitDecision.THROTTLE; // 429 + Retry-After: 6
+        }
+    }
+
+    // 2단계: ASN 5개 이상 — CAPTCHA 도전
+    if (asnCount >= 5 && asnCount < 8) {
+        return RateLimitDecision.CAPTCHA_REQUIRED;
+    }
+
+    // 3단계: ASN 8개 이상 — 핑거프린트 차단 + 가짜 데이터 반환
+    if (asnCount >= 8) {
+        redis.sadd("banned_fingerprints", fingerprint);
+        redis.expire("banned_fingerprints", 86400); // 24시간 차단
+
+        // Tar Pit: 차단 사실을 숨기고 가짜 데이터 반환
+        return RateLimitDecision.SERVE_FAKE_DATA;
+    }
+
+    return RateLimitDecision.ALLOW;
+}
+```
+
+Redis로 핑거프린트별 IP 변경 추적과 AS번호 분산도를 계산하는 전체 흐름:
+
+```python
+def get_proxy_score(redis_client, fingerprint, ip) -> float:
+    """0.0(정상) ~ 1.0(확정 프록시) 점수 반환"""
+    # 고유 IP 수 (5분 윈도우)
+    ip_key = f"fp_ips:{fingerprint}"
+    redis_client.sadd(ip_key, ip)
+    redis_client.expire(ip_key, 300)
+    unique_ips = redis_client.scard(ip_key)
+
+    # 고유 ASN 수 (5분 윈도우)
+    asn = get_asn(ip)  # 캐시된 ASN 조회
+    asn_key = f"fp_asn:{fingerprint}"
+    redis_client.sadd(asn_key, asn)
+    redis_client.expire(asn_key, 300)
+    unique_asns = redis_client.scard(asn_key)
+
+    # 점수 계산: ASN 분산도가 핵심 지표
+    # 정상 사용자: unique_asns=1~2, unique_ips=1~3
+    # 프록시 봇: unique_asns=10~50, unique_ips=50~500
+    score = min(1.0, (unique_asns - 1) / 10.0)
+    return score
+```
+
+**5단계: 사후 분석 — 재발 방지**
+
+공격 종료 후 수행할 분석:
+
+```python
+def post_attack_analysis(redis_client, attack_window_start, attack_window_end):
+    """공격 후 패턴 분석 및 방어 강화"""
+
+    # 1. 공격에 사용된 ASN 분포 추출
+    # 특정 ISP(예: AS7922 Comcast)가 다수 등장하면 해당 ISP 가중치 상향
+    attack_asns = get_attack_asns(attack_window_start, attack_window_end)
+    for asn, count in attack_asns.most_common(20):
+        print(f"ASN {asn}: {count}건 — 임계값 강화 검토")
+
+    # 2. 오탐 계정 식별 (차단됐지만 실제 사용자였던 경우)
+    false_positives = identify_false_positives(attack_window_start, attack_window_end)
+    print(f"오탐률: {len(false_positives) / total_blocked:.2%}")
+
+    # 3. 방어 임계값 자동 조정
+    # 오탐률 > 5%이면 ASN 임계값을 5 → 7로 완화
+    if len(false_positives) / total_blocked > 0.05:
+        update_config("fp_asn_threshold", current_threshold + 2)
+        alert("ASN 임계값 완화: 오탐률 초과")
+```
+
+---
+
 ### 시나리오 B: CAPTCHA 풀이 서비스 — JS Challenge도 돈으로 뚫린다
 
 **상황**: Cloudflare JS Challenge나 reCAPTCHA를 설정했는데도 봇이 통과합니다. 공격자가 2Captcha, Anti-Captcha 같은 서비스를 이용해 실제 사람이 CAPTCHA를 풀어줍니다. 건당 $0.001~$0.003, 초당 수천 건 처리 가능.
@@ -727,6 +901,268 @@ def verify_solution(nonce, solution, difficulty):
     # 정상 사용자: 100ms 대기 (체감 안 됨)
     # 봇 초당 1만 건: 1만 × 100ms = CPU 1,000초 필요 (불가능)
 ```
+
+---
+
+**1단계: 분석 — 왜 뚫리는가**
+
+CAPTCHA는 "사람만 풀 수 있다"는 가정에 기반합니다. 2Captcha·Anti-Captcha 같은 풀이 서비스는 이 가정을 완전히 무너뜨립니다. 구조는 단순합니다. 봇이 CAPTCHA 이미지를 API로 전송하면, 제3세계 국가의 인간 작업자가 실제로 풀고 결과를 돌려줍니다. 건당 $0.001~$0.003으로, 10만 건 풀이에 $100~$300입니다.
+
+공격자가 악용하는 취약점은 CAPTCHA 시스템이 "풀이 행위자가 누구인가"를 검증하지 않는다는 점입니다. reCAPTCHA v2가 반환하는 토큰은 "이 CAPTCHA가 풀렸다"는 증명이지, "이 요청을 보낸 브라우저가 직접 풀었다"는 증명이 아닙니다. 봇은 토큰만 훔쳐서 자기 요청에 붙이면 됩니다.
+
+**2단계: 탐지 — 어떻게 발견하는가**
+
+핵심 지표는 **CAPTCHA 응답 시간 분포**입니다. 사람이 직접 푸는 경우: 3~10초(집중 상태) 또는 10~20초(산만한 상태). 풀이 서비스를 경유하는 경우: 20~60초(큐 대기 + 전송 왕복). 이 분포는 서비스마다 다르지만 일반적으로 20초 이상이면 풀이 서비스 의심입니다.
+
+```python
+import redis
+import numpy as np
+from collections import Counter
+
+def analyze_captcha_timing(redis_client, window_minutes=60):
+    """최근 N분간 CAPTCHA 응답 시간 분포를 분석"""
+    timings_raw = redis_client.lrange("captcha_solve_times", 0, -1)
+    timings = [float(t) for t in timings_raw]
+
+    if len(timings) < 30:
+        return  # 데이터 부족
+
+    # 히스토그램 구간: 0-3초, 3-10초, 10-20초, 20-60초, 60초+
+    buckets = [0, 3, 10, 20, 60, float('inf')]
+    labels = ["<3s(의심)", "3-10s(정상)", "10-20s(느림)", "20-60s(풀이서비스의심)", ">60s(이상)"]
+    counts, _ = np.histogram(timings, bins=buckets)
+
+    for label, count in zip(labels, counts):
+        pct = count / len(timings) * 100
+        print(f"{label}: {count}건 ({pct:.1f}%)")
+
+    # 알람 조건: 20초 이상 응답이 전체의 30% 초과
+    slow_ratio = sum(1 for t in timings if t >= 20) / len(timings)
+    if slow_ratio > 0.30:
+        trigger_alert(f"CAPTCHA 풀이 서비스 의심: 20초+ 응답 {slow_ratio:.1%}")
+
+def record_captcha_solve_time(redis_client, session_id, solve_seconds):
+    """CAPTCHA 응답 시간 기록"""
+    redis_client.lpush("captcha_solve_times", solve_seconds)
+    redis_client.ltrim("captcha_solve_times", 0, 9999)  # 최근 1만 건만 유지
+    redis_client.expire("captcha_solve_times", 3600)
+
+    # 세션별 기록 (검증 단계에서 사용)
+    redis_client.setex(f"captcha_time:{session_id}", 300, solve_seconds)
+```
+
+모니터링 대시보드 쿼리:
+
+```
+# Prometheus: CAPTCHA 응답 시간 P50/P95/P99
+histogram_quantile(0.95, rate(captcha_solve_duration_seconds_bucket[5m]))
+
+# 알람: P50이 15초 초과 (풀이 서비스가 다수이면 중앙값이 올라감)
+histogram_quantile(0.50, rate(captcha_solve_duration_seconds_bucket[10m])) > 15
+```
+
+**3단계: 검증 — 정말 봇인가 확인**
+
+응답 시간 하나만으로 차단하면 네트워크 지연이 심한 정상 사용자를 오탐할 수 있습니다. 두 가지 조건을 동시에 만족해야 "확정"으로 분류합니다.
+
+| 조건 | 의심 | 확정 |
+|------|------|------|
+| CAPTCHA 응답 시간 | 20초 이상 | 20초 이상 **AND** 성공률 100% |
+| 성공률 | — | 5회 연속 1회 시도 성공 |
+| 세션 내 CAPTCHA 패턴 | 1회만 풀고 다수 요청 | 풀이 간격이 일정(큐 대기 패턴) |
+| IP 다양성 | — | 동일 응답 시간 분포를 가진 IP가 다수 |
+
+```python
+def is_captcha_farm(redis_client, session_id, solve_time_seconds) -> bool:
+    """CAPTCHA 풀이 서비스인지 판정"""
+    # 조건 1: 응답 시간 20초 이상
+    if solve_time_seconds < 20:
+        return False
+
+    # 조건 2: 이 세션의 CAPTCHA 성공 횟수와 시도 횟수 비교
+    success_count = int(redis_client.get(f"captcha_success:{session_id}") or 0)
+    attempt_count = int(redis_client.get(f"captcha_attempt:{session_id}") or 1)
+
+    # 5번 모두 1번 시도에 성공 → 사람이 아니라 전문 풀이 서비스
+    if attempt_count >= 5 and success_count / attempt_count >= 0.99:
+        return True
+
+    return False
+```
+
+**4단계: 차단 — 어떻게 막는가**
+
+의심 단계부터 풀이 비용을 점진적으로 올려서 경제성을 파괴합니다.
+
+```python
+import hashlib, secrets, time
+
+# 동적 PoW 난이도 조절
+DIFFICULTY_TABLE = {
+    "normal":   4,   # 평균 100ms, 65,536회 해시
+    "suspect":  6,   # 평균 1.6초, 16,777,216회 해시 — 풀이 비용 16배
+    "likely":   8,   # 평균 25초, 4억 회 해시 — 풀이 비용 250배
+    "confirmed": 10, # 평균 6.5분 — 경제적으로 불가능
+}
+
+def get_pow_difficulty(redis_client, session_id, ip) -> int:
+    """세션 위험도에 따라 PoW 난이도 반환"""
+    solve_time = float(redis_client.get(f"captcha_time:{session_id}") or 0)
+    is_farm = is_captcha_farm(redis_client, session_id, solve_time)
+
+    if is_farm:
+        # 확정: 난이도 10 (건당 6.5분 → 분당 요청 불가)
+        redis_client.setex(f"pow_difficulty:{session_id}", 3600, 10)
+        return DIFFICULTY_TABLE["confirmed"]
+
+    if solve_time >= 20:
+        # 의심: 난이도 6 (건당 1.6초 → 초당 요청 불가)
+        return DIFFICULTY_TABLE["suspect"]
+
+    return DIFFICULTY_TABLE["normal"]
+
+def generate_challenge(redis_client, session_id, ip):
+    nonce = secrets.token_hex(16)
+    difficulty = get_pow_difficulty(redis_client, session_id, ip)
+    redis_client.setex(f"pow_nonce:{session_id}", 300, nonce)
+    return {"nonce": nonce, "difficulty": difficulty}
+
+def verify_pow(redis_client, session_id, nonce, solution):
+    stored_nonce = redis_client.get(f"pow_nonce:{session_id}")
+    if not stored_nonce or stored_nonce.decode() != nonce:
+        return False
+    difficulty = int(redis_client.get(f"pow_difficulty:{session_id}") or 4)
+    hash_val = hashlib.sha256(f"{nonce}{solution}".encode()).hexdigest()
+    return hash_val[:difficulty] == "0" * difficulty
+```
+
+비용 계산 정리:
+
+| 난이도 | 평균 해시 횟수 | 클라이언트 시간 | 풀이 서비스 비용(초당 1만 건 기준) |
+|--------|-------------|--------------|----------------------------------|
+| 4 (정상) | 65,536 | ~100ms | 초당 $10 |
+| 6 (의심) | 16,777,216 | ~1.6초 | 초당 $160 |
+| 8 (likely) | 4,294,967,296 | ~25초 | 초당 $2,500 — 비경제적 |
+
+**5단계: 사후 분석 — 재발 방지**
+
+```python
+def post_captcha_attack_analysis(redis_client, db):
+    """CAPTCHA 풀이 서비스 공격 후 분석"""
+
+    # 1. 풀이 서비스를 이용한 세션이 실제로 어떤 행동을 했는가
+    # → 스크래핑인지, 계정 탈취 시도인지, 스팸 게시인지 파악
+    farm_sessions = db.query("""
+        SELECT session_id, action_type, count(*) as cnt
+        FROM request_logs
+        WHERE session_id IN (
+            SELECT session_id FROM captcha_events
+            WHERE solve_time >= 20 AND solve_success_rate >= 0.99
+            AND created_at >= NOW() - INTERVAL '24 hours'
+        )
+        GROUP BY session_id, action_type
+        ORDER BY cnt DESC
+    """)
+
+    # 2. 공격자가 얻어간 데이터 범위 파악
+    for session in farm_sessions:
+        print(f"세션 {session.session_id}: {session.action_type} {session.cnt}건")
+
+    # 3. 방어 강화 조치
+    # 공격 목적이 스크래핑이면 → Tar Pit(가짜 데이터) 활성화
+    # 공격 목적이 계정 탈취면 → 해당 이메일 대상 MFA 강제
+    # 공격 목적이 스팸이면 → 콘텐츠 필터 강화
+
+    # 4. PoW 기본 난이도 재검토
+    # 풀이 서비스 탐지 비율이 1% 초과이면 기본 난이도를 4→5로 상향
+    farm_ratio = get_captcha_farm_ratio(redis_client)
+    if farm_ratio > 0.01:
+        update_config("pow_base_difficulty", 5)
+        print(f"PoW 기본 난이도 상향: 탐지 비율 {farm_ratio:.2%}")
+```
+
+### 시나리오 B-2: AI CAPTCHA 솔버 — GPT-4V가 CAPTCHA를 99% 풀어버린다
+
+2024년 이후 CAPTCHA 풀이 시장이 근본적으로 바뀌었습니다. 사람이 아니라 **AI가 풀어줍니다.**
+
+**현재 AI CAPTCHA 솔버 현황:**
+
+| CAPTCHA 유형 | AI 풀이 성공률 | 풀이 시간 | 비용 (건당) |
+|-------------|:---:|:---:|:---:|
+| 이미지 텍스트 (왜곡 문자) | **99.8%** | 0.5초 | $0.0001 |
+| reCAPTCHA v2 (이미지 선택) | **96%** | 2초 | $0.001 |
+| reCAPTCHA v3 (점수 기반) | **우회 가능** | — | Playwright 행동 조작으로 0.7+ 점수 |
+| hCaptcha | **94%** | 3초 | $0.002 |
+| Cloudflare Turnstile | **90%+** | 5초 | $0.003 |
+| Proof of Work (해시 퍼즐) | **뚫을 수 없음** | 컴퓨팅 비용 비례 | CPU 시간 × 난이도 |
+
+> **핵심**: 이미지/텍스트 기반 CAPTCHA는 **AI에게 이미 졌습니다.** GPT-4V, Claude Vision이 왜곡된 텍스트를 사람보다 더 잘 읽습니다. reCAPTCHA v3의 "행동 점수"도 Playwright + 가짜 마우스로 0.7 이상을 만들 수 있습니다.
+
+**왜 기존 CAPTCHA 방어가 다 뚫리는가:**
+
+```python
+# 공격자의 AI CAPTCHA 솔버 — reCAPTCHA v2 이미지 선택
+import anthropic, base64
+
+client = anthropic.Anthropic()
+
+def solve_recaptcha_image(image_bytes, instruction):
+    """예: '버스가 있는 이미지를 모두 선택하세요'"""
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=100,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64",
+                    "media_type": "image/png",
+                    "data": base64.b64encode(image_bytes).decode()}},
+                {"type": "text", "text": f"이 3x3 그리드에서 {instruction} "
+                    "해당하는 셀 번호를 쉼표로 반환해. 숫자만."}
+            ]
+        }]
+    )
+    return [int(x.strip()) for x in response.content[0].text.split(",")]
+    # 성공률 96%, 풀이 시간 2초, 비용 $0.001/건
+```
+
+**AI 시대의 CAPTCHA 대안 — CAPTCHA를 버리고 다른 것으로 가야 합니다:**
+
+| 대안 | 원리 | AI 우회 가능성 | 구현 난이도 |
+|------|------|:---:|:---:|
+| **Proof of Work (PoW)** | 클라이언트 CPU에게 해시 계산 강제 — AI 여부와 무관하게 **컴퓨팅 비용** 부과 | ❌ 불가 — 수학적 보장 | 중간 |
+| **행동 생체 인증** | 타이핑 리듬, 터치 압력, 자이로스코프 데이터 | 매우 어려움 — 하드웨어 센서 필요 | 높음 |
+| **지연 기반 PoW** | 의심 점수에 비례해 응답 지연 (0.1초~30초) | ❌ 불가 — 시간을 사야 함 | 낮음 |
+| **경제적 마찰** | SMS 인증, 신용카드 등록, 보증금 | 대량 확보 비용 높음 | 낮음 |
+| **인비저블 챌린지** | 브라우저 API 호출 패턴 (Web Audio, WebGL, Battery API 등 50+ 신호) | 어려움 — 모든 API를 완벽 시뮬레이션 불가 | 높음 |
+
+**Proof of Work가 AI 시대의 답인 이유:**
+
+CAPTCHA는 "사람인지 봇인지"를 구분하려 합니다. 하지만 AI가 사람을 흉내 낼 수 있으므로 이 구분은 더 이상 유효하지 않습니다. PoW는 질문을 바꿉니다: **"사람인지 봇인지"가 아니라 "이 요청에 컴퓨팅 비용을 지불했는가?"**
+
+```java
+// 적응형 Proof of Work — 의심 점수에 따라 난이도 동적 조절
+public class AdaptiveProofOfWork {
+
+    // 의심 점수 0~100에 따라 PoW 난이도 결정
+    public int getDifficulty(double threatScore) {
+        if (threatScore < 20) return 0;   // 정상 — PoW 없음
+        if (threatScore < 50) return 4;   // 경미 의심 — 100ms (사용자 체감 없음)
+        if (threatScore < 70) return 6;   // 중간 의심 — 1.6초
+        if (threatScore < 90) return 8;   // 높은 의심 — 25초 (봇 비경제적)
+        return 10;                         // 확정 봇 — 6분+ (사실상 차단)
+    }
+
+    // 비용 계산:
+    // 정상 사용자: 난이도 0 = 0ms 추가 지연
+    // 봇 초당 1,000건 × 난이도 8 = 초당 25,000초 CPU 필요 = GPU 25대 필요
+    // → 봇 운영 비용이 데이터 가치를 초과하는 시점에서 공격 포기
+}
+```
+
+**핵심 통찰**: CAPTCHA 군비 경쟁에서 방어측이 이길 수 없습니다. AI 솔버는 점점 좋아지고 저렴해집니다. **PoW는 물리 법칙(연산에는 시간이 걸린다)에 의존**하므로 AI로 우회할 수 없습니다. 의심 점수가 높을수록 PoW 난이도를 올려 공격 비용을 지수적으로 증가시키는 것이 AI 시대의 봇 방어 핵심입니다.
+
+---
 
 ### 시나리오 C: 계정 탈취 후 합법 토큰 악용
 
@@ -766,6 +1202,205 @@ public void detectCoordinatedAbuse() {
 }
 ```
 
+---
+
+**1단계: 분석 — 왜 뚫리는가**
+
+사용자 ID 기반 Rate Limit은 "계정 = 사람 1명"이라는 가정에 의존합니다. 크리덴셜 스터핑으로 탈취한 계정 1만 개는 이 가정을 1만 배로 희석시킵니다. 각 계정이 분당 5건씩만 호출해도 전체 시스템에는 분당 5만 건이 들어옵니다. 탈취된 JWT 토큰은 서명이 유효하기 때문에 인증 레이어도 통과합니다.
+
+공격자가 악용하는 취약점은 개별 계정 관점에서는 모든 수치가 정상이라는 점입니다. 이상은 오직 **집단 행동 패턴**에서만 드러납니다. 수만 개의 계정이 동일한 시간대에 동일한 API를 동일한 간격으로 호출하는 패턴은 자연 발생적으로는 불가능합니다.
+
+**2단계: 탐지 — 어떻게 발견하는가**
+
+두 가지 신호를 동시에 모니터링합니다.
+
+첫째, 글로벌 로그인 실패율 급증과 동시에 다수 계정에서 비정상 API 호출이 발생합니다. 둘째, 정상 상태에서 특정 API의 호출 계정 수 분포는 멱함수(소수 헤비 유저 + 다수 라이트 유저)를 따르는데, 공격 중에는 수천 개의 계정이 동시에 동일 API를 호출하는 이상 분포가 됩니다.
+
+```python
+import redis
+from collections import Counter
+import statistics
+
+def detect_coordinated_abuse(redis_client, api_endpoint, window_minutes=1):
+    """집단 행동 탐지 — 동일 시간대 동일 API 호출 계정 클러스터 식별"""
+
+    key = f"api_users:{api_endpoint}:last_{window_minutes}m"
+    recent_users = redis_client.smembers(key)
+    user_count = len(recent_users)
+
+    # 기준선(baseline) 대비 10배 초과 시 의심
+    baseline_key = f"api_users_baseline:{api_endpoint}"
+    baseline = float(redis_client.get(baseline_key) or user_count)
+
+    surge_ratio = user_count / max(baseline, 1)
+
+    # 요청 간격 표준편차 계산 (낮을수록 봇)
+    interval_key = f"api_intervals:{api_endpoint}:last_{window_minutes}m"
+    intervals = [float(x) for x in redis_client.lrange(interval_key, 0, 999)]
+    interval_stddev = statistics.stdev(intervals) if len(intervals) > 10 else 999
+
+    print(f"[{api_endpoint}] 계정 수: {user_count} (기준선 대비 {surge_ratio:.1f}x), "
+          f"간격 표준편차: {interval_stddev:.3f}s")
+
+    # 알람 조건: 기준선 10배 초과 AND 간격 표준편차 0.5 미만
+    if surge_ratio >= 10 and interval_stddev < 0.5:
+        trigger_alert(
+            f"집단 행동 공격 감지: {api_endpoint} — "
+            f"{user_count}개 계정, 간격편차={interval_stddev:.3f}s"
+        )
+        return True
+    return False
+```
+
+Prometheus 모니터링 쿼리:
+
+```
+# 계정당 API 호출 수 분포가 비정상적으로 균일해지는지 감지
+# 정상: 소수 헤비 유저가 대부분의 요청을 차지
+# 공격: 수천 계정이 동일한 소량 요청 (균일 분포)
+stddev(rate(api_calls_per_user_total[1m])) / avg(rate(api_calls_per_user_total[1m])) < 0.2
+
+# 동시에 로그인 실패율 급증 감지
+rate(login_failure_total[1m]) > rate(login_failure_total[1m] offset 1h) * 5
+```
+
+**3단계: 검증 — 정말 봇인가 확인**
+
+정상 사용자 중에도 마케팅 이벤트나 앱 업데이트 배포 시 일시적으로 동시 접속이 급증할 수 있습니다. 이와 구분하기 위해 계정별 "평소 행동 프로파일"과의 유사도를 비교합니다.
+
+```python
+import numpy as np
+
+def compute_behavior_similarity(user_id, current_window_hours=1):
+    """사용자의 현재 행동과 평소 프로파일의 코사인 유사도 계산"""
+
+    # 평소 프로파일: 지난 30일 시간대별 API 호출 분포 (24차원 벡터)
+    profile_key = f"user_profile:{user_id}:hourly"
+    profile = np.array([float(x) for x in redis.lrange(profile_key, 0, 23)])
+
+    # 현재 행동: 지난 1시간의 API 호출 패턴
+    current_key = f"user_current:{user_id}:api_pattern"
+    current = np.array([float(x) for x in redis.lrange(current_key, 0, 23)])
+
+    if profile.sum() == 0 or current.sum() == 0:
+        return 1.0  # 데이터 없으면 정상으로 간주
+
+    # 코사인 유사도 (1.0 = 완전 일치, 0.0 = 완전 다름)
+    similarity = np.dot(profile, current) / (
+        np.linalg.norm(profile) * np.linalg.norm(current) + 1e-9
+    )
+    return float(similarity)
+
+def classify_account_status(user_id) -> str:
+    similarity = compute_behavior_similarity(user_id)
+
+    if similarity >= 0.7:
+        return "NORMAL"          # 평소와 70% 이상 유사
+    elif similarity >= 0.4:
+        return "SUSPICIOUS"      # 추가 검증 필요
+    else:
+        return "LIKELY_COMPROMISED"  # 평소와 완전히 다른 행동
+```
+
+| 코사인 유사도 | 판정 | 조치 |
+|-------------|------|------|
+| 0.7 이상 | 정상 | 허용 |
+| 0.4~0.7 | 의심 | MFA 재인증 요청 |
+| 0.4 미만 | 탈취 의심 확정 | 세션 강제 만료 + 이메일 알림 |
+
+**4단계: 차단 — 어떻게 막는가**
+
+```java
+@Service
+public class CompromisedAccountDefense {
+
+    // 이상 행동 감지 시 세션 강제 만료 + MFA 강제
+    public void handleSuspiciousActivity(String userId, String reason) {
+        double similarity = computeBehaviorSimilarity(userId);
+
+        if (similarity < 0.4) {
+            // 1단계: 모든 활성 세션 즉시 만료
+            invalidateAllSessions(userId);
+
+            // 2단계: 새 로그인 시 MFA 강제 (24시간)
+            redis.setex("force_mfa:" + userId, 86400, reason);
+
+            // 3단계: 계정 소유자에게 알림
+            sendSecurityAlert(userId,
+                "비정상적인 접근이 감지되어 세션이 종료되었습니다. " +
+                "본인이 아니면 비밀번호를 즉시 변경하세요.");
+
+            // 4단계: 보안팀 에스컬레이션 로그
+            securityLog.warn("Account likely compromised: userId={}, " +
+                "behaviorSimilarity={}, reason={}", userId, similarity, reason);
+
+        } else if (similarity < 0.7) {
+            // 의심 단계: 조용히 추가 인증 요청 (사용자 경험 최소 침해)
+            redis.setex("soft_mfa:" + userId, 3600, "suspicious_behavior");
+        }
+    }
+
+    // 집단 행동 감지 시 일괄 대응
+    public void handleCoordinatedAbuse(Set<String> suspiciousUserIds) {
+        // 집단으로 의심되는 계정들의 Rate Limit을 일시적으로 강화
+        suspiciousUserIds.forEach(userId -> {
+            String key = "emergency_rate_limit:" + userId;
+            redis.setex(key, 3600, "10");  // 1시간 동안 분당 10건으로 제한
+        });
+
+        // 1,000개 이상이면 글로벌 비상 모드
+        if (suspiciousUserIds.size() > 1000) {
+            redis.setex("global_emergency_mode", 3600, "coordinated_attack");
+            enableEmergencyRateLimit();  // 모든 사용자 Rate Limit 50% 강화
+        }
+    }
+}
+```
+
+**5단계: 사후 분석 — 재발 방지**
+
+```python
+def post_account_takeover_analysis(db, redis_client, attack_start, attack_end):
+    """계정 탈취 공격 후 분석"""
+
+    # 1. 탈취된 계정 수와 피해 범위 파악
+    compromised_accounts = db.query("""
+        SELECT COUNT(DISTINCT user_id) as count,
+               SUM(CASE WHEN action='data_access' THEN 1 ELSE 0 END) as data_exposures,
+               SUM(CASE WHEN action='purchase' THEN amount ELSE 0 END) as financial_damage
+        FROM security_events
+        WHERE event_type='compromised_session'
+        AND created_at BETWEEN %s AND %s
+    """, (attack_start, attack_end))
+
+    print(f"탈취 계정: {compromised_accounts.count}개")
+    print(f"데이터 노출: {compromised_accounts.data_exposures}건")
+    print(f"금전 피해: {compromised_accounts.financial_damage:,}원")
+
+    # 2. 탈취된 계정들의 공통점 분석
+    # → 특정 기간에 가입한 계정인가? 특정 이메일 도메인인가?
+    # → 패스워드 강도가 낮은 계정인가?
+    common_patterns = analyze_compromised_account_patterns(compromised_accounts)
+
+    # 3. 방어 강화 조치
+    # 탈취 계정 비율이 높았던 이메일 도메인에 MFA 강제
+    for domain in common_patterns.high_risk_domains:
+        force_mfa_for_domain(domain)
+
+    # 4. 행동 프로파일 베이스라인 재계산
+    # 공격 기간의 데이터를 제외하고 재학습
+    rebuild_behavior_profiles(exclude_window=(attack_start, attack_end))
+
+    # 5. 동시 세션 제한 임계값 검토
+    # 공격 중 계정당 최대 동시 세션이 몇 개였는가
+    max_concurrent = get_max_concurrent_sessions_during_attack(attack_start, attack_end)
+    print(f"공격 중 계정당 최대 동시 세션: {max_concurrent}")
+    if max_concurrent > 3:
+        update_config("max_concurrent_sessions", 2)  # 더 엄격하게 조정
+```
+
+---
+
 ### 시나리오 D: Slowloris / Low-and-slow — 탐지 안 되는 느린 공격
 
 **상황**: 봇이 HTTP 연결을 열고 헤더를 극도로 느리게 보냅니다 (10초마다 1바이트). 서버는 연결이 완료되길 기다리며 스레드/커넥션을 점유합니다. 초당 요청 수는 0건이라 Rate Limiter에 안 걸립니다.
@@ -800,6 +1435,244 @@ http {
     keepalive_requests 100;
 }
 ```
+
+---
+
+**1단계: 분석 — 왜 뚫리는가**
+
+Slowloris가 통하는 이유는 HTTP/1.1 서버가 설계상 "헤더 수신 완료"를 기다리기 때문입니다. 스레드 기반 서버(Apache prefork, Tomcat BIO)는 연결마다 스레드를 할당하고, 헤더가 완성될 때까지 그 스레드를 점유합니다. 공격자는 10바이트짜리 헤더를 10초에 1바이트씩 보냅니다. 요청은 영원히 "진행 중"이고, 스레드는 영원히 "대기 중"입니다.
+
+QPS Rate Limit이 무력화되는 이유는 정확합니다. 완성된 요청이 0건이기 때문입니다. 방화벽과 WAF도 정상적인 HTTP 헤더 구문(`GET /index.html HTTP/1.1\r\nHost: target.com\r\n`)을 보내고 있어 패턴 매칭이 불가능합니다. 공격자는 연결만 열면 되고, 요청을 완성할 필요가 없습니다.
+
+**2단계: 탐지 — 어떻게 발견하는가**
+
+핵심 지표는 **불완전 연결 수(incomplete connections)**와 **연결 대비 완료 요청 비율**입니다.
+
+```bash
+# netstat으로 ESTABLISHED 연결 중 오래된 연결 탐지
+# SYN_RECV 상태가 급증하면 SYN Flood, ESTABLISHED가 급증하면 Slowloris
+watch -n 1 'netstat -ant | awk "{print \$6}" | sort | uniq -c | sort -rn'
+
+# IP별 연결 수 상위 목록 (특정 IP가 50+ 연결 유지 중이면 의심)
+netstat -ant | grep ESTABLISHED | awk '{print $5}' | cut -d: -f1 | sort | uniq -c | sort -rn | head -20
+
+# ss 명령으로 더 상세한 연결 상태 확인
+ss -s  # 전체 요약
+ss -ant state established | wc -l  # 현재 ESTABLISHED 연결 수
+```
+
+Prometheus + Nginx 연동 모니터링:
+
+```python
+import subprocess
+import re
+from prometheus_client import Gauge
+
+# 메트릭 정의
+incomplete_connections = Gauge('nginx_incomplete_connections',
+                                'Number of connections without completed request')
+connection_completion_ratio = Gauge('nginx_connection_completion_ratio',
+                                    'Ratio of completed requests to active connections')
+
+def collect_slowloris_metrics():
+    """Nginx 상태 페이지 + netstat으로 Slowloris 징후 수집"""
+
+    # Nginx stub_status 파싱
+    # nginx.conf에 location /nginx_status { stub_status; } 설정 필요
+    import requests
+    status = requests.get("http://localhost/nginx_status", timeout=2).text
+    # 예시 출력:
+    # Active connections: 847
+    # server accepts handled requests: 12345 12345 54321
+    # Reading: 823 Writing: 15 Waiting: 9
+
+    reading = int(re.search(r'Reading: (\d+)', status).group(1))
+    writing = int(re.search(r'Writing: (\d+)', status).group(1))
+    active = int(re.search(r'Active connections: (\d+)', status).group(1))
+
+    # Reading이 높고 Writing이 낮으면 → 헤더 수신 중인 연결이 많음 = Slowloris 징후
+    incomplete_connections.set(reading)
+    if active > 0:
+        connection_completion_ratio.set(writing / active)
+
+    # 알람 조건: Reading/Active 비율이 80% 초과
+    if active > 100 and reading / active > 0.8:
+        trigger_alert(
+            f"Slowloris 의심: Active={active}, Reading={reading} "
+            f"({reading/active:.1%}) — 헤더 미완성 연결 급증"
+        )
+```
+
+Prometheus 알람 규칙:
+
+```yaml
+# alerting_rules.yml
+groups:
+  - name: slowloris
+    rules:
+      - alert: SlowlorisAttackSuspected
+        # Reading 연결이 전체의 70% 초과이고 100개 이상
+        expr: nginx_reading_connections > 100 AND
+              nginx_reading_connections / nginx_active_connections > 0.7
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Slowloris 공격 의심 — 즉시 확인 필요"
+```
+
+**3단계: 검증 — 정말 봇인가 확인**
+
+정상적인 느린 연결과 Slowloris를 구분하는 기준은 **Content-Length 헤더**와 **전송 속도**입니다.
+
+| 조건 | 정상 느린 연결 | Slowloris |
+|------|-------------|-----------|
+| Content-Length 헤더 | 존재 (대용량 업로드) | 없거나 헤더 자체가 미완성 |
+| 전송 속도 | 느리지만 일정 (수십 KB/s) | 극도로 느림 (수 바이트/초) |
+| 헤더 완성 여부 | 헤더는 빠르게 완성 | 헤더가 수십 초째 미완성 |
+| User-Agent | 정상 브라우저 | 없거나 의심스러운 값 |
+| 같은 IP 연결 수 | 1~3개 | 수십~수백 개 |
+
+```bash
+# tcpdump로 의심 IP의 패킷 간격 분석
+# 정상: 패킷이 꾸준히 옴, Slowloris: 매우 드문드문 옴
+tcpdump -i eth0 -n host 1.2.3.4 -A 2>/dev/null | \
+    awk '/^[0-9]/{print $1}' | \
+    awk 'NR>1{printf "%.6f\n", $1-prev} {prev=$1}' | \
+    sort -n | tail -5
+# 패킷 간격이 수 초 이상이면 Slowloris 확정
+
+# Nginx 로그에서 헤더 수신 시간이 긴 요청 필터링
+# log_format에 $request_time 포함 필요
+awk '$NF > 30' /var/log/nginx/access.log | \
+    awk '{print $1}' | sort | uniq -c | sort -rn | head -10
+```
+
+**4단계: 차단 — 어떻게 막는가**
+
+Nginx 설정 강화와 커널 레벨 방어를 결합합니다.
+
+```nginx
+# /etc/nginx/nginx.conf — Slowloris 완전 방어 설정
+http {
+    # 연결 추적용 공유 메모리 존
+    limit_conn_zone $binary_remote_addr zone=conn_limit_per_ip:10m;
+    limit_conn_zone $server_name        zone=conn_limit_per_server:10m;
+
+    server {
+        # IP당 동시 연결 20개로 제한 (기존 50개에서 강화)
+        limit_conn conn_limit_per_ip     20;
+        # 서버 전체 최대 동시 연결 1000개
+        limit_conn conn_limit_per_server 1000;
+
+        # 헤더 수신 타임아웃: 5초 (기존 10초에서 강화)
+        client_header_timeout 5s;
+        # 바디 수신 타임아웃: 10초
+        client_body_timeout   10s;
+        # 응답 전송 타임아웃: 10초
+        send_timeout          10s;
+
+        # Keep-alive 연결 타임아웃 단축
+        keepalive_timeout     15s;
+        keepalive_requests    50;
+
+        # 최소 전송 속도: 초당 100바이트 미만이면 연결 끊기
+        # (대용량 업로드와 구분: Content-Length 있으면 예외)
+        client_body_min_rate 100;
+    }
+}
+```
+
+커널 레벨 SYN Cookie 활성화 (SYN Flood 병행 방어):
+
+```bash
+# /etc/sysctl.conf에 추가
+# SYN Cookie: SYN Flood 방어 (SYN 큐 가득 차면 자동 활성화)
+net.ipv4.tcp_syncookies = 1
+
+# TIME_WAIT 소켓 재사용 허용 (연결 고갈 방지)
+net.ipv4.tcp_tw_reuse = 1
+
+# FIN_WAIT2 타임아웃 단축
+net.ipv4.tcp_fin_timeout = 15
+
+# TCP keep-alive 설정 (유령 연결 탐지)
+net.ipv4.tcp_keepalive_time = 60
+net.ipv4.tcp_keepalive_intvl = 10
+net.ipv4.tcp_keepalive_probes = 3
+
+# 설정 즉시 적용
+sysctl -p
+```
+
+공격 진행 중 실시간 IP 차단 스크립트:
+
+```bash
+#!/bin/bash
+# slowloris_blocker.sh — 50개 이상 연결 유지 IP 자동 차단
+
+THRESHOLD=50
+WHITELIST=("10.0.0.0/8" "172.16.0.0/12")  # 내부 IP 제외
+
+netstat -ant | grep ESTABLISHED | \
+    awk '{print $5}' | cut -d: -f1 | \
+    sort | uniq -c | sort -rn | \
+    while read count ip; do
+        if [ "$count" -gt "$THRESHOLD" ]; then
+            # 화이트리스트 확인
+            is_whitelisted=false
+            for cidr in "${WHITELIST[@]}"; do
+                if ipcalc -n "$ip" "$cidr" 2>/dev/null | grep -q "NETWORK"; then
+                    is_whitelisted=true
+                fi
+            done
+
+            if [ "$is_whitelisted" = false ]; then
+                echo "차단: $ip ($count 연결)"
+                iptables -I INPUT -s "$ip" -j DROP
+                # 1시간 후 자동 해제
+                (sleep 3600 && iptables -D INPUT -s "$ip" -j DROP) &
+            fi
+        fi
+    done
+```
+
+**5단계: 사후 분석 — 재발 방지**
+
+```python
+def post_slowloris_analysis(log_file, attack_start, attack_end):
+    """Slowloris 공격 후 분석 및 타임아웃 설정 최적화"""
+
+    # 1. 공격 피해 규모: 정상 사용자 요청 중 타임아웃 발생 건수
+    timeout_requests = parse_nginx_log_timeouts(log_file, attack_start, attack_end)
+    print(f"공격 중 타임아웃 요청: {len(timeout_requests)}건")
+
+    # 2. 공격 IP 분포 분석
+    attack_ips = get_attack_ips(log_file, attack_start, attack_end)
+    print(f"공격 IP 수: {len(attack_ips)}개")
+    print(f"상위 10개 IP: {attack_ips.most_common(10)}")
+
+    # 3. 타임아웃 설정 최적화
+    # 정상 요청의 P99 헤더 수신 시간을 기준으로 타임아웃 설정
+    normal_header_times = get_normal_header_times(log_file)
+    p99_time = sorted(normal_header_times)[int(len(normal_header_times) * 0.99)]
+    optimal_timeout = max(3, p99_time * 1.5)  # P99의 1.5배, 최소 3초
+
+    print(f"정상 요청 P99 헤더 수신 시간: {p99_time:.2f}초")
+    print(f"권장 client_header_timeout: {optimal_timeout:.0f}초")
+
+    # 4. 연결 수 임계값 재설정
+    # 공격 중 공격 IP당 평균 연결 수의 50%를 새 임계값으로
+    avg_attack_connections = sum(attack_ips.values()) / len(attack_ips)
+    new_conn_limit = max(10, int(avg_attack_connections * 0.5))
+    print(f"권장 limit_conn: {new_conn_limit}")
+
+    # 5. iptables 블랙리스트에 공격 IP 영구 등록
+    for ip, count in attack_ips.most_common(100):
+        add_to_permanent_blacklist(ip, reason="slowloris_attack")
+```
+
+---
 
 ### 시나리오 E: GraphQL 쿼리 폭탄 — 단일 요청으로 서버를 죽인다
 
@@ -854,6 +1727,283 @@ public boolean allowRequest(String userId, int queryCost) {
     return totalCost <= 10_000; // 분당 비용 한도
 }
 ```
+
+---
+
+**1단계: 분석 — 왜 뚫리는가**
+
+GraphQL의 근본적인 취약점은 "요청 1건 = 작업 1개"라는 REST의 가정이 성립하지 않는다는 점입니다. REST에서 `/products/1`은 DB 쿼리 1개이지만, GraphQL에서 `users(first:1000) { orders(first:100) { items(first:50) } }`는 1,000 × 100 × 50 = 5,000만 번의 DB 조회를 유발할 수 있습니다.
+
+QPS Rate Limit이 무력화되는 이유는 명확합니다. 공격자는 단 1건의 요청만 보냅니다. Rate Limit 카운터는 1 증가하고, 서버는 수억 행을 조인하다가 다운됩니다. 공격자가 악용하는 취약점은 GraphQL 스키마가 공개(introspection)되어 있어 어떤 중첩이 가능한지 쉽게 파악할 수 있다는 점과, 기본 설정에서 깊이·복잡도 제한이 없다는 점입니다.
+
+**2단계: 탐지 — 어떻게 발견하는가**
+
+핵심 지표는 **쿼리 실행 시간 P99 급증**과 **DB CPU 급등**의 동시 발생입니다. 일반적인 트래픽 증가와 다르게, GraphQL 폭탄은 요청 수가 적음에도 불구하고 DB 부하가 폭발적으로 증가합니다.
+
+```python
+import time
+import redis
+from functools import wraps
+
+def monitor_graphql_execution(redis_client):
+    """GraphQL 쿼리 실행 시간 모니터링 데코레이터"""
+    def decorator(resolve_fn):
+        @wraps(resolve_fn)
+        def wrapper(*args, **kwargs):
+            start = time.monotonic()
+            result = resolve_fn(*args, **kwargs)
+            elapsed_ms = (time.monotonic() - start) * 1000
+
+            # 실행 시간 히스토그램 기록
+            redis_client.lpush("graphql_exec_times", elapsed_ms)
+            redis_client.ltrim("graphql_exec_times", 0, 9999)
+            redis_client.expire("graphql_exec_times", 300)
+
+            # 단일 쿼리가 1초 초과 시 즉시 알람
+            if elapsed_ms > 1000:
+                query_info = args[1].field_name if len(args) > 1 else "unknown"
+                trigger_alert(
+                    f"GraphQL 폭탄 의심: {query_info} 실행 {elapsed_ms:.0f}ms"
+                )
+            return result
+        return wrapper
+    return decorator
+```
+
+Prometheus 모니터링 쿼리:
+
+```
+# GraphQL 쿼리 실행 시간 P99가 2초 초과
+histogram_quantile(0.99, rate(graphql_execution_duration_seconds_bucket[1m])) > 2
+
+# 동시에 DB CPU 사용률 80% 초과
+rate(db_cpu_usage_percent[1m]) > 80
+
+# 요청 수는 평소와 비슷한데 DB 부하만 폭증 (GraphQL 폭탄 특징)
+# 요청 수 증가율 < 1.5x, DB CPU 증가율 > 5x
+rate(http_requests_total[5m]) / rate(http_requests_total[5m] offset 5m) < 1.5
+AND
+rate(db_cpu_percent[5m]) / rate(db_cpu_percent[5m] offset 5m) > 5
+```
+
+쿼리 복잡도 실시간 로깅:
+
+```java
+// GraphQL 실행 전 복잡도 계산 및 로깅
+public class ComplexityLoggingInstrumentation extends SimpleInstrumentation {
+    @Override
+    public InstrumentationContext<ExecutionResult> beginExecution(
+            InstrumentationExecutionParameters params) {
+
+        int complexity = calculateComplexity(params.getDocument());
+        String query = params.getQuery().substring(0, Math.min(200, params.getQuery().length()));
+
+        log.info("GraphQL query complexity={} userId={} query={}",
+            complexity,
+            params.getContext().getUserId(),
+            query);
+
+        // 복잡도 상위 1% 쿼리 별도 추적
+        if (complexity > 5000) {
+            log.warn("HIGH_COMPLEXITY_QUERY complexity={} userId={} fullQuery={}",
+                complexity, params.getContext().getUserId(), params.getQuery());
+            metrics.increment("graphql.high_complexity_queries");
+        }
+
+        return super.beginExecution(params);
+    }
+}
+```
+
+**3단계: 검증 — 정말 봇인가 확인**
+
+단순히 복잡한 쿼리를 작성한 개발자와 의도적 공격을 구분합니다.
+
+| 조건 | 실수/개발자 | 의도적 공격 |
+|------|-----------|-----------|
+| 복잡도 점수 | 1,000~5,000 | 10,000 이상 |
+| 동일 쿼리 반복 | 없음 (1~2회) | 수십~수백 회 반복 |
+| 요청 간격 | 불규칙 | 자동화된 일정 간격 |
+| 쿼리 구조 | 실제 UI 기능에 필요한 수준 | 의도적으로 최대 중첩 |
+| 발신 환경 | 브라우저/앱 | curl, python-requests |
+
+```java
+public QueryClassification classifyQuery(String userId, GraphQLQuery query, int complexity) {
+    // 조건 1: 복잡도 임계값
+    if (complexity < 1000) return QueryClassification.NORMAL;
+
+    // 조건 2: 동일 사용자가 동일 구조의 고복잡도 쿼리를 반복하는가
+    String queryHash = hashQueryStructure(query); // 변수값 제외, 구조만 해시
+    String repeatKey = "query_repeat:" + userId + ":" + queryHash;
+    long repeatCount = redis.incr(repeatKey);
+    redis.expire(repeatKey, 60); // 1분 윈도우
+
+    if (complexity > 5000 && repeatCount > 3) {
+        // 고복잡도 쿼리를 1분에 3회 이상 반복 = 의도적 공격
+        return QueryClassification.ATTACK;
+    }
+
+    if (complexity > 1000 && repeatCount > 10) {
+        // 중간 복잡도 쿼리를 1분에 10회 이상 반복 = 의심
+        return QueryClassification.SUSPICIOUS;
+    }
+
+    // 복잡도는 높지만 반복이 없으면 = 실수한 개발자
+    return QueryClassification.COMPLEX_BUT_LEGITIMATE;
+}
+```
+
+**4단계: 차단 — 어떻게 막는가**
+
+쿼리 비용 한도 초과 시 즉시 거부와 Persisted Queries를 결합합니다.
+
+```java
+// GraphQL Validation Rule — 복잡도 초과 쿼리 즉시 거부
+public class MaxComplexityRule implements ValidationRule {
+    private static final int MAX_COMPLEXITY = 1000;
+
+    @Override
+    public List<ValidationError> validate(ValidationContext context) {
+        int complexity = new ComplexityCalculator().calculate(context.getDocument());
+
+        if (complexity > MAX_COMPLEXITY) {
+            return List.of(ValidationError.newValidationError()
+                .message(String.format(
+                    "쿼리 복잡도 %d가 한도 %d를 초과합니다. 쿼리를 분할하세요.",
+                    complexity, MAX_COMPLEXITY))
+                .build());
+        }
+        return List.of();
+    }
+}
+
+// 쿼리 화이트리스트 — Persisted Queries 구현
+@Service
+public class PersistedQueryService {
+
+    // 사전 등록된 쿼리만 허용 (프로덕션 모드)
+    public boolean isAllowedQuery(String queryHash) {
+        // Redis Set에 허용된 쿼리 해시 저장
+        return redis.sismember("allowed_query_hashes", queryHash);
+    }
+
+    // 새 쿼리 등록 (개발팀만 가능 — CI/CD 파이프라인에서 자동 등록)
+    public void registerQuery(String query) {
+        String hash = sha256(query);
+        redis.sadd("allowed_query_hashes", hash);
+        log.info("쿼리 등록: hash={} query={}", hash, query.substring(0, 100));
+    }
+
+    // 요청 처리
+    public ExecutionResult executeQuery(String queryHash, String rawQuery,
+                                         Map<String, Object> variables) {
+        boolean isProd = isProdEnvironment();
+
+        if (isProd && !isAllowedQuery(queryHash)) {
+            // 프로덕션: 미등록 쿼리 거부
+            throw new QueryNotAllowedException(
+                "임의 쿼리는 허용되지 않습니다. 등록된 쿼리 해시를 사용하세요.");
+        }
+
+        // 등록된 쿼리 또는 개발 환경: 복잡도 검증 후 실행
+        return graphQL.execute(rawQuery, variables);
+    }
+}
+```
+
+점진적 대응 체계:
+
+```java
+public GraphQLResponse handleRequest(String userId, GraphQLQuery query) {
+    int complexity = calculateComplexity(query);
+    QueryClassification classification = classifyQuery(userId, query, complexity);
+
+    switch (classification) {
+        case NORMAL:
+            return execute(query);
+
+        case COMPLEX_BUT_LEGITIMATE:
+            // 실수한 개발자: 실행하되 경고 메시지 포함
+            GraphQLResponse result = execute(query);
+            result.addExtension("warning",
+                "쿼리 복잡도가 높습니다. 페이지네이션을 줄이는 것을 권장합니다.");
+            return result;
+
+        case SUSPICIOUS:
+            // 의심: 실행하되 Rate Limit 강화 + 느린 응답
+            Thread.sleep(500); // 0.5초 인위적 지연
+            return execute(query);
+
+        case ATTACK:
+            // 확정: 즉시 거부 + 사용자 차단
+            redis.setex("graphql_banned:" + userId, 3600, "complexity_attack");
+            throw new RateLimitException("쿼리 복잡도 한도를 반복 초과하여 1시간 차단되었습니다.");
+
+        default:
+            return execute(query);
+    }
+}
+```
+
+**5단계: 사후 분석 — 재발 방지**
+
+```python
+def post_graphql_bomb_analysis(db, redis_client, attack_time):
+    """GraphQL 폭탄 공격 후 분석 및 스키마 강화"""
+
+    # 1. 어떤 쿼리 구조가 사용되었는가
+    high_complexity_queries = db.query("""
+        SELECT query_hash, query_structure, complexity_score,
+               COUNT(*) as execution_count, AVG(execution_time_ms) as avg_time
+        FROM graphql_query_logs
+        WHERE complexity_score > 5000
+        AND created_at >= %s - INTERVAL '1 hour'
+        AND created_at <= %s + INTERVAL '1 hour'
+        GROUP BY query_hash, query_structure, complexity_score
+        ORDER BY complexity_score DESC
+        LIMIT 20
+    """, (attack_time, attack_time))
+
+    for q in high_complexity_queries:
+        print(f"복잡도 {q.complexity_score}: {q.execution_count}회, "
+              f"평균 {q.avg_time:.0f}ms — {q.query_structure[:100]}")
+
+    # 2. 공격에 사용된 필드 조합 분석
+    # → 특정 타입의 중첩(예: User→Orders→Items→Product→Reviews)이 반복되면
+    #   해당 경로에 깊이 제한 추가
+    dangerous_paths = extract_dangerous_field_paths(high_complexity_queries)
+    for path in dangerous_paths:
+        print(f"위험 경로 감지: {path} — 깊이 제한 추가 권장")
+        add_field_level_depth_limit(path, max_depth=2)
+
+    # 3. 복잡도 임계값 재보정
+    # 정상 쿼리의 P99 복잡도를 기준으로 임계값 설정
+    normal_complexities = db.query("""
+        SELECT PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY complexity_score)
+        FROM graphql_query_logs
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+        AND execution_time_ms < 100  -- 빠른 쿼리만 = 정상 쿼리
+    """)
+    p99_complexity = normal_complexities[0][0]
+    recommended_limit = int(p99_complexity * 2)  # P99의 2배를 새 한도로
+
+    print(f"정상 쿼리 P99 복잡도: {p99_complexity:.0f}")
+    print(f"권장 MAX_COMPLEXITY: {recommended_limit}")
+
+    # 4. Introspection 비활성화 검토
+    # 공격자가 스키마를 정찰했는지 확인
+    introspection_requests = db.query("""
+        SELECT COUNT(*) FROM graphql_query_logs
+        WHERE query_structure LIKE '%__schema%'
+        AND created_at BETWEEN %s - INTERVAL '24 hours' AND %s
+    """, (attack_time, attack_time))
+
+    if introspection_requests[0][0] > 10:
+        print("경고: 공격 전 Introspection 정찰 감지 — 프로덕션 Introspection 비활성화 권장")
+        # GraphQL 설정에서 introspection=False (프로덕션 환경)
+```
+
+---
 
 ### 시나리오 F: 크리덴셜 스터핑 — 분당 10만 로그인 시도
 
@@ -911,6 +2061,269 @@ public LoginResult login(String email, String password, String ip) {
     return authenticate(email, password);
 }
 ```
+
+---
+
+**1단계: 분석 — 왜 뚫리는가**
+
+크리덴셜 스터핑이 강력한 이유는 공격 도구가 아니라 **데이터**에 있습니다. 다크웹에서 이메일/비밀번호 조합 1억 건을 $50에 구매할 수 있습니다. 사람들이 여러 사이트에서 동일한 비밀번호를 재사용하기 때문에, 다른 사이트에서 유출된 비밀번호가 우리 서비스에서도 통합니다. 성공률은 서비스마다 다르지만 평균 0.1~2%입니다.
+
+IP 기반 Rate Limit이 무력화되는 이유는 봇넷 1만 대를 활용하면 IP당 하루 10건의 요청만으로 전체 1억 건을 며칠 만에 시도할 수 있기 때문입니다. 계정 기반 Rate Limit은 각 계정에 대해 1~2번만 시도하는 방식으로 우회합니다. 공격자는 성공률을 최대화하는 것보다 차단을 피하는 것을 우선합니다.
+
+**2단계: 탐지 — 어떻게 발견하는가**
+
+글로벌 로그인 실패율이 baseline 대비 10배 급증하는 것이 1차 신호입니다. 더 결정적인 신호는 **실패한 이메일의 존재 여부**입니다.
+
+```python
+import redis
+from collections import Counter
+
+def detect_credential_stuffing(redis_client, db, window_minutes=5):
+    """크리덴셜 스터핑 탐지"""
+
+    # 1. 글로벌 실패율 확인
+    fail_key = f"login_fail_global:{get_current_minute()}"
+    current_fails = int(redis_client.get(fail_key) or 0)
+
+    # 기준선(baseline): 평소 분당 로그인 실패 수
+    baseline = float(redis_client.get("login_fail_baseline") or 50)
+    surge_ratio = current_fails / max(baseline, 1)
+
+    print(f"현재 실패율: {current_fails}/분 (기준선 대비 {surge_ratio:.1f}x)")
+
+    # 2. 실패한 이메일이 우리 DB에 존재하는지 확인
+    # 크리덴셜 스터핑은 외부 유출 DB 기반이므로 존재하지 않는 이메일도 다수 포함
+    recent_failed_emails = get_recent_failed_emails(redis_client, window_minutes)
+    total_attempts = len(recent_failed_emails)
+
+    if total_attempts == 0:
+        return False
+
+    # DB에 존재하지 않는 이메일 비율 계산
+    nonexistent_count = sum(
+        1 for email in recent_failed_emails
+        if not db.user_exists(email)
+    )
+    nonexistent_ratio = nonexistent_count / total_attempts
+
+    print(f"존재하지 않는 이메일 비율: {nonexistent_ratio:.1%} "
+          f"({nonexistent_count}/{total_attempts})")
+
+    # 판정 기준:
+    # - 실패율 10배 이상 AND 존재하지 않는 이메일 30% 이상 → 크리덴셜 스터핑 확정
+    # - 실패율 10배 이상만 → 브루트포스 (특정 계정 대상)
+    if surge_ratio >= 10 and nonexistent_ratio >= 0.30:
+        trigger_alert(
+            f"크리덴셜 스터핑 공격 확정: 실패율 {surge_ratio:.0f}x 급증, "
+            f"미존재 이메일 {nonexistent_ratio:.0%} — 즉시 비상 모드 활성화"
+        )
+        return True
+
+    if surge_ratio >= 10:
+        trigger_alert(
+            f"로그인 공격 의심 (브루트포스): 실패율 {surge_ratio:.0f}x 급증"
+        )
+
+    return False
+```
+
+Prometheus 모니터링 쿼리:
+
+```
+# 분당 로그인 실패 수가 기준선 대비 10배 초과
+rate(login_failure_total[1m]) > 10 * rate(login_failure_total[1m] offset 1d)
+
+# IP별 로그인 실패 지리적 분포 엔트로피 (높을수록 분산 공격)
+# 정상: 엔트로피 낮음 (특정 국가 집중), 스터핑: 엔트로피 높음 (전 세계 분산)
+login_failure_geo_entropy > 3.5
+
+# 알람: 위 두 조건 동시 만족
+(rate(login_failure_total[1m]) > 10 * rate(login_failure_total[1m] offset 1d))
+AND (login_failure_geo_entropy > 3.5)
+```
+
+**3단계: 검증 — 정말 봇인가 확인**
+
+존재하지 않는 이메일 비율이 핵심 구분 기준입니다.
+
+| 공격 유형 | 실패율 | 미존재 이메일 비율 | 판정 |
+|---------|--------|----------------|------|
+| 정상 사용자 오타 | 기준선 이하 | 5~10% | 정상 |
+| 특정 계정 브루트포스 | 10배 이상 | 5% 미만 | 브루트포스 |
+| **크리덴셜 스터핑** | **10배 이상** | **30~80%** | **확정** |
+| 내부 계정 열거 | 보통 | 50~90% | 계정 열거 |
+
+```python
+def verify_stuffing_attack(redis_client, db):
+    """공격 유형 정밀 분류"""
+
+    recent_fails = get_recent_login_failures(redis_client, minutes=10)
+
+    # 실패 이메일 분석
+    emails = [f['email'] for f in recent_fails]
+    email_counts = Counter(emails)
+
+    # 동일 이메일이 반복 시도되는 비율 (브루트포스 특징)
+    repeated_emails = sum(1 for e, c in email_counts.items() if c > 3)
+    repeat_ratio = repeated_emails / max(len(email_counts), 1)
+
+    # DB 미존재 이메일 비율 (스터핑 특징)
+    nonexistent = sum(1 for e in email_counts if not db.user_exists(e))
+    nonexistent_ratio = nonexistent / max(len(email_counts), 1)
+
+    if nonexistent_ratio > 0.5 and repeat_ratio < 0.1:
+        return "CREDENTIAL_STUFFING"   # 다양한 미존재 이메일 + 반복 없음
+    elif repeat_ratio > 0.5:
+        return "BRUTE_FORCE"           # 동일 계정 반복 시도
+    elif nonexistent_ratio > 0.7:
+        return "ACCOUNT_ENUMERATION"   # 계정 존재 여부 확인 목적
+    else:
+        return "UNKNOWN_ATTACK"
+```
+
+**4단계: 차단 — 어떻게 막는가**
+
+크리덴셜 스터핑 확정 시 글로벌 비상 모드를 즉시 활성화합니다.
+
+```java
+@Service
+public class CredentialStuffingDefense {
+
+    // 글로벌 비상 모드 활성화
+    public void activateEmergencyMode(String reason) {
+        // 1. 모든 로그인에 CAPTCHA 강제 (기존: 실패 10회 이후)
+        redis.setex("global_captcha_required", 3600, reason);
+
+        // 2. 로그인 처리 속도 제한 (전체 시스템)
+        redis.setex("global_login_throttle", 3600, "300"); // 분당 300건으로 제한
+
+        // 3. 실시간 모니터링 강화
+        redis.setex("enhanced_monitoring", 3600, "true");
+
+        log.warn("크리덴셜 스터핑 비상 모드 활성화: {}", reason);
+        alertSecurityTeam("EMERGENCY: Credential stuffing — " + reason);
+    }
+
+    public LoginResult login(String email, String password,
+                              String ip, String captchaToken) {
+        // 비상 모드 확인
+        boolean emergencyMode = redis.exists("global_captcha_required");
+
+        if (emergencyMode) {
+            // 비상 모드: CAPTCHA 무조건 검증
+            if (!verifyCaptcha(captchaToken)) {
+                return LoginResult.CAPTCHA_REQUIRED;
+            }
+        }
+
+        // Have I Been Pwned API 연동 — 유출 비밀번호 사전 차단
+        if (isPasswordPwned(password)) {
+            // 차단하지 않고 경고 후 비밀번호 변경 강제
+            // (차단 시 공격자가 어떤 비밀번호가 유효한지 알 수 있음)
+            flagAccountForPasswordReset(email);
+            return LoginResult.PASSWORD_CHANGE_REQUIRED;
+        }
+
+        // 계정별 실패 횟수 확인 (기존 로직)
+        String failKey = "login_fail:" + email;
+        int fails = Integer.parseInt(redis.get(failKey) != null
+            ? redis.get(failKey) : "0");
+
+        if (fails > 5) {
+            long delay = Math.min(fails * 1000L, 30_000L);
+            Thread.sleep(delay);
+        }
+        if (fails > 10 && !emergencyMode) {
+            if (!verifyCaptcha(captchaToken)) return LoginResult.CAPTCHA_REQUIRED;
+        }
+        if (fails > 30) {
+            lockAccount(email);
+            return LoginResult.ACCOUNT_LOCKED;
+        }
+
+        return authenticate(email, password);
+    }
+
+    // Have I Been Pwned k-Anonymity API 연동
+    // 비밀번호 평문을 전송하지 않고 SHA1 해시의 앞 5자리만 전송
+    private boolean isPasswordPwned(String password) {
+        try {
+            String sha1 = sha1Hex(password).toUpperCase();
+            String prefix = sha1.substring(0, 5);
+            String suffix = sha1.substring(5);
+
+            // HIBP API: 앞 5자리로 조회, 나머지는 로컬에서 매칭
+            String response = httpClient.get(
+                "https://api.pwnedpasswords.com/range/" + prefix);
+
+            return Arrays.stream(response.split("\n"))
+                .anyMatch(line -> line.startsWith(suffix));
+        } catch (Exception e) {
+            log.warn("HIBP API 조회 실패, 차단 없이 진행: {}", e.getMessage());
+            return false; // API 장애 시 로그인 막지 않음
+        }
+    }
+}
+```
+
+**5단계: 사후 분석 — 재발 방지**
+
+```python
+def post_stuffing_analysis(db, redis_client, attack_start, attack_end):
+    """크리덴셜 스터핑 공격 후 분석"""
+
+    # 1. 탈취 성공 계정 수 파악
+    # 공격 중 로그인 성공한 계정 중 이후 비정상 행동이 있는 것
+    compromised = db.query("""
+        SELECT COUNT(DISTINCT l.user_id) as count
+        FROM login_logs l
+        JOIN user_activity a ON l.user_id = a.user_id
+        WHERE l.created_at BETWEEN %s AND %s
+        AND l.success = true
+        AND l.ip IN (
+            -- 공격 IP 목록: 공격 기간 중 다수 실패를 기록한 IP
+            SELECT ip FROM login_logs
+            WHERE created_at BETWEEN %s AND %s
+            AND success = false
+            GROUP BY ip HAVING COUNT(*) > 20
+        )
+    """, (attack_start, attack_end, attack_start, attack_end))
+
+    print(f"탈취 의심 계정: {compromised.count}개")
+
+    # 2. 탈취 성공 계정 일괄 처리
+    # 비밀번호 변경 강제 + 세션 만료 + 이메일 알림
+    force_password_reset_batch(compromised.user_ids)
+
+    # 3. 공격에 사용된 이메일/비밀번호 패턴 분석
+    # 어떤 유출 DB 기반인지 파악 (Have I Been Pwned에서 확인)
+    attack_emails_sample = get_attack_email_sample(attack_start, attack_end, limit=1000)
+    breach_sources = identify_breach_sources(attack_emails_sample)
+    print(f"유출 출처 추정: {breach_sources}")
+
+    # 4. 글로벌 비상 모드 해제 조건 확인
+    # 실패율이 기준선의 2배 이하로 30분 이상 유지되면 해제
+    current_fail_rate = get_current_fail_rate(redis_client)
+    baseline = float(redis_client.get("login_fail_baseline") or 50)
+    if current_fail_rate < baseline * 2:
+        redis_client.delete("global_captcha_required")
+        redis_client.delete("global_login_throttle")
+        print("글로벌 비상 모드 해제")
+
+    # 5. 방어 강화 조치
+    # 공격에 사용된 IP 대역 블랙리스트에 추가
+    attack_ip_ranges = extract_attack_ip_ranges(attack_start, attack_end)
+    for cidr in attack_ip_ranges:
+        add_to_ip_blacklist(cidr, duration_days=30)
+
+    # 6. 취약 계정(약한 비밀번호) 사전 강제 변경 캠페인
+    # 유출 DB에 포함된 이메일 주소로 비밀번호 변경 권고 발송
+    vulnerable_users = find_users_with_pwned_passwords(db, batch_size=10000)
+    send_password_change_campaign(vulnerable_users)
+    print(f"비밀번호 변경 권고 발송: {len(vulnerable_users)}명")
+```
+
+---
 
 ### 봇 방어 최종 정리 — 비용 vs 효과 매트릭스
 
