@@ -100,6 +100,8 @@ toc_label: 목차
 
 ## 2. 고수준 아키텍처
 
+> **비유**: 배송 시스템은 택시 배차 앱과 같습니다. 손님(주문)이 호출하면, 중앙 관제(배차 서버)가 가장 가까운 기사(배송 기사)를 찾아 배정하고, 기사의 GPS 위치를 실시간으로 손님에게 보여줍니다. 기사가 도착하면 "배달 완료"를 누르고, 이 모든 기록이 남습니다.
+
 ```mermaid
 graph LR
     A[주문 서비스] --> B[창고 선택기]
@@ -155,16 +157,20 @@ sequenceDiagram
 
 ### 3-1. 실시간 위치 추적
 
-위치 이력은 시계열 DB(InfluxDB/TimescaleDB)에 별도 저장합니다. SSE 서버는 Redis Pub/Sub를 구독하여 특정 기사 위치 변경 시 해당 기사를 추적 중인 고객에게만 이벤트를 전송합니다.
+위치 이력은 시계열 DB(InfluxDB/TimescaleDB)에 별도 저장합니다.
+
+> **왜 MySQL이 아닌 시계열 DB인가?** GPS 좌표는 초당 수만 건이 쌓이고, "최근 30분 기사 이동 경로" 같은 시간 범위 쿼리가 대부분입니다. MySQL의 B-Tree 인덱스는 범위 쿼리에 비효율적이지만, InfluxDB/TimescaleDB는 시간 기준 파티셔닝과 자동 다운샘플링(예: 1초 데이터를 1분 평균으로 압축)을 제공해 수십배 빠른 조회가 가능합니다.
+
+SSE 서버는 Redis Pub/Sub를 구독하여 특정 기사 위치 변경 시 해당 기사를 추적 중인 고객에게만 이벤트를 전송합니다.
 
 ```mermaid
 sequenceDiagram
-    participant D as 기사 앱
+    participant D as 기사앱
     participant K as Kafka
-    participant C as 고객 앱
-    D->>K: GPS 좌표 (5초마다)
-    K->>K: Redis 최신 위치 갱신
-    K-->>C: SSE로 위치 이벤트 Push
+    participant R as Redis+InfluxDB
+    D->>K: GPS 좌표 전송 (5초 간격)
+    K->>R: Redis 최신위치 갱신 + InfluxDB 이력저장
+    R-->>D: SSE로 고객앱에 실시간 Push
 ```
 
 ```java
@@ -218,6 +224,8 @@ public SseEmitter trackOrder(@PathVariable String orderId) {
 ### 3-2. 배차 알고리즘 (단순화된 VRP)
 
 최근접 이웃(Nearest Neighbor) 알고리즘으로 배송 순서를 정렬하고, 2-opt 스왑으로 경로를 개선합니다.
+
+> **2-opt 스왑이란?** Nearest Neighbor로 만든 경로에서 두 구간을 선택해 교차 연결을 해제하는 최적화 기법입니다. A→B→C→D 경로에서 B→C 구간과 A→D 구간이 교차하면, A→C→B→D로 바꿔 총 거리를 줄입니다. 한 번에 최적해를 찾지 못하지만, 반복할수록 경로가 짧아지며 보통 5~15% 개선됩니다.
 
 ```java
 public List<DeliveryOrder> optimizeRoute(Location driverLocation, List<DeliveryOrder> orders) {

@@ -190,9 +190,27 @@ cart:user:12345 → Hash { "P001": "2", "P002": "1", "P003": "3" }
 @Service
 public class CartMergeService {
 
+    // Redis Lua 스크립트로 게스트→회원 병합을 원자적으로 실행
+    private static final String MERGE_SCRIPT = """
+        local guestKey = KEYS[1]
+        local userKey = KEYS[2]
+        local maxQty = tonumber(ARGV[1])
+        local items = redis.call('HGETALL', guestKey)
+        if #items == 0 then return 0 end
+        for i = 1, #items, 2 do
+            local productId = items[i]
+            local guestQty = tonumber(items[i+1])
+            local userQty = tonumber(redis.call('HGET', userKey, productId) or '0')
+            local merged = math.min(guestQty + userQty, maxQty)
+            redis.call('HSET', userKey, productId, merged)
+        end
+        redis.call('DEL', guestKey)
+        return 1
+        """;
+
+    // 프로덕션에서는 Lua 스크립트 버전을 사용해야 합니다.
+    // 아래 Java 코드는 개별 명령이 원자적이지 않아 동시 로그인 시 이중 합산이 발생할 수 있습니다.
     // 병합 전략: 수량 합산 (양쪽에 같은 상품이 있으면 더함)
-    // Redis Lua 스크립트로 guestKey 읽기 + userKey 병합 + guestKey 삭제를 원자적으로 실행해
-    // 멀티 디바이스 동시 로그인 시 이중 합산을 방지합니다.
     public void mergeGuestCartToUser(String guestId, Long userId) {
         String guestKey = "cart:guest:" + guestId;
         String userKey  = "cart:user:" + userId;
@@ -378,8 +396,6 @@ Kafka로 병합 이벤트를 처리해 멱등성을 보장합니다.
 **그룹 장바구니**: 여러 사람이 하나의 장바구니를 공유하는 기능. 키를 `cart:group:{groupId}`로 하고 각 상품에 담은 사람의 userId를 메타데이터로 추가합니다. 동시 수정 충돌은 Redis Lua Script로 처리합니다.
 
 **멀티 셀러 장바구니**: `cart_items`에 `seller_id`를 추가하고 결제 시 셀러별 주문 그룹으로 분리합니다.
-
----
 
 ---
 
