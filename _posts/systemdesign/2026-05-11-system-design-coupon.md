@@ -115,11 +115,26 @@ graph LR
     G --> F
 ```
 
-- **API Gateway**: 요청 인증, 사용자당 발급 빈도 Rate Limiting
-- **쿠폰 발급 서비스**: Redis DECR로 카운터 원자 감소, 성공 시 발급 이벤트 발행
-- **Redis 카운터**: 단일 스레드 원자 연산으로 경쟁 상태 원천 차단
-- **룰 엔진**: JSON DSL 기반 할인 조건 평가. 배포 없이 즉시 적용
-- **발급 DB**: 발급 내역 영구 저장. Redis 장애 시 복구 기준점
+| 컴포넌트 | 역할 |
+|----------|------|
+| API Gateway | 요청 인증, Rate Limiting |
+| 쿠폰 발급 서비스 | Redis DECR 원자 감소, 발급 이벤트 발행 |
+| Redis 카운터 | 단일 스레드 원자 연산으로 경쟁 상태 차단 |
+| 룰 엔진 | JSON DSL 기반 할인 조건 평가, 배포 없이 즉시 적용 |
+| 발급 DB | 발급 내역 영구 저장, Redis 장애 시 복구 기준점 |
+
+**선착순 쿠폰 발급 흐름:**
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant CS as 발급 서비스
+    participant R as Redis
+    U->>CS: 쿠폰 발급 요청
+    CS->>R: Lua 스크립트 원자 실행
+    R-->>CS: 성공/재고소진/중복
+    CS-->>U: 즉시 결과 반환
+```
 
 ---
 
@@ -269,6 +284,19 @@ public AbuseCheckResult check(Long userId, String ipAddress, String deviceFinger
 
 즉시 차단보다 **소프트 차단**이 효과적입니다. 의심 사용자에게 CAPTCHA를 요구하거나, 발급은 허용하되 사용 시 추가 인증을 요구합니다.
 
+**어뷰징 탐지 흐름:**
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant AS as 어뷰징 탐지
+    participant R as Redis
+    U->>AS: 쿠폰 발급 요청
+    AS->>R: IP/디바이스/계정 카운터 조회
+    R-->>AS: 시그널 반환
+    AS-->>U: 정상 통과 또는 CAPTCHA
+```
+
 ---
 
 ## 4. 장애 시나리오와 대응
@@ -342,37 +370,22 @@ public void onOrderCancelled(OrderCancelledEvent event) {
 
 ## 면접 포인트
 
-<details>
-<summary><strong>Q. Redis DECR만 쓰면 되는데 왜 Lua 스크립트가 필요한가요?</strong></summary>
+### 면접 포인트 1️⃣ "Redis DECR만 쓰면 되는데 왜 Lua 스크립트가 필요한가요?"
 
 DECR 단독으로는 "수량 감소"만 원자적입니다. "중복 발급 확인 + 수량 감소 + 사용자 등록"을 세 번의 Redis 명령으로 나누면 명령 사이에 다른 요청이 끼어들 수 있습니다. Lua 스크립트는 서버에서 인터럽트 없이 실행되므로 세 작업 전체가 하나의 원자 단위가 됩니다.
 
-</details>
-
-<details>
-<summary><strong>Q. Redis 장애 시 쿠폰이 더 발급될 수 있지 않나요?</strong></summary>
+### 면접 포인트 2️⃣ "Redis 장애 시 쿠폰이 더 발급될 수 있지 않나요?"
 
 Redis 장애를 감지하면 Circuit Breaker로 발급 API를 즉시 차단합니다. 복구 후 DB에서 실제 발급 건수를 집계해 카운터를 재설정한 뒤 재개합니다. 장애 감지 → 차단까지 수 초의 공백이 있을 수 있으므로 발급 한도를 실제 목표보다 0.1% 낮게 설정하는 안전 마진 전략을 씁니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 쿠폰 스태킹에서 조합 최적화가 필요하면 어떻게 하나요?</strong></summary>
+### 면접 포인트 3️⃣ "쿠폰 스태킹에서 조합 최적화가 필요하면 어떻게 하나요?"
 
 보유 쿠폰이 N장일 때 최적 조합을 찾는 완전 탐색은 O(2^N)입니다. 현실적으로는 stackGroup을 3~5개로 제한하고 그룹 내 최선 쿠폰만 선택하는 Greedy 방식으로 O(N)에 해결합니다. 더 복잡한 경우는 DP로 접근하되 쿠폰 수 상한(예: 10장)으로 연산량을 제한합니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 선착순 쿠폰에서 "내가 받았는지"를 어떻게 즉시 알려주나요?</strong></summary>
+### 면접 포인트 4️⃣ "선착순 쿠폰에서 내가 받았는지를 어떻게 즉시 알려주나요?"
 
 Lua 스크립트의 반환값으로 즉시 성공/실패/중복을 알 수 있으므로 폴링 없이 응답합니다. DB 후기록은 비동기라 "내 쿠폰함 조회" 시 수 초 지연이 있을 수 있습니다. Redis에 사용자 발급 내역 캐시를 두고 DB 동기화 전까지 Redis를 소스 오브 트루스로 사용합니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 계정을 새로 만들어 쿠폰을 또 받으면 어떻게 막나요?</strong></summary>
+### 면접 포인트 5️⃣ "계정을 새로 만들어 쿠폰을 또 받으면 어떻게 막나요?"
 
 계정 기준 외에 디바이스 지문, CI(주민번호 기반 해시), 핸드폰 번호 인증 이력을 교차 확인합니다. 고가치 쿠폰은 본인 인증 완료 계정에만 발급하는 것이 근본적 해결책입니다. 토스와 카카오페이가 고액 혜택 이벤트에 반드시 CI 검증을 붙이는 이유가 여기에 있습니다.
-
-</details>

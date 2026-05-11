@@ -122,12 +122,43 @@ graph LR
     Merge --> MySQL
 ```
 
-- **API Gateway**: guestId 쿠키 주입, 인증 토큰 검증. 비로그인 요청에도 guestId가 없으면 UUID를 발급해 쿠키에 심습니다.
-- **Cart Service**: Redis Write-Through 캐시를 통해 조회 성능을 보장합니다.
-- **Redis Hash**: `cart:{userId}` 또는 `cart:guest:{guestId}` 키로 상품 ID → 수량 매핑을 저장합니다.
-- **MySQL**: 로그인 회원의 영구 장바구니. Redis 장애 시에도 데이터 유실이 없습니다.
-- **Product Service**: 가격·재고 조회. Cart Service는 조회 시 Product Service를 호출합니다.
-- **Merge Worker**: 로그인 이벤트를 Kafka로 수신해 비동기 병합. 동기 처리 시 로그인 응답이 느려지는 것을 방지합니다.
+| 컴포넌트 | 역할 |
+|---------|------|
+| **API Gateway** | guestId 쿠키 주입, 인증 토큰 검증. 비로그인 요청에도 guestId 없으면 UUID 발급해 쿠키에 삽입 |
+| **Cart Service** | Redis Write-Through 캐시를 통해 조회 성능 보장 |
+| **Redis Hash** | `cart:{userId}` 또는 `cart:guest:{guestId}` 키로 상품 ID → 수량 매핑 저장 |
+| **MySQL** | 로그인 회원의 영구 장바구니. Redis 장애 시에도 데이터 유실 없음 |
+| **Product Service** | 가격·재고 조회. Cart Service가 조회 시 호출 |
+| **Merge Worker** | 로그인 이벤트를 Kafka로 수신해 비동기 병합. 동기 처리 시 로그인 응답 지연 방지 |
+
+**로그인 시 게스트 장바구니 병합 흐름**
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant CS as Cart Service
+    participant R as Redis
+    U->>CS: 로그인 완료
+    CS->>R: 게스트 장바구니 조회
+    R-->>CS: guestId 항목 반환
+    CS->>R: 회원 장바구니에 수량 합산
+    CS->>R: 게스트 키 삭제
+    CS-->>U: 병합 완료
+```
+
+**결제 시 재고 Hard Lock 흐름**
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant CS as Cart Service
+    participant IS as 재고 DB
+    U->>CS: 결제 요청
+    CS->>IS: SELECT FOR UPDATE (productId 오름차순)
+    IS-->>CS: 재고 확인
+    CS->>IS: 재고 차감 확정
+    CS-->>U: 주문 생성 완료
+```
 
 ---
 
@@ -352,37 +383,30 @@ Kafka로 병합 이벤트를 처리해 멱등성을 보장합니다.
 
 ## 면접 포인트
 
-<details>
-<summary><strong>Q1. Redis 장애 시 게스트 장바구니가 유실되어도 괜찮은가?</strong></summary>
+### 면접 포인트 1️⃣ "Redis 장애 시 게스트 장바구니가 유실되어도 괜찮은가?"
 
 비즈니스 트레이드오프의 문제입니다. 게스트의 60~70%가 결제 없이 이탈한다는 점을 감안하면, 모든 게스트 장바구니를 RDB에도 저장하는 것은 비용 대비 효과가 낮습니다. Redis Cluster + AOF persistence로 구성하면 단일 노드 장애에서 유실 위험을 거의 없앨 수 있습니다.
 
-</details>
+### 면접 포인트 2️⃣ "병합 전략에서 수량 합산 vs 로그인 우선 중 어떤 것이 맞는가?"
 
-<details>
-<summary><strong>Q2. 병합 전략에서 수량 합산 vs 로그인 우선 중 어떤 것이 맞는가?</strong></summary>
+- 정답은 없고 **제품 방향성**에 달려 있습니다.
+- 올리브영처럼 "최근 담은 것을 존중" → 게스트 우선
+- 쿠팡처럼 "장기 고객의 위시를 존중" → 로그인 우선
+- **수량 합산**이 가장 보수적이고 데이터 유실이 없어 기본값으로 적합. 단, 수량 상한(99개) 반드시 적용
 
-정답은 없고 제품 방향성에 달려 있습니다. 올리브영처럼 "최근 담은 것을 존중"하면 게스트 우선, 쿠팡처럼 "장기 고객의 위시를 존중"하면 로그인 우선이 맞습니다. 수량 합산이 가장 보수적이고 데이터 유실이 없어 기본값으로 적합합니다. 단, 수량 상한(99개)을 반드시 적용해야 합니다.
-
-</details>
-
-<details>
-<summary><strong>Q3. 결제 시 재고 Hard Lock의 데드락을 어떻게 방지하는가?</strong></summary>
+### 면접 포인트 3️⃣ "결제 시 재고 Hard Lock의 데드락을 어떻게 방지하는가?"
 
 항상 동일한 순서(productId 오름차순)로 락을 잡습니다. Thread 1이 A→B, Thread 2가 B→A 순서로 잡으면 교착이 발생합니다. 정렬된 순서로 잡으면 두 스레드 모두 A를 먼저 시도하므로 하나만 진행하고 나머지는 대기합니다. MySQL InnoDB의 `innodb_lock_wait_timeout`을 5초로 설정해 교착 발생 시 자동 롤백 안전망도 함께 구성합니다.
 
-</details>
+### 면접 포인트 4️⃣ "장바구니 조회 QPS가 매우 높을 때 Product Service 호출을 어떻게 줄이는가?"
 
-<details>
-<summary><strong>Q4. 장바구니 조회 QPS가 매우 높을 때 Product Service 호출을 어떻게 줄이는가?</strong></summary>
+두 가지를 조합합니다.
 
-두 가지를 조합합니다. 첫째, Cart Service 내부에 상품 정보 Local Cache(Caffeine, TTL 30초)를 두어 반복 호출을 줄입니다. 둘째, 인기 상품 Top 1000의 가격·재고를 Cart Service Redis에 별도 캐싱합니다. 이 두 가지로 Product Service 호출의 90%를 줄일 수 있습니다. 단, 품절 이벤트는 즉시 캐시 무효화가 필요합니다.
+- **Local Cache(Caffeine, TTL 30초)**: Cart Service 내부 캐시로 반복 호출 흡수
+- **인기 상품 Top 1000 별도 캐싱**: 가격·재고를 Cart Service Redis에 보관
 
-</details>
+이 두 가지로 Product Service 호출의 90%를 줄일 수 있습니다. 단, 품절 이벤트는 즉시 캐시 무효화가 필요합니다.
 
-<details>
-<summary><strong>Q5. 가격이 결제 직전에 인상됐을 때 사용자에게 어떻게 알리는가?</strong></summary>
+### 면접 포인트 5️⃣ "가격이 결제 직전에 인상됐을 때 사용자에게 어떻게 알리는가?"
 
 결제 요청(POST /orders)에서 장바구니 각 상품 가격을 스냅샷과 비교합니다. 가격이 상승한 상품이 있으면 `HTTP 409 Conflict`와 함께 변경된 상품 목록과 새 가격을 반환합니다. 프론트엔드는 "가격이 변경되었습니다. 새 가격으로 계속 진행하시겠습니까?" 다이얼로그를 표시합니다. 가격이 하락한 경우에는 조용히 최신 가격을 적용합니다.
-
-</details>

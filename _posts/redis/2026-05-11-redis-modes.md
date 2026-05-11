@@ -39,9 +39,13 @@ Redis는 단일 장비가 가진 세 가지 벽에 부딪힌다.
 
 Redis Standalone은 **이벤트 루프(ae)** 기반 단일 프로세스다. Linux에서 `epoll`, macOS에서 `kqueue`를 사용해 I/O 이벤트를 비동기로 처리한다.
 
-명령 실행 자체는 Redis 6.0 이후에도 단일 스레드다. 6.0에서 추가된 I/O 멀티스레딩은 **네트워크 read/write 파싱**에만 적용된다. 이 구조 덕분에 레이스 컨디션 없이 원자적(atomic) 명령을 보장할 수 있다.
+주의할 점:
 
-`KEYS *`, `SMEMBERS`(대형 Set) 같은 O(N) 명령은 이벤트 루프를 수십~수백 밀리초 블로킹한다. `slowlog get 10`으로 주기적으로 확인하고, `SCAN` 커서 기반 반복자로 대체해야 한다.
+- 명령 실행 자체는 Redis 6.0 이후에도 단일 스레드다
+- 6.0에서 추가된 I/O 멀티스레딩은 **네트워크 read/write 파싱**에만 적용
+- 이 구조 덕분에 레이스 컨디션 없이 원자적(atomic) 명령을 보장
+- `KEYS *`, `SMEMBERS`(대형 Set) 같은 O(N) 명령은 이벤트 루프를 수십~수백 밀리초 블로킹
+- `slowlog get 10`으로 주기적으로 확인하고, `SCAN` 커서 기반 반복자로 대체
 
 ### 복제: PSYNC 프로토콜
 
@@ -64,12 +68,18 @@ graph LR
 
 ### 영속성: RDB vs AOF
 
-**RDB**: `fork()`로 자식 프로세스를 생성해 디스크에 쓴다. 복구 속도 빠름, 파일 크기 작음. 스냅샷 간격 사이의 쓰기 데이터는 유실된다.
+**RDB**: `fork()`로 자식 프로세스를 생성해 디스크에 쓴다.
+
+- 복구 속도 빠름, 파일 크기 작음
+- 스냅샷 간격 사이의 쓰기 데이터는 유실
 
 **AOF**: 모든 쓰기 명령을 RESP 형식으로 순서대로 기록. `fsync` 정책:
-- `appendfsync always`: 데이터 유실 0, 성능 급저하
-- `appendfsync everysec`: 최대 1초 유실. **실무 권장값**
-- `appendfsync no`: OS가 결정(기본 30초), 유실 위험 큼
+
+| 정책 | 유실 범위 | 성능 |
+|------|---------|------|
+| `appendfsync always` | 데이터 유실 0 | 성능 급저하 |
+| `appendfsync everysec` | 최대 1초 유실 | **실무 권장값** |
+| `appendfsync no` | OS 결정(기본 30초) | 유실 위험 큼 |
 
 **RDB-AOF 혼합 모드 (Redis 4.0+)**: `aof-use-rdb-preamble yes` 설정 시 AOF 앞부분에 RDB 바이너리를 기록하고, 이후 변경 사항만 AOF 형식으로 추가. 복구 속도와 내구성을 동시에 확보하는 현재 권장 설정이다.
 
@@ -105,10 +115,28 @@ graph LR
 
 ### SDOWN vs ODOWN
 
-- **SDOWN (Subjectively Down)**: 단일 Sentinel이 `down-after-milliseconds` 동안 유효한 응답을 받지 못하면 혼자 판단. 이것만으로는 페일오버가 시작되지 않는다.
-- **ODOWN (Objectively Down)**: `quorum` 이상의 Sentinel이 동의하면 전환. 이 시점부터 페일오버가 시작된다.
+| 상태 | 판단 주체 | 페일오버 시작 |
+|------|---------|------------|
+| **SDOWN** (Subjectively Down) | 단일 Sentinel이 혼자 판단 | 시작 안 함 |
+| **ODOWN** (Objectively Down) | quorum 이상 동의 | 이 시점부터 시작 |
 
 ### 페일오버 과정
+
+**Sentinel 페일오버 흐름:**
+
+```mermaid
+sequenceDiagram
+    participant S as Sentinel
+    participant M as Master
+    participant R as Replica
+    S->>M: PING (매 1초)
+    Note over M: 응답 없음 (down-after-ms 초과)
+    Note over S: SDOWN 판정 → quorum 투표
+    Note over S: ODOWN 확정 → 리더 Sentinel 선출
+    S->>R: SLAVEOF NO ONE
+    R-->>S: 마스터 전환 완료
+    Note over S: +switch-master 이벤트 발행
+```
 
 1. **마스터 다운 감지**: 각 Sentinel이 1초마다 PING. `down-after-milliseconds` 내 응답 없으면 SDOWN
 2. **ODOWN 합의**: SDOWN Sentinel이 다른 Sentinel들에게 투표 요청. quorum 달성 시 ODOWN
@@ -170,9 +198,12 @@ public class RedisConfig {
 Redis Cluster는 데이터를 **16384개의 해시 슬롯**으로 분할한다. 각 키는 `CRC16(key) % 16384`로 슬롯 번호가 결정된다.
 
 예: 3 마스터 구성 시
-- M1: 슬롯 0 ~ 5460
-- M2: 슬롯 5461 ~ 10922
-- M3: 슬롯 10923 ~ 16383
+
+| 마스터 | 담당 슬롯 범위 |
+|--------|-------------|
+| M1 | 0 ~ 5460 |
+| M2 | 5461 ~ 10922 |
+| M3 | 10923 ~ 16383 |
 
 16384를 선택한 이유: 슬롯 비트맵 크기를 2KB(16384/8)로 제한해 gossip 트래픽을 최소화하면서, 1000개 이상의 노드도 수용할 수 있기 때문이다.
 
@@ -188,6 +219,20 @@ graph LR
 ```
 
 ### MOVED vs ASK 리디렉션
+
+**Cluster MOVED 리디렉션 흐름:**
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N1 as Node-1
+    participant N2 as Node-2
+    C->>N1: GET user:1001
+    N1-->>C: MOVED 7638 node2:6379
+    Note over C: 슬롯 캐시 갱신
+    C->>N2: GET user:1001
+    N2-->>C: 데이터 반환
+```
 
 | 구분 | MOVED | ASK |
 |------|-------|-----|
@@ -209,9 +254,10 @@ user:{1001}:orders   -> CRC16("1001") % 16384 = 슬롯 X (동일)
 
 ### 클러스터 페일오버
 
-마스터가 `cluster-node-timeout`(기본 15초) 동안 응답하지 않으면 replica들이 페일오버를 시작한다. replication offset이 큰 replica(최신 데이터를 가진)가 우선 승격된다.
-
-`cluster-require-full-coverage yes`(기본): 일부 슬롯이 커버되지 않으면 클러스터 전체 쓰기를 거부한다. `no`로 설정하면 가용한 슬롯에 대해 계속 서비스한다.
+- 마스터가 `cluster-node-timeout`(기본 15초) 동안 응답하지 않으면 replica들이 페일오버를 시작
+- replication offset이 큰 replica(최신 데이터를 가진)가 우선 승격
+- `cluster-require-full-coverage yes`(기본): 일부 슬롯이 커버되지 않으면 클러스터 전체 쓰기를 거부
+- `no`로 설정하면 가용한 슬롯에 대해 계속 서비스
 
 ### 데이터 유실 주의
 
@@ -295,9 +341,16 @@ graph LR
 
 ### 시나리오 1: 마스터 OOM Kill
 
-**Sentinel 환경**: `down-after-milliseconds` 후 SDOWN → ODOWN → replica 승격. 약 30초~1분 이내 자동 복구. 단, 구 마스터가 자동 재시작되지 않으면 복구 후 토폴로지는 마스터 1 + replica 1로 줄어 또 다른 장애에 취약해진다.
+**Sentinel 환경**:
 
-**Cluster 환경**: OOM Kill된 노드의 슬롯은 `cluster-node-timeout` 후 replica가 자동 승격. 단, replica가 없거나 함께 장애라면 `cluster-require-full-coverage yes` 시 전체 쓰기가 중단된다.
+- `down-after-milliseconds` 후 SDOWN → ODOWN → replica 승격
+- 약 30초~1분 이내 자동 복구
+- 단, 구 마스터가 자동 재시작되지 않으면 복구 후 토폴로지는 마스터 1 + replica 1로 줄어 또 다른 장애에 취약
+
+**Cluster 환경**:
+
+- OOM Kill된 노드의 슬롯은 `cluster-node-timeout` 후 replica가 자동 승격
+- replica가 없거나 함께 장애라면 `cluster-require-full-coverage yes` 시 전체 쓰기 중단
 
 ```bash
 # OS 레벨 OOM kill 방어
@@ -309,9 +362,9 @@ echo -500 > /proc/$(pgrep redis-server)/oom_score_adj
 
 특정 키에 초당 수만 번 조회가 집중되면 해당 슬롯의 마스터 CPU가 100%에 달한다.
 
-**해결책 1**: `ReadFrom.REPLICA_PREFERRED`로 읽기 트래픽을 replica에 분산
-
-**해결책 2**: JVM 로컬 캐시(Caffeine)에 짧은 TTL로 캐싱해 Redis 호출 자체를 줄임
+- **해결책 1**: `ReadFrom.REPLICA_PREFERRED`로 읽기 트래픽을 replica에 분산
+- **해결책 2**: JVM 로컬 캐시(Caffeine)에 짧은 TTL로 캐싱해 Redis 호출 자체를 줄임
+- **해결책 3**: `product:1234:stock:{0}` ~ `product:1234:stock:{N-1}` 여러 키에 분산, 조회 시 랜덤 선택
 
 ```java
 @Service
@@ -327,8 +380,6 @@ public class StockService {
     }
 }
 ```
-
-**해결책 3**: `product:1234:stock:{0}` ~ `product:1234:stock:{N-1}` 여러 키에 분산, 조회 시 랜덤 선택
 
 ### 운영 체크리스트
 
@@ -439,51 +490,52 @@ spring:
 
 ## 8. 면접 포인트
 
-<details>
-<summary><strong>Q. Redis가 단일 스레드임에도 빠른 이유는?</strong></summary>
+### 면접 포인트 1️⃣ "Redis가 단일 스레드임에도 빠른 이유는?"
 
 모든 데이터가 메모리에 있으므로 명령 처리 자체는 수 마이크로초에 완료된다. 단일 스레드는 컨텍스트 스위칭과 락 경합이 없어 오히려 유리하다. Redis 6.0+에서 I/O 스레딩이 추가됐지만 명령 처리 자체는 여전히 단일 스레드다.
 
-</details>
-
-<details>
-<summary><strong>Q. Sentinel과 Cluster 중 어떤 상황에서 Sentinel을 선택하는가?</strong></summary>
+### 면접 포인트 2️⃣ "Sentinel과 Cluster 중 어떤 상황에서 Sentinel을 선택하는가?"
 
 데이터 규모가 단일 노드 메모리에 충분히 들어가고, Multi-key 연산(`MGET`, Lua, 트랜잭션)을 제약 없이 사용해야 하거나, 운영 복잡도를 최소화해야 할 때 Sentinel을 선택한다. 수 GB~수십 GB 규모라면 Sentinel + 고성능 단일 노드가 Cluster보다 운영하기 쉽다.
 
-</details>
+### 면접 포인트 3️⃣ "Cluster에서 MGET이 실패하는 이유와 해결 방법은?"
 
-<details>
-<summary><strong>Q. Cluster에서 MGET이 실패하는 이유와 해결 방법은?</strong></summary>
+각 키가 다른 슬롯에 속하면 `CROSSSLOT` 오류가 발생한다. 해결책은 두 가지다:
 
-각 키가 다른 슬롯에 속하면 `CROSSSLOT` 오류가 발생한다. 해결책은 두 가지다. 첫째, 해시 태그를 사용해 관련 키를 같은 슬롯에 배치한다(`{user:1001}:profile`, `{user:1001}:orders`). 둘째, MGET을 개별 GET으로 분해하고 Pipelining으로 묶어 슬롯별 병렬 요청으로 최적화한다.
+- 해시 태그를 사용해 관련 키를 같은 슬롯에 배치 (`{user:1001}:profile`, `{user:1001}:orders`)
+- MGET을 개별 GET으로 분해하고 Pipelining으로 묶어 슬롯별 병렬 요청으로 최적화
 
-</details>
+### 면접 포인트 4️⃣ "PSYNC에서 부분 재동기화가 실패하는 조건은?"
 
-<details>
-<summary><strong>Q. PSYNC에서 부분 재동기화가 실패하는 조건은?</strong></summary>
+`repl_backlog` 링 버퍼(기본 1MB)에 replica의 offset 이후 데이터가 없을 때 실패한다. 구체적으로:
 
-`repl_backlog` 링 버퍼(기본 1MB)에 replica의 offset 이후 데이터가 없을 때 실패한다. 구체적으로: (1) 네트워크 단절 시간 동안 발생한 쓰기가 버퍼를 초과했을 때, (2) replica가 참조하는 replid가 현재 마스터와 다를 때(마스터 교체 발생). 고쓰기 트래픽 환경에서 `repl-backlog-size`를 100MB~1GB로 늘려야 한다.
+- 네트워크 단절 시간 동안 발생한 쓰기가 버퍼를 초과했을 때
+- replica가 참조하는 replid가 현재 마스터와 다를 때(마스터 교체 발생)
 
-</details>
+고쓰기 트래픽 환경에서 `repl-backlog-size`를 100MB~1GB로 늘려야 한다.
 
-<details>
-<summary><strong>Q. `maxmemory-policy volatile-lru`와 `allkeys-lru`의 차이와 선택 기준은?</strong></summary>
+### 면접 포인트 5️⃣ "`maxmemory-policy volatile-lru`와 `allkeys-lru`의 차이와 선택 기준은?"
 
-`volatile-lru`는 TTL이 설정된 키 중에서만 LRU를 적용한다. TTL 없는 키는 절대 퇴거되지 않는다. `allkeys-lru`는 TTL 유무에 관계없이 모든 키에 LRU를 적용한다. 순수 캐시 용도라면 `allkeys-lru`가 안전하다. 일부 키는 절대 퇴거하면 안 되는 영속 데이터라면 `volatile-lru`를 사용하되, 영속 키에는 TTL을 설정하지 않고 캐시 키에는 반드시 TTL을 설정한다.
+- `volatile-lru`: TTL이 설정된 키 중에서만 LRU 적용. TTL 없는 키는 절대 퇴거되지 않음
+- `allkeys-lru`: TTL 유무에 관계없이 모든 키에 LRU 적용
 
-</details>
+순수 캐시 용도라면 `allkeys-lru`가 안전하다. 일부 키는 절대 퇴거하면 안 되는 영속 데이터라면 `volatile-lru`를 사용하되, 영속 키에는 TTL을 설정하지 않고 캐시 키에는 반드시 TTL을 설정한다.
 
-<details>
-<summary><strong>Q. Split-Brain 상황에서 두 마스터가 동시에 쓰기를 받으면 어떻게 되는가?</strong></summary>
+### 면접 포인트 6️⃣ "Split-Brain 상황에서 두 마스터가 동시에 쓰기를 받으면 어떻게 되는가?"
 
-파티션 복구 후 구 마스터는 새 마스터의 replica로 전환되고, 구 마스터에 기록된 모든 데이터가 유실된다. 이를 방지하기 위해 `min-replicas-to-write 1`로 격리된 마스터의 쓰기를 원천 차단하거나, 애플리케이션에서 CAS 패턴과 버전 번호를 함께 사용해 충돌을 감지한다.
+파티션 복구 후 구 마스터는 새 마스터의 replica로 전환되고, 구 마스터에 기록된 모든 데이터가 유실된다. 이를 방지하기 위해:
 
-</details>
+- `min-replicas-to-write 1`로 격리된 마스터의 쓰기를 원천 차단
+- 애플리케이션에서 CAS 패턴과 버전 번호를 함께 사용해 충돌을 감지
 
-<details>
-<summary><strong>Q. Redis Cluster에서 `WAIT` 명령의 역할과 한계는?</strong></summary>
+### 면접 포인트 7️⃣ "Redis Cluster에서 `WAIT` 명령의 역할과 한계는?"
 
-`WAIT numreplicas timeout`은 지정한 수의 replica가 최신 쓰기를 복제 확인할 때까지 블로킹한다. 한계: (1) 타임아웃 내 replica가 응답하지 않으면 실제 복제 여부와 무관하게 반환, (2) 확인된 replica도 이후 비정상 재시작 시 데이터를 잃을 수 있음, (3) 파이프라이닝 최적화를 깨뜨려 성능 저하. 금융 트랜잭션 등 zero-loss 요구사항에는 Redis 단독으로 충분하지 않고 RDBMS와 조합해야 한다.
+`WAIT numreplicas timeout`은 지정한 수의 replica가 최신 쓰기를 복제 확인할 때까지 블로킹한다.
 
-</details>
+한계:
+
+- 타임아웃 내 replica가 응답하지 않으면 실제 복제 여부와 무관하게 반환
+- 확인된 replica도 이후 비정상 재시작 시 데이터를 잃을 수 있음
+- 파이프라이닝 최적화를 깨뜨려 성능 저하
+
+금융 트랜잭션 등 zero-loss 요구사항에는 Redis 단독으로 충분하지 않고 RDBMS와 조합해야 한다.

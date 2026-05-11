@@ -110,10 +110,25 @@ graph LR
     F --> G[고객 앱]
 ```
 
-- **창고 선택기**: 재고 DB와 거리 계산으로 최적 창고 결정
-- **배차 서버**: VRP 기반 그리디 알고리즘으로 기사에게 배송 목록 배정
-- **위치 수집기**: 기사 앱에서 GPS 좌표를 Kafka로 수신, Redis에 최신 위치 저장
-- **추적 서버**: SSE 연결을 유지하며 고객에게 위치 변경 이벤트 Push
+| 컴포넌트 | 역할 |
+|----------|------|
+| 창고 선택기 | 재고 DB + 거리 계산으로 최적 창고 결정 |
+| 배차 서버 | VRP 기반 그리디 알고리즘으로 배송 목록 배정 |
+| 위치 수집기 | 기사 GPS 좌표를 Kafka로 수신, Redis에 최신 위치 저장 |
+| 추적 서버 | SSE 연결 유지, 고객에게 위치 변경 이벤트 Push |
+
+**주문 접수 → 배차 흐름:**
+
+```mermaid
+sequenceDiagram
+    participant O as 주문 서비스
+    participant W as 창고 선택기
+    participant D as 배차 서버
+    O->>W: 주문 확정, 창고 선택 요청
+    W-->>O: 최적 창고 ID + ETA
+    O->>D: 배차 요청
+    D-->>O: 기사 배정 완료
+```
 
 ---
 
@@ -121,9 +136,17 @@ graph LR
 
 ### 3-1. 실시간 위치 추적
 
-**데이터 흐름**: 기사 앱 → Kafka → 위치 소비자 → Redis (최신 위치, TTL 30초) → SSE 서버 → 고객 앱
-
 위치 이력은 시계열 DB(InfluxDB/TimescaleDB)에 별도 저장합니다. SSE 서버는 Redis Pub/Sub를 구독하여 특정 기사 위치 변경 시 해당 기사를 추적 중인 고객에게만 이벤트를 전송합니다.
+
+```mermaid
+sequenceDiagram
+    participant D as 기사 앱
+    participant K as Kafka
+    participant C as 고객 앱
+    D->>K: GPS 좌표 (5초마다)
+    K->>K: Redis 최신 위치 갱신
+    K-->>C: SSE로 위치 이벤트 Push
+```
 
 ```java
 // 기사 앱 → 서버: 위치 업데이트 (5초마다)
@@ -301,37 +324,22 @@ public EtaResult calculateEta(String orderId, String driverId) {
 
 ## 면접 포인트
 
-<details>
-<summary><strong>Q. 기사 위치를 Redis에만 저장하면 Redis 재시작 시 위치 데이터가 사라지지 않나요?</strong></summary>
+### 면접 포인트 1️⃣ "기사 위치를 Redis에만 저장하면 Redis 재시작 시 위치 데이터가 사라지지 않나요?"
 
 Redis에는 최신 위치만 저장합니다. 위치 이력은 Kafka → 시계열 DB(InfluxDB)에 영속 저장합니다. Redis 재시작 시 5초 이내에 기사 앱이 새 위치를 전송하므로 자동 복구됩니다. Redis를 "TTL 있는 실시간 캐시"로 사용하는 패턴입니다.
 
-</details>
-
-<details>
-<summary><strong>Q. VRP가 NP-Hard인데 실시간 배차를 어떻게 처리하나요?</strong></summary>
+### 면접 포인트 2️⃣ "VRP가 NP-Hard인데 실시간 배차를 어떻게 처리하나요?"
 
 NP-Hard는 이론적 최적해를 보장하는 알고리즘이 없다는 의미입니다. 실무에서는 그리디 + 제한된 반복 횟수의 국소 탐색으로 충분히 좋은 해를 1초 이내에 구합니다. 그리디만으로도 이론적 최적 대비 5~15% 차이에 수렴합니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 배송 이벤트가 순서 없이 도착하면 어떻게 처리하나요?</strong></summary>
+### 면접 포인트 3️⃣ "배송 이벤트가 순서 없이 도착하면 어떻게 처리하나요?"
 
 Kafka 파티션을 주문 ID 기반으로 설정하면 동일 주문의 이벤트는 반드시 같은 파티션에 순서대로 들어갑니다. 다른 시스템에서 이벤트가 순서 없이 도착한다면 `sequence_number` 또는 `event_timestamp`로 정렬 후 처리합니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 새벽배송에서 ETA 정확도를 어떻게 높이나요?</strong></summary>
+### 면접 포인트 4️⃣ "새벽배송에서 ETA 정확도를 어떻게 높이나요?"
 
 새벽 2~5시는 교통 변수가 적어 거리 기반 ETA 정확도가 높습니다. 이력 데이터로 "이 아파트 단지 배달은 평균 X분"을 학습해 이상치를 제거합니다. 배달 완료 시각 vs 예측 시각 오차를 매일 모니터링해 모델을 개선합니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 배송기사가 갑자기 앱을 종료하면 어떻게 되나요?</strong></summary>
+### 면접 포인트 5️⃣ "배송기사가 갑자기 앱을 종료하면 어떻게 되나요?"
 
 기사 앱은 백그라운드에서도 위치를 전송하는 Foreground Service로 동작합니다. 30초간 위치 업데이트가 없으면 배차 서버가 기사를 "연락 불가" 상태로 표시하고 고객과 관제 센터에 알림을 보냅니다. 동시에 재배차 절차가 시작됩니다.
-
-</details>

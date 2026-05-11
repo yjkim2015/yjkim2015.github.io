@@ -136,17 +136,44 @@ graph LR
     D --> G[Kafka] --> F
 ```
 
+**상품 등록 → ES 인덱싱 흐름**
+
+```mermaid
+sequenceDiagram
+    participant S as 셀러
+    participant CS as 카탈로그 서비스
+    participant ES as Elasticsearch
+    S->>CS: 상품 등록 요청
+    CS->>CS: MySQL 저장 + Outbox 기록
+    CS-->>S: 등록 완료
+    CS->>ES: Kafka 이벤트 → ES 인덱싱
+    ES-->>CS: 인덱싱 완료 (10초 이내)
+```
+
+**ES 장애 시 MySQL 폴백 흐름**
+
+```mermaid
+sequenceDiagram
+    participant U as 구매자
+    participant CS as 카탈로그 서비스
+    participant ES as Elasticsearch
+    U->>CS: 검색 요청
+    CS->>ES: 검색 쿼리
+    ES-->>CS: 장애 응답
+    CS->>CS: 서킷 브레이커 오픈
+    CS->>CS: MySQL 폴백 쿼리
+    CS-->>U: 기본 검색 결과 반환
+```
+
 ### 핵심 컴포넌트 역할
 
-**카탈로그 서비스**: 모든 상품 CRUD와 검색 요청의 진입점. 셀러 요청은 MySQL에 쓰고 Kafka 이벤트를 발행하며, 구매자 검색은 Redis L1 → Redis L2 → ES 순으로 처리합니다.
-
-**MySQL**: 가격·재고·셀러ID·상태의 단일 진실 공급원. 쓰기는 마스터, 폴백 조회는 읽기 레플리카를 사용합니다.
-
-**Kafka**: MySQL → Debezium CDC → Kafka → ES Consumer 파이프라인으로 상품 등록 후 10초 이내 검색 반영을 보장합니다.
-
-**Elasticsearch**: 모든 검색과 복합 필터 요청 처리. MySQL은 단일 레코드 조회, ES는 수억 건 역인덱스 검색에 최적화되어 역할이 완전히 분리됩니다.
-
-**Redis**: 인기 상품 상세, 카테고리 트리, 브랜드 목록 캐시. 재고·가격 변경 이벤트 수신 시 해당 키를 즉시 무효화합니다.
+| 컴포넌트 | 역할 |
+|---------|------|
+| **카탈로그 서비스** | 모든 상품 CRUD·검색 진입점. 셀러 요청 → MySQL 쓰기 + Kafka 이벤트 발행, 구매자 검색 → Redis L1 → Redis L2 → ES 순서로 처리 |
+| **MySQL** | 가격·재고·셀러ID·상태의 단일 진실 공급원. 쓰기는 마스터, 폴백 조회는 읽기 레플리카 |
+| **Kafka** | MySQL → Debezium CDC → Kafka → ES Consumer 파이프라인으로 상품 등록 후 10초 이내 검색 반영 보장 |
+| **Elasticsearch** | 모든 검색·복합 필터 요청 처리. MySQL은 단일 레코드 조회, ES는 수억 건 역인덱스 검색에 최적화 |
+| **Redis** | 인기 상품 상세·카테고리 트리·브랜드 목록 캐시. 재고·가격 변경 이벤트 수신 시 해당 키 즉시 무효화 |
 
 ---
 
@@ -441,6 +468,20 @@ public class CategoryService {
 
 re-index 도중 원본에 쓰기가 계속 발생하므로, alias 전환 전 시점의 누락 방지를 위해 이중 쓰기 구간이 필수입니다.
 
+**캐시 무효화 흐름 (가격 변경 시)**
+
+```mermaid
+sequenceDiagram
+    participant S as 셀러
+    participant CS as 카탈로그 서비스
+    participant R as Redis
+    S->>CS: 가격 변경 요청
+    CS->>CS: MySQL UPDATE
+    CS->>R: DEL product:detail:{id}
+    R-->>CS: 삭제 완료
+    CS-->>S: 변경 완료
+```
+
 ### ES → MySQL 폴백 구현
 
 ```java
@@ -481,37 +522,22 @@ public class SearchFacade {
 
 ## 면접 포인트
 
-<details>
-<summary><strong>Q. MySQL과 Elasticsearch를 동시에 쓰면 데이터 불일치는 어떻게 처리하나요?</strong></summary>
+### 면접 포인트 1️⃣ "MySQL과 Elasticsearch를 동시에 쓰면 데이터 불일치는 어떻게 처리하나요?"
 
 결제 단계에서 MySQL 재고를 최종 검증합니다. ES는 검색과 필터에만 사용하고 재고 차감은 항상 MySQL 트랜잭션으로 처리합니다. ES 재고 표시가 10초 지연될 수 있지만 UX에 허용 가능한 수준이며, 결제 오류로 이어지지 않습니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 상품 수가 10억 건이 되면 ES가 버틸 수 있나요?</strong></summary>
+### 면접 포인트 2️⃣ "상품 수가 10억 건이 되면 ES가 버틸 수 있나요?"
 
 ES 공식 가이드 기준 샤드당 10~50GB가 권장입니다. 100TB 규모라면 최소 2,000~10,000개 샤드가 필요합니다. 카테고리별 인덱스 분리와 ILM(Index Lifecycle Management)으로 삭제된 상품을 콜드 스토리지로 이전해 활성 인덱스 크기를 관리합니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 셀러가 가격을 바꿨을 때 캐시 무효화는 어떻게 하나요?</strong></summary>
+### 면접 포인트 3️⃣ "셀러가 가격을 바꿨을 때 캐시 무효화는 어떻게 하나요?"
 
 가격 변경 이벤트가 Kafka에 발행되면 Cache Invalidation Consumer가 Redis에서 해당 상품 키를 즉시 `DEL`합니다. 로컬 캐시는 최대 TTL(30초) 후 자연 만료됩니다. 그 30초 안에 이전 가격으로 구매를 시도하면 결제 전 가격 확인 단계에서 "가격이 변경되었습니다"를 안내합니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 카테고리 속성이 카테고리마다 다른데 ES에서 어떻게 필터링하나요?</strong></summary>
+### 면접 포인트 4️⃣ "카테고리 속성이 카테고리마다 다른데 ES에서 어떻게 필터링하나요?"
 
 `attributes` 필드를 `dynamic: true`로 설정해 카테고리별 속성이 자동으로 ES 필드로 생성됩니다. `attributes.ram_gb`, `attributes.material` 같은 경로로 필터 쿼리를 작성합니다. 속성명 충돌 방지를 위해 카테고리 코드를 접두어로 붙이는 네임스페이스 전략을 사용합니다.
 
-</details>
-
-<details>
-<summary><strong>Q. 검색 랭킹 조작(어뷰징)은 어떻게 막나요?</strong></summary>
+### 면접 포인트 5️⃣ "검색 랭킹 조작(어뷰징)은 어떻게 막나요?"
 
 판매량·리뷰 수 기반 점수는 일별 배치로 갱신해 단기 어뷰징 효과를 희석합니다. 리뷰 어뷰징은 별도 FDS(Fraud Detection System)에서 처리합니다. 광고 상품은 오가닉 랭킹과 명확히 분리된 슬롯으로 노출하며, 입찰가 기반 노출로 처리합니다.
-
-</details>

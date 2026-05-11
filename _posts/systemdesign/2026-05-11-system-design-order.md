@@ -134,15 +134,41 @@ graph LR
 
 ### 핵심 컴포넌트 역할
 
-**API Gateway**: 인증, 레이트 리미팅, SSL 종료. 주문 생성은 Order Service로, 조회는 Query Service(ES 앞단)로 라우팅합니다.
+| 컴포넌트 | 역할 |
+|---------|------|
+| **API Gateway** | 인증, 레이트 리미팅, SSL 종료. 주문 생성 → Order Service, 조회 → Query Service(ES 앞단) 라우팅 |
+| **주문 서비스** | 상태 머신으로 허용된 전이만 실행, 각 전이 시 Outbox 테이블에 이벤트 기록 |
+| **Kafka + Outbox Relay** | DB 트랜잭션 안에 Outbox 기록 → Relay가 Kafka 발행. DB 저장과 이벤트 발행 원자성 보장 |
+| **결제/재고/배송 서비스** | Kafka 이벤트를 구독해 독립 동작. 실패 시 보상 이벤트를 발행해 Saga 롤백 |
+| **Query Service + ES** | 주문 상태 변경 이벤트를 구독해 ES 인덱스 동기화. 목록 조회·검색·필터는 ES에서 처리 |
 
-**주문 서비스**: 상태 머신으로 허용된 전이만 실행하고, 각 전이 시 Outbox 테이블에 이벤트를 기록합니다.
+**주문 생성 정상 흐름 (Saga)**
 
-**Kafka + Outbox Relay**: Order Service가 DB 트랜잭션 안에 Outbox 테이블에 이벤트를 기록하면, Relay 프로세스가 Kafka로 발행합니다. DB 저장과 이벤트 발행의 원자성을 보장합니다.
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant OS as 주문서비스
+    participant PS as 결제서비스
+    U->>OS: 주문 생성 요청
+    OS->>OS: DB 저장 + Outbox 기록
+    OS-->>U: 주문번호 반환
+    OS->>PS: OrderCreated 이벤트
+    PS->>PS: PG사 결제 요청
+    PS-->>OS: PaymentCompleted 이벤트
+```
 
-**결제 / 재고 / 배송 서비스**: Kafka 이벤트를 구독해 독립 동작. 실패 시 보상 이벤트를 발행해 Saga 롤백합니다.
+**결제 실패 시 Saga 보상 흐름**
 
-**Query Service + Elasticsearch**: 주문 상태 변경 이벤트를 구독해 ES 인덱스를 동기화합니다. 목록 조회·검색·필터는 ES에서 처리해 MySQL 부담을 없앱니다.
+```mermaid
+sequenceDiagram
+    participant OS as 주문서비스
+    participant PS as 결제서비스
+    participant IS as 재고서비스
+    PS->>OS: PaymentFailed 이벤트
+    OS->>OS: 주문 상태 → PAYMENT_FAILED
+    OS->>IS: 재고 선점 해제 요청
+    IS-->>OS: InventoryReleased 이벤트
+```
 
 ---
 
@@ -456,37 +482,28 @@ S3 조회: Athena 쿼리 (CS 팀 전용, 비용 per-query)
 
 ## 면접 포인트
 
-<details>
-<summary><strong>Q. 주문 생성 시 재고 차감을 어느 시점에 해야 하는가? 주문 시점 vs 결제 완료 시점</strong></summary>
+### 면접 포인트 1️⃣ "주문 생성 시 재고 차감을 어느 시점에 해야 하는가? 주문 시점 vs 결제 완료 시점"
 
-**결제 완료 후 차감**은 실제 판매만 집계하지만 결제 진행 중 재고가 소진되어 다른 사용자가 구매 불가한 문제가 있습니다. **주문 시점 선점 + 결제 완료 시 확정**이 커머스 표준입니다. 선점 후 결제 미완 시 선점 해제 타임아웃(10분)이 필요합니다.
+- **결제 완료 후 차감**: 실제 판매만 집계하지만 결제 진행 중 재고가 소진되어 다른 사용자가 구매 불가한 문제 발생
+- **주문 시점 선점 + 결제 완료 시 확정**: 커머스 표준. 선점 후 결제 미완 시 선점 해제 타임아웃(10분) 필요
 
-</details>
-
-<details>
-<summary><strong>Q. 주문번호 노출로 경쟁사가 건수를 역산할 수 있다. 어떻게 막는가?</strong></summary>
+### 면접 포인트 2️⃣ "주문번호 노출로 경쟁사가 건수를 역산할 수 있다. 어떻게 막는가?"
 
 내부 PK는 Snowflake ID(순차)를 사용하고, 고객 노출 주문번호는 날짜 + 랜덤 6자리 영숫자(`20260511-A1B2C3`)로 별도 생성합니다. 경쟁사가 건수를 역산할 수 없고, CS 소통도 쉽습니다.
 
-</details>
+### 면접 포인트 3️⃣ "Saga의 보상 트랜잭션이 실패하면 어떻게 되는가?"
 
-<details>
-<summary><strong>Q. Saga의 보상 트랜잭션이 실패하면 어떻게 되는가?</strong></summary>
+- 보상 트랜잭션도 실패할 수 있습니다. 재시도 + 알림으로 운영팀이 수동 처리합니다.
+- 보상 트랜잭션은 반드시 **멱등성**을 보장해야 하며(여러 번 실행해도 같은 결과)
+- 보상도 실패하는 극단 케이스는 **DLQ(Dead Letter Queue)** 에 보관 후 운영팀이 처리합니다.
 
-보상 트랜잭션도 실패할 수 있습니다. 재시도 + 알림으로 운영팀이 수동 처리합니다. 보상 트랜잭션은 반드시 멱등성을 보장해야 하며(여러 번 실행해도 같은 결과), 보상도 실패하는 극단 케이스는 DLQ(Dead Letter Queue)에 보관 후 운영팀이 처리합니다.
-
-</details>
-
-<details>
-<summary><strong>Q. CQRS에서 주문 직후 조회 시 내 주문이 안 보이면?</strong></summary>
+### 면접 포인트 4️⃣ "CQRS에서 주문 직후 조회 시 내 주문이 안 보이면?"
 
 읽기 모델의 최종 일관성 지연은 보통 수백 ms 이내입니다. 주문 직후 "내 주문 확인" 화면은 쓰기 DB(MySQL)에서 직접 조회하고, 주문 목록·검색은 Elasticsearch에서 조회하는 방식으로 분리합니다. UI에서 "주문이 처리 중입니다" 표시로 UX를 보완합니다.
 
-</details>
+### 면접 포인트 5️⃣ "블프 피크에 초당 1만 건을 처리하려면 서버가 몇 대 필요한가?"
 
-<details>
-<summary><strong>Q. 블프 피크에 초당 1만 건을 처리하려면 서버가 몇 대 필요한가?</strong></summary>
-
-주문 서버 1대 TPS를 50으로 가정하면 200대 필요합니다. 실제 병목은 서버가 아니라 DB입니다. MySQL 쓰기 노드 한계(~5,000 TPS)를 넘어서면 DB 샤딩이 필수입니다. 16샤드 구성 시 80,000 TPS까지 확장 가능합니다. 피크 트래픽의 80%가 재고 조회·목록이므로 CQRS로 읽기를 분리하면 쓰기 DB 실질 부하는 훨씬 낮습니다.
-
-</details>
+- 주문 서버 1대 TPS를 50으로 가정하면 **200대** 필요
+- 실제 병목은 서버가 아니라 **DB**: MySQL 쓰기 노드 한계(~5,000 TPS) 초과 시 DB 샤딩 필수
+- 16샤드 구성 시 **80,000 TPS**까지 확장 가능
+- 피크 트래픽의 80%가 재고 조회·목록이므로 CQRS로 읽기를 분리하면 쓰기 DB 실질 부하는 훨씬 낮음

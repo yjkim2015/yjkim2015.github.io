@@ -145,13 +145,44 @@ graph LR
 ```
 
 **데이터 흐름**:
-1. 주문 서비스가 재고 API를 호출합니다.
-2. 재고 API는 Redis에서 Lua 스크립트로 원자 차감을 시도합니다.
-3. 차감 성공 시 Kafka에 재고 차감 이벤트를 발행합니다.
-4. 재고 이벤트 워커가 DB에 영구 기록합니다.
-5. 창고 시스템은 DB를 구독해 실물 피킹(picking) 작업을 시작합니다.
+
+| 단계 | 처리 |
+|------|------|
+| 1 | 주문 서비스 → 재고 API 호출 |
+| 2 | 재고 API → Redis Lua 스크립트로 원자 차감 시도 |
+| 3 | 차감 성공 → Kafka에 재고 차감 이벤트 발행 |
+| 4 | 재고 이벤트 워커 → DB에 영구 기록 |
+| 5 | 창고 시스템 → DB 구독 → 실물 피킹(picking) 시작 |
 
 핵심은 **Redis 원자 차감이 진실의 원천**이라는 점입니다. DB는 약간의 지연을 허용하는 대신 Redis 다운 시 복구 기반이 됩니다.
+
+**재고 차감 정상 흐름 (Redis Lua)**
+
+```mermaid
+sequenceDiagram
+    participant OS as 주문서비스
+    participant IS as 재고 API
+    participant R as Redis
+    OS->>IS: 재고 차감 요청
+    IS->>R: Lua 스크립트 실행
+    R-->>IS: 차감 성공 (남은 재고 반환)
+    IS->>IS: Kafka 이벤트 발행
+    IS-->>OS: 예약 성공
+```
+
+**Redis 장애 시 DB 폴백 흐름**
+
+```mermaid
+sequenceDiagram
+    participant OS as 주문서비스
+    participant IS as 재고 API
+    participant DB as 재고 DB
+    OS->>IS: 재고 차감 요청
+    IS->>IS: Redis 연결 실패 감지
+    IS->>DB: 낙관적 락으로 차감
+    DB-->>IS: 차감 완료 (version 증가)
+    IS-->>OS: 예약 성공 (TPS 저하 허용)
+```
 
 ---
 
@@ -393,10 +424,18 @@ public ReservationResult reserve(long skuId, int warehouseId, int quantity) {
 2. **대기열(Queue)**: 타임딜 상품은 Kafka 큐에 넣고 워커가 순서대로 차감, 결과를 SSE로 푸시
 3. **Redis 재고 선차감**: 타임딜 시작 전 Redis에 재고를 미리 적재하고 Lua 스크립트로 원자 차감
 
-```
-고객 클릭 → Rate Limit 체크
-  → 통과: Redis Lua 차감 → 성공: 주문 큐 진입 / 실패: 즉시 "품절"
-  → 실패: 429 반환
+**타임딜 요청 처리 흐름**
+
+```mermaid
+sequenceDiagram
+    participant U as 고객
+    participant IS as 재고 API
+    participant R as Redis
+    U->>IS: 타임딜 구매 클릭
+    IS->>IS: Rate Limit 체크
+    IS->>R: Lua 원자 차감 시도
+    R-->>IS: 성공 (재고 있음)
+    IS-->>U: 주문 큐 진입
 ```
 
 ### 재고 불일치 — Redis와 DB 수치가 다름
@@ -452,44 +491,38 @@ public void reconcileInventory() {
 
 ## 면접 포인트
 
-<details>
-<summary><strong>Q1. "DB 트랜잭션 하나로 재고 차감하면 되지 않나요?"</strong></summary>
+### 면접 포인트 1️⃣ "DB 트랜잭션 하나로 재고 차감하면 되지 않나요?"
 
 단일 서버·단일 DB에서는 맞습니다. 그러나 타임딜처럼 초당 5만 요청이 같은 행의 `available` 컬럼을 UPDATE하면, 모든 트랜잭션이 같은 행의 락을 기다리며 직렬화됩니다. 결과는 TPS가 수십 이하로 떨어지고 타임아웃이 폭주합니다. Redis Lua 스크립트는 DB 락 없이 원자성을 보장하면서 초당 수십만 연산을 처리합니다.
 
-</details>
+### 면접 포인트 2️⃣ "Redis가 죽으면 어떻게 되나요?"
 
-<details>
-<summary><strong>Q2. "Redis가 죽으면 어떻게 되나요?"</strong></summary>
+- **폴백**: DB 낙관적 락으로 전환. TPS는 떨어지지만 초과판매는 방지
+- **자동 복구**: Redis Sentinel/Cluster로 페일오버 구성 시 장애 시간 수십 초 이내
+- **워밍업**: 재기동 후 DB 수치로 Redis 캐시 재적재
 
-DB 낙관적 락으로 폴백합니다. TPS는 떨어지지만 초과판매는 방지됩니다. Redis Sentinel이나 Cluster로 자동 페일오버를 구성하면 장애 시간을 수십 초 이내로 줄일 수 있습니다. 재기동 후에는 DB 수치로 Redis를 워밍업합니다.
+### 면접 포인트 3️⃣ "낙관적 락과 비관적 락 중 무엇을 써야 하나요?"
 
-</details>
+충돌 빈도에 따라 다릅니다.
 
-<details>
-<summary><strong>Q3. "낙관적 락과 비관적 락 중 무엇을 써야 하나요?"</strong></summary>
+- **일반 상품 (충돌 드묾)**: 낙관적 락 — 락 오버헤드 없음
+- **타임딜 (충돌 거의 확실)**: 낙관적 락의 재시도 비용이 폭발 → Redis 원자 스크립트 적합
 
-충돌 빈도에 따라 다릅니다. 동시 주문이 드문 일반 상품은 낙관적 락이 적합합니다(락 오버헤드 없음). 타임딜처럼 충돌이 거의 확실한 상황에서는 낙관적 락의 재시도 비용이 폭발하므로 Redis 원자 스크립트가 적합합니다.
+### 면접 포인트 4️⃣ "재고가 -1이 됐습니다. 어떻게 디버깅하나요?"
 
-</details>
+- `inventory_event` 로그를 해당 SKU로 필터링해 시간 순 조회
+- `SUM(quantity)`가 현재 `available`과 일치하는지 확인
+- 불일치 시점의 이벤트로 어떤 주문 ID가 차감했는지 추적
+- 이것이 이벤트 로그를 병행하는 핵심 이유
 
-<details>
-<summary><strong>Q4. "재고가 -1이 됐습니다. 어떻게 디버깅하나요?"</strong></summary>
+### 면접 포인트 5️⃣ "100개 재고에 99명이 동시에 1개씩 주문했을 때 몇 명이 성공하나요?"
 
-`inventory_event` 로그를 해당 SKU로 필터링해 모든 이벤트를 시간 순으로 조회합니다. `SUM(quantity)`가 현재 `available`과 일치하는지 확인합니다. 불일치 시점의 이벤트를 찾아 어떤 주문 ID가 차감했는지 추적합니다. 이것이 이벤트 로그를 병행하는 핵심 이유입니다.
+Redis Lua 스크립트 기준으로 정확히 **99명**이 성공합니다. Lua 스크립트는 단일 스레드로 직렬 실행되어 check-and-decrement가 원자적으로 수행됩니다. 100개에서 99번 차감하면 1개가 남고, 나머지 요청은 모두 "재고 부족" 응답을 받습니다.
 
-</details>
+### 면접 포인트 6️⃣ "글로벌 서비스로 확장할 때 어떻게 하나요?"
 
-<details>
-<summary><strong>Q5. "100개 재고에 99명이 동시에 1개씩 주문했을 때 몇 명이 성공하나요?"</strong></summary>
+지역별로 재고를 할당(파티셔닝)합니다.
 
-Redis Lua 스크립트 기준으로 정확히 99명이 성공합니다. Lua 스크립트는 단일 스레드로 직렬 실행되어 check-and-decrement가 원자적으로 수행됩니다. 100개에서 99번 차감하면 1개가 남고, 나머지 요청은 모두 "재고 부족" 응답을 받습니다.
-
-</details>
-
-<details>
-<summary><strong>Q6. "글로벌 서비스로 확장할 때 어떻게 하나요?"</strong></summary>
-
-지역별로 재고를 할당(파티셔닝)합니다. 전체 재고 1,000개 중 한국 700개, 미국 300개를 사전 배분합니다. 지역별 차감은 해당 지역 Redis/DB에서만 일어나 네트워크 레이턴시 없이 처리됩니다. 한쪽이 먼저 소진되면 중앙 재고 풀에서 보충하는 2단계 구조로 운영합니다.
-
-</details>
+- 전체 재고 1,000개 중 한국 700개, 미국 300개 사전 배분
+- 지역별 차감은 해당 지역 Redis/DB에서만 처리 → 네트워크 레이턴시 없음
+- 한쪽이 먼저 소진되면 중앙 재고 풀에서 보충하는 **2단계 구조**로 운영
