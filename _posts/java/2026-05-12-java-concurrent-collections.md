@@ -786,3 +786,108 @@ graph LR
 ```
 
 동시성 자료구조의 선택은 "읽기와 쓰기의 비율", "블로킹 허용 여부", "정렬/순서 필요 여부" 세 가지 축으로 결정됩니다. 가장 흔한 실수는 `HashMap`을 그대로 두거나 `synchronizedMap`으로 감싸는 것입니다. `ConcurrentHashMap`은 거의 모든 범용 케이스에서 최선의 선택이며, 특수한 요구사항이 있을 때만 다른 자료구조를 검토하면 됩니다.
+
+---
+
+## 14. 실무 패턴 — 코드로 보는 조합 사례
+
+### 패턴 1: 멀티스레드 안전 캐시 (ConcurrentHashMap + computeIfAbsent)
+
+서비스 레이어에서 DB 조회 결과를 캐싱할 때 가장 흔히 사용하는 패턴입니다.
+
+```java
+public class UserCache {
+    private final ConcurrentHashMap<Long, User> cache = new ConcurrentHashMap<>();
+    private final UserRepository repository;
+
+    public User get(Long userId) {
+        // 없을 때만 DB 조회, 전체 과정이 원자적
+        return cache.computeIfAbsent(userId, id -> repository.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("userId=" + id)));
+    }
+
+    public void invalidate(Long userId) {
+        cache.remove(userId);
+    }
+
+    // 만료 처리: ScheduledExecutorService로 주기적 실행
+    public void evictAll() {
+        cache.clear();
+    }
+}
+```
+
+### 패턴 2: 고성능 생산자-소비자 파이프라인
+
+이벤트 수집 → 비동기 처리 파이프라인에서 `LinkedBlockingQueue`와 스레드 풀을 조합합니다.
+
+```java
+public class EventPipeline {
+    private final BlockingQueue<Event> queue = new LinkedBlockingQueue<>(50_000);
+    private final ExecutorService consumers = Executors.newFixedThreadPool(8);
+    private volatile boolean running = true;
+
+    public void start() {
+        for (int i = 0; i < 8; i++) {
+            consumers.submit(() -> {
+                while (running || !queue.isEmpty()) {
+                    try {
+                        // 100ms 타임아웃: shutdown 신호 감지 가능
+                        Event event = queue.poll(100, TimeUnit.MILLISECONDS);
+                        if (event != null) process(event);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            });
+        }
+    }
+
+    public boolean publish(Event event) {
+        // 블로킹 없이 시도, 가득 찼으면 false 반환 (배압 신호)
+        return queue.offer(event);
+    }
+
+    public void shutdown() {
+        running = false;
+        consumers.shutdown();
+    }
+}
+```
+
+### 패턴 3: AtomicReference를 이용한 Lock-Free 설정 교체
+
+설정 객체 전체를 원자적으로 교체하는 패턴입니다. 읽기가 매우 빈번하고 쓰기(설정 갱신)가 드문 상황에 적합합니다.
+
+```java
+public class ConfigHolder {
+    // 불변 설정 객체를 원자적으로 교체
+    private final AtomicReference<AppConfig> config;
+
+    public ConfigHolder(AppConfig initial) {
+        this.config = new AtomicReference<>(initial);
+    }
+
+    // 락 없이 현재 설정 읽기 (매우 빠름)
+    public AppConfig get() {
+        return config.get();
+    }
+
+    // 설정 전체 교체 (드물게 발생)
+    public void reload(AppConfig newConfig) {
+        config.set(newConfig);  // volatile write → 즉시 모든 스레드에 가시
+    }
+
+    // CAS 기반 조건부 교체: 예상한 설정과 현재가 같을 때만 교체
+    public boolean updateIfUnchanged(AppConfig expected, AppConfig updated) {
+        return config.compareAndSet(expected, updated);
+    }
+}
+```
+
+**핵심 원칙**: `AppConfig`는 반드시 **불변 객체(Immutable)**여야 합니다. 참조만 교체하므로 교체 이전에 참조를 얻은 스레드는 기존 설정을 계속 안전하게 사용합니다.
+
+---
+
+동시성 자료구조는 잘못 쓰면 데이터 손실, 무한 루프, OOM, 데드락으로 이어집니다. "스레드 안전하다"는 말이 "모든 상황에서 정확하다"를 의미하지 않는다는 점을 항상 기억하세요. `size()`의 근사값, `computeIfAbsent` 람다의 제약, `LinkedBlockingQueue`의 기본 무제한 용량 — 이 세 가지만 체득해도 동시성 관련 장애의 절반은 예방할 수 있습니다.
