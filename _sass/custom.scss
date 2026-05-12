@@ -1502,12 +1502,41 @@ nav.pagination,
 .sidebar-ad--left { margin-right: 2em; }
 .sidebar-ad--right { margin-left: 2em; }
 
-/* 테이블 모바일 가로 스크롤 */
+/* 테이블 반응형 — 모바일 가로 스크롤 + 줄바꿈 허용 */
 .page__content table {
   display: block;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+/* Mermaid 다이어그램 반응형 */
+.mermaid svg {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* 접기/펼치기 공통 스타일 */
+.extreme-scenario-summary {
+  padding: 0.8em 1em;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 코드 블록 공통 */
+.page__content pre {
+  border-radius: 8px;
+  margin: 1em 0;
+}
+
+.page__content code {
+  word-break: break-word;
 }
 
 @media (max-width: 1200px) {
@@ -1518,30 +1547,76 @@ nav.pagination,
 }
 
 @media (max-width: 768px) {
-  /* 모바일: 본문 여백 최적화, 코드 블록 스크롤 */
-  .single-layout-flex { padding: 1em 0.5em !important; }
+  /* 모바일: 본문 여백 최적화 */
+  .single-layout-flex { padding: 0.8em 0.4em !important; }
 
+  .page__content {
+    /* 본문 내 요소 좌우 여백 */
+    padding: 0 0.3em !important;
+  }
+
+  /* 코드 블록 — 가로 스크롤 + 폰트 축소 */
   .page__content pre {
-    font-size: 13px !important;
+    font-size: 12.5px !important;
+    line-height: 1.6 !important;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    padding: 0.8em !important;
+    margin-left: -0.4em;
+    margin-right: -0.4em;
+    border-radius: 6px;
   }
 
+  /* 테이블 — 스크롤 가능 + 콤팩트 */
   .page__content table {
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 1.5;
   }
 
-  /* 접기/펼치기 터치 영역 확대 */
-  .page__content details summary {
-    padding: 0.8em 0;
-    cursor: pointer;
+  .page__content table th,
+  .page__content table td {
+    padding: 0.4em 0.6em;
+    min-width: 60px;
   }
 
-  /* in-article 광고 최대 너비 */
-  .page__content .adsbygoogle {
+  /* 접기/펼치기 터치 영역 — 최소 48px (Google 권장) */
+  .page__content details summary,
+  .extreme-scenario-summary {
+    padding: 1em 0.8em !important;
+    min-height: 48px;
+    font-size: 15px;
+  }
+
+  /* Mermaid 다이어그램 — 모바일 최적화 */
+  .mermaid {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 1em -0.4em;
+    padding: 0.5em;
+  }
+
+  .mermaid svg {
+    min-width: 300px; /* 너무 작아지면 안 읽힘 */
+  }
+
+  /* in-article 광고 */
+  .page__content .adsbygoogle,
+  .page__content ins {
     max-width: 100% !important;
     overflow: hidden;
   }
+
+  /* blockquote 모바일 여백 */
+  .page__content blockquote {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0.8em 1em;
+    font-size: 14.5px;
+  }
+
+  /* h2/h3 모바일 폰트 */
+  .page__content h2 { font-size: 1.4em !important; }
+  .page__content h3 { font-size: 1.15em !important; }
 }
 
 /* ============================================
