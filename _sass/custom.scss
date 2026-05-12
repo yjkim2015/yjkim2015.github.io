@@ -1413,6 +1413,73 @@ nav.pagination,
 }
 
 /* ============================================
+   Home 레이아웃 flex
+   ============================================ */
+.home-layout-flex {
+  display: flex;
+  justify-content: center;
+  gap: 1.5em;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2em;
+}
+
+.home-content {
+  flex: 1;
+  min-width: 0;
+  max-width: 900px;
+}
+
+/* ============================================
+   면접 포인트 접이식 섹션
+   ============================================ */
+.interview-point-details {
+  border: 1.5px solid #bbdefb;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f8fbff;
+  margin-bottom: 0.5em;
+
+  &[open] .interview-point-toggle::after { content: "▲"; }
+}
+
+.interview-point-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 1em 1.3em;
+  cursor: pointer;
+  list-style: none;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  font-weight: 700;
+  font-size: 1em;
+  color: #1565c0 !important;
+  user-select: none;
+  transition: background 0.15s;
+
+  &::-webkit-details-marker { display: none; }
+  &:hover { background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%); }
+}
+
+.interview-point-icon {
+  font-size: 1.2em;
+}
+
+.interview-point-label {
+  flex: 1;
+}
+
+.interview-point-toggle {
+  font-size: 0.75em;
+  color: #1565c0 !important;
+  &::after { content: "▼"; }
+}
+
+.interview-point-body {
+  padding: 1.5em 1.8em;
+}
+
+/* ============================================
    Responsive
    ============================================ */
 @media (max-width: 1024px) {
@@ -1544,11 +1611,23 @@ nav.pagination,
   .sidebar-ad { display: none !important; }
   .page-toc-right { display: none !important; }
   .main-container { max-width: 100% !important; }
+  .home-layout-flex { padding: 1.5em 1em; }
+  .home-content { max-width: 100%; }
 }
 
 @media (max-width: 768px) {
   /* 모바일: 본문 여백 최적화 */
   .single-layout-flex { padding: 0.8em 0.4em !important; }
+  .home-layout-flex { padding: 0.8em 0.4em; }
+  .home-content { max-width: 100%; }
+  .home-hero h1 { font-size: 1.6em !important; }
+  .home-hero__subtitle { font-size: 1em; }
+  .home-hero__desc { font-size: 0.9em; }
+  .category-chip { padding: 0.3em 0.7em; font-size: 0.75em; }
+
+  /* 면접포인트 모바일 */
+  .interview-point-summary { padding: 0.8em !important; font-size: 14px; }
+  .interview-point-body { padding: 1em; }
 
   .page__content {
     /* 본문 내 요소 좌우 여백 */

@@ -133,6 +133,60 @@
 })();
 </script>
 
+<script>
+// 면접 포인트 h2를 접기/펼치기로 변환
+(function() {
+  var content = document.querySelector('.page__content');
+  if (!content) return;
+
+  var headings = Array.from(content.querySelectorAll('h2'));
+
+  headings.forEach(function(h2) {
+    var text = h2.textContent || '';
+
+    // "면접 포인트" 또는 "면접포인트"를 포함하는 h2만 대상
+    if (text.indexOf('면접 포인트') === -1 && text.indexOf('면접포인트') === -1) return;
+
+    // 이 h2 아래의 h3들을 각각 접기/펼치기로 변환
+    var next = h2.nextElementSibling;
+    var h3List = [];
+    while (next && next.tagName !== 'H2') {
+      if (next.tagName === 'H3') {
+        h3List.push(next);
+      }
+      next = next.nextElementSibling;
+    }
+
+    h3List.forEach(function(h3) {
+      var h3Text = h3.textContent || '';
+      var siblings = [];
+      var nxt = h3.nextElementSibling;
+      while (nxt && nxt.tagName !== 'H3' && nxt.tagName !== 'H2') {
+        siblings.push(nxt);
+        nxt = nxt.nextElementSibling;
+      }
+      if (siblings.length === 0) return;
+
+      var details = document.createElement('details');
+      details.className = 'interview-point-details';
+      var summary = document.createElement('summary');
+      summary.className = 'interview-point-summary';
+      summary.innerHTML = '<span class="interview-point-icon">\uD83C\uDFAF</span>' +
+        '<span class="interview-point-label">' + h3Text + ' \u2014 \uD074\uB9AD\uD558\uC5EC \uD3BC\uCE58\uAE30</span>' +
+        '<span class="interview-point-toggle"></span>';
+      details.appendChild(summary);
+
+      var body = document.createElement('div');
+      body.className = 'interview-point-body';
+      siblings.forEach(function(el) { body.appendChild(el); });
+      details.appendChild(body);
+
+      h3.parentNode.replaceChild(details, h3);
+    });
+  });
+})();
+</script>
+
 {% include analytics.html %}
 {% include /comments-providers/scripts.html %}
 
