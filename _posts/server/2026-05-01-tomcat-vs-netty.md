@@ -1,388 +1,799 @@
 ---
-title: "Tomcat vs Netty"
-categories: SERVER
-tags: [Tomcat, Netty, NIO, 스레드모델, VirtualThread, WebFlux]
+title: "Tomcat vs Netty 스레드 모델 딥다이브 — 왜 10만 동시 접속에서 차이가 나는가"
+categories:
+- SERVER
 toc: true
 toc_sticky: true
 toc_label: 목차
-date: 2026-05-01
 ---
 
-Tomcat과 Netty는 Java 생태계에서 가장 널리 사용되는 두 서버 엔진이다. 둘 다 네트워크 I/O를 처리하지만 설계 철학과 스레드 모델이 근본적으로 다르다. Spring MVC와 Spring WebFlux의 기반이 되는 두 엔진을 이해하면 성능 문제를 더 잘 진단하고 올바른 기술을 선택할 수 있다.
+동시 접속자가 늘어나는 순간, Tomcat과 Netty는 전혀 다른 방식으로 반응한다. 같은 Java 생태계, 같은 HTTP, 같은 서버이지만 설계 철학이 근본적으로 다르다. 그 차이가 10만 동시 접속에서 생사를 가른다. 왜 그런지, 내부에서 실제로 무슨 일이 벌어지는지를 파헤친다.
 
 ---
 
-## Tomcat 아키텍처
+## 실제 문제 — 동시 접속 1만에서 Tomcat이 멈춘 이유
 
-### 개요
+### 사건 재현
 
-> 비유: 음식점에서 손님 한 명이 오면 직원 한 명이 전담해 주문받고 요리 나올 때까지 기다리는 방식이다. 손님이 200명이면 직원도 200명이 필요하다.
+전자상거래 서비스에서 블랙프라이데이 세일이 시작됐다. 평소 TPS 500이던 서비스에 갑자기 동시 접속 1만 명이 몰렸다.
 
-Apache Tomcat은 Java Servlet 명세를 구현한 서블릿 컨테이너이자 웹 서버다. Spring MVC의 기본 내장 서버이며, Thread-Per-Request 모델을 따른다.
+```
+[13:00:00] 동시 접속 200명   → 응답시간 120ms  (정상)
+[13:00:30] 동시 접속 500명   → 응답시간 280ms  (느려짐)
+[13:01:00] 동시 접속 1,000명 → 응답시간 1,200ms (심각)
+[13:01:30] 동시 접속 2,000명 → 응답시간 타임아웃 (503 폭발)
+[13:02:00] 동시 접속 10,000명 → 서비스 응답 불가
+```
 
-### 내부 컴포넌트
+Netty 기반 서버(같은 스펙)는 같은 상황에서 응답시간 200ms를 유지했다. 왜 이런 차이가 발생했는가?
+
+### 근본 원인: 스레드가 "기다리는" 방식의 차이
+
+Tomcat은 요청 하나에 스레드 하나를 묶어 둔다. 상품 상세 페이지를 불러올 때 DB 쿼리(100ms) + 재고 API 호출(150ms)이 발생하면, 그 스레드는 250ms 동안 아무것도 하지 않고 대기한다.
+
+Netty는 스레드를 기다리게 하지 않는다. I/O가 완료되면 "이벤트"가 발생하고, 그때 처리한다. 스레드는 그 사이에 다른 연결을 처리한다.
 
 ```mermaid
 graph LR
-    Client --> Connector --> Executor --> Engine
-    Engine --> Servlet --> DispatcherServlet
+    A["요청 1만개"] --> B{"스레드 모델"}
+    B -->|"Thread-per-Request"| C["스레드 200개"]
+    B -->|"Event Loop"| D["스레드 8개"]
+    C --> E["9,800개 큐 대기 → 503"]
+    D --> F["전부 처리 → 정상"]
 ```
 
-- **Connector**: 클라이언트 연결을 받아들이는 입구. HTTP/1.1, HTTP/2, AJP 등 프로토콜 지원
-- **ProtocolHandler**: 실제 소켓 I/O를 처리. NIO, NIO2, APR 방식 선택 가능
-- **Executor**: 요청을 처리하는 스레드 풀
+---
 
-### NIO 스레드 모델
+## 스레드 모델의 근본 차이
 
-Tomcat 8.5부터 NIO가 기본값이다.
+### Tomcat — Thread-per-Request 모델
+
+#### 왜 이 모델을 선택했는가
+
+Tomcat은 Java Servlet 명세 기반으로 설계됐다. Servlet 명세는 2000년대 초 설계됐고, 당시의 가정은 "개발자가 동기 코드를 작성한다"는 것이었다. `HttpServletRequest`와 `HttpServletResponse`를 하나의 스레드에서 읽고 쓰는 모델은 직관적이고 디버깅이 쉽다. 스레드 로컬로 요청 상태를 관리할 수 있어 Security Context나 Transaction Context를 자연스럽게 바인딩할 수 있다.
+
+이 모델의 핵심 가정은 "OS 스레드가 충분하면 동시 처리가 가능하다"는 것이다. 문제는 OS 스레드가 I/O를 기다리는 동안 점유 상태로 남는다는 점이다.
+
+#### 스레드 풀 구조 — Acceptor에서 Worker까지
 
 ```mermaid
 graph LR
-    Acceptor["Acceptor 1~2개"] --> Poller["Poller 1~2개"] --> Workers["Worker Pool 200개"]
+    Client["클라이언트"] -->|"TCP 연결"| ACC["Acceptor\n1~2개"]
+    ACC -->|"소켓 등록"| POL["Poller\n1~2개"]
+    POL -->|"이벤트 감지 후\n작업 제출"| WRK["Worker Pool\n기본 200개"]
+    WRK -->|"Servlet 실행"| DS["DispatcherServlet\n→ Controller"]
 ```
+
+각 계층의 역할:
+
+1. **Acceptor**: TCP 연결 수락 전담. `ServerSocket.accept()`를 루프로 호출하며 새 연결을 Poller에 넘긴다. 1~2개로 충분하다.
+2. **Poller**: NIO Selector를 사용해 연결된 소켓 중 읽기 가능한 것을 감지한다. I/O 이벤트가 발생하면 Worker에 요청을 넘긴다.
+3. **Worker**: 실제 요청을 처리하는 스레드 풀. HTTP 파싱, Servlet 호출, 응답 전송을 담당한다. 기본 최대 200개.
 
 ```yaml
 # Spring Boot application.yml
 server:
   tomcat:
     threads:
-      max: 200          # 최대 워커 스레드 수
-      min-spare: 10     # 최소 유지 스레드 수
-    max-connections: 8192
-    accept-count: 100
+      max: 200          # 최대 Worker 스레드 수 (기본값)
+      min-spare: 10     # 항상 대기 중인 최소 스레드 수
+    max-connections: 8192  # Poller가 관리하는 최대 연결 수
+    accept-count: 100      # Worker 풀이 가득 찰 때 대기 큐 크기
     connection-timeout: 20s
 ```
 
-### Thread-Per-Request의 한계
-
-Tomcat의 워커 스레드는 요청을 받아 응답을 반환할 때까지 해당 스레드를 독점한다. DB 쿼리나 외부 API 호출처럼 I/O 대기가 발생하면 스레드는 그 시간 동안 아무것도 하지 않고 멈춰 있다. CPU는 놀고 있지만 스레드는 점유 상태다.
-
-기본값 200개 스레드 서버에 각각 200ms짜리 외부 API 호출이 포함된 요청이 동시에 200개 들어오면, 200개 스레드 전부가 I/O 대기 상태로 블로킹된다. 이 순간 201번째 요청은 `accept-count` 큐에서 대기하고, 큐마저 가득 차면 TCP 연결 자체가 거부된다.
-
-> **비유**: 식당에 웨이터 200명이 있는데, 모두 주방에서 요리가 나오기를 서서 기다리고 있다. 새 손님이 와도 안내할 웨이터가 없어 입구에서 대기하다가 결국 돌아간다. 요리(I/O)가 느릴수록 웨이터(스레드)가 더 오래 묶인다.
+#### maxThreads=200이면 201번째 요청은 어떻게 되는가
 
 ```mermaid
 graph LR
-    A["200 스레드 BLOCKED"] --> B["201번째 → 큐 대기"] --> C["큐 초과 → 503"] --> D["CPU 0% 낭비"]
+    R201["201번째 요청"] --> Q{"accept-count\n큐 여유?"}
+    Q -->|"여유 있음"| WAIT["큐에서 대기\n→ 응답시간 증가"]
+    Q -->|"큐도 가득"| REJ["TCP 연결 거부\n→ 503 Service Unavailable"]
+    WAIT --> TO{"timeout\n초과?"}
+    TO -->|"Yes"| TTO["클라이언트 타임아웃"]
+    TO -->|"No"| PROC["Worker 해제 후 처리"]
 ```
 
-스레드 수를 늘리면 일시적으로 해결되는 것처럼 보이지만, OS 스레드는 스택 메모리(기본 1MB)를 차지하므로 스레드 1,000개면 1GB RAM이 스택에만 소모된다. 더 근본적인 문제는 스레드 간 컨텍스트 스위칭 오버헤드가 스레드 수 증가에 따라 비선형으로 폭발한다는 점이다.
+`accept-count=100` 기본값이라면, Worker 200개 + 큐 100개 = 최대 300개 요청을 동시에 처리할 수 있다. 301번째 요청은 TCP 레벨에서 거부된다.
+
+#### 왜 DB 쿼리 1초면 TPS가 200으로 제한되는가
+
+Worker 스레드가 DB 쿼리를 기다리는 동안 블로킹 상태로 점유되는 원리다.
+
+```mermaid
+sequenceDiagram
+    participant C as 클라이언트
+    participant W as Worker 스레드
+    participant DB as 데이터베이스
+    C->>W: HTTP 요청
+    Note over W: 스레드 할당 (스레드 풀에서 제거)
+    W->>DB: SELECT * FROM orders WHERE ...
+    Note over W,DB: ← 이 구간 1초 동안 스레드 블로킹 →
+    Note over W: CPU 0%, 메모리만 점유
+    DB-->>W: 결과 반환
+    W->>C: HTTP 응답
+    Note over W: 스레드 반환 (스레드 풀로 복귀)
+```
+
+수학적으로 보면:
+
+```
+최대 TPS = Worker 스레드 수 / 요청 처리 시간(초)
+
+DB 쿼리 1초짜리 요청, 스레드 200개:
+  최대 TPS = 200 / 1.0 = 200 req/s
+
+DB 쿼리 0.1초짜리 요청, 스레드 200개:
+  최대 TPS = 200 / 0.1 = 2,000 req/s
+```
+
+DB가 느릴수록 TPS 한계가 낮아진다. 스레드는 I/O를 기다리는 동안 CPU를 쓰지 않는다. CPU 사용률 0%인데 서버가 응답 불가 상태가 되는 이유가 바로 이것이다.
+
+#### 스레드 수를 늘리면 해결되는가
+
+OS 스레드는 생성할 때 스택 메모리를 예약한다. 기본값은 JVM 옵션과 OS에 따라 다르지만 통상 512KB~1MB다.
+
+```
+스레드 1,000개 × 1MB = 1GB RAM (스택만)
+스레드 10,000개 × 1MB = 10GB RAM (스택만)
+
+컨텍스트 스위칭:
+  스레드 200개:  관리 가능한 수준
+  스레드 2,000개: 컨텍스트 스위칭 비용이 실제 작업 비용 초과
+  스레드 10,000개: OS 스케줄러가 포화
+```
+
+스레드 수를 늘리는 것은 밴드에이드다. 근본 해결책이 아니다.
 
 ---
 
-## Netty 아키텍처
+### Netty — Event Loop 모델
 
-### 개요
+#### 왜 스레드 수가 CPU 코어 수와 같은가
 
-Netty는 비동기 이벤트 기반 네트워크 I/O 프레임워크다. Spring WebFlux의 기본 서버이며, Reactor 패턴을 기반으로 한다.
+Netty의 Event Loop는 블로킹을 하지 않는다. I/O가 완료되면 OS가 알려준다(epoll/kqueue). 스레드는 알림을 기다리는 동안 다른 연결의 이벤트를 처리한다. 따라서 CPU 코어당 하나의 스레드로 모든 CPU를 100% 활용할 수 있다.
 
-### 핵심 컴포넌트
+컨텍스트 스위칭이 없으므로 코어 수보다 많은 스레드는 오히려 낭비다.
 
-> 비유: 교환원(Boss)이 전화를 받아 직원(Worker)에게 연결하고, 직원은 여러 통화를 동시에 돌아가며 처리한다. 직원이 통화 중 잠깐 대기하는 동안 다른 통화를 처리한다.
+```
+8코어 서버 기준:
+  Tomcat:  Worker 200개 스레드 (I/O 대기 중 190개는 자고 있음)
+  Netty:   Worker 16개 스레드 (CPU×2, 항상 바쁨)
+
+왜 CPU×2인가:
+  - I/O 처리 중 잠깐 대기하는 경우가 있어 여유 1개씩 추가
+  - Boss Group 1~2개 + Worker Group CPU×2가 관례
+```
+
+#### Boss Group + Worker Group 구조
 
 ```mermaid
 graph LR
-    Boss["Boss 1~2개"] -->|연결 전달| Worker["Worker CPU×2개"]
-    Worker --> Channel --> Pipeline
+    CLI["클라이언트들"] -->|"TCP 연결"| SRV["NioServerSocketChannel"]
+    SRV --> BG["Boss Group\n1~2개 EventLoop"]
+    BG -->|"연결 등록"| WG["Worker Group\nCPU×2개 EventLoop"]
+    WG --> EL1["EventLoop 1\nChannel A, B, C"]
+    WG --> EL2["EventLoop 2\nChannel D, E, F"]
+    EL1 --> PP["ChannelPipeline\n→ Handler 체인"]
+    EL2 --> PP
 ```
 
-### EventLoop
+Boss Group은 TCP 연결 수락만 전담한다. 새 연결이 들어오면 Worker Group의 EventLoop 하나에 등록하고 끝이다. Worker Group은 등록된 Channel의 모든 I/O 이벤트를 처리한다.
 
-하나의 스레드가 하나의 EventLoop를 담당하고, 하나의 EventLoop는 여러 Channel을 처리한다.
+#### 왜 10만 동시 접속이 가능한가
+
+핵심 개념: **연결 = 파일 디스크립터(File Descriptor), 스레드 ≠ 연결**
+
+```
+Tomcat Thread-per-Request:
+  10만 연결 = 10만 스레드 필요
+  10만 스레드 × 1MB = 100GB RAM → 불가능
+
+Netty Event Loop:
+  10만 연결 = 10만 파일 디스크립터 (소켓)
+  실제 스레드: CPU×2 = 16개
+  16개 스레드가 10만 개 소켓 이벤트를 순서대로 처리
+```
+
+파일 디스크립터는 정수 하나(소켓 번호)다. 10만 개 연결이 열려 있어도 OS에서 epoll로 관리하므로 메모리 오버헤드는 연결당 수 KB에 불과하다. 스레드 오버헤드가 없다.
+
+#### Channel Pipeline Handler 체인 동작 원리
 
 ```mermaid
 graph LR
-    EL["EventLoop"] --> S["select()"] --> P["processKeys()"] --> R["runTasks()"]
-    EL --- A["Ch A"] & B["Ch B"] & C["Ch C"]
+    SOC["소켓 수신"] -->|"인바운드"| DEC1["ByteToMessage\nDecoder"]
+    DEC1 --> DEC2["HTTP\nDecoder"]
+    DEC2 --> BIZ["Business\nHandler"]
+    BIZ -->|"아웃바운드"| ENC1["HTTP\nEncoder"]
+    ENC1 --> ENC2["MessageToByte\nEncoder"]
+    ENC2 --> OUT["소켓 송신"]
 ```
 
-**핵심 원칙**: EventLoop 스레드를 절대 블로킹하면 안 된다. 블로킹 작업은 별도 스레드 풀(`Schedulers.boundedElastic()`)로 오프로드해야 한다.
+각 Handler는 단일 책임을 가진다. 바이트 스트림 → HTTP 객체 → 비즈니스 로직 → HTTP 응답 → 바이트 스트림 순서로 체인이 구성된다. 각 단계는 다음 Handler에게 위임한다.
 
-### ChannelPipeline
+#### 왜 Handler에서 블로킹 코드를 쓰면 안 되는가
 
 ```mermaid
-graph LR
-    Socket1[소켓 수신] -->|인바운드| D1[ByteToMessage Decoder]
-    D1 --> D2[HTTP 객체 Decoder]
-    D2 --> BL[Business Logic Handler]
-    BL -->|아웃바운드| E1[HTTP 객체 Encoder]
-    E1 --> E2[MessageToByte Encoder]
-    E2 --> Socket2[소켓 송신]
+sequenceDiagram
+    participant EL as EventLoop 스레드
+    participant CH_A as Channel A
+    participant CH_B as Channel B
+    participant DB as Database (블로킹)
+
+    CH_A->>EL: 읽기 이벤트 발생
+    EL->>DB: Thread.sleep(1000) 또는 JDBC 호출
+    Note over EL,DB: ← EventLoop 1초 블로킹 →
+    Note over CH_B: Channel B의 이벤트 처리 불가<br/>Channel B 클라이언트는 응답 없음
+    Note over CH_A: + EventLoop가 담당하는<br/>수천 개 연결 전부 멈춤
+    DB-->>EL: 결과 반환
+    EL->>CH_B: 이제야 처리 가능
 ```
 
-### 기본 Netty 서버 코드
+EventLoop 스레드 하나가 수천 개 Channel을 담당한다. 그 스레드가 블로킹되면 담당하는 모든 Channel이 정지한다. 단 하나의 실수로 수천 개 연결이 영향 받는다.
 
-```java
-public class SimpleNettyServer {
+#### Netty 서버 연결 처리 흐름
 
-    public void start(int port) throws InterruptedException {
-        NioEventLoopGroup bossGroup = new NioEventLoopGroup(1);
-        NioEventLoopGroup workerGroup = new NioEventLoopGroup(); // 기본: CPU × 2
+```mermaid
+sequenceDiagram
+    participant C as 클라이언트
+    participant BG as Boss EventLoop
+    participant WG as Worker EventLoop
+    participant SEL as OS epoll/Selector
+    participant HL as ChannelHandler
 
-        try {
-            ServerBootstrap bootstrap = new ServerBootstrap()
-                .group(bossGroup, workerGroup)
-                .channel(NioServerSocketChannel.class)
-                .option(ChannelOption.SO_BACKLOG, 128)
-                .childOption(ChannelOption.SO_KEEPALIVE, true)
-                .childHandler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    protected void initChannel(SocketChannel ch) {
-                        ch.pipeline()
-                            .addLast(new HttpServerCodec())
-                            .addLast(new HttpObjectAggregator(65536))
-                            .addLast(new SimpleServerHandler());
-                    }
-                });
-
-            ChannelFuture future = bootstrap.bind(port).sync();
-            future.channel().closeFuture().sync();
-        } finally {
-            bossGroup.shutdownGracefully();
-            workerGroup.shutdownGracefully();
-        }
-    }
-}
-
-@ChannelHandler.Sharable
-class SimpleServerHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
-
-    @Override
-    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
-        // EventLoop 스레드에서 실행 — 블로킹 금지!
-        ByteBuf content = Unpooled.copiedBuffer("Hello, Netty!", CharsetUtil.UTF_8);
-        FullHttpResponse response = new DefaultFullHttpResponse(
-            HttpVersion.HTTP_1_1, HttpResponseStatus.OK, content
-        );
-        response.headers()
-            .set(HttpHeaderNames.CONTENT_TYPE, "text/plain")
-            .set(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes());
-        ctx.writeAndFlush(response);
-    }
-}
+    C->>BG: TCP 연결 요청
+    BG->>WG: Channel 등록
+    WG->>SEL: Channel을 Selector에 등록
+    C->>SEL: 데이터 전송
+    SEL->>WG: 읽기 이벤트 알림
+    WG->>HL: Pipeline 통해 Handler 순서대로 실행
+    HL->>WG: writeAndFlush() 호출
+    WG->>C: 응답 전송
+    Note over WG,SEL: 응답 대기 중 다른 Channel 이벤트 처리
 ```
 
-### Spring WebFlux + Netty
+---
+
+## Spring MVC (Tomcat) vs Spring WebFlux (Netty) 비교
+
+### 같은 API를 두 방식으로 구현
+
+**Spring MVC (Tomcat, 동기/블로킹)**
 
 ```java
 @RestController
-public class ReactiveController {
+@RequiredArgsConstructor
+public class UserController {
 
-    private final WebClient webClient = WebClient.create("https://api.example.com");
+    private final UserRepository userRepository;
+    private final ExternalApiClient externalClient;
 
+    // 직관적이고 디버깅 쉬움
+    // 단점: DB 쿼리 + 외부 API 호출 동안 스레드 블로킹
     @GetMapping("/users/{id}")
-    public Mono<UserDto> getUser(@PathVariable Long id) {
-        return webClient.get()
-            .uri("/users/{id}", id)
-            .retrieve()
-            .bodyToMono(UserDto.class)
-            .map(user -> new UserDto(user.id(), user.name().toUpperCase()))
-            .timeout(Duration.ofSeconds(3))
-            .onErrorReturn(new UserDto(-1L, "Unknown"));
-    }
+    public UserDto getUser(@PathVariable Long id) {
+        User user = userRepository.findById(id)   // 블로킹 — 스레드 대기
+                        .orElseThrow(() -> new UserNotFoundException(id));
 
-    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> stream() {
-        return Flux.interval(Duration.ofSeconds(1))
-            .map(i -> "Event: " + i)
-            .take(10);
+        ExternalProfile profile = externalClient.getProfile(user.getExternalId()); // 블로킹
+
+        return UserDto.of(user, profile);
     }
 }
 ```
 
----
+**Spring WebFlux (Netty, 비동기/논블로킹)**
 
-## 스레드 모델 비교
+```java
+@RestController
+@RequiredArgsConstructor
+public class UserReactiveController {
 
-### 동시 연결 처리
+    private final R2dbcUserRepository userRepository;  // 리액티브 DB 드라이버
+    private final WebClient webClient;
+
+    // 논블로킹 — EventLoop 스레드를 점유하지 않음
+    // 단점: 코드가 복잡하고 스택 트레이스 추적 어려움
+    @GetMapping("/users/{id}")
+    public Mono<UserDto> getUser(@PathVariable Long id) {
+        return userRepository.findById(id)
+            .switchIfEmpty(Mono.error(new UserNotFoundException(id)))
+            .flatMap(user ->
+                webClient.get()
+                    .uri("/profiles/{id}", user.getExternalId())
+                    .retrieve()
+                    .bodyToMono(ExternalProfile.class)
+                    .map(profile -> UserDto.of(user, profile))
+            )
+            .timeout(Duration.ofSeconds(3))
+            .onErrorResume(TimeoutException.class,
+                e -> Mono.error(new ServiceUnavailableException()));
+    }
+}
+```
+
+같은 결과를 반환하지만 동작 방식이 완전히 다르다. MVC는 스레드를 점유하고, WebFlux는 이벤트 발생 시에만 스레드를 사용한다.
+
+### 왜 WebFlux가 항상 좋은 게 아닌가
+
+WebFlux가 빛을 발하는 조건은 **I/O 바운드 작업이 많고, 동시 연결 수가 많을 때**다.
+
+다음 경우에는 WebFlux가 이점이 없거나 오히려 불리하다:
+
+**1. CPU 바운드 작업**
+
+```java
+// CPU 집약적 이미지 처리 — 블로킹이 없으므로 WebFlux 이점 없음
+@GetMapping("/resize")
+public Mono<byte[]> resizeImage(@RequestBody byte[] imageData) {
+    return Mono.fromCallable(() -> {
+        // CPU를 100% 사용하는 작업 — EventLoop 스레드가 점유됨
+        // 별도 스레드 풀로 오프로드해야 함
+        return ImageUtils.resize(imageData, 800, 600);
+    }).subscribeOn(Schedulers.boundedElastic()); // 결국 별도 스레드 필요
+}
+```
+
+CPU 바운드라면 Tomcat + 충분한 Worker 스레드가 더 단순하다.
+
+**2. 팀의 리액티브 경험이 없을 때**
+
+리액티브 프로그래밍은 학습 곡선이 가파르다. `flatMap`, `switchIfEmpty`, `zipWith`, `mergeWith` 등의 연산자를 잘못 쓰면 오히려 성능이 나빠지고, 버그를 찾기가 극히 어렵다.
+
+**3. 간단한 CRUD API**
+
+응답 시간이 10ms 미만인 단순 CRUD API에서는 Tomcat과 Netty의 성능 차이가 거의 없다. 복잡성만 늘어난다.
+
+### 왜 블로킹 라이브러리(JDBC)를 WebFlux에서 쓰면 안 되는가
 
 ```mermaid
 graph LR
-    T["Tomcat: 200 스레드"] -->|"1000 요청"| TB["800개 큐 대기"]
-    N["Netty: 8 EventLoop"] -->|"1000 연결"| NB["전부 처리"]
+    WF["WebFlux 요청"] --> EL["EventLoop 스레드"]
+    EL --> JDBC["JDBC 호출 (블로킹)"]
+    JDBC --> DB["Database"]
+    Note1["EventLoop 스레드가\nDB 응답까지 블로킹"] -.-> EL
+    Note2["이 스레드가 담당하던\n수천 개 연결 전부 정지"] -.-> Note1
 ```
 
-### I/O 바운드 vs CPU 바운드
+JDBC는 블로킹 I/O 기반이다. WebFlux의 EventLoop 스레드에서 JDBC를 직접 호출하면 그 스레드가 DB 응답을 기다리는 동안 블로킹된다. 수천 개 연결이 동시에 멈춘다. Tomcat에서 Worker 스레드 하나가 블로킹되는 것과는 차원이 다른 피해다.
 
-| 작업 유형 | Tomcat | Netty |
-|-----------|--------|-------|
-| I/O 바운드 (외부 API, DB) | 스레드 블로킹 → 낭비 | EventLoop가 다른 채널 처리 → 효율적 |
-| CPU 바운드 (복잡한 계산) | 자연스러움 | EventLoop 점유 시 다른 채널 지연 → 별도 풀 필요 |
+### R2DBC가 필요한 이유
 
-### 처리량 비교 (이론적)
+```java
+// JDBC — 블로킹. WebFlux에서 직접 쓰면 위험
+User user = jdbcTemplate.queryForObject(
+    "SELECT * FROM users WHERE id = ?",
+    User.class, id
+); // ← 이 줄에서 EventLoop 스레드 블로킹
 
-| 시나리오 | Tomcat (200스레드) | Netty (8 EventLoop) |
-|----------|-------------------|---------------------|
-| 빠른 응답 (<1ms) | 높음 | 더 높음 |
-| I/O 대기 (100ms) | ~200 req/s | 수천 req/s |
-| CPU 집약 (50ms) | ~4,000 req/s | 비슷 (별도 풀 필요) |
-| 대용량 연결 유지 | 스레드 고갈 가능 | 수만 연결 가능 |
+// R2DBC — 논블로킹. WebFlux와 함께 사용
+Mono<User> userMono = r2dbcTemplate.selectOne(
+    Query.query(Criteria.where("id").is(id)),
+    User.class
+); // ← 즉시 반환. DB 응답 시 이벤트로 처리
+```
+
+R2DBC는 JDBC의 리액티브 대안이다. DB 쿼리 결과를 콜백/이벤트로 처리하므로 EventLoop 스레드를 블로킹하지 않는다. 단, JPA와 호환되지 않으므로 QueryDSL, jOOQ 등 다른 ORM/쿼리 도구가 필요하다.
+
+WebFlux를 쓴다면 반드시 논블로킹 드라이버 체계를 갖춰야 한다:
+
+| 계층 | 블로킹 (MVC용) | 논블로킹 (WebFlux용) |
+|------|--------------|---------------------|
+| HTTP 클라이언트 | RestTemplate | WebClient |
+| DB 접근 | JDBC / JPA | R2DBC |
+| 캐시 | Jedis (Redis) | Lettuce (비동기 모드) |
+| 메시지 | KafkaTemplate (sync) | ReactiveKafkaTemplate |
 
 ---
 
-## Virtual Thread와의 비교 (Java 21+)
+## Java Virtual Thread가 판도를 바꾸는 이유
 
-### Virtual Thread란
+### Virtual Thread란 무엇인가
 
-Java 21에서 정식 출시된 경량 스레드다. JVM이 OS 스레드 위에 수백만 개의 가상 스레드를 실행할 수 있다.
+Java 21에서 정식 출시(JEP 444)된 경량 스레드다. JVM이 OS 스레드(Platform Thread) 위에 수백만 개의 가상 스레드를 마운트/언마운트해 실행한다.
+
+핵심은 **블로킹 발생 시 JVM이 OS 스레드를 해제한다**는 점이다.
 
 ```java
-// 블로킹 코드를 그대로 작성해도 OS 스레드는 해제됨
-Thread.ofVirtual().start(() -> {
-    String result = blockingHttpCall(); // 블로킹 발생 시 OS 스레드 언마운트
-    process(result);                    // 응답 도착 시 다시 마운트
+// 기존 Platform Thread — JDBC 호출 시 OS 스레드 블로킹
+Thread platformThread = new Thread(() -> {
+    String result = jdbcTemplate.queryForObject(...); // OS 스레드 대기
+});
+
+// Virtual Thread — JDBC 호출 시 OS 스레드 해제
+Thread virtualThread = Thread.ofVirtual().start(() -> {
+    String result = jdbcTemplate.queryForObject(...);
+    // ↑ 블로킹 발생 → JVM이 이 Virtual Thread를 OS 스레드에서 언마운트
+    //                → OS 스레드는 다른 Virtual Thread 실행
+    //                → DB 응답 도착 → 이 Virtual Thread 재마운트
 });
 ```
 
-**Spring Boot + Virtual Thread 활성화**
-```yaml
-spring:
-  threads:
-    virtual:
-      enabled: true  # Spring Boot 3.2+
+개발자는 기존 블로킹 코드를 그대로 쓴다. JVM이 내부적으로 비동기로 처리한다.
+
+### Thread-per-Request + 논블로킹 장점 결합
+
+```mermaid
+graph LR
+    TpR["Thread-per-Request\n장점: 직관적 코드\n단점: I/O 대기 중\nOS 스레드 낭비"] --> VT["Virtual Thread"]
+    EL["Event Loop\n장점: I/O 효율적\n단점: 복잡한 코드\n블로킹 금지"] --> VT
+    VT --> BEST["직관적 코드 +\nI/O 효율적 처리"]
 ```
 
-### 3가지 모델 비교
-
-| 항목 | Tomcat (플랫폼 스레드) | Netty (리액티브) | Tomcat + Virtual Thread |
-|------|----------------------|-----------------|------------------------|
-| 프로그래밍 모델 | 동기/블로킹 | 비동기/비블로킹 | 동기/블로킹 |
-| 코드 복잡도 | 낮음 | 높음 | 낮음 |
-| I/O 바운드 성능 | 낮음 | 매우 높음 | 높음 |
-| CPU 바운드 성능 | 보통 | 보통 | 보통 |
-| 스택 트레이스 가독성 | 명확 | 복잡(리액티브 체인) | 명확 |
-| 메모리 (1만 연결) | ~10GB | ~수십MB | ~수백MB |
-| JPA/JDBC 사용 | 자연스러움 | 불가(블로킹) | 자연스러움 |
-| 학습 곡선 | 낮음 | 높음 | 낮음 |
-
-### WebFlux에서 블로킹 코드 처리
+Virtual Thread를 사용하면 다음이 가능해진다:
 
 ```java
-@Service
-public class UserService {
-
-    // JPA(블로킹)를 WebFlux 환경에서 사용할 때
-    public Mono<User> findById(Long id) {
-        return Mono.fromCallable(() -> userRepository.findById(id).orElseThrow())
-            .subscribeOn(Schedulers.boundedElastic()); // 블로킹 작업용 스레드 풀
-    }
-
-    // R2DBC(리액티브 DB 드라이버) 사용 시
-    public Mono<User> findByIdReactive(Long id) {
-        return r2dbcUserRepository.findById(id); // 논블로킹
+// Spring Boot 3.2+, Java 21+
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
     }
 }
 ```
 
----
-
-## 선택 기준
-
-| 상황 | 권장 선택 |
-|------|----------|
-| 레거시 코드베이스, JPA 사용, 단순 CRUD | Tomcat (플랫폼 스레드) |
-| 대용량 실시간 스트리밍, SSE, WebSocket, 극한 성능 | Netty (WebFlux) |
-| 신규 프로젝트, I/O 바운드 위주, Java 21+, Spring Boot 3.2+ | Tomcat + Virtual Thread |
-
----
-
-## 마치며
-
-Tomcat과 Netty는 각각 다른 문제를 해결하기 위해 설계됐다. Tomcat은 단순함과 안정성을, Netty는 극한의 처리량과 확장성을 추구한다. Java 21의 Virtual Thread 도입으로 Tomcat도 I/O 바운드 시나리오에서 경쟁력을 갖게 됐다. 새 프로젝트라면 Virtual Thread + Tomcat 조합이 학습 비용 대비 성능을 얻기 쉬운 선택이다.
-
----
-
-## 왜 이 기술인가? — 서버 모델 선택 가이드
-
-### 서버 I/O 모델 비교
-
-| 항목 | Tomcat (BIO/NIO) | Netty (NIO) | Tomcat + Virtual Thread | Spring WebFlux |
-|------|-----------------|-------------|------------------------|----------------|
-| 프로그래밍 모델 | 동기/블로킹 | 비동기/이벤트 | 동기/블로킹 | 리액티브 |
-| 코드 복잡도 | 낮음 | 높음 | 낮음 | 높음 |
-| I/O 바운드 성능 | 보통 | 매우 높음 | 높음 | 매우 높음 |
-| CPU 바운드 성능 | 보통 | 별도 스레드 풀 필요 | 보통 | 별도 스케줄러 필요 |
-| JPA/JDBC 사용 | 자연스러움 | 불가(블로킹) | 자연스러움 | 불가(R2DBC 필요) |
-| 메모리 (1만 동시 연결) | ~10GB | ~수십MB | ~수백MB | ~수십MB |
-| 스택 트레이스 가독성 | 명확 | 복잡 | 명확 | 복잡(리액티브 체인) |
-| 학습 곡선 | 낮음 | 매우 높음 | 낮음 | 높음 |
-| 적합한 사례 | REST API, 레거시 | WebSocket, gRPC, IoT | REST API, Java 21+ | 스트리밍, SSE |
-
-**Tomcat을 선택해야 할 때:**
-- JPA/Hibernate를 사용하는 기존 코드베이스
-- 팀의 리액티브 프로그래밍 경험이 없을 때
-- 단순 CRUD 위주의 비즈니스 API
-
-**Netty를 선택해야 할 때:**
-- 수만 개의 동시 연결을 유지해야 하는 경우 (WebSocket, SSE, 게임 서버)
-- gRPC 서버 구축
-- 커스텀 프로토콜 처리가 필요한 경우
-
----
-
-## 실무에서 자주 하는 실수
-
-### 실수 1: I/O 바운드 작업에 Tomcat 기본 설정 그대로 사용
-
-외부 API를 많이 호출하는 서비스에서 `server.tomcat.threads.max=200` 기본값을 유지한다. 각 요청이 평균 200ms 대기하면 초당 최대 1,000 req/s가 한계다. Virtual Thread 활성화나 스레드 수 증가, 또는 WebFlux 전환을 고려해야 한다.
-
 ```yaml
-# Java 21 + Spring Boot 3.2: 한 줄로 해결
+# application.yml — 한 줄로 Virtual Thread 활성화
 spring:
   threads:
     virtual:
       enabled: true
 ```
 
-### 실수 2: WebFlux 환경에서 블로킹 코드를 호출한다
+이 설정 하나로 Tomcat의 Worker 스레드가 Virtual Thread로 교체된다. 기존 코드 변경 없이 I/O 바운드 성능이 대폭 향상된다.
 
-Netty 기반 WebFlux에서 JPA나 `Thread.sleep()` 같은 블로킹 코드를 EventLoop 스레드에서 직접 실행한다. EventLoop 스레드가 블로킹되면 해당 스레드가 처리하는 **모든 연결이 멈춘다**.
+### 왜 Virtual Thread면 Netty가 필요 없을 수 있는가
+
+Virtual Thread는 I/O 대기 중 OS 스레드를 해제하므로, 수만 개의 동시 연결을 처리할 때도 실제 OS 스레드 수는 소수로 유지된다. Thread-per-Request 모델을 유지하면서 Event Loop와 유사한 자원 효율을 얻는다.
+
+```
+10만 동시 연결 처리 시:
+
+Tomcat (Platform Thread): 10만 OS 스레드 필요 → 불가능
+Netty (Event Loop):       16개 OS 스레드로 처리 → 가능
+Tomcat (Virtual Thread):  10만 Virtual Thread, OS 스레드는 수십~수백 개
+                           → 가능, 코드는 동기식 그대로
+```
+
+단순 I/O 바운드 REST API에서는 Virtual Thread + Tomcat이 Netty/WebFlux와 거의 동등한 성능을 낸다.
+
+### Virtual Thread의 한계
+
+**1. CPU 바운드에서는 이점 없음**
+
+Virtual Thread는 I/O 블로킹 시 OS 스레드를 해제하는 게 핵심이다. CPU를 실제로 사용하는 작업에서는 OS 스레드를 점유해야 한다. CPU 바운드 작업에서는 Platform Thread와 성능 차이가 없다.
+
+**2. Pinning 문제**
+
+`synchronized` 블록이나 특정 네이티브 코드 안에서 블로킹이 발생하면, Virtual Thread가 OS 스레드에 고정(pinned)된다. 해제가 안 된다.
 
 ```java
-// 잘못된 예: EventLoop 스레드에서 블로킹 호출
-public Mono<User> getUser(Long id) {
-    User user = userRepository.findById(id).get(); // 블로킹!
-    return Mono.just(user);
+// 문제: synchronized 안에서 블로킹 → Pinning
+public synchronized void updateWithLock() {
+    jdbcTemplate.update(...); // 블로킹 — OS 스레드에 Pinned
 }
 
-// 올바른 예: boundedElastic 스케줄러로 오프로드
-public Mono<User> getUser(Long id) {
-    return Mono.fromCallable(() -> userRepository.findById(id).get())
-               .subscribeOn(Schedulers.boundedElastic());
+// 해결: ReentrantLock 사용
+private final ReentrantLock lock = new ReentrantLock();
+
+public void updateWithLock() {
+    lock.lock();
+    try {
+        jdbcTemplate.update(...); // 블로킹이어도 Pinning 없음
+    } finally {
+        lock.unlock();
+    }
 }
 ```
 
-### 실수 3: Netty를 단순 REST API에 도입한다
+JVM 옵션 `-Djdk.tracePinnedThreads=full`로 Pinning 발생 위치를 추적할 수 있다.
 
-처리 시간이 짧은 단순 REST API(< 5ms)는 Tomcat과 Netty의 성능 차이가 거의 없다. 오히려 리액티브 코드의 복잡성, 디버깅 어려움, 팀 학습 비용이 더 크다. Netty는 **수만 개의 동시 연결 유지** 또는 **스트리밍**이 필요할 때 도입한다.
+**3. 수만 개 장기 유지 연결에서는 Netty가 여전히 유리**
 
-### 실수 4: Tomcat 스레드 수를 무한정 늘린다
+WebSocket, SSE, IoT처럼 연결을 수만 개 열고 오랫동안 유지하는 시나리오에서는 Netty가 여전히 유리하다. Virtual Thread는 연결 수만큼 Virtual Thread를 생성하므로, 스케줄링 오버헤드가 발생할 수 있다. Netty는 연결 수와 무관하게 EventLoop 스레드 수는 고정이다.
 
-`server.tomcat.threads.max=2000`으로 늘려도 효과가 없다. OS 스레드 하나당 기본 스택 메모리가 512KB ~ 1MB이므로, 2,000 스레드면 약 2GB를 스레드 스택에 사용한다. 컨텍스트 스위칭 비용도 급증한다. 스레드 수보다는 연결 자체를 비동기로 처리하는 것이 근본 해결책이다.
+---
 
-### 실수 5: keep-alive 타임아웃을 너무 길게 설정한다
+## 종합 비교
 
-```yaml
-server:
-  tomcat:
-    keep-alive-timeout: 60000  # 60초 — 너무 길다
-    max-keep-alive-requests: 100
+### 4가지 모델 전체 비교
+
+| 모델 | 동시 접속 한계 | OS 스레드 수 | 코드 복잡도 | I/O 대기 처리 | CPU 바운드 | JPA/JDBC |
+|------|:---:|:---:|:---:|------|:---:|:---:|
+| Tomcat (Platform Thread) | ~1,000 | Worker 수 = 동시 연결 수 | 낮음 | OS 스레드 블로킹 (낭비) | 보통 | 가능 |
+| Netty (Event Loop) | 10만+ | CPU × 2 | 높음 (리액티브) | 논블로킹 이벤트 | 별도 풀 필요 | 불가 (R2DBC 필요) |
+| Tomcat (Virtual Thread) | ~10만 | 수십~수백 | 낮음 | VT 언마운트 | 보통 | 가능 |
+| Kotlin Coroutine | 10만+ | 구성 가능 | 중간 | Suspend 함수 | 별도 Dispatcher 필요 | 불가 (R2DBC 필요) |
+
+### 선택 기준
+
+| 상황 | 권장 선택 | 이유 |
+|------|---------|------|
+| 기존 JPA/Hibernate 코드베이스 | Tomcat + Platform Thread | 리팩토링 불필요 |
+| Java 21+, 신규 I/O 바운드 API | Tomcat + Virtual Thread | 코드 단순 + 높은 성능 |
+| WebSocket, SSE, IoT 서버 | Netty (WebFlux) | 수만 장기 연결 유지 |
+| gRPC 서버 | Netty | 기본 구현이 Netty 기반 |
+| 커스텀 프로토콜 (게임, 금융) | Netty | 프로토콜 커스터마이징 |
+| Kotlin 팀 + 높은 동시성 | Kotlin Coroutine | 언어 레벨 지원 |
+
+---
+
+## 극한 시나리오
+
+### 극한 시나리오 1: "CPU 0%인데 서버가 먹통" — 스레드 고갈
+
+온라인 쇼핑몰에서 타임세일 시작과 동시에 재고 확인 API가 폭주했다. 재고 서버는 CPU 사용률 0%이지만 HTTP 503을 뱉고 있다.
+
+```
+원인 진단:
+1. 재고 서버: Tomcat, Worker 200개
+2. 재고 DB 응답 시간: 평소 20ms → 갑자기 800ms (DB 슬로우 쿼리)
+3. 동시 요청: 분당 5만 건
+
+계산:
+  초당 요청 = 50,000 / 60 ≈ 833 req/s
+  요청당 처리 시간 = 800ms
+  필요 스레드 = 833 × 0.8 = 666개
+  실제 스레드 = 200개 → 466개 큐 대기 → 큐 초과 → 503
 ```
 
-keep-alive 시간이 길면 스레드가 유휴 연결을 잡고 있어 스레드 풀이 고갈된다. 로드밸런서(Nginx/ALB) 타임아웃보다 서버 타임아웃을 짧게 설정해야 한다. 통상 20~30초가 적정값이다.
+해결 순서:
+1. 즉각 조치: DB 슬로우 쿼리 인덱스 추가 (응답 20ms 복구)
+2. 중기 조치: Virtual Thread 활성화 (스레드 고갈 근본 해결)
+3. 장기 조치: 재고 조회에 Redis 캐시 도입 (DB 부하 감소)
+
+### 극한 시나리오 2: "WebFlux 도입했더니 오히려 느려짐" — EventLoop 오염
+
+리액티브 전환을 위해 WebFlux를 도입했다. 그런데 성능이 기존 Tomcat보다 나빠졌다.
+
+```java
+// 범인: EventLoop 스레드에서 슬롯 변환 로직 실행
+@GetMapping("/products")
+public Flux<ProductDto> getProducts() {
+    return productRepository.findAll()
+        .map(p -> {
+            // 무거운 CPU 연산 — EventLoop 스레드에서 실행됨
+            String encodedImage = Base64.encodeToString(
+                ImageUtils.resize(p.getImage(), 200, 200), // 10ms/건
+                Base64.DEFAULT
+            );
+            return new ProductDto(p.getId(), p.getName(), encodedImage);
+        });
+}
+```
+
+EventLoop 스레드에서 CPU 집약 작업을 실행하면 해당 EventLoop가 담당하는 수천 개 연결이 모두 느려진다.
+
+```java
+// 해결: CPU 작업을 boundedElastic으로 오프로드
+@GetMapping("/products")
+public Flux<ProductDto> getProducts() {
+    return productRepository.findAll()
+        .flatMap(p ->
+            Mono.fromCallable(() -> {
+                String encodedImage = Base64.encodeToString(
+                    ImageUtils.resize(p.getImage(), 200, 200),
+                    Base64.DEFAULT
+                );
+                return new ProductDto(p.getId(), p.getName(), encodedImage);
+            }).subscribeOn(Schedulers.boundedElastic()) // 별도 스레드 풀
+        );
+}
+```
+
+### 극한 시나리오 3: "Virtual Thread 도입 후 간헐적 응답 지연" — Pinning 문제
+
+Virtual Thread 활성화 후 간헐적으로 P99 응답시간이 치솟는다.
+
+```
+JVM 진단:
+  -Djdk.tracePinnedThreads=full 활성화
+
+출력:
+  Thread[#123,ForkJoinPool-1-worker-5,5,CarrierThreads]
+      java.base/java.lang.Object.wait(Object.java)
+      com.example.legacy.SynchronizedPool.acquire(SynchronizedPool.java:45)
+          <== PINNED (synchronized)
+```
+
+`SynchronizedPool`의 `acquire()` 메서드가 `synchronized` 블록 안에서 블로킹 I/O를 수행하고 있었다. Virtual Thread가 OS 스레드에 Pinned되어 해제가 안 됐다.
+
+```java
+// 문제: 레거시 synchronized 기반 커넥션 풀
+public synchronized Connection acquire() {
+    while (available.isEmpty()) {
+        wait(); // synchronized 안에서 wait — Pinning 발생
+    }
+    return available.poll();
+}
+
+// 해결: ReentrantLock으로 교체
+private final ReentrantLock lock = new ReentrantLock();
+private final Condition notEmpty = lock.newCondition();
+
+public Connection acquire() throws InterruptedException {
+    lock.lock();
+    try {
+        while (available.isEmpty()) {
+            notEmpty.await(); // ReentrantLock — Pinning 없음
+        }
+        return available.poll();
+    } finally {
+        lock.unlock();
+    }
+}
+```
 
 ---
 
 ## 면접 포인트
 
-### Q1: Tomcat의 이벤트 기반 NIO와 Netty의 차이는?
+### Q1. Tomcat NIO도 비블로킹인데, Netty와 뭐가 다른가?
 
-Tomcat NIO도 비블로킹 I/O를 사용하지만, **요청당 하나의 스레드를 할당하는 모델**은 유지한다. 스레드가 I/O를 기다리는 동안에는 다른 작업을 하지 않고 대기한다. Netty는 소수의 EventLoop 스레드가 수천 개의 연결을 **이벤트 기반**으로 처리한다. I/O 대기 중에는 다른 연결의 이벤트를 처리하므로 스레드 효율이 훨씬 높다.
+Tomcat은 NIO를 사용하지만 **요청당 Worker 스레드 하나를 할당하는 모델을 유지한다**. Poller(NIO Selector)가 읽기 가능한 소켓을 감지해 Worker에 넘기는 것뿐이다. Worker 스레드가 실제로 DB 쿼리나 외부 API를 호출하면 그 스레드는 블로킹 상태로 대기한다.
 
-### Q2: C10K 문제란 무엇이고, 어떻게 해결하는가?
+Netty는 EventLoop 스레드 자체가 I/O 완료 이벤트를 기다리다가, 이벤트 발생 시 콜백을 실행한다. I/O 대기 중에 EventLoop는 다른 Channel의 이벤트를 처리한다. 스레드가 블로킹되지 않는다.
 
-C10K(Concurrent 10,000 connections) 문제는 10,000개 동시 연결을 처리할 때 스레드 기반 서버가 한계에 부딪히는 현상이다. 스레드당 1MB 스택 메모리라면 10,000 스레드는 10GB가 필요하다. 해결책은 세 가지다: (1) Netty같은 이벤트 루프 모델, (2) Java 21 Virtual Thread, (3) WebFlux + R2DBC 리액티브 스택.
+한 줄 요약: Tomcat NIO는 "연결 수락을 비블로킹으로 하고, 처리는 블로킹으로 한다." Netty는 "연결 수락과 처리 모두 이벤트 기반으로 논블로킹으로 한다."
 
-### Q3: Virtual Thread가 Netty를 대체할 수 있는가?
+### Q2. C10K 문제란 무엇이고, 각 방식이 어떻게 해결하는가?
 
-단순 I/O 바운드 API에서는 Virtual Thread + Tomcat이 Netty/WebFlux와 비슷한 성능을 낸다. 하지만 **수만 개 연결을 장시간 유지**하는 WebSocket, SSE, IoT 서버에서는 Netty가 여전히 유리하다. Virtual Thread는 연결 하나에 스레드 하나를 생성하므로, 연결 수만큼 Virtual Thread가 생기고 스케줄링 오버헤드가 발생할 수 있다. 반면 Netty는 연결 수와 무관하게 EventLoop 스레드 수는 고정이다.
+C10K(Concurrent 10,000 connections) 문제는 동시 연결 1만 개를 처리할 때 Thread-per-Request 서버가 한계에 부딪히는 현상이다. 1999년 Dan Kegel이 제시한 문제다.
+
+- **Tomcat (Platform Thread)**: 스레드 1만 개 = 10GB RAM 스택 + 컨텍스트 스위칭 폭발 → C10K 불가
+- **Netty (Event Loop)**: 연결 수만 개를 파일 디스크립터로 관리, OS 스레드는 CPU×2개 → C10K 이상 처리 가능
+- **Tomcat (Virtual Thread)**: Virtual Thread 1만 개, OS 스레드는 수백 개 → C10K 처리 가능
+
+### Q3. Virtual Thread는 Netty를 완전히 대체할 수 있는가?
+
+단순 I/O 바운드 REST API에서는 대체 가능하다. 하지만 다음 경우에는 Netty가 여전히 유리하다.
+
+1. **수만 개 장기 연결 유지** (WebSocket, SSE, 게임 서버): Virtual Thread는 연결당 하나 생성되므로 스케줄링 오버헤드가 있다. Netty EventLoop는 연결 수와 무관하게 스레드 수가 고정이다.
+2. **커스텀 프로토콜**: Netty의 ChannelPipeline은 TCP 위에서 임의 프로토콜을 구현하는 데 최적화되어 있다.
+3. **극한의 처리량이 필요한 경우**: EventLoop 모델이 Virtual Thread보다 컨텍스트 스위칭 오버헤드가 적다.
+
+### Q4. WebFlux에서 JDBC를 써야 한다면 어떻게 해야 하는가?
+
+`Schedulers.boundedElastic()`을 사용해 블로킹 작업을 별도 스레드 풀로 오프로드한다.
+
+```java
+// R2DBC 마이그레이션이 불가능한 레거시 상황
+public Mono<User> findByIdLegacy(Long id) {
+    return Mono.fromCallable(() ->
+        jdbcTemplate.queryForObject(
+            "SELECT * FROM users WHERE id = ?",
+            userRowMapper, id
+        )
+    ).subscribeOn(Schedulers.boundedElastic()); // I/O 블로킹 전용 스레드 풀
+}
+```
+
+단, 이 방식은 사실상 Tomcat의 Thread-per-Request와 동일하다. 진정한 논블로킹 이점을 얻으려면 R2DBC로 전환해야 한다.
+
+### Q5. 같은 서버 스펙에서 Tomcat vs Netty, 어떤 경우에 Tomcat이 더 나은가?
+
+**CPU 집약적 연산이 많은 서비스**에서는 Tomcat이 WebFlux보다 관리가 쉽다. CPU 바운드 작업은 블로킹/논블로킹 구분이 의미 없으므로, 리액티브 코드의 복잡성만 늘어난다.
+
+**팀의 리액티브 경험이 없을 때**: 잘못 작성된 WebFlux 코드는 Tomcat보다 성능이 나쁘다. EventLoop 오염, 잘못된 Scheduler 선택, flatMap 남용 등으로 오히려 성능이 악화된다.
+
+**응답 시간 목표가 매우 짧은 CRUD** (< 5ms): 이 구간에서는 두 서버의 처리량 차이가 거의 없다. 단순성과 디버깅 편의성에서 Tomcat이 유리하다.
+
+---
+
+## 실무 실수 Top 5
+
+### 실수 1: I/O 바운드 서비스에 기본 Tomcat 스레드 설정 유지
+
+외부 API를 다수 호출하는 서비스에서 `maxThreads=200` 기본값을 그대로 사용한다. 외부 API 평균 응답이 200ms라면 이론적 최대 TPS는 1,000이다. 트래픽이 몰리면 스레드 고갈이 발생한다.
+
+```yaml
+# Java 21 + Spring Boot 3.2 — 한 줄로 해결
+spring:
+  threads:
+    virtual:
+      enabled: true
+```
+
+### 실수 2: WebFlux 환경에서 블로킹 코드 직접 호출
+
+```java
+// 잘못된 예: EventLoop 스레드에서 블로킹 JPA 호출
+@GetMapping("/orders/{id}")
+public Mono<OrderDto> getOrder(@PathVariable Long id) {
+    Order order = orderRepository.findById(id).orElseThrow(); // 블로킹!
+    return Mono.just(OrderDto.of(order));
+    // → EventLoop 스레드 블로킹 → 수천 개 연결 정지
+}
+
+// 올바른 예: boundedElastic으로 오프로드
+@GetMapping("/orders/{id}")
+public Mono<OrderDto> getOrder(@PathVariable Long id) {
+    return Mono.fromCallable(() -> orderRepository.findById(id).orElseThrow())
+               .subscribeOn(Schedulers.boundedElastic())
+               .map(OrderDto::of);
+}
+```
+
+### 실수 3: 단순 REST API에 WebFlux 도입
+
+응답 시간 5ms 미만의 단순 CRUD API에 WebFlux를 도입한다. 성능 이점은 없고, 코드 복잡도, 디버깅 난이도, 팀 학습 비용만 증가한다. WebFlux는 **수만 동시 연결 유지** 또는 **스트리밍**이 필요할 때 도입한다.
+
+### 실수 4: Tomcat 스레드 수를 무한정 증가
+
+```yaml
+# 나쁜 예 — 스레드를 늘려서 문제를 임시방편 처리
+server:
+  tomcat:
+    threads:
+      max: 2000
+# → 스레드 2,000개 × 1MB = 2GB RAM 스택 소모
+# → 컨텍스트 스위칭 비용 폭발
+# → 근본 원인(느린 DB 쿼리, 느린 외부 API)은 해결 안 됨
+```
+
+올바른 접근: 스레드를 늘리기 전에 병목 원인을 찾는다. DB 슬로우 쿼리라면 인덱스 최적화가 우선이다.
+
+### 실수 5: Virtual Thread 활성화 후 Pinning 점검 생략
+
+Virtual Thread를 활성화하면 기존 `synchronized` 기반 코드에서 Pinning이 발생할 수 있다. 특히 레거시 라이브러리의 `synchronized` 내부에서 I/O가 발생하는 경우 OS 스레드가 해제되지 않는다.
+
+```bash
+# Pinning 발생 여부 추적
+java -Djdk.tracePinnedThreads=full -jar app.jar
+
+# 출력 예시
+Thread[#125,ForkJoinPool-1-worker-3,5,CarrierThreads]
+    com.zaxxer.hikari.pool.ProxyConnection.close(ProxyConnection.java:...)
+        <== PINNED (synchronized)
+```
+
+Pinning이 발견되면 해당 `synchronized`를 `ReentrantLock`으로 교체하거나, 해당 라이브러리의 최신 버전(Virtual Thread 대응 버전)으로 업그레이드한다.
+
+---
+
+## Tomcat 스레드 풀 구조와 Netty EventLoop 아키텍처
+
+### Tomcat 내부 구조
+
+```mermaid
+graph LR
+    CLT["클라이언트들"] -->|"TCP"| ACC
+    subgraph Tomcat["Tomcat 서버"]
+        ACC["Acceptor\n1~2개 스레드\n연결 수락 전담"] -->|"소켓 등록"| POL["Poller\n1~2개 스레드\nNIO Selector"]
+        POL -->|"읽기 이벤트 감지\n→ 작업 제출"| EXC["ThreadPoolExecutor\nWorker 스레드\n기본 max 200개"]
+        EXC --> SRV["DispatcherServlet\n→ @Controller\n→ Service → Repository"]
+        SRV -->|"블로킹 I/O"| DB["Database\nExternal API"]
+    end
+    DB -.->|"1초 응답\n= 200 req/s 한계"| SRV
+```
+
+### Netty EventLoop 구조
+
+```mermaid
+graph LR
+    CLT["클라이언트들"] -->|"TCP"| SRV
+    subgraph Netty["Netty 서버"]
+        SRV["ServerSocketChannel"] --> BG["Boss EventLoop\n1~2개\n연결 수락만 담당"]
+        BG -->|"Channel 등록"| WG["Worker EventLoop Group\nCPU×2개 스레드"]
+        WG --> EL1["EventLoop 1\nCh A, B, C, D ..."]
+        WG --> EL2["EventLoop 2\nCh X, Y, Z, W ..."]
+        EL1 --> SEL1["epoll/Selector\n이벤트 감지"]
+        EL2 --> SEL2["epoll/Selector\n이벤트 감지"]
+        SEL1 --> PP["ChannelPipeline\n→ Handler 체인"]
+        SEL2 --> PP
+    end
+    PP -->|"논블로킹\nCallback"| EXT["Database\nExternal API"]
+    EXT -.->|"응답 이벤트\n→ Handler 실행"| PP
+```
+
+두 구조의 핵심 차이는 Database/External API와의 연결 방식이다. Tomcat은 스레드가 직접 기다리고, Netty는 응답이 오면 이벤트가 발생해 Handler가 실행된다.
+
+---
+
+## 마치며
+
+Tomcat과 Netty는 각각 다른 문제를 해결하기 위해 설계됐다. Tomcat Thread-per-Request는 개발자가 직관적으로 코드를 작성할 수 있게 하고, Netty Event Loop는 극한의 동시 연결 처리를 가능하게 한다.
+
+Java 21 Virtual Thread의 등장으로 많은 경우 WebFlux 대신 Virtual Thread + Tomcat이 현실적인 선택이 됐다. 기존 코드를 바꾸지 않고, 리액티브 코드의 복잡성 없이, I/O 바운드 성능을 크게 향상시킬 수 있다.
+
+기술 선택의 기준은 단순하다. **팀이 유지보수할 수 있는 코드**, **실제 트래픽 패턴에 맞는 모델**, **장애 발생 시 디버깅 가능한 구조**. 최신 기술보다 이 세 가지 기준이 더 중요하다.
