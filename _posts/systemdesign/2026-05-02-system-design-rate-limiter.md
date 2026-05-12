@@ -2791,6 +2791,291 @@ HONEYPOT_PRODUCTS = {
 
 ---
 
+## 총동원 방어 아키텍처 — 모든 무기를 한 번에 배치한다
+
+지금까지 개별 공격에 대한 개별 방어를 다뤘습니다. 실전에서는 공격자가 **여러 기법을 동시에 조합**합니다. 레지덴셜 프록시 + Headless Chrome + AI CAPTCHA 솔버 + 탈취 계정을 한꺼번에 사용합니다.
+
+이 섹션에서는 모든 방어를 **하나의 파이프라인**으로 통합합니다.
+
+### 7계층 방어 파이프라인
+
+요청이 서버에 도달하기까지 7개의 관문을 통과해야 합니다. 각 관문에서 탈락하면 다음 관문으로 가지 않습니다. 뒤로 갈수록 비용이 비싸므로 **앞에서 최대한 걸러야** 합니다.
+
+```mermaid
+graph LR
+    R[요청] --> L1[L1 CDN/DNS]
+    L1 --> L2[L2 WAF]
+    L2 --> L3[L3 Gateway]
+    L3 --> L4[L4 PoW]
+    L4 --> L5[L5 행동분석]
+    L5 --> L6[L6 비즈로직]
+    L6 --> API[API 서버]
+```
+
+| 계층 | 도구 | 차단 대상 | 비용 | 차단율 |
+|------|------|----------|------|:------:|
+| **L1: CDN/DNS** | Cloudflare, AWS Shield | L3/L4 DDoS, 알려진 봇 IP, 국가 차단 | $20~200/월 | 60% |
+| **L2: WAF** | AWS WAF, Cloudflare WAF Rules | SQL Injection, XSS, IP 블랙리스트, 요청 패턴 | $5~100/월 | 15% |
+| **L3: API Gateway** | Kong, Nginx | IP/API키 Rate Limit, 인증 전 차단, 헤더 검증 | 인프라 포함 | 10% |
+| **L4: Proof of Work** | 자체 구현 | AI CAPTCHA 솔버, 대량 자동화 봇 | 개발 비용 | 8% |
+| **L5: 행동 분석** | Redis + ML | 프록시 로테이션, 핑거프린트 우회, 계정 팜 | $100~500/월 | 5% |
+| **L6: 비즈니스 로직** | 앱 서버 | 순차 접근, 일일 누적 초과, 이상 세션 | 개발 비용 | 1.5% |
+| **L7: 사후 대응** | 워터마킹, 법적 대응 | 사람 고용, 내부자 유출 | 법무 비용 | 0.5% |
+
+> **핵심**: L1~L3에서 85%를 걸러야 L4~L7이 감당할 수 있습니다. L1 없이 L5부터 시작하면 ML 모델에 초당 10만 건이 밀려와 모델 자체가 병목이 됩니다.
+
+### 통합 요청 처리 파이프라인 — Java 구현
+
+```java
+@Component
+@Order(1)
+public class UnifiedDefenseFilter implements Filter {
+
+    private final CloudflareClient cloudflare;      // L1
+    private final WafClient waf;                     // L2
+    private final MultiWindowRateLimiter rateLimiter; // L3
+    private final AdaptiveProofOfWork pow;           // L4
+    private final BehaviorAnalyzer behavior;         // L5
+    private final BusinessRuleChecker bizRule;        // L6
+    private final ResponseWatermarkFilter watermark;  // L7
+
+    @Override
+    public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+            throws IOException, ServletException {
+
+        HttpServletRequest request = (HttpServletRequest) req;
+        HttpServletResponse response = (HttpServletResponse) res;
+        RequestContext ctx = RequestContext.from(request);
+
+        // ═══════════════════════════════════════════════
+        // L3: Rate Limit (L1/L2는 CDN/WAF에서 이미 처리)
+        // ═══════════════════════════════════════════════
+        RateLimitResult rlResult = rateLimiter.check(ctx.getUserId(), ctx.getIp());
+        if (rlResult.isBlocked()) {
+            response.setStatus(429);
+            response.setHeader("Retry-After", String.valueOf(rlResult.getRetryAfter()));
+            return;
+        }
+
+        // ═══════════════════════════════════════════════
+        // L5: 행동 분석 → 위협 점수 산출
+        // ═══════════════════════════════════════════════
+        double threatScore = behavior.analyze(ctx);
+        /*
+         * 점수 구성 (총 200점 만점):
+         *  - 상세 페이지 비율 > 80%     → +30
+         *  - 요청 간격 엔트로피 < 1.0    → +25
+         *  - 세션 > 2시간               → +20
+         *  - 일일 페이지뷰 > 1,000      → +25
+         *  - 핑거프린트 IP 변경 > 5회    → +20
+         *  - 새벽 연속 활동              → +15
+         *  - Referer 깊이 < 1           → +15
+         *  - WebGL SwiftShader          → +30
+         *  - 마우스 엔트로피 < 0.1       → +20
+         */
+
+        // ═══════════════════════════════════════════════
+        // L4: 위협 점수에 따른 Proof of Work 난이도 결정
+        // ═══════════════════════════════════════════════
+        if (threatScore >= 30) {
+            int difficulty = pow.getDifficulty(threatScore);
+            // 30~49: 난이도 4 (100ms, 체감 없음)
+            // 50~69: 난이도 6 (1.6초)
+            // 70~89: 난이도 8 (25초, 봇 비경제적)
+            // 90+:   난이도 10 (6분+, 사실상 차단)
+
+            String powToken = request.getHeader("X-PoW-Token");
+            if (powToken == null || !pow.verify(ctx.getSessionId(), powToken, difficulty)) {
+                // PoW 챌린지 발급
+                response.setStatus(202);
+                response.setHeader("X-PoW-Challenge", pow.generateChallenge(ctx.getSessionId()));
+                response.setHeader("X-PoW-Difficulty", String.valueOf(difficulty));
+                return;
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        // L6: 비즈니스 룰 체크
+        // ═══════════════════════════════════════════════
+        BizRuleResult bizResult = bizRule.check(ctx);
+        if (bizResult.isViolation()) {
+            // 순차 ID 접근, 일일 누적 초과, 이상 세션 등
+            if (threatScore >= 70) {
+                // 높은 위협 + 비즈 룰 위반 = 가짜 데이터 반환
+                response.setStatus(200);
+                response.getWriter().write(fakeDataGenerator.generate(request));
+                return;
+            }
+            response.setStatus(429);
+            return;
+        }
+
+        // ═══════════════════════════════════════════════
+        // L7: 통과 — 워터마크 삽입 후 응답
+        // ═══════════════════════════════════════════════
+        if (threatScore >= 20) {
+            // 약간이라도 의심되면 워터마크 삽입
+            watermark.doFilter(req, res, chain);
+        } else {
+            chain.doFilter(req, res);
+        }
+
+        // 요청 컨텍스트를 비동기로 ML 파이프라인에 전송 (다음 요청 분석에 활용)
+        behavior.recordAsync(ctx, threatScore);
+    }
+}
+```
+
+### 위협 점수별 대응 매트릭스
+
+단일 임계값으로 "봇/사람" 이분법 판정하면 오탐이 발생합니다. **점진적 대응**이 핵심입니다.
+
+| 위협 점수 | 판정 | 대응 | 사용자 체감 |
+|:---:|------|------|-----------|
+| 0~19 | 정상 | 제한 없음 | 없음 |
+| 20~29 | 약한 의심 | 워터마크 삽입 | 없음 (모름) |
+| 30~49 | 의심 | PoW 난이도 4 (100ms) | 거의 없음 |
+| 50~69 | 강한 의심 | PoW 난이도 6 (1.6초) + 일일 한도 절반 | 약간 느려짐 |
+| 70~89 | 봇 추정 | PoW 난이도 8 (25초) + CAPTCHA | 불편 — 정상 사용자면 풀 수 있음 |
+| 90~100 | 봇 확정 | 200 OK + 가짜 데이터 반환 | 없음 (봇은 차단 사실을 모름) |
+| 100+ | 확정 봇 (webdriver=true 등) | 즉시 차단 + IP 블랙리스트 | 403 |
+
+> **왜 90점에서 429가 아니라 200 + 가짜 데이터인가?** 429를 주면 공격자가 "차단당했다"는 사실을 즉시 알고 전략을 바꿉니다. 200 + 변조된 데이터를 주면 봇은 "성공했다"고 판단하고 오염된 데이터를 계속 수집합니다. 나중에 데이터 품질 검증 단계에서야 발각되므로 공격자의 시간과 비용을 낭비시킵니다.
+
+### 극한 시나리오: 모든 방어를 동시에 뚫으려는 공격
+
+**상황**: 국가급 공격자(또는 대형 경쟁사)가 월 $50,000 예산으로 다음을 동시에 투입합니다:
+
+```
+공격 인프라:
+- 레지덴셜 프록시: 500만 IP ($10,000/월)
+- Headless Chrome 팜: 서버 100대 ($5,000/월)
+- AI CAPTCHA 솔버: GPT-4V API ($3,000/월)
+- 탈취 계정 5만 개 ($2,000)
+- CAPTCHA 풀이 서비스 백업: 2Captcha ($1,000/월)
+- 크라우드 워커 100명: Mechanical Turk ($5,000/월)
+
+목표: 상품 카탈로그 전체 (500만 상품) 일일 스크래핑
+```
+
+**7계층 방어가 어떻게 막는가:**
+
+```
+L1 (CDN): 알려진 데이터센터 IP 차단
+   → 레지덴셜 프록시는 통과. 효과: 10% 차단
+
+L2 (WAF): 요청 패턴 필터링 (동일 경로 반복, 비정상 헤더)
+   → Headless Chrome이 정상 헤더를 보냄. 효과: 5% 차단
+
+L3 (Rate Limit): 4단계 누적 한도 (분/시간/일/주)
+   → 5만 계정 × 일일 100건 = 500만건/일. 계정당 한도 이하.
+   → 효과: 한도를 낮추면 정상 사용자도 영향. 10% 차단
+
+L4 (PoW): 위협 점수 30 이상이면 해시 퍼즐 부과
+   → 핑거프린트 IP 변경 탐지 → 점수 50~70 → 난이도 6~8
+   → Headless Chrome이 CPU 1.6~25초 소모
+   → 서버 100대 × 초당 처리 가능: 4~60건 → 일일 최대 34만~518만건
+   → 효과: 난이도 8이면 일일 34만건으로 제한. 68% 차단
+
+L5 (행동 분석): 순차 접근 + 상세 비율 + 간격 균일성
+   → 남은 34만건 중 패턴 분석으로 봇 식별
+   → 효과: 추가 40% 차단 → 일일 20만건까지 감소
+
+L6 (비즈니스 룰): 일일 누적 + 주간 누적
+   → 20만건 / 5만 계정 = 계정당 4건/일 → 주간 28건
+   → 주간 한도 50건이면 통과. 한도를 20건으로 줄이면?
+   → 정상 사용자 영향. 효과: 추가 30% 차단 → 일일 14만건
+
+L7 (워터마크 + 가짜 데이터):
+   → 14만건 중 위협 점수 90+ (확정 봇)에는 가짜 데이터 반환
+   → 나머지에는 워터마크 삽입
+   → 공격자가 가져간 데이터의 30%가 오염
+   → 워터마크로 유출 경로 특정 → 법적 대응 가능
+```
+
+**결과:**
+
+| 지표 | 방어 없음 | 7계층 방어 |
+|------|:---:|:---:|
+| 일일 스크래핑 성공 | 500만 건 | ~14만 건 (97% 차단) |
+| 데이터 품질 | 100% 정확 | 70% 정확 (30% 오염) |
+| 공격 비용 | $50,000/월 | $50,000/월 (동일) |
+| 데이터 수집 기간 | 1일 | 36일 |
+| 법적 증거 | 없음 | 워터마크 + 허니팟 상품 |
+
+> **공격자의 경제 계산**: 월 $50,000을 써서 36일에 걸쳐 500만 건을 가져오는데, 그 중 30%가 가짜 데이터. 정제 비용까지 합치면 건당 $0.015. 합법적 데이터 API를 사는 게 더 싼 시점이 옵니다. **이것이 방어의 승리 조건입니다.**
+
+### 방어 총동원 운영 대시보드 — 실시간 모니터링
+
+```python
+# Prometheus + Grafana 대시보드 핵심 지표
+DEFENSE_METRICS = {
+    # L1~L3: 인프라 계층
+    "l1_cdn_blocked_qps": "CDN에서 차단된 초당 요청 수",
+    "l2_waf_blocked_qps": "WAF에서 차단된 초당 요청 수",
+    "l3_ratelimit_429_qps": "Rate Limit 429 응답 초당 수",
+
+    # L4: PoW
+    "l4_pow_challenge_issued": "PoW 챌린지 발급 수/분",
+    "l4_pow_avg_difficulty": "평균 PoW 난이도 (높을수록 봇 많음)",
+    "l4_pow_fail_ratio": "PoW 실패율 (봇은 높은 난이도에서 포기)",
+
+    # L5: 행동 분석
+    "l5_threat_score_p50": "위협 점수 중앙값 (정상: <10, 공격 중: >40)",
+    "l5_threat_score_p99": "위협 점수 P99 (100에 가까울수록 봇 다수)",
+    "l5_fingerprint_proxy_detected": "프록시 사용 탐지 수/분",
+
+    # L6: 비즈니스 룰
+    "l6_sequential_access_detected": "순차 접근 탐지 수/분",
+    "l6_daily_limit_exceeded": "일일 한도 초과 사용자 수",
+
+    # L7: 사후 대응
+    "l7_fake_data_served": "가짜 데이터 반환 수/분",
+    "l7_watermark_injected": "워터마크 삽입 수/분",
+
+    # 전체
+    "overall_bot_ratio": "전체 트래픽 중 봇 비율 추정",
+    "false_positive_rate": "오탐율 (정상 사용자 차단)",
+}
+
+# 알람 규칙
+ALERT_RULES = [
+    # 공격 시작 감지
+    {"condition": "l5_threat_score_p50 > 30 for 5m",
+     "severity": "P1", "action": "봇 공격 시작 — PoW 기본 난이도 4로 상향"},
+
+    # 대규모 공격
+    {"condition": "l4_pow_challenge_issued > 10000/min",
+     "severity": "P0", "action": "대규모 공격 — PoW 난이도 +2 자동 상향, 온콜 호출"},
+
+    # 오탐 위험
+    {"condition": "false_positive_rate > 0.5%",
+     "severity": "P1", "action": "정상 사용자 차단 위험 — 위협 점수 임계값 10% 완화"},
+
+    # 방어 무력화 감지
+    {"condition": "l4_pow_fail_ratio < 5% AND l5_threat_score_p99 > 80",
+     "severity": "P0", "action": "봇이 PoW를 뚫고 있음 — 난이도 +3 긴급 상향"},
+
+    # 가짜 데이터 과다
+    {"condition": "l7_fake_data_served > 30% of total",
+     "severity": "P2", "action": "정상 트래픽도 영향받을 수 있음 — 위협 점수 재검증"},
+]
+```
+
+### 방어 비용 대비 효과 — Phase별 투자 가이드
+
+| Phase | MAU | 월 방어 비용 | 방어 수준 | 뚫리는 공격 |
+|-------|-----|:---:|------|-----------|
+| 1 | 1만 | $70 | L1+L3 (Cloudflare 무료 + Nginx) | Headless Chrome, 프록시 |
+| 2 | 10만 | $350 | +L2 (WAF) + Redis Rate Limit | 레지덴셜 프록시, AI 솔버 |
+| 3 | 100만 | $1,500 | +L4 (PoW) + L5 (행동 분석) | 계정 팜, 사람 고용 |
+| 4 | 1,000만 | $8,000 | +L6 (ML) + L7 (워터마크) | 국가급 공격만 가능 |
+| 5 | 1억 | $30,000+ | 전 계층 + 법무팀 + 전담 보안팀 | 경제적으로 비효율적인 공격만 |
+
+> **Phase별 판단 기준**: "현재 봇으로 인한 월 손실 > 다음 Phase 방어 비용"이면 투자합니다. 봇이 월 $1,000의 서버 비용을 유발하는데 Phase 3 비용이 $1,500이면? 아직은 참습니다. 봇 손실이 $2,000을 넘으면 Phase 3으로 전환합니다.
+
+---
+
 ## 보안 고려사항
 
 > **비유**: 놀이공원 회전문은 한 명씩만 통과시킨다. 그런데 100명이 다른 회전문으로 동시에 들어오면? 분산 봇넷은 정확히 이 방식으로 Rate Limiter를 우회한다.
