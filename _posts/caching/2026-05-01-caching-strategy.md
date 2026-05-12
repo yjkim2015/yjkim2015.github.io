@@ -365,6 +365,176 @@ Duration ttl = Duration.ofMinutes(10).plusSeconds(new Random().nextInt(60));
 redisTemplate.opsForValue().set(key, value, ttl);
 ```
 
+### 해결책 3: 논리적 만료 (Logical Expiration) — TTL을 두지 않고 앱이 판단
+
+Redis TTL을 설정하지 않습니다. 대신 캐시 값 안에 `expireAt` 필드를 넣고, 조회 시 앱이 만료 여부를 판단합니다. 만료됐으면 **stale 데이터를 즉시 반환**하면서 백그라운드에서 갱신합니다.
+
+```java
+@Value
+public class CacheEntry<T> {
+    T data;
+    long expireAt;  // 논리적 만료 시각 (epoch ms)
+
+    public boolean isLogicallyExpired() {
+        return System.currentTimeMillis() > expireAt;
+    }
+}
+
+public Product getProduct(Long productId) {
+    String key = "product:" + productId;
+    CacheEntry<Product> entry = redis.opsForValue().get(key);
+
+    if (entry == null) {
+        // 진짜 캐시 미스 → 동기 로딩 (뮤텍스 락 병행)
+        return loadAndCache(productId);
+    }
+
+    if (entry.isLogicallyExpired()) {
+        // 논리적으로 만료됨 → stale 데이터 즉시 반환 + 비동기 갱신
+        refreshAsync(productId);
+        return entry.getData();  // 구 데이터라도 즉시 응답
+    }
+
+    return entry.getData();
+}
+
+@Async
+public void refreshAsync(Long productId) {
+    String lockKey = "refresh-lock:product:" + productId;
+    Boolean acquired = redis.opsForValue().setIfAbsent(lockKey, "1", Duration.ofSeconds(10));
+    if (Boolean.TRUE.equals(acquired)) {
+        try {
+            Product fresh = productRepository.findById(productId).orElseThrow();
+            CacheEntry<Product> newEntry = new CacheEntry<>(fresh,
+                System.currentTimeMillis() + Duration.ofMinutes(10).toMillis());
+            redis.opsForValue().set("product:" + productId, newEntry);
+            // Redis TTL은 설정하지 않거나 매우 길게 (24시간)
+        } finally {
+            redis.delete(lockKey);
+        }
+    }
+    // 락 획득 실패 = 다른 스레드가 이미 갱신 중 → 아무것도 안 함
+}
+```
+
+> **왜 이게 강력한가?** Redis TTL이 만료되는 순간이 없습니다. 캐시 키가 항상 존재하므로 1,000개 요청이 동시에 와도 전부 stale 데이터를 받고, 딱 1개만 DB를 조회합니다. **스탬피드가 원천적으로 불가능**합니다.
+
+| 방식 | 스탬피드 방지 | 응답 지연 | 데이터 신선도 |
+|------|:---:|:---:|:---:|
+| 뮤텍스 락 | ✅ | 락 대기 50ms+ | 항상 최신 |
+| TTL 지터 | △ (확률 감소) | 없음 | 최신 |
+| **논리적 만료** | ✅✅ (원천 차단) | 없음 | 최대 갱신 주기만큼 stale |
+
+### 해결책 4: Refresh-Ahead — 만료 전에 미리 갱신
+
+TTL의 80% 시점에 도달하면 백그라운드에서 미리 캐시를 갱신합니다. 만료 시점에 이미 새 데이터가 들어있으므로 스탬피드가 발생하지 않습니다.
+
+```java
+public Product getProduct(Long productId) {
+    String key = "product:" + productId;
+    Product cached = redis.opsForValue().get(key);
+    if (cached == null) return loadAndCache(productId);
+
+    Long ttl = redis.getExpire(key, TimeUnit.SECONDS);
+    long totalTtl = 600; // 10분
+    double remainRatio = (double) ttl / totalTtl;
+
+    // TTL이 20% 이하로 남으면 → 백그라운드 갱신
+    if (remainRatio <= 0.2) {
+        refreshAsync(productId);
+    }
+
+    return cached;  // 항상 즉시 반환
+}
+```
+
+> **장점**: 사용자는 항상 캐시 데이터를 즉시 받고, DB 조회는 백그라운드에서 1건만 수행됩니다.
+> **단점**: 접근 빈도가 낮은 키는 갱신 트리거가 안 되어 만료 후 스탬피드 발생 가능. Hot key에만 효과적입니다.
+
+### 해결책 5: 확률적 조기 갱신 (Probabilistic Early Recomputation)
+
+XFetch 알고리즘이라고도 합니다. TTL이 줄어들수록 **확률적으로** 갱신을 시도합니다. 여러 서버가 동시에 갱신하는 것을 수학적으로 방지합니다.
+
+```python
+import math, random, time
+
+def xfetch(key, ttl_seconds, beta=1.0):
+    """
+    beta: 조기 갱신 강도 (높을수록 일찍 갱신 시도)
+    논문: "Optimal Probabilistic Cache Stampede Prevention" (2015)
+    """
+    cached = redis.get(key)
+    if cached is None:
+        return recompute_and_cache(key, ttl_seconds)
+
+    entry = deserialize(cached)
+    remaining_ttl = redis.ttl(key)
+    recompute_time = entry['compute_time']  # 마지막 DB 조회에 걸린 시간
+
+    # 핵심 공식: TTL이 줄수록, 계산 시간이 길수록 조기 갱신 확률 증가
+    # remaining_ttl - (recompute_time * beta * log(random()))
+    threshold = remaining_ttl - (recompute_time * beta * math.log(random.random()))
+
+    if threshold <= 0:
+        # 확률에 당첨 → 이 서버가 갱신
+        return recompute_and_cache(key, ttl_seconds)
+
+    return entry['data']
+```
+
+> **왜 이게 수학적으로 우아한가?**
+> - TTL이 많이 남았을 때: `remaining_ttl`이 크므로 `threshold > 0` → 갱신 안 함
+> - TTL이 거의 없을 때: `remaining_ttl`이 작으므로 `threshold ≤ 0` 확률 증가
+> - DB 조회가 느린 키: `recompute_time`이 크므로 더 일찍 갱신 시도
+> - 여러 서버: `log(random())`이 서버마다 다르므로 1대만 갱신 당첨
+
+### 해결책 6: 이중 캐시 (Two-Layer Stale Cache) — 절대 비어있지 않는 캐시
+
+Primary 캐시(TTL 10분) + Backup 캐시(TTL 24시간)를 동시에 유지합니다. Primary가 만료되면 Backup에서 즉시 반환하면서 비동기 갱신합니다.
+
+```java
+public Product getProduct(Long productId) {
+    String primaryKey = "product:" + productId;
+    String backupKey = "product:backup:" + productId;
+
+    // Primary 조회
+    Product primary = redis.opsForValue().get(primaryKey);
+    if (primary != null) return primary;
+
+    // Primary Miss → Backup에서 즉시 반환 (stale but fast)
+    Product backup = redis.opsForValue().get(backupKey);
+    if (backup != null) {
+        refreshAsync(productId);  // 비동기 갱신
+        return backup;  // 구 데이터라도 즉시 응답
+    }
+
+    // 둘 다 Miss → 동기 로딩
+    return loadAndCacheBoth(productId);
+}
+
+private Product loadAndCacheBoth(Long productId) {
+    Product product = productRepository.findById(productId).orElseThrow();
+    redis.opsForValue().set("product:" + productId, product, Duration.ofMinutes(10));
+    redis.opsForValue().set("product:backup:" + productId, product, Duration.ofHours(24));
+    return product;
+}
+```
+
+> **메모리 2배 사용하지만 스탬피드를 완벽 차단합니다.** 인기 상품 페이지, 메인 페이지 배너 같은 Hot key에 적합합니다.
+
+### 스탬피드 방어 전략 종합 비교
+
+| 전략 | 스탬피드 방지 | 구현 난이도 | 응답 지연 | 데이터 신선도 | 메모리 | 적합한 상황 |
+|------|:---:|:---:|:---:|:---:|:---:|-----------|
+| **뮤텍스 락** | ✅ | 쉬움 | 락 대기 | 최신 | 1x | 범용 |
+| **TTL 지터** | △ | 매우 쉬움 | 없음 | 최신 | 1x | 다수 키 동시 만료 방지 |
+| **논리적 만료** | ✅✅ | 중간 | 없음 | stale 가능 | 1x | Hot key 보호 |
+| **Refresh-Ahead** | ✅ | 중간 | 없음 | 거의 최신 | 1x | 접근 빈도 높은 키 |
+| **XFetch (확률적)** | ✅✅ | 어려움 | 없음 | 거의 최신 | 1x | 대규모 분산 환경 |
+| **이중 캐시** | ✅✅✅ | 쉬움 | 없음 | stale 가능 | **2x** | 절대 다운 불가 서비스 |
+
+> **실무 추천 조합**: TTL 지터(기본) + 뮤텍스 락(Cold Miss) + 논리적 만료(Top 100 Hot key). 이 3개 조합이면 99.9%의 스탬피드를 방어합니다. XFetch와 이중 캐시는 월 1억 PV 이상의 대규모 서비스에서만 필요합니다.
+
 ---
 
 ## 다단계 캐시 (Multi-Level Cache)
