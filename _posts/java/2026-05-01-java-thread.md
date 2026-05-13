@@ -1,5 +1,5 @@
 ---
-title: "Java 스레드(Thread) — 동시성 프로그래밍"
+title: "Java 스레드(Thread) — 동시성 프로그래밍 심층 해부"
 categories:
 - JAVA
 toc: true
@@ -7,2071 +7,1495 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-주문 처리와 이메일 발송을 순차적으로 하면 사용자는 이메일이 발송될 때까지 기다려야 한다. 스레드를 분리하면 주문 처리 응답을 즉시 주고 이메일은 백그라운드에서 보낼 수 있다. 하지만 스레드를 잘못 다루면 데이터가 꼬인다.
+주문 처리와 이메일 발송을 순차적으로 하면 사용자는 이메일 발송이 끝날 때까지 기다려야 한다. 스레드를 분리하면 주문 처리 응답을 즉시 돌려주고 이메일은 백그라운드에서 보낼 수 있다. 하지만 스레드를 잘못 다루면 데이터가 조용히 망가진다. 예외 없이, 로그 없이, 오직 잘못된 결과만 남긴다.
 
-> **비유로 먼저 이해하기**: 스레드는 주방의 요리사와 같다. 요리사가 한 명(단일 스레드)이면 한 번에 한 요리만 된다. 여러 명(멀티 스레드)이면 동시에 여러 요리를 할 수 있지만, 같은 재료(공유 자원)를 동시에 집으려 하면 충돌이 생긴다. 이 충돌을 막는 규칙이 동기화다.
+> **비유로 먼저 이해하기**: 스레드는 주방의 요리사다. 요리사가 한 명(단일 스레드)이면 한 번에 한 요리만 된다. 여러 명(멀티 스레드)이면 동시에 여러 요리를 할 수 있지만, 같은 재료(공유 자원)를 동시에 집으려 하면 충돌이 생긴다. 이 충돌을 막는 규칙이 동기화다. 동기화를 너무 느슨하게 하면 데이터 충돌, 너무 엄격하게 하면 교착상태(Deadlock)가 발생한다.
 
-Java 스레드와 동시성 프로그래밍의 핵심 개념부터 실무 패턴까지 완전히 정리합니다. 기본 개념, 동기화 메커니즘, java.util.concurrent 패키지, Virtual Thread까지 빠짐없이 다룹니다.
+Java 스레드와 동시성 프로그래밍의 핵심 개념부터 내부 메커니즘까지 시니어 면접 수준으로 완전히 정리합니다. 단순 사용법이 아니라 **왜(WHY)** 그렇게 동작하는지를 JVM 내부, 하드웨어 아키텍처, OS 스케줄러까지 파고듭니다.
 
 ---
 
-## 1. 스레드 기본 개념
+## 1. 스레드 생명주기 — NEW부터 TERMINATED까지
 
-### 프로세스 vs 스레드
+### 6가지 상태와 전이 트리거
 
-**프로세스(Process)**는 운영체제로부터 자원을 할당받는 독립적인 실행 단위입니다. 각 프로세스는 독립된 메모리 공간(Code, Data, Stack, Heap)을 가집니다.
-
-**스레드(Thread)**는 프로세스 내에서 실행되는 흐름의 단위입니다. 같은 프로세스의 스레드들은 Heap과 Code, Data 영역을 공유하며, 각자 독립적인 Stack과 PC(Program Counter)를 가집니다.
+Java 스레드는 `java.lang.Thread.State` 열거형으로 정확히 6가지 상태를 가집니다. 각 전이(transition)에는 명확한 트리거가 있으며, 이를 이해해야 스레드 덤프(thread dump)를 읽을 수 있습니다.
 
 ```mermaid
 graph LR
-    PA["프로세스A"] --> SHARED["공유 Heap"]
-    PA --> T1["Thread1 Stack"]
-    PA --> T2["Thread2 Stack"]
-    PB["프로세스B"] --> SB["독립 Heap"]
+    NEW["NEW"] -->|start 호출| RUN["RUNNABLE"]
+    RUN -->|synchronized 락 대기| BLK["BLOCKED"]
+    BLK -->|락 획득| RUN
+    RUN -->|wait/join 호출| WAIT["WAITING"]
+    WAIT -->|notify/join완료| RUN
+    RUN -->|sleep/timed-wait| TW["TIMED_WAITING"]
+    TW -->|시간 경과/notify| RUN
 ```
 
-| 구분 | 프로세스 | 스레드 |
-|------|---------|--------|
-| 메모리 | 독립 공간 | Heap/Code 공유 |
-| 생성 비용 | 높음 | 낮음 |
-| 컨텍스트 스위칭 | 느림 | 빠름 |
-| 통신 방법 | IPC (소켓, 파이프) | 공유 메모리 직접 접근 |
-| 격리성 | 완전 격리 | 동일 프로세스 내 |
+**NEW**: `new Thread()`로 객체가 생성되었지만 `start()`가 호출되지 않은 상태. JVM 내부에는 아직 OS 커널 스레드가 존재하지 않습니다. 단순한 Java 객체일 뿐입니다.
 
-### 커널 스레드 vs 유저 스레드
+**RUNNABLE**: `start()`를 호출하면 JVM이 OS 커널 스레드를 생성하고(`pthread_create` on Linux), OS 스케줄러의 실행 큐에 등록됩니다. RUNNABLE은 두 가지 하위 상태를 포함합니다. CPU를 실제로 사용 중인 **Running**과 CPU 할당을 기다리는 **Ready**입니다. Java Thread.State는 이 둘을 구분하지 않습니다. OS 레벨에서는 다른 상태지만 Java 레벨에서는 모두 RUNNABLE로 보입니다.
 
-**커널 스레드(Kernel Thread)**는 OS가 직접 관리하는 스레드입니다. OS 스케줄러가 CPU 코어에 할당합니다. 생성/전환 비용이 비교적 크지만 진정한 병렬 실행이 가능합니다.
+**BLOCKED**: `synchronized` 블록이나 메서드에 진입하려는데 다른 스레드가 이미 해당 객체의 모니터 락을 보유하고 있을 때 진입합니다. 락이 해제되면 다시 RUNNABLE로 돌아갑니다. BLOCKED는 오직 `synchronized` 대기에서만 발생합니다. `ReentrantLock`의 `lock()` 대기는 WAITING으로 나타납니다.
 
-**유저 스레드(User Thread)**는 사용자 공간(User Space)에서 라이브러리가 관리하는 스레드입니다. OS는 유저 스레드의 존재를 모릅니다. 생성/전환 비용이 낮지만, 하나가 블로킹되면 전체가 블로킹될 수 있습니다.
+**WAITING**: `Object.wait()`, `Thread.join()`, `LockSupport.park()` 호출 시 진입합니다. 타임아웃 없이 무기한 대기합니다. 반드시 다른 스레드의 `notify()`, `notifyAll()`, `unpark()` 또는 join 대상 스레드의 종료가 있어야 깨어납니다.
 
-**매핑 모델 3가지:**
+**TIMED_WAITING**: `Thread.sleep(n)`, `Object.wait(n)`, `Thread.join(n)`, `LockSupport.parkNanos(n)` 호출 시 진입합니다. 지정된 시간이 경과하거나 외부 신호를 받으면 RUNNABLE로 돌아갑니다.
 
-```mermaid
-sequenceDiagram
-    UThread1->>KernelThread: N:1
-    UThread2->>KernelThread: N:1
-    VThread1->>KT1/KT2: M:N
-    VThread2->>KT1/KT2: M:N
-```
-
-### JVM 스레드 모델 (1:1 매핑)
-
-Java의 전통적인 Platform Thread는 OS 커널 스레드와 **1:1로 매핑**됩니다. `new Thread()`로 Java 스레드를 생성하면 OS 커널 스레드가 하나 만들어집니다.
-
-```mermaid
-sequenceDiagram
-    JT1->>OS: JNI
-    JT2->>OS: JNI
-    JT3->>OS: JNI
-    OS->>CPU1: 호출
-    OS->>CPU2: 호출
-```
-
-이 모델의 한계는 커널 스레드 생성 비용(약 1MB 스택 메모리)과 컨텍스트 스위칭 오버헤드입니다. 수만 개의 스레드를 동시에 만들기 어렵습니다.
-
-### 스레드 생명주기
-
-Java 스레드는 `java.lang.Thread.State` 열거형으로 6가지 상태를 가집니다.
-
-```mermaid
-sequenceDiagram
-    NEW->>RUNNABLE: start
-    RUNNABLE->>BLOCKED: 락 실패
-    BLOCKED->>RUNNABLE: 락 획득
-    RUNNABLE->>WAITING/TW: wait/sleep
-    WAITING/TW->>RUNNABLE: notify/경과
-```
-
-| 상태 | 설명 |
-|------|------|
-| `NEW` | `new Thread()` 생성 후 `start()` 전 |
-| `RUNNABLE` | 실행 중이거나 CPU 할당 대기 중 |
-| `BLOCKED` | synchronized 락 획득 대기 중 |
-| `WAITING` | 다른 스레드의 통지를 무기한 대기 |
-| `TIMED_WAITING` | 지정 시간 동안 대기 |
-| `TERMINATED` | 실행 완료 또는 예외로 종료 |
+**TERMINATED**: `run()` 메서드가 정상 종료되거나 처리되지 않은 예외로 종료된 상태입니다. 한 번 TERMINATED가 된 스레드는 다시 시작할 수 없습니다. `start()`를 다시 호출하면 `IllegalThreadStateException`이 발생합니다.
 
 ```java
-Thread thread = new Thread(() -> {
-    System.out.println("state: " + Thread.currentThread().getState()); // RUNNABLE
-});
+public class ThreadLifecycleDemo {
+    public static void main(String[] args) throws InterruptedException {
+        Object lock = new Object();
 
-System.out.println("before start: " + thread.getState()); // NEW
-thread.start();
-thread.join();
-System.out.println("after join: " + thread.getState()); // TERMINATED
+        Thread waiting = new Thread(() -> {
+            synchronized (lock) {
+                try {
+                    lock.wait(); // WAITING 상태로 전이
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+
+        Thread blocked = new Thread(() -> {
+            synchronized (lock) { // waiting 스레드가 락 보유 중이면 BLOCKED
+                System.out.println("blocked thread got lock");
+            }
+        });
+
+        System.out.println("waiting state before start: " + waiting.getState()); // NEW
+
+        synchronized (lock) {
+            waiting.start();
+            Thread.sleep(100); // waiting 스레드가 wait()에 진입할 시간
+            System.out.println("waiting state: " + waiting.getState()); // WAITING
+
+            blocked.start();
+            Thread.sleep(100); // blocked 스레드가 synchronized 진입 시도
+            System.out.println("blocked state: " + blocked.getState()); // BLOCKED
+
+            lock.notifyAll();
+        }
+
+        waiting.join();
+        blocked.join();
+        System.out.println("waiting state after join: " + waiting.getState()); // TERMINATED
+    }
+}
 ```
+
+### WHY: start()와 run()의 차이가 중요한 이유
+
+`thread.run()`을 직접 호출하면 OS 커널 스레드가 생성되지 않습니다. 현재 스레드에서 `run()` 메서드가 단순 메서드 호출로 실행됩니다. 새로운 실행 흐름이 만들어지지 않습니다. 반드시 `start()`를 호출해야 JVM이 `Thread.start0()`이라는 native 메서드를 통해 OS에 커널 스레드 생성을 요청합니다.
 
 ---
 
-## 2. 스레드 생성 방법
+## 2. Thread vs Runnable vs Callable — 왜 Callable이 도입되었나
 
-### Thread 상속
+### Thread와 Runnable의 한계
 
-`Thread` 클래스를 상속하고 `run()` 메서드를 오버라이드합니다.
+Java 초기(1.0)부터 스레드를 실행하는 두 가지 방법이 있었습니다.
 
 ```java
-public class MyThread extends Thread {
-    private final String name;
-
-    public MyThread(String name) {
-        super(name); // 스레드 이름 설정
-        this.name = name;
-    }
-
+// 방법 1: Thread 상속
+class MyThread extends Thread {
     @Override
     public void run() {
-        System.out.printf("[%s] 실행 중, ID=%d%n",
-                name, Thread.currentThread().getId());
-        try {
-            Thread.sleep(1000); // 1초 대기
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt(); // 인터럽트 플래그 복원
-            System.out.println(name + " 인터럽트 발생");
-        }
+        System.out.println("Thread 상속 방식");
     }
 }
 
-// 사용
-MyThread t1 = new MyThread("Worker-1");
-MyThread t2 = new MyThread("Worker-2");
-t1.start(); // start()는 반드시 호출, run()을 직접 호출하면 단일 스레드로 실행됨
-t2.start();
-t1.join(); // t1 완료 대기
-t2.join(); // t2 완료 대기
-System.out.println("모든 스레드 완료");
-```
-
-**단점:** Java는 단일 상속이므로 다른 클래스를 상속받고 있으면 사용 불가합니다.
-
-### Runnable 구현
-
-`Runnable` 인터페이스를 구현하는 방식으로 더 유연합니다.
-
-```java
-public class PrintTask implements Runnable {
-    private final int taskId;
-
-    public PrintTask(int taskId) {
-        this.taskId = taskId;
-    }
-
+// 방법 2: Runnable 구현 (권장)
+class MyTask implements Runnable {
     @Override
     public void run() {
-        System.out.printf("Task %d 실행 - Thread: %s%n",
-                taskId, Thread.currentThread().getName());
+        System.out.println("Runnable 구현 방식");
     }
 }
 
-// 익명 클래스로 사용
-Runnable r = new Runnable() {
-    @Override
-    public void run() {
-        System.out.println("익명 클래스 실행");
+public class BasicThreadDemo {
+    public static void main(String[] args) {
+        new MyThread().start();
+        new Thread(new MyTask()).start();
+
+        // Java 8+ 람다
+        new Thread(() -> System.out.println("람다 방식")).start();
     }
-};
-
-// 람다로 사용 (Java 8+)
-Runnable lambda = () -> System.out.println("람다 실행");
-
-Thread t = new Thread(lambda, "lambda-thread");
-t.setDaemon(false);      // false: JVM 종료 시까지 실행 (기본값)
-t.setPriority(Thread.NORM_PRIORITY); // 우선순위 1~10, 기본 5
-t.start();
+}
 ```
 
-### Callable + Future
+**Thread 상속의 문제**: Java는 단일 상속만 지원합니다. `Thread`를 상속받으면 다른 클래스를 상속받을 수 없습니다. 또한 스레드 실행 메커니즘과 비즈니스 로직이 하나의 클래스에 섞입니다.
 
-`Callable`은 `Runnable`과 달리 **결과값을 반환**하고 **체크드 예외를 던질** 수 있습니다.
+**Runnable의 한계**: `run()` 메서드의 반환 타입은 `void`입니다. 결과값을 반환할 수 없습니다. 또한 checked exception을 던질 수 없습니다(`throws` 선언 불가). 결과를 얻으려면 공유 변수나 콜백을 사용해야 했고, 이는 동기화 문제를 유발했습니다.
+
+### Callable 도입 — Java 5에서 해결한 두 가지 문제
+
+Java 5(2004년)에서 `java.util.concurrent` 패키지와 함께 `Callable<V>`가 도입되었습니다.
+
+```java
+@FunctionalInterface
+public interface Callable<V> {
+    V call() throws Exception; // 반환값 있음, checked exception 허용
+}
+```
+
+`Runnable.run()`과 비교하면 두 가지가 다릅니다. 첫째로 제네릭 반환 타입 `V`가 있어 결과를 타입 안전하게 반환할 수 있습니다. 둘째로 `throws Exception`이 있어 checked exception을 던질 수 있습니다.
+
+### Future.get() — 비동기 결과 수집의 핵심
+
+`Callable`의 실행 결과는 `Future<V>` 인터페이스를 통해 수집합니다.
 
 ```java
 import java.util.concurrent.*;
 
-Callable<Integer> task = () -> {
-    System.out.println("Callable 실행 중...");
-    Thread.sleep(2000);
-    return 42; // 결과 반환
-};
+public class CallableFutureDemo {
+    public static void main(String[] args) throws ExecutionException, InterruptedException {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
 
-ExecutorService executor = Executors.newSingleThreadExecutor();
-Future<Integer> future = executor.submit(task);
-
-System.out.println("비동기 작업 제출 완료, 다른 작업 수행 가능");
-
-try {
-    // get()은 블로킹: 결과가 준비될 때까지 현재 스레드 대기
-    Integer result = future.get(3, TimeUnit.SECONDS); // 타임아웃 설정
-    System.out.println("결과: " + result);
-} catch (TimeoutException e) {
-    future.cancel(true); // 인터럽트로 취소
-    System.out.println("타임아웃!");
-} catch (ExecutionException e) {
-    System.out.println("작업 내부 예외: " + e.getCause());
-} catch (InterruptedException e) {
-    Thread.currentThread().interrupt();
-} finally {
-    executor.shutdown();
-}
-
-// Future 상태 확인
-// future.isDone()     - 완료 여부 (정상/예외/취소 모두 포함)
-// future.isCancelled() - 취소 여부
-// future.cancel(true)  - 실행 중이면 인터럽트, 대기 중이면 취소
-```
-
-### CompletableFuture (Java 8+)
-
-비동기 작업을 선언적으로 체이닝할 수 있는 강력한 클래스입니다.
-
-```java
-import java.util.concurrent.CompletableFuture;
-
-// 기본 비동기 실행
-CompletableFuture<String> future = CompletableFuture
-        .supplyAsync(() -> {
-            // ForkJoinPool.commonPool()에서 실행
-            System.out.println("비동기 작업 시작");
-            return "Hello";
-        })
-        .thenApply(result -> result + ", World")          // 변환
-        .thenApply(String::toUpperCase)                   // 추가 변환
-        .thenApply(result -> result + "!");               // 최종 변환
-
-System.out.println(future.join()); // HELLO, WORLD!
-
-// 커스텀 Executor 지정
-ExecutorService customExecutor = Executors.newFixedThreadPool(4);
-
-CompletableFuture<Void> pipeline = CompletableFuture
-        .supplyAsync(() -> fetchUserData(1L), customExecutor)
-        .thenApplyAsync(user -> processUser(user), customExecutor)
-        .thenAcceptAsync(processed -> saveResult(processed), customExecutor)
-        .exceptionally(ex -> {
-            System.out.println("파이프라인 에러: " + ex.getMessage());
-            return null;
+        // Callable 제출 — 즉시 반환, 백그라운드에서 실행 시작
+        Future<Integer> future = executor.submit(() -> {
+            System.out.println("계산 중... thread: " + Thread.currentThread().getName());
+            Thread.sleep(1000); // 시뮬레이션
+            return 42;
         });
 
-pipeline.join();
-customExecutor.shutdown();
+        System.out.println("다른 작업 수행 중..."); // future.get() 이전에 실행
+
+        // future.get()은 블로킹 호출 — 결과가 준비될 때까지 현재 스레드를 WAITING 상태로 만듦
+        Integer result = future.get(); // 최대 1초 대기
+        System.out.println("결과: " + result); // 42
+
+        executor.shutdown();
+    }
+}
+```
+
+**WHY future.get()은 블로킹인가**: `FutureTask` 내부적으로 `LockSupport.park()`를 사용합니다. 결과가 아직 없으면 호출 스레드를 WAITING 상태로 전환하고, 작업이 완료되면 `LockSupport.unpark()`로 깨웁니다. 타임아웃 버전인 `future.get(timeout, unit)`은 `LockSupport.parkNanos()`를 사용해 TIMED_WAITING 상태로 대기합니다.
+
+```java
+// 타임아웃과 예외 처리 패턴
+public class FutureExceptionDemo {
+    public static void main(String[] args) {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        Future<String> future = executor.submit(() -> {
+            if (Math.random() > 0.5) {
+                throw new IOException("네트워크 오류"); // checked exception 가능
+            }
+            return "성공";
+        });
+
+        try {
+            String result = future.get(2, TimeUnit.SECONDS);
+            System.out.println("결과: " + result);
+        } catch (TimeoutException e) {
+            future.cancel(true); // 인터럽트로 작업 취소
+            System.out.println("타임아웃으로 취소");
+        } catch (ExecutionException e) {
+            // Callable이 던진 예외는 ExecutionException으로 래핑됨
+            Throwable cause = e.getCause(); // 원래 IOException
+            System.out.println("작업 예외: " + cause.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            executor.shutdown();
+        }
+    }
+}
 ```
 
 ---
 
-## 3. 동기화 (Synchronization)
+## 3. synchronized — 모니터 락의 내부 구조
 
-### synchronized 키워드
+### 모니터(Monitor)란 무엇인가
 
-**메서드 레벨 synchronized:**
+Java의 모든 객체는 **모니터(Monitor)**를 가집니다. 모니터는 뮤텍스(mutex) + 조건 변수(condition variable)의 결합입니다. `synchronized` 키워드는 이 모니터를 활용합니다.
 
 ```java
-public class Counter {
+public class SynchronizedDemo {
     private int count = 0;
 
-    // 인스턴스 메서드: this 객체 자체를 락으로 사용
+    // 메서드 레벨 synchronized — this 객체의 모니터 사용
     public synchronized void increment() {
         count++;
     }
 
-    // 정적 메서드: Counter.class 객체를 락으로 사용
+    // 블록 레벨 synchronized — 특정 객체의 모니터 사용
+    public void incrementBlock() {
+        synchronized (this) {
+            count++;
+        }
+    }
+
+    // static synchronized — Class 객체의 모니터 사용
     public static synchronized void staticMethod() {
-        // ...
-    }
-
-    public synchronized int getCount() {
-        return count;
+        // SynchronizedDemo.class 객체의 모니터 획득
     }
 }
 ```
 
-**블록 레벨 synchronized (더 세밀한 제어):**
+### Object Header Mark Word — 락 정보가 저장되는 곳
 
-```java
-public class FineGrainedCounter {
-    private int readCount = 0;
-    private int writeCount = 0;
+JVM에서 Java 객체는 **Object Header**를 포함합니다. 64비트 JVM 기준 헤더는 두 부분으로 구성됩니다.
 
-    // 락 객체를 분리하여 읽기/쓰기 독립적으로 동기화
-    private final Object readLock = new Object();
-    private final Object writeLock = new Object();
+**Mark Word (8 bytes)**: 객체의 해시코드, GC 나이(age), 락 상태 정보를 저장합니다. 락 상태에 따라 Mark Word의 비트 레이아웃이 달라집니다.
 
-    public void incrementRead() {
-        synchronized (readLock) {
-            readCount++;
-        }
-        // writeLock은 건드리지 않음 → 병렬성 향상
-    }
+**Klass Pointer (4 bytes, CompressedOops 사용 시)**: 객체의 클래스 정보를 가리키는 포인터입니다.
 
-    public void incrementWrite() {
-        synchronized (writeLock) {
-            writeCount++;
-        }
-    }
-
-    public void both() {
-        // 데드락 방지: 항상 동일 순서로 락 획득
-        synchronized (readLock) {
-            synchronized (writeLock) {
-                readCount++;
-                writeCount++;
-            }
-        }
-    }
-}
+```
+Mark Word 비트 레이아웃 (64비트 JVM):
+┌────────────────────────────────────────────────────────┬────────┐
+│                    내용                                │ 상태   │
+├────────────────────────────────────────────────────────┼────────┤
+│ [해시코드 25비트][나이 4비트][0][01]                    │ 잠금해제│
+│ [스레드ID 54비트][Epoch 2비트][나이 4비트][1][01]        │ 편향락 │
+│ [포인터 62비트][00]                                    │ 경량락 │
+│ [포인터 62비트][10]                                    │ 중량락 │
+│ [포워딩포인터 62비트][11]                               │ GC마킹 │
+└────────────────────────────────────────────────────────┴────────┘
 ```
 
-### 모니터 락 (Monitor Lock) 동작 원리
+### 락 에스컬레이션 — Biased → Thin → Fat Lock
 
-Java의 모든 객체는 내부적으로 **모니터(Monitor)**를 가집니다. 모니터는 뮤텍스 락 + 대기 큐로 구성됩니다.
+JVM은 성능 최적화를 위해 세 단계의 락을 사용합니다. 경합 정도에 따라 점점 무거운 락으로 **에스컬레이션(escalation)**됩니다. 락은 에스컬레이션만 되고, 다운그레이드되지 않습니다(Java 15 이전 기준).
 
 ```mermaid
 graph LR
-    TA["ThreadA"] --> CHK{"owner==null?"}
-    CHK -->|YES| OWN["owner=A, count+1"]
-    CHK -->|NO| BLK["EntrySet→BLOCKED"]
-    OWN -->|exit| REL["owner=null, 재경쟁"]
+    UNLOCK["잠금해제"] -->|첫 획득| BIAS["편향락"]
+    BIAS -->|다른 스레드 접근| THIN["경량락 CAS"]
+    THIN -->|CAS 실패/경합| FAT["중량락 OS뮤텍스"]
+    FAT -->|스레드 블로킹| BLOCK["BLOCKED 상태"]
 ```
 
-**재진입(Reentrant):** 같은 스레드가 이미 보유한 락을 다시 요청하면 count만 증가합니다.
+**편향 락(Biased Locking)**: 대부분의 경우 하나의 스레드만 락을 반복적으로 획득합니다. 편향 락은 Mark Word에 해당 스레드 ID를 기록해두고, 이후 같은 스레드가 진입할 때 CAS 없이 즉시 락을 획득합니다. 락 해제도 Mark Word를 변경하지 않습니다. 비용이 거의 없습니다.
+
+**경량 락(Thin Lock / Lightweight Lock)**: 다른 스레드가 접근하면 편향 락을 해제하고 경량 락으로 전환합니다. 스레드 스택에 **Lock Record**를 만들고 CAS(Compare-And-Swap)로 Mark Word를 교체합니다. CAS 성공 시 락 획득, 실패 시 스핀(spin)을 시도합니다. 적응형 스피닝(Adaptive Spinning)으로 과거 성공률에 따라 스핀 횟수를 조절합니다.
+
+**중량 락(Fat Lock / Inflated Lock)**: 스핀 실패가 반복되면 OS 뮤텍스(pthread_mutex)를 사용하는 중량 락으로 에스컬레이션됩니다. 대기 스레드는 OS 수준에서 블로킹되어 CPU를 소비하지 않습니다. 하지만 OS 컨텍스트 스위칭 비용이 발생합니다.
+
+### WHY 편향 락이 Java 15에서 제거되었나
+
+JEP 374로 Java 15에서 편향 락이 deprecated되고 Java 21에서 완전히 제거되었습니다. 이유는 다음과 같습니다.
+
+첫째, 현대 애플리케이션은 멀티 스레드 경합이 일반적입니다. 편향 락이 유효한 단일 스레드 접근 패턴이 드물어졌습니다.
+
+둘째, 편향 락 취소(revocation) 비용이 큽니다. 편향된 스레드를 Safe Point까지 정지시키고 Mark Word를 복구하는 과정이 STW(Stop-The-World)와 유사합니다. ConcurrentHashMap 같은 자료구조는 의도적으로 편향 락을 비활성화했을 만큼 역효과가 있었습니다.
+
+셋째, OpenJDK 팀의 분석에 따르면 편향 락 관련 코드가 JVM 전체에서 가장 복잡한 부분 중 하나였습니다. 유지보수 비용 대비 이점이 사라졌습니다.
 
 ```java
-public class ReentrantExample {
+// 실제 synchronized 성능 확인 방법
+public class MonitorDemo {
+    private final Object monitor = new Object();
+    private long counter = 0;
+
+    public void increment() {
+        synchronized (monitor) {
+            counter++;
+        }
+    }
+
+    // 재진입(Reentrant) 가능 — 같은 스레드는 이미 획득한 락을 다시 획득 가능
     public synchronized void outer() {
-        System.out.println("outer 진입 (count=1)");
-        inner(); // 같은 스레드, 재진입 허용 (count=2)
+        System.out.println("outer: " + counter);
+        inner(); // 같은 스레드이므로 즉시 재진입 가능
     }
 
     public synchronized void inner() {
-        System.out.println("inner 진입 (count=2)");
-    } // monitorexit → count=1
-
-    // outer 종료 시 count=0, 락 해제
-}
-```
-
-### Object의 wait() / notify() / notifyAll()
-
-`wait()`, `notify()`, `notifyAll()`은 **반드시 synchronized 블록 내에서** 호출해야 합니다.
-
-```java
-public class ProducerConsumer {
-    private final Queue<Integer> queue = new LinkedList<>();
-    private final int MAX_SIZE = 5;
-
-    public synchronized void produce(int item) throws InterruptedException {
-        while (queue.size() == MAX_SIZE) {
-            System.out.println("큐 가득참, 생산자 대기");
-            wait(); // 락을 해제하고 WaitSet으로 이동
-        }
-        queue.add(item);
-        System.out.println("생산: " + item + ", 큐 크기: " + queue.size());
-        notifyAll(); // WaitSet의 모든 스레드를 EntrySet으로 이동
+        System.out.println("inner: " + counter);
     }
-
-    public synchronized int consume() throws InterruptedException {
-        while (queue.isEmpty()) {
-            System.out.println("큐 비어있음, 소비자 대기");
-            wait();
-        }
-        int item = queue.poll();
-        System.out.println("소비: " + item + ", 큐 크기: " + queue.size());
-        notifyAll();
-        return item;
-    }
-}
-```
-
-**notify() vs notifyAll():**
-- `notify()`: WaitSet에서 임의의 스레드 하나만 깨움 → starvation 위험
-- `notifyAll()`: WaitSet의 모든 스레드 깨움 → 더 안전하지만 오버헤드 큼
-
-### 가시성(Visibility) 문제와 volatile 키워드
-
-멀티코어 환경에서 각 코어는 **CPU 캐시**를 가집니다. 한 스레드가 변수를 수정해도 다른 코어의 캐시에 즉시 반영되지 않을 수 있습니다.
-
-```mermaid
-graph LR
-  F1["코어1 캐시: flag=true"]
-  F2["코어2 캐시: flag=false"]
-  MM["메인 메모리: flag=true"]
-  F1 --> MM
-  MM --> F1
-  F2 --> MM
-  MM --> F2
-```
-
-```java
-// 문제: stop 플래그 변경이 다른 스레드에 보이지 않을 수 있음
-private boolean stop = false; // 위험!
-
-// 해결: volatile 선언
-private volatile boolean stop = false;
-
-// volatile은 가시성만 보장, 원자성은 보장하지 않음
-private volatile int count = 0;
-count++; // NOT atomic! (read-modify-write 세 단계)
-// 원자성이 필요하면 AtomicInteger 또는 synchronized 사용
-```
-
-**volatile 사용 사례:**
-```java
-public class StopFlag {
-    private volatile boolean running = true; // volatile 필수
-
-    public void run() {
-        while (running) {
-            // 작업 수행
-        }
-        System.out.println("종료됨");
-    }
-
-    public void stop() {
-        running = false; // 다른 스레드에서 호출
-    }
-}
-```
-
-### happens-before 관계
-
-**happens-before**는 JMM(Java Memory Model)에서 정의한 메모리 가시성 보장 규칙입니다. A happens-before B라면 A의 모든 결과가 B에 보입니다.
-
-주요 happens-before 규칙:
-1. **Program Order Rule**: 같은 스레드 내 앞 코드 → 뒷 코드
-2. **Monitor Lock Rule**: `unlock()` → 동일 모니터의 `lock()`
-3. **Volatile Variable Rule**: volatile 쓰기 → 이후 volatile 읽기
-4. **Thread Start Rule**: `Thread.start()` → 시작된 스레드의 모든 동작
-5. **Thread Join Rule**: 스레드 종료 → `join()` 이후의 모든 동작
-6. **Transitivity**: A → B이고 B → C이면 A → C
-
-```java
-int x = 0;
-volatile boolean flag = false;
-
-// Thread 1
-x = 42;          // (1)
-flag = true;     // (2) volatile 쓰기
-
-// Thread 2
-if (flag) {      // (3) volatile 읽기 → (2) happens-before (3)
-    // x == 42 가 보장됨: (1) happens-before (2) happens-before (3)
-    System.out.println(x); // 항상 42
 }
 ```
 
 ---
 
-## 4. java.util.concurrent 핵심
+## 4. volatile — 메모리 가시성과 CPU 캐시
 
-### ReentrantLock
+### CPU 캐시와 메모리 불일치 문제
 
-`synchronized`보다 유연한 락입니다. 공정/비공정 선택, tryLock, Condition 사용이 가능합니다.
+멀티코어 CPU에서 각 코어는 자체 L1/L2 캐시를 가집니다. 스레드가 변수를 읽으면 메인 메모리에서 CPU 캐시로 복사됩니다. 수정은 캐시에 먼저 반영되고 메인 메모리에는 나중에 플러시됩니다. 이 때문에 한 스레드의 변경이 다른 스레드에 보이지 않을 수 있습니다.
 
 ```java
-import java.util.concurrent.locks.*;
+// volatile 없이 — 다른 스레드의 변경이 보이지 않을 수 있음
+public class VisibilityProblem {
+    private boolean running = true; // volatile 없음
 
-public class ReentrantLockExample {
-    // 공정 락(fair=true): 대기 순서 보장, 처리량 낮음
-    // 비공정 락(fair=false): 순서 미보장, 처리량 높음 (기본값)
-    private final ReentrantLock lock = new ReentrantLock(false);
+    public void stop() {
+        running = false; // CPU 캐시에만 반영, 메인 메모리 반영 보장 없음
+    }
 
-    public void basicUsage() {
+    public void run() {
+        while (running) { // 캐시된 값(true)을 계속 읽어 무한 루프 가능
+            doWork();
+        }
+    }
+}
+
+// volatile로 해결
+public class VisibilitySolved {
+    private volatile boolean running = true; // 항상 메인 메모리에서 읽고 씀
+
+    public void stop() {
+        running = false; // 즉시 메인 메모리에 반영
+    }
+
+    public void run() {
+        while (running) { // 항상 최신 값을 읽음
+            doWork();
+        }
+    }
+}
+```
+
+### MESI 프로토콜 — 캐시 일관성 하드웨어 메커니즘
+
+현대 CPU는 **MESI 프로토콜**로 캐시 일관성을 유지합니다. 각 캐시 라인은 네 가지 상태를 가집니다.
+
+**M(Modified)**: 이 캐시만 수정된 값을 가지고, 메인 메모리와 다릅니다. 다른 코어의 읽기 요청 시 메인 메모리에 write-back 후 S로 전환됩니다.
+
+**E(Exclusive)**: 이 캐시만 해당 데이터를 보유하며, 메인 메모리와 일치합니다.
+
+**S(Shared)**: 여러 캐시가 동일한 데이터를 보유합니다. 읽기 전용입니다.
+
+**I(Invalid)**: 캐시 라인이 무효화되었습니다. 다음 접근 시 메인 메모리나 다른 캐시에서 가져와야 합니다.
+
+`volatile` 변수를 수정하면 JVM이 **메모리 배리어(Memory Barrier)**를 삽입하여 CPU가 캐시를 메인 메모리에 플러시하고, 다른 코어의 해당 캐시 라인을 Invalid로 만들도록 강제합니다.
+
+### 메모리 배리어(Memory Barrier) — JVM 레벨 구현
+
+`volatile`은 JVM이 생성하는 바이트코드에 메모리 배리어 명령어를 추가합니다.
+
+```
+volatile 쓰기 전: StoreStore 배리어 (이전 쓰기가 완료된 후 volatile 쓰기)
+volatile 쓰기 후: StoreLoad 배리어 (volatile 쓰기가 완료된 후 이후 읽기)
+volatile 읽기 전: LoadLoad 배리어 (이전 읽기가 완료된 후 volatile 읽기)
+volatile 읽기 후: LoadStore 배리어 (volatile 읽기가 완료된 후 이후 쓰기)
+```
+
+x86 아키텍처에서 `StoreLoad` 배리어는 `MFENCE` 또는 `LOCK ADD` 명령어로 구현됩니다. 이것이 `volatile` 읽기/쓰기가 일반 변수보다 느린 이유입니다.
+
+### happens-before 관계
+
+Java 메모리 모델(JMM)은 **happens-before** 관계로 메모리 가시성을 정의합니다. A happens-before B란, A의 결과가 B에 반드시 보인다는 보장입니다.
+
+`volatile` 변수의 쓰기는 이후의 해당 변수 읽기보다 happens-before 관계를 가집니다. 이를 통해 `volatile` 변수 쓰기 이전의 모든 쓰기도 이후 읽기에 보입니다.
+
+```java
+public class HappensBeforeDemo {
+    private int data = 0;
+    private volatile boolean ready = false;
+
+    // 스레드 A
+    public void writer() {
+        data = 42;          // 1. 일반 변수 쓰기
+        ready = true;       // 2. volatile 쓰기 — 1이 반드시 먼저 완료됨 (happens-before)
+    }
+
+    // 스레드 B
+    public void reader() {
+        if (ready) {        // 3. volatile 읽기
+            // 4. data 읽기 — ready 읽기(3)가 ready 쓰기(2)를 본다면,
+            //    data 읽기(4)는 data 쓰기(1)를 반드시 봄 (happens-before 전이)
+            System.out.println(data); // 반드시 42
+        }
+    }
+}
+```
+
+### WHY volatile은 복합 연산에 안전하지 않은가
+
+`volatile`은 **단일 읽기/쓰기**의 원자성만 보장합니다. `count++`는 세 단계(읽기, 증가, 쓰기)이므로 `volatile`만으로는 스레드 안전하지 않습니다.
+
+```java
+public class VolatileLimitation {
+    private volatile int count = 0;
+
+    // 스레드 안전하지 않음! volatile은 복합 연산 원자성 보장 안 함
+    public void increment() {
+        count++; // read-modify-write: 원자적이지 않음
+    }
+
+    // 해결책: AtomicInteger 사용
+    private final AtomicInteger atomicCount = new AtomicInteger(0);
+
+    public void safeIncrement() {
+        atomicCount.incrementAndGet(); // CAS 기반 원자적 연산
+    }
+}
+```
+
+---
+
+## 5. wait()/notify() — 스레드 간 통신
+
+### 왜 반드시 synchronized 블록 안에서 호출해야 하는가
+
+`wait()`와 `notify()`는 반드시 해당 객체의 모니터를 보유한 상태에서 호출해야 합니다. 그렇지 않으면 `IllegalMonitorStateException`이 발생합니다. 이유는 다음과 같습니다.
+
+**Lost Wakeup 문제 방지**: `wait()`와 `notify()` 사이의 경쟁 조건(race condition)을 방지하기 위해서입니다.
+
+```java
+// synchronized 없이는 이런 문제 발생
+// 스레드 A: 조건 확인 후 wait() 호출 직전에
+// 스레드 B: notify() 호출 → lost wakeup!
+// 스레드 A: wait()로 진입하여 영원히 대기
+
+// synchronized로 보호하면 조건 확인과 wait()가 원자적으로 실행됨
+synchronized (lock) {
+    while (!condition) { // 조건 재확인 (spurious wakeup 방어)
+        lock.wait();     // 모니터를 해제하고 WAITING 상태로 전환
+    }
+    // 조건이 충족된 상태에서 작업 수행
+}
+```
+
+`wait()` 호출 시 내부적으로 두 가지가 원자적으로 발생합니다. 첫째, 해당 객체의 모니터 락을 해제합니다. 둘째, 현재 스레드를 해당 객체의 대기 집합(Wait Set)에 추가하고 WAITING 상태로 전환합니다. 이 두 동작이 원자적이어야 하기 때문에 모니터 내부에서 실행되어야 합니다.
+
+### 허위 깨움(Spurious Wakeup) — if가 아니라 while을 써야 하는 이유
+
+`wait()`는 예외적으로 `notify()`나 `notifyAll()` 없이도 깨어날 수 있습니다. 이를 **허위 깨움(Spurious Wakeup)**이라 합니다. POSIX 스레드 표준이 허위 깨움을 허용하며, Linux의 `futex` 시스템 콜도 허위 반환이 가능합니다.
+
+```java
+// 잘못된 코드 — if 사용
+synchronized (queue) {
+    if (queue.isEmpty()) {
+        queue.wait(); // 허위 깨움 후 queue가 여전히 비어있어도 진행
+    }
+    Object item = queue.poll(); // NPE 또는 잘못된 동작 가능
+}
+
+// 올바른 코드 — while 사용
+synchronized (queue) {
+    while (queue.isEmpty()) { // 깨어날 때마다 조건 재확인
+        queue.wait();
+    }
+    Object item = queue.poll(); // 반드시 큐에 요소가 있음
+}
+```
+
+### 생산자-소비자 패턴 구현
+
+```java
+import java.util.LinkedList;
+import java.util.Queue;
+
+public class ProducerConsumerDemo {
+    private final Queue<Integer> queue = new LinkedList<>();
+    private final int MAX_SIZE = 5;
+    private final Object lock = new Object();
+
+    // 생산자
+    public void produce(int item) throws InterruptedException {
+        synchronized (lock) {
+            while (queue.size() == MAX_SIZE) {
+                System.out.println("큐 가득 참 — 생산자 대기");
+                lock.wait(); // 소비자가 빈 공간을 만들 때까지 대기
+            }
+            queue.offer(item);
+            System.out.println("생산: " + item + ", 큐 크기: " + queue.size());
+            lock.notifyAll(); // 대기 중인 소비자에게 알림
+        }
+    }
+
+    // 소비자
+    public int consume() throws InterruptedException {
+        synchronized (lock) {
+            while (queue.isEmpty()) {
+                System.out.println("큐 비어있음 — 소비자 대기");
+                lock.wait(); // 생산자가 아이템을 넣을 때까지 대기
+            }
+            int item = queue.poll();
+            System.out.println("소비: " + item + ", 큐 크기: " + queue.size());
+            lock.notifyAll(); // 대기 중인 생산자에게 알림
+            return item;
+        }
+    }
+}
+```
+
+### WHY notify()보다 notifyAll()이 안전한가
+
+`notify()`는 대기 집합에서 임의의 스레드 하나만 깨웁니다. 여러 종류의 스레드가 같은 객체를 기다리면 엉뚱한 스레드가 깨어날 수 있습니다. `notifyAll()`은 모든 대기 스레드를 깨우고, 각 스레드가 `while` 루프로 조건을 재확인하게 합니다. 불필요한 스레드는 다시 `wait()`으로 돌아갑니다. 성능상 오버헤드가 있지만 정확성이 우선입니다.
+
+---
+
+## 6. ThreadPoolExecutor 내부 — 왜 Executors 팩토리를 피해야 하는가
+
+### ThreadPoolExecutor 핵심 파라미터
+
+```java
+public ThreadPoolExecutor(
+    int corePoolSize,           // 기본 상주 스레드 수
+    int maximumPoolSize,        // 최대 스레드 수
+    long keepAliveTime,         // core 초과 스레드의 유휴 생존 시간
+    TimeUnit unit,
+    BlockingQueue<Runnable> workQueue,      // 작업 대기열
+    ThreadFactory threadFactory,            // 스레드 생성 팩토리
+    RejectedExecutionHandler handler        // 큐 가득 찼을 때 처리 정책
+)
+```
+
+### 스레드 풀 작업 처리 흐름
+
+```mermaid
+graph LR
+    TASK["작업 제출"] -->|core 미달| NEW["코어스레드 생성"]
+    TASK -->|core 가득| QUEUE["큐 대기"]
+    QUEUE -->|큐 가득| MAX["최대스레드 생성"]
+    MAX -->|max 가득| REJECT["거부 정책"]
+```
+
+1. 현재 스레드 수 < `corePoolSize`: 새 스레드를 생성하여 작업 실행.
+2. 현재 스레드 수 >= `corePoolSize`: 작업을 `workQueue`에 추가.
+3. `workQueue`가 가득 참 && 현재 스레드 수 < `maximumPoolSize`: 새 스레드 생성.
+4. `workQueue`가 가득 참 && 현재 스레드 수 == `maximumPoolSize`: `RejectedExecutionHandler` 호출.
+
+### WHY Executors.newFixedThreadPool은 위험한가
+
+```java
+// Executors.newFixedThreadPool 내부 구현
+public static ExecutorService newFixedThreadPool(int nThreads) {
+    return new ThreadPoolExecutor(
+        nThreads, nThreads,
+        0L, TimeUnit.MILLISECONDS,
+        new LinkedBlockingQueue<Runnable>() // 크기 제한 없음! Integer.MAX_VALUE
+    );
+}
+```
+
+`LinkedBlockingQueue()`의 기본 용량은 `Integer.MAX_VALUE`(약 21억)입니다. 스레드 풀이 처리할 수 없을 만큼 작업이 쌓이면 큐에 무한정 누적됩니다. 결국 `OutOfMemoryError`가 발생합니다. 거부 정책도 발동되지 않습니다.
+
+`Executors.newCachedThreadPool()`도 위험합니다. `maximumPoolSize`가 `Integer.MAX_VALUE`입니다. 작업이 폭발적으로 들어오면 스레드를 무한정 생성하여 OOM이 발생합니다.
+
+### 올바른 ThreadPoolExecutor 설정
+
+```java
+import java.util.concurrent.*;
+
+public class ProperThreadPoolDemo {
+    public static void main(String[] args) {
+        // CPU 집약적 작업: CPU 코어 수 + 1
+        int cpuCores = Runtime.getRuntime().availableProcessors();
+
+        // I/O 집약적 작업: CPU 코어 수 * (1 + 대기시간/처리시간)
+        // 예: I/O 대기 90%, 처리 10% → 코어 수 * 10
+
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+            cpuCores,                           // corePoolSize
+            cpuCores * 2,                       // maximumPoolSize
+            60L, TimeUnit.SECONDS,              // keepAliveTime
+            new ArrayBlockingQueue<>(1000),     // 유한 크기 큐
+            new ThreadFactory() {
+                private int count = 0;
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "worker-" + count++);
+                    t.setDaemon(true); // JVM 종료 시 자동 종료
+                    return t;
+                }
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy() // 백프레셔
+        );
+
+        // 풀 상태 모니터링
+        System.out.println("활성 스레드: " + executor.getActiveCount());
+        System.out.println("완료 작업: " + executor.getCompletedTaskCount());
+        System.out.println("큐 크기: " + executor.getQueue().size());
+    }
+}
+```
+
+### 거부 정책(RejectedExecutionHandler) 4가지
+
+```java
+// 1. AbortPolicy (기본값): RejectedExecutionException 던짐
+// 2. CallerRunsPolicy: 제출 스레드가 직접 실행 (자연스러운 백프레셔)
+// 3. DiscardPolicy: 조용히 버림 (데이터 유실 위험)
+// 4. DiscardOldestPolicy: 큐에서 가장 오래된 작업을 버리고 재시도
+
+// CallerRunsPolicy의 백프레셔 효과:
+// 생산자 스레드가 작업을 직접 실행하므로 새 작업 제출 속도가 느려짐
+// → 자연스럽게 부하 조절 (서킷 브레이커 역할)
+
+public class CustomRejectedHandler implements RejectedExecutionHandler {
+    @Override
+    public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
+        // 메트릭 기록, 알림 발송, 재시도 큐에 저장 등
+        System.err.println("작업 거부됨. 큐 크기: " + executor.getQueue().size());
+        // 필요시 CallerRunsPolicy처럼 현재 스레드에서 실행
+        if (!executor.isShutdown()) {
+            r.run();
+        }
+    }
+}
+```
+
+---
+
+## 7. ReentrantLock vs synchronized — AQS 내부 구조
+
+### AQS(AbstractQueuedSynchronizer) — 동기화의 뼈대
+
+`ReentrantLock`, `Semaphore`, `CountDownLatch`, `CyclicBarrier` 등 `java.util.concurrent`의 대부분 동기화 도구는 **AQS(AbstractQueuedSynchronizer)**를 기반으로 합니다.
+
+AQS의 핵심은 두 가지입니다. 하나는 `volatile int state` 필드로, 동기화 상태를 나타냅니다. 다른 하나는 **CLH 큐(Craig-Landin-Hagersten queue)**로, 락을 기다리는 스레드들의 이중 연결 리스트입니다.
+
+```java
+// AQS 핵심 구조 (OpenJDK 소스 단순화)
+public abstract class AbstractQueuedSynchronizer {
+    private volatile int state; // 동기화 상태
+
+    // CLH 큐의 head/tail 노드
+    private transient volatile Node head;
+    private transient volatile Node tail;
+
+    // 서브클래스가 구현해야 하는 메서드
+    protected boolean tryAcquire(int arg) { throw new UnsupportedOperationException(); }
+    protected boolean tryRelease(int arg) { throw new UnsupportedOperationException(); }
+}
+```
+
+### CLH 큐 동작 방식
+
+CLH 큐는 스핀락 기반의 대기 큐입니다. 각 노드는 이전 노드의 상태를 감시(spin)합니다. 락을 획득하지 못하면 노드를 큐 끝에 추가하고 이전 노드가 해제될 때까지 `LockSupport.park()`로 대기합니다.
+
+```
+CLH 큐 상태:
+HEAD(가상) → Node(T1, SIGNAL) → Node(T2, WAITING) → Node(T3, WAITING) → TAIL
+
+T1이 락 보유 중:
+- T2: T1의 해제를 기다림 (park 상태)
+- T3: T2가 완료될 때까지 대기
+```
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.Condition;
+
+public class ReentrantLockDemo {
+    private final ReentrantLock lock = new ReentrantLock(true); // true = 공정 락
+    private final Condition notEmpty = lock.newCondition();
+    private final Condition notFull = lock.newCondition();
+
+    public void fairnessDemo() throws InterruptedException {
+        // tryLock: 락 획득 시도, 실패 시 즉시 반환 (synchronized로 불가)
+        if (lock.tryLock()) {
+            try {
+                // 임계 구역
+            } finally {
+                lock.unlock();
+            }
+        } else {
+            System.out.println("락 획득 실패 — 다른 작업 수행");
+        }
+    }
+
+    public void timedLockDemo() throws InterruptedException {
+        // 시간 제한 락 획득 시도 (synchronized로 불가)
+        if (lock.tryLock(100, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+            try {
+                // 임계 구역
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+
+    public void conditionDemo() throws InterruptedException {
         lock.lock();
         try {
-            // 임계 구역
+            while (/* 큐가 비었으면 */ false) {
+                notEmpty.await(); // Object.wait()와 동일하지만 여러 조건 변수 사용 가능
+            }
+            notFull.signal(); // Object.notify()와 동일
         } finally {
             lock.unlock(); // 반드시 finally에서 해제
         }
     }
-
-    public boolean tryLockUsage() {
-        // 즉시 반환: 락 획득 실패 시 false
-        if (lock.tryLock()) {
-            try {
-                return true;
-            } finally {
-                lock.unlock();
-            }
-        }
-        return false; // 락 획득 실패
-    }
-
-    public boolean tryLockWithTimeout() throws InterruptedException {
-        // 최대 1초 대기
-        if (lock.tryLock(1, TimeUnit.SECONDS)) {
-            try {
-                return true;
-            } finally {
-                lock.unlock();
-            }
-        }
-        return false;
-    }
-
-    // Condition: 특정 조건 기반 대기/신호
-    private final Condition notFull = lock.newCondition();
-    private final Condition notEmpty = lock.newCondition();
-    private final Queue<Integer> queue = new ArrayDeque<>();
-    private static final int MAX = 5;
-
-    public void put(int item) throws InterruptedException {
-        lock.lock();
-        try {
-            while (queue.size() == MAX) {
-                notFull.await(); // wait()과 유사, 락 해제 후 대기
-            }
-            queue.add(item);
-            notEmpty.signal(); // notify()와 유사, 하나만 깨움
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    public int take() throws InterruptedException {
-        lock.lock();
-        try {
-            while (queue.isEmpty()) {
-                notEmpty.await();
-            }
-            int item = queue.poll();
-            notFull.signal();
-            return item;
-        } finally {
-            lock.unlock();
-        }
-    }
 }
 ```
 
-### ReadWriteLock
+### ReentrantLock vs synchronized 비교
 
-읽기는 병렬로, 쓰기는 독점으로 처리합니다. 읽기가 많은 환경에서 성능을 크게 향상시킵니다.
+| 특성 | synchronized | ReentrantLock |
+|------|-------------|---------------|
+| 락 획득 방식 | 블로킹만 | tryLock, 타임아웃 |
+| 공정성 | 보장 없음 | 선택 가능 |
+| 조건 변수 | 1개(wait/notify) | 다수(Condition) |
+| 인터럽트 | 불가 | lockInterruptibly() |
+| 성능 | JVM 최적화됨 | 유사 |
+| 코드 | 간결 | 장황(try-finally) |
 
-```java
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+**WHY ReentrantLock이 필요한가**: `synchronized`는 블록 구조(block-structured)입니다. 락 획득 시도를 포기하거나(tryLock), 타임아웃을 설정하거나, 인터럽트에 반응하거나, 여러 조건 변수를 분리할 수 없습니다. 이런 고급 시나리오에서 `ReentrantLock`이 필요합니다.
 
-public class Cache<K, V> {
-    private final Map<K, V> map = new HashMap<>();
-    private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
-    private final Lock readLock = rwLock.readLock();
-    private final Lock writeLock = rwLock.writeLock();
+**공정 락(Fair Lock)의 트레이드오프**: 공정 락은 FIFO 순서를 보장하여 starvation을 방지합니다. 하지만 스레드를 깨우는 오버헤드(park/unpark)가 추가되어 처리량이 낮아집니다. 불공정 락은 현재 실행 중인 스레드에게 락 획득 기회를 더 주므로 처리량이 높지만 이론적으로 starvation이 가능합니다.
 
-    public V get(K key) {
-        readLock.lock(); // 여러 스레드 동시 읽기 가능
-        try {
-            return map.get(key);
-        } finally {
-            readLock.unlock();
-        }
-    }
+---
 
-    public void put(K key, V value) {
-        writeLock.lock(); // 쓰기 시 모든 읽기/쓰기 차단
-        try {
-            map.put(key, value);
-        } finally {
-            writeLock.unlock();
-        }
-    }
-}
-```
+## 8. CountDownLatch / CyclicBarrier / Semaphore
 
-**ReadWriteLock 동시성 규칙:**
-- 읽기 락 ↔ 읽기 락: 동시 허용
-- 읽기 락 ↔ 쓰기 락: 상호 배제
-- 쓰기 락 ↔ 쓰기 락: 상호 배제
+### CountDownLatch — 일회성 카운트다운
 
-### StampedLock (Java 8)
+`CountDownLatch`는 N개의 이벤트가 완료될 때까지 하나 이상의 스레드를 대기시킵니다. 카운터는 0이 되면 재사용할 수 없습니다.
 
-낙관적 읽기(Optimistic Read)를 지원하여 ReadWriteLock보다 높은 처리량을 제공합니다.
-
-```java
-import java.util.concurrent.locks.StampedLock;
-
-public class Point {
-    private double x, y;
-    private final StampedLock sl = new StampedLock();
-
-    public void move(double deltaX, double deltaY) {
-        long stamp = sl.writeLock(); // 쓰기 락
-        try {
-            x += deltaX;
-            y += deltaY;
-        } finally {
-            sl.unlockWrite(stamp);
-        }
-    }
-
-    public double distanceFromOrigin() {
-        // 낙관적 읽기: 락을 획득하지 않고 읽기 시도
-        long stamp = sl.tryOptimisticRead();
-        double curX = x, curY = y;
-
-        // 읽는 동안 쓰기 발생 여부 확인
-        if (!sl.validate(stamp)) {
-            // 쓰기가 발생했으므로 읽기 락으로 재시도
-            stamp = sl.readLock();
-            try {
-                curX = x;
-                curY = y;
-            } finally {
-                sl.unlockRead(stamp);
-            }
-        }
-        return Math.sqrt(curX * curX + curY * curY);
-    }
-}
-```
-
-### Semaphore
-
-지정된 수의 스레드만 동시에 접근할 수 있도록 제한합니다.
-
-```java
-import java.util.concurrent.Semaphore;
-
-// 시나리오: DB 커넥션 풀 (최대 10개 동시 연결)
-public class ConnectionPool {
-    private final Semaphore semaphore = new Semaphore(10, true); // 공정
-    private final Queue<Connection> pool = new ConcurrentLinkedQueue<>();
-
-    public Connection acquire() throws InterruptedException {
-        semaphore.acquire(); // permit 획득 (없으면 대기)
-        return pool.poll();
-    }
-
-    public void release(Connection conn) {
-        pool.offer(conn);
-        semaphore.release(); // permit 반납
-    }
-
-    // 현재 사용 가능한 permit 수
-    public int availablePermits() {
-        return semaphore.availablePermits();
-    }
-}
-
-// 간단한 예제: 동시 3개 스레드만 허용
-Semaphore sem = new Semaphore(3);
-for (int i = 0; i < 10; i++) {
-    final int id = i;
-    new Thread(() -> {
-        try {
-            sem.acquire();
-            System.out.println("스레드 " + id + " 실행 중");
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            sem.release();
-        }
-    }).start();
-}
-```
-
-### CountDownLatch
-
-일회성 카운트다운 래치입니다. 특정 수의 이벤트가 발생할 때까지 하나 이상의 스레드가 대기합니다.
+**내부 메커니즘**: AQS의 `state`를 카운터로 사용합니다. `countDown()`은 `state--`를 CAS로 수행합니다. `await()`는 `state == 0`이 될 때까지 `LockSupport.park()`로 대기합니다.
 
 ```java
 import java.util.concurrent.CountDownLatch;
 
-// 시나리오: 여러 서비스 초기화 완료 후 메인 로직 시작
-public class ServiceInitializer {
-    private final CountDownLatch latch = new CountDownLatch(3);
+public class CountDownLatchDemo {
+    public static void main(String[] args) throws InterruptedException {
+        int workerCount = 5;
+        CountDownLatch startGate = new CountDownLatch(1); // 출발 신호
+        CountDownLatch endGate = new CountDownLatch(workerCount); // 완료 신호
 
-    public void init() throws InterruptedException {
-        // 3개의 서비스를 병렬 초기화
-        new Thread(() -> {
-            initDatabase();
-            latch.countDown(); // 카운트 1 감소 (3→2)
-        }).start();
-
-        new Thread(() -> {
-            initCache();
-            latch.countDown(); // 카운트 1 감소 (2→1)
-        }).start();
-
-        new Thread(() -> {
-            initMessageQueue();
-            latch.countDown(); // 카운트 1 감소 (1→0)
-        }).start();
-
-        // 카운트가 0이 될 때까지 블로킹
-        latch.await();
-        System.out.println("모든 서비스 초기화 완료, 서버 시작!");
-        // 참고: CountDownLatch는 재사용 불가 (일회성)
-    }
-}
-
-// 시나리오: 모든 스레드 동시 출발 (레이스 시작 신호)
-CountDownLatch startSignal = new CountDownLatch(1);
-CountDownLatch doneSignal = new CountDownLatch(5);
-
-for (int i = 0; i < 5; i++) {
-    final int id = i;
-    new Thread(() -> {
-        try {
-            startSignal.await(); // 시작 신호 대기
-            System.out.println("스레드 " + id + " 출발!");
-            doneSignal.countDown();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }).start();
-}
-
-Thread.sleep(1000);
-startSignal.countDown(); // 동시 출발 신호
-doneSignal.await();      // 모두 완료 대기
-```
-
-### CyclicBarrier
-
-지정된 수의 스레드가 모두 배리어에 도달할 때까지 대기하고, 이후 모두 동시에 계속 진행합니다. **재사용 가능**합니다.
-
-```java
-import java.util.concurrent.CyclicBarrier;
-
-// 시나리오: 분산 계산 - 각 단계마다 모든 스레드 동기화
-public class ParallelMergeSort {
-    private final CyclicBarrier barrier;
-
-    public ParallelMergeSort(int numThreads) {
-        // 배리어 도달 시 실행할 작업 (선택 사항)
-        this.barrier = new CyclicBarrier(numThreads, () -> {
-            System.out.println("=== 모든 스레드가 배리어 도달, 다음 단계 시작 ===");
-        });
-    }
-
-    public void process(int threadId, int[] steps) {
-        for (int step : steps) {
-            System.out.printf("Thread %d: Step %d 처리 중%n", threadId, step);
-            try {
-                Thread.sleep(100);
-                barrier.await(); // 다른 스레드들 대기
-                // 여기서 모든 스레드가 동시에 재개됨
-            } catch (InterruptedException | BrokenBarrierException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
-}
-```
-
-**CountDownLatch vs CyclicBarrier:**
-
-| 특성 | CountDownLatch | CyclicBarrier |
-|------|---------------|---------------|
-| 재사용 | 불가 | 가능 (reset()) |
-| 감소 주체 | 어떤 스레드든 countDown() | 배리어 참여 스레드 |
-| 대기 대상 | 이벤트 N번 발생 | 스레드 N개 도달 |
-| 배리어 액션 | 없음 | 선택적 Runnable |
-
-### Phaser (Java 7)
-
-`CyclicBarrier`와 `CountDownLatch`를 합친 유연한 동기화 도구입니다. 동적으로 참여자 수를 조절할 수 있습니다.
-
-```java
-import java.util.concurrent.Phaser;
-
-// 시나리오: 동적 참여자 수를 가진 다단계 작업
-public class PhaserExample {
-    public static void main(String[] args) {
-        Phaser phaser = new Phaser(1); // 1 = 메인 스레드
-
-        for (int i = 0; i < 3; i++) {
-            phaser.register(); // 참여자 추가 (동적)
-            final int id = i;
+        for (int i = 0; i < workerCount; i++) {
+            final int workerId = i;
             new Thread(() -> {
-                System.out.printf("Phase 0: Worker %d 시작%n", id);
-                phaser.arriveAndAwaitAdvance(); // Phase 0 완료 대기
-
-                System.out.printf("Phase 1: Worker %d 시작%n", id);
-                phaser.arriveAndAwaitAdvance(); // Phase 1 완료 대기
-
-                System.out.printf("Worker %d 종료%n", id);
-                phaser.arriveAndDeregister(); // 참여자 제거
+                try {
+                    startGate.await(); // 출발 신호 대기 — 모든 스레드가 동시에 시작
+                    System.out.println("Worker " + workerId + " 작업 중");
+                    Thread.sleep((long)(Math.random() * 1000));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    endGate.countDown(); // 작업 완료 알림
+                }
             }).start();
         }
 
-        // 메인 스레드도 각 Phase에 참여
-        phaser.arriveAndAwaitAdvance(); // Phase 0
-        System.out.println("메인: Phase 0 완료");
-        phaser.arriveAndAwaitAdvance(); // Phase 1
-        System.out.println("메인: Phase 1 완료");
-        phaser.arriveAndDeregister();
+        long start = System.nanoTime();
+        startGate.countDown(); // 모든 워커 동시 출발
+        endGate.await();       // 모든 워커 완료 대기
+        long elapsed = System.nanoTime() - start;
+        System.out.println("전체 완료: " + elapsed / 1_000_000 + "ms");
     }
 }
 ```
 
----
+### CyclicBarrier — 반복 가능한 집결점
 
-## 5. 스레드 풀 (ExecutorService)
+`CyclicBarrier`는 N개의 스레드가 모두 특정 지점에 도달할 때까지 서로 기다립니다. 모두 도달하면 선택적으로 배리어 액션을 실행하고 재사용할 수 있습니다(Cyclic).
 
-### ThreadPoolExecutor 내부 구조
-
-```java
-new ThreadPoolExecutor(
-    int corePoolSize,          // 기본 유지 스레드 수
-    int maximumPoolSize,       // 최대 스레드 수
-    long keepAliveTime,        // 초과 스레드 유휴 유지 시간
-    TimeUnit unit,             // keepAliveTime 단위
-    BlockingQueue<Runnable> workQueue, // 작업 대기 큐
-    ThreadFactory threadFactory,       // 스레드 생성 팩토리
-    RejectedExecutionHandler handler   // 거부 정책
-);
-```
-
-**동작 흐름:**
-
-```mermaid
-sequenceDiagram
-    SUB->>CHK1: 호출
-    CHK1->>NEW1: YES
-    CHK1->>CHK2: NO
-    CHK2->>ENQUEUE: NO
-    CHK2->>CHK3: YES
-    CHK3->>NEW2: YES
-    CHK3->>REJ: NO
-```
-
-**RejectedExecutionHandler 전략:**
-- `AbortPolicy` (기본): `RejectedExecutionException` 던짐
-- `CallerRunsPolicy`: 제출한 스레드가 직접 실행 (백프레셔 효과)
-- `DiscardPolicy`: 조용히 무시
-- `DiscardOldestPolicy`: 큐에서 가장 오래된 작업 제거 후 재시도
+**내부 메커니즘**: `ReentrantLock`과 `Condition`을 사용합니다. `await()` 호출 시 카운터를 감소시키고, 0이 되면 `Condition.signalAll()`로 모든 스레드를 깨웁니다. 배리어는 초기 카운터로 리셋되어 재사용됩니다.
 
 ```java
-// 실무 권장 ThreadPoolExecutor 설정
-ThreadPoolExecutor executor = new ThreadPoolExecutor(
-        4,                                      // corePoolSize
-        8,                                      // maxPoolSize
-        60L, TimeUnit.SECONDS,                  // keepAlive
-        new LinkedBlockingQueue<>(1000),        // 유계 큐 (중요!)
-        new ThreadFactory() {
-            private final AtomicInteger idx = new AtomicInteger();
-            @Override
-            public Thread newThread(Runnable r) {
-                Thread t = new Thread(r, "worker-" + idx.incrementAndGet());
-                t.setDaemon(false);
-                return t;
-            }
-        },
-        new ThreadPoolExecutor.CallerRunsPolicy() // 거부 시 호출자 실행
-);
-```
-
-### Executors 팩토리를 쓰면 안 되는 이유
-
-```java
-// 위험! newFixedThreadPool: 큐 크기 무제한 (Integer.MAX_VALUE)
-// → 작업이 쌓이면 OOM 발생
-ExecutorService bad1 = Executors.newFixedThreadPool(4);
-
-// 위험! newCachedThreadPool: 스레드 수 무제한 (Integer.MAX_VALUE)
-// → 폭발적인 요청에 스레드 수십만 개 생성 → OOM
-ExecutorService bad2 = Executors.newCachedThreadPool();
-
-// 위험! newSingleThreadExecutor: 큐 크기 무제한
-// → OOM 위험
-ExecutorService bad3 = Executors.newSingleThreadExecutor();
-```
-
-**실무에서는 항상 `ThreadPoolExecutor`를 직접 생성**하여 corePoolSize, maxPoolSize, 큐 크기를 명시적으로 지정하세요.
-
-### ForkJoinPool — Work-Stealing 알고리즘
-
-분할 정복(Divide & Conquer) 방식의 병렬 처리에 최적화된 스레드 풀입니다.
-
-```mermaid
-graph LR
-  W1["Worker1: T1,T2,T3"]
-  W2["Worker2: T4,T5"]
-  W3["Worker3: 빈 큐"]
-  W3 -->|"Work-Stealing"| W1
-```
-
-```java
-import java.util.concurrent.*;
-
-// RecursiveTask: 결과 반환
-class SumTask extends RecursiveTask<Long> {
-    private final long[] array;
-    private final int start, end;
-    private static final int THRESHOLD = 1000;
-
-    public SumTask(long[] array, int start, int end) {
-        this.array = array;
-        this.start = start;
-        this.end = end;
-    }
-
-    @Override
-    protected Long compute() {
-        if (end - start <= THRESHOLD) {
-            // 충분히 작으면 직접 계산
-            long sum = 0;
-            for (int i = start; i < end; i++) sum += array[i];
-            return sum;
-        }
-        // 절반으로 분할
-        int mid = (start + end) / 2;
-        SumTask leftTask = new SumTask(array, start, mid);
-        SumTask rightTask = new SumTask(array, mid, end);
-
-        leftTask.fork(); // 비동기 실행 (다른 워커에게 위임)
-        long rightResult = rightTask.compute(); // 현재 스레드에서 실행
-        long leftResult = leftTask.join(); // 결과 대기
-
-        return leftResult + rightResult;
-    }
-}
-
-// 사용
-ForkJoinPool pool = new ForkJoinPool(
-        Runtime.getRuntime().availableProcessors()
-);
-long[] data = new long[10_000_000];
-Arrays.fill(data, 1L);
-
-Long sum = pool.invoke(new SumTask(data, 0, data.length));
-System.out.println("합계: " + sum); // 10000000
-```
-
-**Java 8+ parallel stream은 내부적으로 ForkJoinPool.commonPool()을 사용:**
-```java
-long sum = LongStream.rangeClosed(1, 1_000_000)
-        .parallel()
-        .sum();
-```
-
-### 적정 스레드 수 계산
-
-**CPU Bound 작업** (계산 위주, I/O 없음):
-```
-스레드 수 = CPU 코어 수 + 1
-// +1: 페이지 폴트 등 일시 중단 시 다른 스레드가 CPU를 활용
-```
-
-**I/O Bound 작업** (DB 쿼리, HTTP 요청 등):
-```
-스레드 수 = CPU 코어 수 × (1 + 대기 시간 / 계산 시간)
-
-예: CPU 8코어, 요청 처리 100ms 중 80ms가 DB 대기
-스레드 수 = 8 × (1 + 80/20) = 8 × 5 = 40
-```
-
-```java
-int cpuCores = Runtime.getRuntime().availableProcessors();
-double blockingCoefficient = 0.8; // 80% I/O 대기
-
-int ioThreads = (int) (cpuCores / (1 - blockingCoefficient));
-// 8 / 0.2 = 40
-
-System.out.println("CPU 코어: " + cpuCores);
-System.out.println("I/O 작업 권장 스레드: " + ioThreads);
-```
-
----
-
-## 6. Atomic 클래스
-
-### AtomicInteger, AtomicLong, AtomicReference
-
-`synchronized` 없이도 스레드 안전한 원자적 연산을 제공합니다.
-
-```java
-import java.util.concurrent.atomic.*;
-
-AtomicInteger counter = new AtomicInteger(0);
-
-counter.get();                    // 현재값 읽기
-counter.set(10);                  // 값 설정
-counter.getAndIncrement();        // 반환 후 증가 (i++)
-counter.incrementAndGet();        // 증가 후 반환 (++i)
-counter.getAndAdd(5);             // 반환 후 5 추가
-counter.addAndGet(5);             // 5 추가 후 반환
-counter.compareAndSet(10, 20);    // 10이면 20으로 변경 (CAS)
-counter.getAndUpdate(x -> x * 2); // 함수 적용 후 이전값 반환
-counter.updateAndGet(x -> x * 2); // 함수 적용 후 새값 반환
-
-// AtomicReference: 객체 참조를 원자적으로 변경
-AtomicReference<String> ref = new AtomicReference<>("initial");
-ref.compareAndSet("initial", "updated"); // 참조 비교는 ==
-```
-
-### CAS (Compare-And-Swap) 동작 원리
-
-CAS는 "내가 마지막으로 읽은 값이 지금도 같다면 새 값으로 바꿔라"는 원자적 명령입니다. 락을 걸지 않고도 경쟁 조건을 해결하는 핵심 메커니즘으로, x86 CPU의 `CMPXCHG` 명령어로 하드웨어 레벨에서 보장됩니다.
-
-> **비유로 이해하기**: 공유 문서를 동시에 수정하는 상황과 같습니다. "내가 읽었을 때 버전이 5였다면, 버전을 6으로 올리고 내용을 저장해라. 만약 이미 누군가 버전을 바꿨다면(5가 아니라면) 실패로 처리하고 다시 읽어라." CAS는 이 낙관적 동시성 제어(Optimistic Concurrency Control)를 CPU 명령어 하나로 수행합니다.
-
-```mermaid
-flowchart LR
-  A["1. 현재값 읽기: val = m"] --> B["2. 새값 계산: newVal ="]
-  B --> C{"3. CAS(addr, val, newVal)"}
-  C -->|"YES → 원자적으로 교체\nme"| D["성공 — return newVal"]
-  C -->|"NO → 다른 스레드가 먼저 변경"| A
-  D2["하드웨어: x86 CMPXCHG"]
-```
-
-```java
-// CAS를 사용한 lock-free 스택 구현
-public class LockFreeStack<T> {
-    private final AtomicReference<Node<T>> top = new AtomicReference<>();
-
-    public void push(T item) {
-        Node<T> newNode = new Node<>(item);
-        Node<T> currentTop;
-        do {
-            currentTop = top.get();
-            newNode.next = currentTop;
-        } while (!top.compareAndSet(currentTop, newNode)); // CAS
-    }
-
-    public T pop() {
-        Node<T> currentTop;
-        Node<T> newTop;
-        do {
-            currentTop = top.get();
-            if (currentTop == null) return null;
-            newTop = currentTop.next;
-        } while (!top.compareAndSet(currentTop, newTop)); // CAS
-        return currentTop.item;
-    }
-
-    private static class Node<T> {
-        T item;
-        Node<T> next;
-        Node(T item) { this.item = item; }
-    }
-}
-```
-
-### ABA 문제
-
-CAS의 고전적인 취약점입니다. 값이 A→B→A로 바뀌었지만 CAS는 현재값이 A인 것만 보고 "변경 없음"으로 판단하는 문제입니다. 단순 카운터에서는 무해하지만, 연결 리스트나 포인터 기반 자료구조에서는 심각한 버그를 유발합니다.
-
-```mermaid
-graph LR
-    T1["스레드1: 읽기 A"] --> CAS["CAS(A,new) 성공"]
-    T2["스레드2"] -->|A→B→A| MEM["메모리: A로 보임"]
-    MEM --> CAS
-    CAS --> BUG["ABA 착각!"]
-```
-
-**해결책: `AtomicStampedReference`** (버전 번호 추가)
-
-```java
-AtomicStampedReference<String> stampedRef =
-        new AtomicStampedReference<>("A", 0);
-
-// 읽기
-int[] stampHolder = new int[1];
-String value = stampedRef.get(stampHolder); // value="A", stamp=0
-
-// CAS: 값과 스탬프 모두 일치해야 성공
-boolean success = stampedRef.compareAndSet(
-        "A", "B",   // 예상값, 새값
-        0, 1        // 예상 스탬프, 새 스탬프
-);
-// 스탬프가 달라지므로 ABA 후에도 CAS 실패 → ABA 문제 해결
-```
-
-### LongAdder vs AtomicLong (고경합 환경)
-
-```mermaid
-sequenceDiagram
-    ThreadA->>AtomicLong_경합: 호출
-    ThreadB->>AtomicLong_경합: 호출
-    Cell:3->>sum_: 호출
-    Cell:7->>sum_: 호출
-```
-
-```java
-LongAdder adder = new LongAdder();
-adder.increment();          // +1
-adder.add(5);               // +5
-long total = adder.sum();   // 합산 (정확한 snapshot이 아닐 수 있음)
-long reset = adder.sumThenReset(); // 합산 후 0으로 리셋
-
-// 언제 무엇을 쓸까?
-// AtomicLong: 경합 낮음, compareAndSet이 필요, 단일 최신값이 중요
-// LongAdder:  경합 높음, 누적 카운터/통계, sum()의 일시적 부정확 허용 가능
-```
-
----
-
-## 7. 동시성 컬렉션
-
-### ConcurrentHashMap 내부 구조 (Java 8)
-
-Java 8의 `ConcurrentHashMap`은 세그먼트 락(Java 7 방식)을 버리고 **CAS + 버킷 단위 synchronized**를 사용합니다. 이 설계가 중요한 이유는 락의 범위가 버킷 하나로 좁혀지기 때문입니다. 16개 버킷이 있다면 최대 16개의 스레드가 서로 다른 버킷에 동시에 쓸 수 있습니다. Java 7의 세그먼트 락(기본 16개 세그먼트)에 비해 훨씬 세밀한 동시성 제어가 가능합니다.
-
-> **비유로 이해하기**: Java 7 ConcurrentHashMap은 도서관을 16개 구역으로 나눠 각 구역마다 사서 한 명이 관리하는 구조였습니다. Java 8은 책 한 권(버킷 하나)마다 독립적인 잠금장치를 달아, 특정 책을 빌리는 동안 다른 책에는 전혀 영향을 주지 않도록 개선한 것입니다.
-
-```mermaid
-graph LR
-    T1["스레드A"] -->|CAS| B0["버킷0"]
-    T2["스레드B"] -->|sync| B1["버킷1"]
-    T3["스레드C"] -->|CAS| B2["버킷2"]
-```
-
-```java
-ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
-
-// 기본 put/get은 스레드 안전
-map.put("key", 1);
-map.get("key");
-
-// 원자적 연산
-map.putIfAbsent("key", 2);     // 없을 때만 삽입
-map.remove("key", 1);          // 값이 1일 때만 제거
-map.replace("key", 1, 2);      // 1일 때만 2로 변경
-
-// Java 8 compute 메서드들
-map.compute("key", (k, v) ->
-        v == null ? 1 : v + 1); // 없으면 1, 있으면 +1 (원자적)
-
-map.merge("key", 1, Integer::sum); // 없으면 1, 있으면 합산 (원자적)
-
-// 대량 작업 (Java 8+, 병렬 처리)
-map.forEach(2, (k, v) ->
-        System.out.println(k + "=" + v)); // 병렬 임계값 = 2
-
-long count = map.reduceValues(2, v -> v.longValue(),
-        Long::sum); // 값 합산
-
-// 주의: size()는 정확하지 않을 수 있음 (추정값)
-// 정확한 크기가 필요하면 mappingCount() 사용 (long 반환)
-```
-
-### CopyOnWriteArrayList
-
-쓰기 시 전체 배열을 복사합니다. **읽기가 압도적으로 많고 쓰기가 드문** 경우에 적합합니다.
-
-```java
-CopyOnWriteArrayList<String> list = new CopyOnWriteArrayList<>();
-
-// 쓰기: 내부 배열 전체 복사 후 추가 → 비용 큼
-list.add("a");
-list.set(0, "b");
-
-// 읽기: 스냅샷 기반 → 락 없음, 매우 빠름
-// iterator는 생성 시점의 스냅샷을 순회 → iterator 중 수정 가능
-Iterator<String> it = list.iterator();
-list.add("c"); // iterator에 영향 없음 (다른 배열 참조)
-
-// 언제 사용?
-// - 이벤트 리스너 목록
-// - 구독자 목록
-// - 설정 목록 (읽기 많음, 쓰기 드묾)
-```
-
-### BlockingQueue
-
-생산자-소비자 패턴의 핵심입니다.
-
-```mermaid
-graph LR
-  P([생산자]) -->|"put() - 큐 꽉 참 시 블로"| BQ["BlockingQueue"]
-  BQ -->|"take() - 큐 비어있으면 블"| C([소비자])
-```
-
-| 구현 클래스 | 특징 |
-|------------|------|
-| `ArrayBlockingQueue` | 배열 기반, 유계, 공정 옵션 |
-| `LinkedBlockingQueue` | 연결 리스트 기반, 선택적 유계, 처리량 높음 |
-| `SynchronousQueue` | 큐 크기 0, 직접 핸드오프 (생산자와 소비자 직접 연결) |
-| `PriorityBlockingQueue` | 우선순위 기반, 무계 |
-| `DelayQueue` | 지연 시간 후 꺼낼 수 있는 큐 |
-
-**생산자-소비자 패턴:**
-
-```java
-import java.util.concurrent.*;
-
-public class WorkQueue {
-    private static final int CAPACITY = 100;
-    private final BlockingQueue<Runnable> queue =
-            new ArrayBlockingQueue<>(CAPACITY);
-
-    // 생산자 스레드
-    public void submit(Runnable task) throws InterruptedException {
-        queue.put(task); // 큐 가득 차면 공간 생길 때까지 블로킹
-        // offer(task, 1, TimeUnit.SECONDS): 타임아웃 버전
-    }
-
-    // 소비자 스레드
-    public void startWorker() {
-        new Thread(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.BrokenBarrierException;
+
+public class CyclicBarrierDemo {
+    public static void main(String[] args) {
+        int phases = 3;
+        int threadCount = 4;
+
+        CyclicBarrier barrier = new CyclicBarrier(threadCount, () -> {
+            // 배리어 액션: 모든 스레드가 도달했을 때 한 번 실행
+            System.out.println("=== 모든 스레드 집결 완료 — 다음 페이즈 시작 ===");
+        });
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            new Thread(() -> {
                 try {
-                    Runnable task = queue.take(); // 큐 비어있으면 블로킹
-                    task.run();
+                    for (int phase = 0; phase < phases; phase++) {
+                        // 각 페이즈 작업 수행
+                        Thread.sleep((long)(Math.random() * 500));
+                        System.out.println("Thread-" + threadId + " 페이즈 " + phase + " 완료, 집결 대기");
+
+                        barrier.await(); // 다른 스레드들 대기
+
+                        // 여기서부터 다음 페이즈
+                        System.out.println("Thread-" + threadId + " 페이즈 " + phase + " 시작");
+                    }
+                } catch (InterruptedException | BrokenBarrierException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).start();
+        }
+    }
+}
+```
+
+**CountDownLatch vs CyclicBarrier 핵심 차이**:
+- `CountDownLatch`: N → 0 방향 카운트다운. 재사용 불가. 주로 1:N 대기 관계.
+- `CyclicBarrier`: N개 스레드가 서로 대기. 재사용 가능. N:N 상호 대기 관계.
+
+### Semaphore — 자원 접근 제한
+
+`Semaphore`는 동시에 접근할 수 있는 스레드 수를 제한합니다. 데이터베이스 커넥션 풀, 파일 접근 제한 등에 활용합니다.
+
+**내부 메커니즘**: AQS의 `state`를 허가(permit) 수로 사용합니다. `acquire()`는 `state > 0`이면 CAS로 감소시키고, `state == 0`이면 `LockSupport.park()`로 대기합니다. `release()`는 `state++` 후 대기 스레드를 깨웁니다.
+
+```java
+import java.util.concurrent.Semaphore;
+
+public class SemaphoreDemo {
+    private static final int MAX_CONNECTIONS = 3;
+    private final Semaphore semaphore = new Semaphore(MAX_CONNECTIONS, true); // 공정 모드
+
+    public void accessResource(int threadId) throws InterruptedException {
+        semaphore.acquire(); // 허가 획득 (없으면 대기)
+        try {
+            System.out.println("Thread-" + threadId + " 자원 사용 중. 남은 허가: " + semaphore.availablePermits());
+            Thread.sleep(1000); // 자원 사용 시뮬레이션
+        } finally {
+            semaphore.release(); // 반드시 반환
+            System.out.println("Thread-" + threadId + " 자원 반환");
+        }
+    }
+
+    public static void main(String[] args) {
+        SemaphoreDemo demo = new SemaphoreDemo();
+        for (int i = 0; i < 10; i++) {
+            final int id = i;
+            new Thread(() -> {
+                try {
+                    demo.accessResource(id);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    break;
                 }
-            }
-        }, "worker").start();
+            }).start();
+        }
     }
 }
 ```
 
 ---
 
-## 8. CompletableFuture 딥다이브
+## 9. Deadlock — 교착상태 분석과 해결
 
-### 비동기 체이닝
+### 4가지 필요 조건
 
-```java
-// 기본 생성 방법
-CompletableFuture<Void> cf1 = CompletableFuture.runAsync(() -> {
-    // 결과 없는 비동기 작업
-});
+교착상태(Deadlock)는 다음 4가지 조건이 **동시에** 성립할 때 발생합니다. 하나라도 깨면 교착상태를 예방할 수 있습니다.
 
-CompletableFuture<String> cf2 = CompletableFuture.supplyAsync(() -> {
-    return "결과값"; // 결과 있는 비동기 작업
-});
+**1. 상호 배제(Mutual Exclusion)**: 한 번에 하나의 스레드만 자원을 사용할 수 있습니다. (락의 본질적 특성 — 제거 불가)
 
-// thenApply: 이전 결과를 변환 (Function<T,R>), 동일 스레드에서 실행
-CompletableFuture<Integer> cf3 = cf2.thenApply(String::length);
+**2. 점유와 대기(Hold-and-Wait)**: 자원을 보유한 채로 다른 자원을 대기합니다.
 
-// thenApplyAsync: 별도 스레드에서 변환
-CompletableFuture<Integer> cf4 = cf2.thenApplyAsync(String::length);
+**3. 비선점(No Preemption)**: 강제로 자원을 빼앗을 수 없습니다. 자발적으로 해제해야 합니다.
 
-// thenCompose: 결과로 새 CompletableFuture 생성 (flatMap과 유사)
-CompletableFuture<String> userCf = CompletableFuture
-        .supplyAsync(() -> fetchUserId())           // Long 반환
-        .thenCompose(id -> fetchUserName(id));      // Long → CF<String>
-
-// thenCombine: 두 CompletableFuture 결과를 합산
-CompletableFuture<String> name = CompletableFuture.supplyAsync(() -> "Kim");
-CompletableFuture<Integer> age = CompletableFuture.supplyAsync(() -> 30);
-
-CompletableFuture<String> combined = name.thenCombine(age,
-        (n, a) -> n + "(" + a + ")"); // "Kim(30)"
-
-// thenAccept: 결과를 소비 (Consumer), 반환값 없음
-cf2.thenAccept(result -> System.out.println("결과: " + result));
-
-// thenRun: 이전 결과 무관하게 실행 (Runnable)
-cf2.thenRun(() -> System.out.println("완료 후 실행"));
-```
-
-### 예외 처리
+**4. 순환 대기(Circular Wait)**: T1 → T2 → T3 → T1 형태의 순환 의존성이 존재합니다.
 
 ```java
-CompletableFuture<String> cf = CompletableFuture
-        .supplyAsync(() -> {
-            if (Math.random() < 0.5) throw new RuntimeException("랜덤 실패");
-            return "성공";
-        })
-        // exceptionally: 예외 발생 시 기본값 제공 (Function<Throwable, T>)
-        .exceptionally(ex -> {
-            System.out.println("예외 처리: " + ex.getMessage());
-            return "기본값";
-        });
+// 전형적인 Deadlock 예제
+public class DeadlockDemo {
+    private final Object lockA = new Object();
+    private final Object lockB = new Object();
 
-// handle: 성공/실패 모두 처리 (BiFunction<T, Throwable, R>)
-CompletableFuture<String> cf2 = CompletableFuture
-        .supplyAsync(() -> "데이터")
-        .handle((result, ex) -> {
-            if (ex != null) {
-                return "에러: " + ex.getMessage();
-            }
-            return "OK: " + result;
-        });
-
-// whenComplete: 결과/예외 소비, 값은 변환하지 않음
-CompletableFuture<String> cf3 = CompletableFuture
-        .supplyAsync(() -> "데이터")
-        .whenComplete((result, ex) -> {
-            // 로깅, 메트릭 수집 등 사이드 이펙트
-            if (ex != null) log.error("실패", ex);
-            else log.info("성공: {}", result);
-        });
-```
-
-### allOf / anyOf
-
-```java
-CompletableFuture<String> cf1 = CompletableFuture.supplyAsync(() -> {
-    sleep(1000); return "서비스A";
-});
-CompletableFuture<String> cf2 = CompletableFuture.supplyAsync(() -> {
-    sleep(2000); return "서비스B";
-});
-CompletableFuture<String> cf3 = CompletableFuture.supplyAsync(() -> {
-    sleep(500); return "서비스C";
-});
-
-// allOf: 모든 CF 완료 대기 (결과는 직접 get() 필요)
-CompletableFuture<Void> all = CompletableFuture.allOf(cf1, cf2, cf3);
-all.join(); // 2초 후 완료
-String r1 = cf1.join(); // 이미 완료됨
-String r2 = cf2.join();
-String r3 = cf3.join();
-
-// 결과를 리스트로 수집하는 패턴
-List<CompletableFuture<String>> futures = List.of(cf1, cf2, cf3);
-CompletableFuture<List<String>> allResults = CompletableFuture
-        .allOf(futures.toArray(new CompletableFuture[0]))
-        .thenApply(v -> futures.stream()
-                .map(CompletableFuture::join)
-                .collect(Collectors.toList()));
-
-// anyOf: 가장 먼저 완료된 CF 반환 (0.5초 후 "서비스C" 반환)
-CompletableFuture<Object> any = CompletableFuture.anyOf(cf1, cf2, cf3);
-Object first = any.join(); // "서비스C"
-```
-
-### 커스텀 Executor 설정
-
-```java
-// I/O 작업용 스레드 풀
-ExecutorService ioExecutor = new ThreadPoolExecutor(
-        20, 100, 60L, TimeUnit.SECONDS,
-        new LinkedBlockingQueue<>(1000),
-        r -> new Thread(r, "io-worker"),
-        new ThreadPoolExecutor.CallerRunsPolicy()
-);
-
-// 계산 작업용 스레드 풀
-ExecutorService cpuExecutor = new ThreadPoolExecutor(
-        Runtime.getRuntime().availableProcessors(),
-        Runtime.getRuntime().availableProcessors(),
-        0L, TimeUnit.SECONDS,
-        new LinkedBlockingQueue<>(500)
-);
-
-// 실무 패턴: 외부 API 병렬 호출
-List<Long> userIds = List.of(1L, 2L, 3L, 4L, 5L);
-
-List<CompletableFuture<UserInfo>> futures = userIds.stream()
-        .map(id -> CompletableFuture
-                .supplyAsync(() -> callExternalApi(id), ioExecutor)
-                .orTimeout(5, TimeUnit.SECONDS) // Java 9+
-                .exceptionally(ex -> UserInfo.empty(id)))
-        .collect(Collectors.toList());
-
-List<UserInfo> results = futures.stream()
-        .map(CompletableFuture::join)
-        .collect(Collectors.toList());
-```
-
----
-
-## 9. Virtual Thread (Java 21+)
-
-### Platform Thread vs Virtual Thread
-
-```
-Platform Thread (Java 21 이전):
-  Java Thread → OS Kernel Thread → CPU 코어
-  생성 비용: ~1MB 스택 메모리
-  최대 수천 개 실용적
-
-Virtual Thread (Java 21+):
-  Virtual Thread → Carrier Thread (Platform Thread) → CPU 코어
-  생성 비용: ~수 KB (힙 메모리)
-  수백만 개 생성 가능
-```
-
-### 왜 필요한가? (C10K 문제)
-
-기존 Platform Thread 방식에서 동시에 10,000개의 요청을 처리하려면 10,000개의 OS 스레드가 필요합니다. 각 스레드는 최소 1MB의 스택 메모리를 가지므로 **10GB**의 메모리가 필요합니다.
-
-게다가 대부분의 요청은 DB 쿼리, HTTP 호출 등 **I/O 대기** 시간이 대부분입니다. OS 스레드가 I/O 대기 중에는 CPU를 사용하지 않지만 메모리를 점유하는 비효율이 발생합니다.
-
-### 동작 원리 (캐리어 스레드 + 마운트/언마운트)
-
-```mermaid
-sequenceDiagram
-    Carrier_Thread->>VT1_힙_저장: I/O→언마운트
-    Carrier_Thread->>VThread2: 마운트
-    VT1_힙_저장->>Carrier_Thread: I/O완료
-```
-
-### 사용법과 마이그레이션 가이드
-
-```java
-// 1. 직접 생성
-Thread vThread = Thread.ofVirtual()
-        .name("vt-", 0) // vt-0, vt-1, ...
-        .start(() -> {
-            System.out.println("Virtual Thread: "
-                    + Thread.currentThread().isVirtual()); // true
-        });
-
-// 2. Factory로 생성
-ThreadFactory factory = Thread.ofVirtual().factory();
-Thread vt = factory.newThread(() -> System.out.println("VT"));
-
-// 3. ExecutorService (가장 실용적)
-try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-    // 요청마다 새 Virtual Thread 생성 (비용 매우 저렴)
-    List<Future<String>> futures = new ArrayList<>();
-    for (int i = 0; i < 10_000; i++) {
-        final int id = i;
-        futures.add(executor.submit(() -> processRequest(id)));
-    }
-    for (Future<String> f : futures) {
-        System.out.println(f.get());
-    }
-} // try-with-resources: 자동 shutdown + awaitTermination
-
-// 4. 스레드 속성 확인
-Thread.currentThread().isVirtual(); // Virtual Thread 여부
-```
-
-**마이그레이션 체크리스트:**
-
-```java
-// 기존 코드 (Platform Thread 풀)
-ExecutorService old = Executors.newFixedThreadPool(200);
-
-// Virtual Thread로 마이그레이션
-ExecutorService newExec = Executors.newVirtualThreadPerTaskExecutor();
-// 스레드 풀 크기 제한 불필요: VT는 I/O 대기 중 Carrier 반환
-
-// Spring Boot 3.2+ 설정
-// application.properties:
-// spring.threads.virtual.enabled=true
-```
-
-### synchronized 피닝(Pinning) 문제
-
-Virtual Thread가 `synchronized` 블록 안에서 I/O 대기 시, Carrier Thread에서 **언마운트되지 못하고 고정(pinned)**됩니다.
-
-```java
-// 문제: synchronized 내부에서 블로킹 I/O → Carrier Thread 낭비
-public synchronized String badMethod() {
-    return httpClient.get(url); // 여기서 블로킹 → Carrier Thread 피닝!
-}
-
-// 해결책 1: ReentrantLock 사용 (피닝 없음)
-private final ReentrantLock lock = new ReentrantLock();
-
-public String goodMethod() {
-    lock.lock();
-    try {
-        return httpClient.get(url); // VT 언마운트 가능
-    } finally {
-        lock.unlock();
-    }
-}
-
-// 해결책 2: 블로킹 작업을 synchronized 외부로 이동
-public String betterMethod() {
-    String result = httpClient.get(url); // 블로킹 (VT 언마운트 가능)
-    synchronized (this) {
-        return processResult(result); // 빠른 CPU 작업만
-    }
-}
-
-// 피닝 진단: JVM 플래그
-// -Djdk.tracePinnedThreads=full
-// → 피닝 발생 시 스택 트레이스 출력
-```
-
-**Virtual Thread 주의사항:**
-- `ThreadLocal`: VT는 많이 생성되므로 무거운 ThreadLocal 값은 메모리 문제
-- CPU Bound 작업: VT는 I/O Bound에 최적화, CPU Bound는 Platform Thread가 유리
-- `synchronized` + 블로킹: 피닝 발생, `ReentrantLock`으로 교체
-
----
-
-## 10. 데드락/라이브락/기아
-
-### 데드락 조건 4가지
-
-데드락은 다음 4가지 조건이 **모두** 충족될 때 발생합니다.
-
-```mermaid
-graph LR
-  A([Thread A]) -->|"보유"| L1[락 1]
-  A -->|"대기"| L2[락 2]
-  B([Thread B]) -->|"보유"| L2
-  B -->|"대기"| L1
-```
-
-**데드락 발생 예제:**
-
-```java
-public class DeadlockExample {
-    private final Object lock1 = new Object();
-    private final Object lock2 = new Object();
-
-    // Thread A: lock1 획득 후 lock2 획득 시도
-    public void methodA() {
-        synchronized (lock1) {
-            System.out.println("Thread A: lock1 획득");
-            try { Thread.sleep(100); } catch (InterruptedException e) {}
-            synchronized (lock2) { // Thread B가 lock2 보유 중 → 대기
-                System.out.println("Thread A: lock2 획득");
+    // 스레드 1: A 획득 후 B 대기
+    public void method1() throws InterruptedException {
+        synchronized (lockA) {
+            System.out.println("Thread1: lockA 획득");
+            Thread.sleep(100); // 스레드2가 lockB를 획득할 시간
+            synchronized (lockB) { // lockB를 Thread2가 보유 중 → 대기
+                System.out.println("Thread1: lockB 획득");
             }
         }
     }
 
-    // Thread B: lock2 획득 후 lock1 획득 시도
-    public void methodB() {
-        synchronized (lock2) {
-            System.out.println("Thread B: lock2 획득");
-            try { Thread.sleep(100); } catch (InterruptedException e) {}
-            synchronized (lock1) { // Thread A가 lock1 보유 중 → 대기
-                System.out.println("Thread B: lock1 획득"); // 영원히 미도달
+    // 스레드 2: B 획득 후 A 대기
+    public void method2() throws InterruptedException {
+        synchronized (lockB) {
+            System.out.println("Thread2: lockB 획득");
+            Thread.sleep(100); // 스레드1이 lockA를 획득할 시간
+            synchronized (lockA) { // lockA를 Thread1이 보유 중 → 대기
+                System.out.println("Thread2: lockA 획득"); // 절대 실행 안 됨
             }
         }
     }
 }
 ```
 
-### 데드락 탐지
+### jstack으로 Deadlock 탐지
 
-**jstack 사용:**
 ```bash
-# PID 확인
+# 실행 중인 JVM의 PID 확인
 jps -l
 
-# 스레드 덤프 생성
+# 스레드 덤프 출력 (jstack)
 jstack <PID>
 
-# 출력 예시:
+# jstack 출력 예시 (Deadlock 탐지)
 # Found one Java-level deadlock:
 # =============================
-# "Thread-A": waiting to lock monitor 0x00007f...
-#   which is held by "Thread-B"
-# "Thread-B": waiting to lock monitor 0x00007f...
-#   which is held by "Thread-A"
+# "Thread-1":
+#   waiting to lock monitor 0x00007f8a1c003ae8 (object 0x000000076b6a4e88, a java.lang.Object),
+#   which is held by "Thread-0"
+# "Thread-0":
+#   waiting to lock monitor 0x00007f8a1c006168 (object 0x000000076b6a4e98, a java.lang.Object),
+#   which is held by "Thread-1"
 ```
 
-**ThreadMXBean으로 프로그래밍적 탐지:**
+### Deadlock 예방 전략
+
 ```java
-import java.lang.management.*;
+// 전략 1: 락 순서 정렬 (순환 대기 제거)
+public class DeadlockPrevention {
+    private final Object lockA = new Object();
+    private final Object lockB = new Object();
 
-ThreadMXBean mxBean = ManagementFactory.getThreadMXBean();
-
-// 데드락 탐지 (synchronized만)
-long[] deadlocked = mxBean.findMonitorDeadlockedThreads();
-
-// 데드락 탐지 (synchronized + j.u.c 락)
-long[] allDeadlocked = mxBean.findDeadlockedThreads();
-
-if (allDeadlocked != null) {
-    ThreadInfo[] infos = mxBean.getThreadInfo(allDeadlocked, true, true);
-    for (ThreadInfo info : infos) {
-        System.out.println("데드락 스레드: " + info.getThreadName());
-        System.out.println("대기 중인 락: " + info.getLockName());
-        System.out.println("락 보유자: " + info.getLockOwnerName());
+    // 항상 lockA → lockB 순서로 획득 (두 메서드 모두 동일한 순서)
+    public void method1() {
+        synchronized (lockA) {
+            synchronized (lockB) { // 항상 A 먼저
+                // 작업
+            }
+        }
     }
-}
-```
 
-### 데드락 회피 전략
-
-**전략 1: 락 순서 고정 (Lock Ordering)**
-
-```java
-// 항상 System.identityHashCode() 순서로 락 획득
-public void safeTransfer(Account from, Account to, int amount) {
-    int fromHash = System.identityHashCode(from);
-    int toHash = System.identityHashCode(to);
-
-    Object first = fromHash < toHash ? from : to;
-    Object second = fromHash < toHash ? to : from;
-
-    synchronized (first) {
-        synchronized (second) {
-            from.debit(amount);
-            to.credit(amount);
+    public void method2() {
+        synchronized (lockA) { // method1과 동일한 순서
+            synchronized (lockB) {
+                // 작업
+            }
         }
     }
 }
-```
 
-**전략 2: tryLock 타임아웃 (Lock Timeout)**
+// 전략 2: tryLock으로 비선점 조건 완화
+public class TryLockPrevention {
+    private final ReentrantLock lockA = new ReentrantLock();
+    private final ReentrantLock lockB = new ReentrantLock();
 
-```java
-public boolean transferWithTimeout(Account from, Account to, int amount)
-        throws InterruptedException {
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-
-    while (true) {
-        if (from.lock.tryLock()) {
-            try {
-                if (to.lock.tryLock()) {
-                    try {
-                        from.debit(amount);
-                        to.credit(amount);
-                        return true;
-                    } finally {
-                        to.lock.unlock();
+    public void method() throws InterruptedException {
+        while (true) {
+            if (lockA.tryLock(50, TimeUnit.MILLISECONDS)) {
+                try {
+                    if (lockB.tryLock(50, TimeUnit.MILLISECONDS)) {
+                        try {
+                            // 두 락 모두 획득 성공
+                            return;
+                        } finally {
+                            lockB.unlock();
+                        }
                     }
+                } finally {
+                    lockA.unlock();
                 }
-            } finally {
-                from.lock.unlock();
             }
-        }
-
-        if (System.nanoTime() > deadline) {
-            return false; // 타임아웃: 데드락 회피
-        }
-
-        Thread.sleep(ThreadLocalRandom.current().nextInt(10)); // 백오프
-    }
-}
-```
-
-### 라이브락 / 기아 상태
-
-**라이브락(Livelock):** 스레드들이 서로 양보하다가 아무도 진행하지 못하는 상태. 데드락과 달리 스레드는 계속 동작 중.
-
-```java
-// 라이브락 예: 두 사람이 복도에서 같은 방향으로 비키는 상황
-public class Livelock {
-    volatile boolean moveLeft = true;
-
-    public void person1() {
-        while (true) {
-            if (!moveLeft) { // 상대방이 왼쪽으로 갔으면
-                System.out.println("Person1 통과");
-                break;
-            }
-            System.out.println("Person1: 오른쪽으로 이동");
-            moveLeft = false; // 오른쪽으로 이동
-        }
-    }
-
-    public void person2() {
-        while (true) {
-            if (moveLeft) { // 상대방이 오른쪽으로 갔으면
-                System.out.println("Person2 통과");
-                break;
-            }
-            System.out.println("Person2: 왼쪽으로 이동");
-            moveLeft = true; // 왼쪽으로 이동
-            // 두 사람이 계속 같은 방향으로 비킴!
+            // 두 락 중 하나라도 실패 → 잠깐 대기 후 재시도
+            Thread.sleep(10 + (long)(Math.random() * 10)); // 랜덤 백오프
         }
     }
 }
-// 해결: 랜덤 백오프 또는 우선순위 부여
-```
-
-**기아(Starvation):** 특정 스레드가 오랫동안 또는 영원히 자원을 할당받지 못하는 상태.
-
-```java
-// 기아 발생 원인:
-// 1. 비공정 락: 높은 우선순위 스레드가 계속 선점
-// 2. synchronized: 락 대기 순서 보장 없음
-
-// 해결: 공정 락 사용
-ReentrantLock fairLock = new ReentrantLock(true); // fair=true
-// 대기 순서대로 락 할당 (FIFO)
-
-// 또는 스레드 우선순위 조정 (주의: OS 의존적)
-Thread t = new Thread(task);
-t.setPriority(Thread.MAX_PRIORITY); // 10 (비추천: 이식성 없음)
 ```
 
 ---
 
-## 11. ThreadLocal
+## 10. Thread Safety — CAS와 원자 연산
 
-### 동작 원리 (Thread 내부 ThreadLocalMap)
+### CAS(Compare-And-Swap) — 락 없는 원자 연산
 
-각 `Thread` 객체는 내부에 `ThreadLocal.ThreadLocalMap`을 가집니다. `ThreadLocal`은 해당 맵의 키 역할을 합니다.
-
-```mermaid
-graph LR
-  TA["Thread A"] --> MA["Map: tlA→사용자A, tlB"]
-  TB["Thread B"] --> MB["Map: tlA→사용자B, tlB"]
-  NOTE["동일 ThreadLocal, 스레"]
-```
+CAS는 현대 CPU가 제공하는 **단일 하드웨어 명령어**입니다. "현재 값이 예상값과 같으면 새 값으로 교체하고 true를 반환, 다르면 false를 반환"합니다. x86에서는 `CMPXCHG` 명령어로 구현됩니다.
 
 ```java
-// ThreadLocal 사용
-public class UserContext {
-    private static final ThreadLocal<String> currentUser =
-            ThreadLocal.withInitial(() -> "anonymous");
-
-    public static String getUser() {
-        return currentUser.get();
+// CAS의 의사 코드 (실제로는 단일 CPU 명령어로 실행)
+boolean compareAndSwap(Object obj, int expected, int newValue) {
+    // 이 블록 전체가 원자적으로 실행됨 (중단 불가)
+    if (obj.value == expected) {
+        obj.value = newValue;
+        return true;
     }
-
-    public static void setUser(String user) {
-        currentUser.set(user);
-    }
-
-    public static void clearUser() {
-        currentUser.remove(); // 반드시 명시적으로 제거
-    }
-}
-
-// 사용 예
-UserContext.setUser("kim");
-try {
-    processRequest(); // 같은 스레드 내 어디서든 kim 반환
-} finally {
-    UserContext.clearUser(); // 스레드 풀 환경에서 필수!
+    return false;
 }
 ```
 
-### 메모리 누수 주의사항
-
-ThreadLocal의 메모리 누수는 스레드 풀 환경에서 특히 위험합니다. 스레드 풀의 스레드는 재사용되므로 `remove()`를 호출하지 않으면 이전 요청의 데이터가 다음 요청에서 그대로 보입니다. 이는 메모리 누수뿐만 아니라 **보안 취약점**이 됩니다(다른 사용자의 인증 정보가 노출될 수 있음).
-
-```mermaid
-graph LR
-    TL["ThreadLocal=null"] -->|GC 수거| GC["KEY=null"]
-    GC -->|VALUE 잔존| LEAK["메모리 누수"]
-    REQ1["요청1 set()"] --> POOL["스레드 재사용"]
-    POOL -->|remove() 없으면| LEAK2["이전값 노출!"]
-```
-
-스레드 풀에서의 올바른 패턴은 반드시 `try-finally`로 `remove()`를 보장하는 것입니다.
-
 ```java
-// 올바른 사용 패턴 (서블릿 필터 예)
-public class SecurityFilter implements Filter {
-    private static final ThreadLocal<User> userHolder = new ThreadLocal<>();
+import java.util.concurrent.atomic.AtomicInteger;
 
-    @Override
-    public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
-            throws IOException, ServletException {
-        try {
-            User user = authenticate(req); // 인증
-            userHolder.set(user);          // 현재 스레드에 저장
-            chain.doFilter(req, res);       // 다운스트림 처리
-        } finally {
-            userHolder.remove();           // 반드시 제거!
+public class CASDemo {
+    private final AtomicInteger count = new AtomicInteger(0);
+
+    public void increment() {
+        // AtomicInteger.incrementAndGet() 내부 구현
+        // do {
+        //     current = get();
+        //     next = current + 1;
+        // } while (!compareAndSet(current, next)); // CAS 실패 시 재시도
+        count.incrementAndGet();
+    }
+
+    // AtomicInteger를 사용한 스택 구현
+    public static class LockFreeCounter {
+        private final AtomicInteger value = new AtomicInteger(0);
+
+        public int getAndIncrement() {
+            int current;
+            do {
+                current = value.get();
+            } while (!value.compareAndSet(current, current + 1));
+            return current;
         }
     }
+}
+```
 
-    public static User getCurrentUser() {
-        return userHolder.get();
+### ABA 문제 — CAS의 숨겨진 함정
+
+CAS의 "현재 값 == 예상값"이라는 조건에는 함정이 있습니다. 값이 A → B → A로 변했지만 관찰하면 여전히 A처럼 보입니다. 이 사이의 변화를 놓칩니다.
+
+```java
+// ABA 문제 시나리오
+// 스레드 1: 스택 top = A → pop() 준비, expected = A
+// 스레드 2: pop A, pop B, push A → 스택 상태 변경됨
+// 스레드 1: CAS(A, new_top) 성공 → 하지만 B는 사라짐!
+
+// AtomicStampedReference로 해결 — 버전 번호 추가
+import java.util.concurrent.atomic.AtomicStampedReference;
+
+public class ABAProblemSolution {
+    private final AtomicStampedReference<Integer> ref =
+        new AtomicStampedReference<>(0, 0); // 값, 스탬프(버전)
+
+    public void update() {
+        int[] stampHolder = new int[1];
+        int current = ref.get(stampHolder); // 현재 값과 스탬프 동시 획득
+        int currentStamp = stampHolder[0];
+
+        // 값과 스탬프가 모두 일치해야 CAS 성공
+        boolean success = ref.compareAndSet(
+            current, current + 1,        // 값: current → current+1
+            currentStamp, currentStamp + 1 // 스탬프: 증가
+        );
+
+        // A → B → A로 바뀌어도 스탬프가 다르므로 CAS 실패
     }
 }
 ```
 
-### InheritableThreadLocal
+### AtomicReference와 Unsafe
 
-부모 스레드의 값을 자식 스레드에 상속합니다.
+Java의 `AtomicInteger`, `AtomicLong`, `AtomicReference` 등은 내부적으로 `sun.misc.Unsafe`의 `compareAndSwapInt()` 등을 호출합니다. `Unsafe`는 JVM 내부의 저수준 메모리 조작 클래스로, 직접 CPU의 CAS 명령어를 사용합니다.
 
 ```java
-InheritableThreadLocal<String> itl = new InheritableThreadLocal<>();
+import java.util.concurrent.atomic.AtomicReference;
 
-itl.set("부모 값");
+public class AtomicReferenceDemo {
+    static class Node<T> {
+        T value;
+        Node<T> next;
+        Node(T value) { this.value = value; }
+    }
 
-Thread child = new Thread(() -> {
-    System.out.println(itl.get()); // "부모 값" 출력
-    itl.set("자식 값");            // 자식에서 변경해도 부모에 영향 없음
-});
-child.start();
+    // 락 없는 스택 (Treiber Stack)
+    static class LockFreeStack<T> {
+        private final AtomicReference<Node<T>> top = new AtomicReference<>();
 
-// 주의: 스레드 풀에서는 스레드 생성 시점에만 상속 → 이후 재사용 시 부모 값 반영 안 됨
-// 해결: Transmittable ThreadLocal (TTL) 라이브러리 사용
-```
+        public void push(T value) {
+            Node<T> newHead = new Node<>(value);
+            Node<T> oldHead;
+            do {
+                oldHead = top.get();
+                newHead.next = oldHead;
+            } while (!top.compareAndSet(oldHead, newHead)); // CAS 실패 시 재시도
+        }
 
-### 실무 활용 (MDC, SecurityContext, 트랜잭션)
-
-**SLF4J MDC (Mapped Diagnostic Context):**
-```java
-// 요청마다 고유 ID를 로그에 자동 포함
-MDC.put("requestId", UUID.randomUUID().toString());
-MDC.put("userId", currentUser.getId());
-
-try {
-    log.info("서비스 시작"); // [requestId=abc123, userId=kim] 서비스 시작
-    doService();
-} finally {
-    MDC.clear(); // 내부적으로 ThreadLocal 사용
+        public T pop() {
+            Node<T> oldHead;
+            Node<T> newHead;
+            do {
+                oldHead = top.get();
+                if (oldHead == null) return null;
+                newHead = oldHead.next;
+            } while (!top.compareAndSet(oldHead, newHead));
+            return oldHead.value;
+        }
+    }
 }
-
-// logback.xml 설정
-// <pattern>%d [%X{requestId}] [%X{userId}] %-5level %msg%n</pattern>
-```
-
-**Spring Security - SecurityContextHolder:**
-```java
-// Spring Security는 SecurityContext를 ThreadLocal에 저장
-Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-String username = auth.getName();
-
-// Virtual Thread 사용 시: ThreadLocal → ScopedValue 고려 필요
-// Spring Security 6.x: 자동으로 Virtual Thread 대응
-```
-
-**Spring Transaction - TransactionSynchronizationManager:**
-```java
-// Spring은 현재 트랜잭션 정보를 ThreadLocal에 저장
-// @Transactional이 동작하는 원리
-boolean hasTransaction = TransactionSynchronizationManager
-        .isActualTransactionActive();
-
-// 같은 스레드 내에서만 트랜잭션 전파 가능한 이유
-// → 다른 스레드는 다른 ThreadLocal → 다른 커넥션/트랜잭션
 ```
 
 ---
 
-## 실무에서 자주 하는 실수
+## 11. Fork/Join — 분할 정복 병렬 처리
 
-**실수 1: run()을 직접 호출해 단일 스레드로 실행**
+### Work-Stealing 알고리즘 — 왜 Deque를 사용하는가
 
-```java
-// 잘못된 코드 — 새 스레드가 생성되지 않고 현재 스레드에서 실행됨
-Thread t = new Thread(() -> System.out.println("작업"));
-t.run(); // 새 스레드 없이 현재 스레드에서 실행!
+`ForkJoinPool`은 **Work-Stealing** 알고리즘을 사용합니다. 각 워커 스레드는 자신만의 **양방향 큐(Deque, Double-Ended Queue)**를 가집니다.
 
-// 올바른 코드
-t.start(); // OS에게 새 스레드 생성 요청
+```mermaid
+graph LR
+    T1["워커1 Deque"] -->|자기 작업| OWN["앞에서 꺼냄"]
+    T2["워커2 Deque"] -->|일 없을 때| STEAL["T1 뒤에서 훔침"]
+    T3["워커3 Deque"] -->|일 없을 때| STEAL2["T2 뒤에서 훔침"]
 ```
 
-`run()`은 단순히 `Runnable`의 메서드를 호출하는 것이고, `start()`가 OS에 커널 스레드 생성을 요청합니다. `run()`을 직접 호출하면 병렬 실행이 전혀 일어나지 않고 모든 작업이 순차적으로 실행됩니다.
+**왜 Deque인가**: 각 스레드는 자신의 Deque 앞(head)에서 작업을 꺼냅니다(LIFO). 다른 스레드가 훔칠 때는 뒤(tail)에서 꺼냅니다(FIFO). 이렇게 하면 같은 노드를 두 스레드가 동시에 접근할 확률이 최소화됩니다. 작업 도둑은 가장 오래된(큰) 작업을 훔치므로 분할 오버헤드를 줄입니다.
 
-**실수 2: synchronized 없이 공유 변수 접근**
+### RecursiveTask와 RecursiveAction
 
 ```java
-// 위험한 코드 — 결과가 1000이 아닐 수 있음
-int count = 0;
-List<Thread> threads = new ArrayList<>();
-for (int i = 0; i < 1000; i++) {
-    threads.add(new Thread(() -> count++)); // count++은 원자적 연산이 아님!
+import java.util.concurrent.*;
+
+public class ForkJoinDemo {
+
+    // 결과 반환 있음 — RecursiveTask
+    static class SumTask extends RecursiveTask<Long> {
+        private static final int THRESHOLD = 1000; // 분할 임계값
+        private final long[] array;
+        private final int start, end;
+
+        SumTask(long[] array, int start, int end) {
+            this.array = array;
+            this.start = start;
+            this.end = end;
+        }
+
+        @Override
+        protected Long compute() {
+            int length = end - start;
+
+            if (length <= THRESHOLD) {
+                // 임계값 이하 — 직접 계산 (순차 처리)
+                long sum = 0;
+                for (int i = start; i < end; i++) {
+                    sum += array[i];
+                }
+                return sum;
+            }
+
+            // 임계값 초과 — 두 개로 분할 (fork)
+            int mid = start + length / 2;
+            SumTask leftTask = new SumTask(array, start, mid);
+            SumTask rightTask = new SumTask(array, mid, end);
+
+            leftTask.fork();             // 비동기로 왼쪽 작업 제출
+            long rightResult = rightTask.compute(); // 현재 스레드에서 오른쪽 처리
+            long leftResult = leftTask.join();      // 왼쪽 결과 대기 (join)
+
+            return leftResult + rightResult;
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        int size = 10_000_000;
+        long[] array = new long[size];
+        for (int i = 0; i < size; i++) array[i] = i + 1;
+
+        ForkJoinPool pool = new ForkJoinPool(); // 기본: 코어 수만큼 워커
+        SumTask task = new SumTask(array, 0, size);
+
+        long result = pool.invoke(task);
+        System.out.println("합계: " + result); // n*(n+1)/2 확인
+        pool.shutdown();
+    }
 }
-threads.forEach(Thread::start);
-threads.forEach(t -> { try { t.join(); } catch (InterruptedException e) {} });
-System.out.println(count); // 1000보다 작은 값이 출력될 수 있음
-
-// 올바른 코드
-AtomicInteger count = new AtomicInteger(0);
-// 또는 synchronized 사용
 ```
 
-`count++`은 읽기-수정-쓰기의 세 단계 연산입니다. 여러 스레드가 동시에 읽기 단계를 수행하면 같은 값을 두 번 증가시키는 경쟁 조건(race condition)이 발생합니다.
+### WHY leftTask.fork() 후 rightTask.compute()를 현재 스레드에서 처리하는가
 
-**실수 3: Executors 팩토리의 무제한 큐/스레드 사용**
+`leftTask.fork()` 후 `rightTask.fork()`를 하고 두 결과를 `join()`하는 패턴은 비효율적입니다. 현재 스레드가 아무 일도 안 하고 두 결과를 기다리기 때문입니다.
+
+올바른 패턴은 `leftTask.fork()` 후 현재 스레드에서 직접 `rightTask.compute()`를 실행합니다. 현재 스레드는 유휴 상태가 되지 않습니다. 그 후 `leftTask.join()`으로 왼쪽 결과만 기다립니다. 이렇게 하면 n개의 작업에 n개의 스레드를 최대한 활용합니다.
 
 ```java
-// 위험! — 큐 크기가 Integer.MAX_VALUE로 무제한
-ExecutorService executor = Executors.newFixedThreadPool(10);
-// 작업이 계속 쌓이면 OutOfMemoryError 발생
+// 비효율적인 패턴 (두 번 fork)
+leftTask.fork();
+rightTask.fork();
+return leftTask.join() + rightTask.join(); // 현재 스레드 유휴
 
-// 올바른 코드 — 명시적 유계 큐 설정
-ExecutorService executor = new ThreadPoolExecutor(
-    10, 20, 60L, TimeUnit.SECONDS,
-    new LinkedBlockingQueue<>(1000), // 최대 1000개
-    new ThreadPoolExecutor.CallerRunsPolicy() // 꽉 차면 호출자 스레드가 직접 실행
+// 효율적인 패턴 (한 번 fork, 한 번 직접 실행)
+leftTask.fork();
+long rightResult = rightTask.compute(); // 현재 스레드 활용
+return leftTask.join() + rightResult;  // 왼쪽만 대기
+```
+
+---
+
+## 12. 극한 시나리오
+
+### 시나리오 1: 주문 처리 시스템에서 ThreadPool OOM
+
+**상황**: 플래시 세일로 초당 10,000개의 주문이 들어오는데 DB 처리는 평균 50ms 걸린다. `Executors.newFixedThreadPool(200)`을 사용 중.
+
+```java
+// 문제 코드
+ExecutorService pool = Executors.newFixedThreadPool(200);
+// 내부: LinkedBlockingQueue() — 무한 큐!
+
+for (Order order : orders) {
+    pool.submit(() -> processOrder(order));
+}
+// 초당 10,000 제출, 초당 200 * (1000/50) = 4,000 처리
+// 초당 6,000씩 큐에 누적 → OOM
+```
+
+```java
+// 해결 코드
+ThreadPoolExecutor pool = new ThreadPoolExecutor(
+    200, 400,
+    60L, TimeUnit.SECONDS,
+    new ArrayBlockingQueue<>(2000),      // 유한 큐 — OOM 방지
+    new ThreadPoolExecutor.CallerRunsPolicy() // 큐 가득 차면 HTTP 요청 스레드가 직접 처리
+    // → HTTP Accept 속도 자연 감소 → 클라이언트에 자연스러운 백프레셔
 );
 ```
 
-**실수 4: InterruptedException 무시**
+### 시나리오 2: volatile 없이 플래그로 스레드 종료 시도
+
+**상황**: `running = false`로 백그라운드 스레드를 멈추려는데 스레드가 계속 실행된다.
 
 ```java
-// 잘못된 코드 — 인터럽트 신호 소멸
-try {
-    Thread.sleep(1000);
-} catch (InterruptedException e) {
-    // 아무것도 하지 않음 → 인터럽트 플래그가 사라짐
-}
+// 문제: JIT 컴파일러가 running을 레지스터에 캐시
+// 루프를 hoisting하여 while (true)처럼 최적화할 수 있음
+private boolean running = true; // volatile 없음
 
-// 올바른 코드 1 — 인터럽트 플래그 복원
-try {
-    Thread.sleep(1000);
-} catch (InterruptedException e) {
-    Thread.currentThread().interrupt(); // 반드시 복원
-    return; // 또는 적절한 종료 처리
-}
+// 해결 1: volatile 사용
+private volatile boolean running = true;
 
-// 올바른 코드 2 — 예외를 상위로 전파
-public void task() throws InterruptedException {
-    Thread.sleep(1000);
-}
+// 해결 2: 인터럽트 메커니즘 활용 (더 표준적)
+Thread worker = new Thread(() -> {
+    while (!Thread.currentThread().isInterrupted()) {
+        doWork();
+    }
+});
+worker.start();
+// 종료 시
+worker.interrupt(); // isInterrupted() = true로 설정
 ```
 
-`InterruptedException`을 catch하면 인터럽트 플래그가 지워집니다. 복원하지 않으면 스레드 종료 요청을 감지하지 못해 스레드 풀 종료 시 무한 대기가 발생할 수 있습니다.
-
-**실수 5: synchronized와 ReentrantLock 혼용으로 데드락**
+### 시나리오 3: wait()/notify() 대신 notifyAll()을 써야 하는 이유
 
 ```java
-// 위험한 코드 — synchronized와 ReentrantLock은 서로 모름
-Object syncLock = new Object();
-ReentrantLock reentrantLock = new ReentrantLock();
+// 상황: 생산자 1개, 소비자 A와 소비자 B가 동일 큐 대기
+// 생산자가 아이템 추가 후 notify() 호출
+// → 소비자 A가 깨어남 (소비자 B는 그대로 대기)
+// → 소비자 A가 아이템 소비 후 큐 비어 있음
+// → 생산자가 다시 넣고 notify()
+// → 이번엔 소비자 A가 또 깨어남 (소비자 B는 영원히 대기 — starvation)
 
-// Thread A
-synchronized (syncLock) {
-    reentrantLock.lock(); // 데드락 가능
-}
+// 해결: notifyAll()로 모두 깨우고 while 루프로 조건 재확인
+```
 
-// Thread B
-reentrantLock.lock();
-synchronized (syncLock) { // 데드락 가능
-}
+### 시나리오 4: Deadlock + 타임아웃 방어
 
-// 올바른 코드 — 프로젝트에서 하나만 선택해 일관되게 사용
+```java
+// 분산 트랜잭션에서 여러 서비스 락을 순서 없이 획득 시도
+// → 서비스 A가 order 락, 서비스 B가 inventory 락 보유
+// → 각각 상대방의 락을 기다림 → 분산 Deadlock
+
+// 해결: tryLock + 랜덤 백오프 + 락 획득 순서 글로벌 정렬
+// 예: 서비스 이름 알파벳 순으로 항상 동일 순서로 락 획득
+```
+
+### 시나리오 5: CAS 스핀이 오히려 CPU를 100%로 만드는 경우
+
+```java
+// 상황: 고경합 AtomicInteger에서 CAS 실패가 반복됨
+// 수백 스레드가 같은 변수를 동시에 수정 → CAS 무한 재시도 → CPU 포화
+
+// 해결: LongAdder 사용 (Java 8+)
+// 내부적으로 Cell 배열에 분산하여 기록, sum()으로 합산
+import java.util.concurrent.atomic.LongAdder;
+
+LongAdder counter = new LongAdder();
+counter.increment(); // 각 스레드가 자신의 Cell에 기록
+long total = counter.sum(); // Cell 합산 — 읽기 시 약간의 오차 허용
 ```
 
 ---
 
+## 13. 면접 포인트 5선
 
-## 극한 시나리오
+### 면접 포인트 1: synchronized와 volatile의 차이를 내부 메커니즘으로 설명하라
 
-### 100 TPS (소규모 서비스)
+**핵심**: `synchronized`는 원자성(Atomicity) + 가시성(Visibility) + 순서보장(Ordering)을 모두 제공합니다. `volatile`은 가시성과 순서보장만 제공하고 원자성은 단일 읽기/쓰기에 대해서만 보장합니다.
 
-단일 서버에서 `synchronized` 또는 `ReentrantLock`으로 충분합니다. 동시 요청이 적으므로 락 경쟁이 거의 없어 성능 문제가 발생하지 않습니다. 코드 단순성을 우선시하세요.
+`synchronized`는 모니터 락을 통해 임계 구역에 한 번에 하나의 스레드만 진입하게 합니다. 진입 시 CPU 캐시를 메인 메모리와 동기화(invalidate)하고, 해제 시 수정 내용을 메인 메모리에 플러시합니다.
+
+`volatile`은 메모리 배리어(x86의 MFENCE)를 삽입하여 해당 변수의 읽기/쓰기가 반드시 메인 메모리를 통하도록 강제합니다. 락을 획득하지 않으므로 여러 스레드가 동시에 읽을 수 있습니다. `count++`처럼 복합 연산은 보호하지 못합니다.
+
+WHY: 성능 때문입니다. `volatile`은 락 없이 가시성만 필요할 때 사용합니다. 예: 상태 플래그(running), 싱글톤의 DCL(Double-Checked Locking) 패턴.
+
+### 면접 포인트 2: wait()는 왜 synchronized 안에서만 호출 가능한가
+
+**핵심**: Lost Wakeup 문제를 방지하기 위해서입니다.
+
+조건 확인(`while (!condition)`)과 대기(`wait()`)는 원자적으로 실행되어야 합니다. `synchronized` 블록이 이 원자성을 보장합니다. `synchronized` 밖에서 `wait()`를 호출하면 조건 확인 직후, `wait()` 진입 직전에 다른 스레드가 `notify()`를 호출할 수 있습니다. 그러면 `wait()`는 이미 지나간 `notify()`를 영원히 기다립니다(Lost Wakeup).
+
+JVM 구현 상으로도, `wait()`는 내부적으로 모니터의 Wait Set에 현재 스레드를 추가하고 모니터를 해제하는 작업을 원자적으로 수행합니다. 모니터를 보유하지 않으면 이 작업이 불가능하므로 `IllegalMonitorStateException`을 던집니다.
+
+### 면접 포인트 3: ReentrantLock과 synchronized의 내부 차이는 무엇인가
+
+**핵심**: `synchronized`는 JVM이 바이트코드 레벨(`monitorenter`/`monitorexit`)에서 처리하며 JVM이 직접 최적화합니다. `ReentrantLock`은 Java 코드로 구현된 AQS 기반 락입니다.
+
+`synchronized`의 락 에스컬레이션(Biased → Thin → Fat)은 JVM이 자동으로 처리합니다. `ReentrantLock`은 항상 AQS의 CAS → CLH 큐 대기 순서를 따릅니다.
+
+`ReentrantLock`이 필요한 경우: `tryLock()`으로 비블로킹 시도, 타임아웃 설정, `lockInterruptibly()`로 인터럽트 가능, 여러 `Condition`으로 세밀한 스레드 통신, 락 획득 대기 스레드 수 조회(`getQueueLength()`).
+
+`synchronized`가 나은 경우: 단순하고 짧은 임계 구역, JVM의 자동 최적화 혜택, 코드 가독성.
+
+### 면접 포인트 4: ThreadPoolExecutor의 작업 처리 순서와 올바른 설정 방법을 설명하라
+
+**핵심**: 작업 처리 순서는 corePoolSize → workQueue → maximumPoolSize → rejected handler입니다. 많은 개발자가 순서를 잘못 알고 있습니다. "core가 가득 차면 max까지 스레드를 늘린다"고 생각하지만, **실제로는 큐가 먼저**입니다.
+
+`Executors` 팩토리의 문제: `newFixedThreadPool`은 무한 큐로 OOM 위험, `newCachedThreadPool`은 무한 스레드로 OOM 위험. 프로덕션에서는 직접 `ThreadPoolExecutor`를 생성하고 모든 파라미터를 명시해야 합니다.
+
+설정 공식:
+- CPU 집약적: `coreSize = N_cpu + 1`
+- I/O 집약적: `coreSize = N_cpu * (1 + W/C)` (W=대기시간, C=처리시간)
+- 큐 크기: 초당 처리량 * 허용 최대 대기 시간
+
+### 면접 포인트 5: Deadlock 4가지 조건과 실무 예방 전략을 설명하라
+
+**핵심**: 4가지 조건(상호 배제, 점유 대기, 비선점, 순환 대기) 중 현실적으로 제거 가능한 것은 **점유 대기** 또는 **순환 대기**입니다.
+
+**점유 대기 제거**: 필요한 모든 락을 한 번에 획득하거나, 실패 시 모두 해제합니다(`tryLock` 패턴).
+
+**순환 대기 제거**: 모든 락에 전역 순서를 부여하고 항상 같은 순서로 획득합니다. 예를 들어 락 객체의 `System.identityHashCode()`를 기준으로 작은 것부터 획득합니다.
+
+**실무 도구**: `jstack`으로 스레드 덤프 분석, Java Flight Recorder(JFR)로 실시간 교착상태 탐지, `ThreadMXBean.findDeadlockedThreads()`로 프로그래매틱 탐지.
 
 ```java
-// 100 TPS: 단순 synchronized로 충분
-public class OrderService {
-    private int pendingCount = 0;
+// 프로그래매틱 Deadlock 탐지
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 
-    public synchronized void addOrder(Order order) {
-        pendingCount++;
-        // 처리 로직
-    }
-}
-```
+public class DeadlockDetector {
+    private final ThreadMXBean mbean = ManagementFactory.getThreadMXBean();
 
-### 10,000 TPS (중규모 서비스)
-
-락 경쟁이 시작되고 `synchronized`의 성능 한계가 보입니다. 읽기/쓰기 비율을 분석해 `ReadWriteLock` 또는 `StampedLock`을 도입하고, 카운터는 `LongAdder`로 교체하며, `ConcurrentHashMap`의 원자적 연산(`compute`, `merge`)을 활용해야 합니다.
-
-```java
-// 10K TPS: 읽기 많은 캐시에 StampedLock 적용
-public class ProductCache {
-    private final StampedLock lock = new StampedLock();
-    private final Map<Long, Product> cache = new HashMap<>();
-
-    public Product get(Long id) {
-        long stamp = lock.tryOptimisticRead(); // 낙관적 읽기: 락 없음
-        Product p = cache.get(id);
-        if (!lock.validate(stamp)) { // 쓰기 발생 여부 확인
-            stamp = lock.readLock();
-            try { p = cache.get(id); }
-            finally { lock.unlockRead(stamp); }
+    public void detectDeadlock() {
+        long[] deadlockedIds = mbean.findDeadlockedThreads();
+        if (deadlockedIds != null) {
+            System.err.println("Deadlock 탐지! 관련 스레드:");
+            for (long id : deadlockedIds) {
+                System.err.println(mbean.getThreadInfo(id));
+            }
+            // 알림 발송, 재시작 등
         }
-        return p;
+    }
+}
+```
+
+---
+
+## 14. 추가 심화 — 실무에서 자주 쓰는 동시성 패턴
+
+### Double-Checked Locking (DCL) 싱글톤
+
+```java
+public class Singleton {
+    // volatile 필수: 객체 생성의 부분 초기화(partial initialization) 방지
+    // new Singleton()은 세 단계: 메모리 할당 → 초기화 → 참조 저장
+    // 컴파일러/CPU 재정렬로 초기화 전에 참조가 저장될 수 있음
+    private static volatile Singleton instance;
+
+    private Singleton() {}
+
+    public static Singleton getInstance() {
+        if (instance == null) {              // 1차 확인 (락 없이) — 성능
+            synchronized (Singleton.class) {
+                if (instance == null) {       // 2차 확인 (락 안에서) — 안전
+                    instance = new Singleton();
+                }
+            }
+        }
+        return instance;
     }
 }
 
-// 고경합 카운터: LongAdder가 AtomicLong보다 3~10배 빠름
-LongAdder requestCount = new LongAdder();
-requestCount.increment(); // 스레드별 독립 셀에 기록
-long total = requestCount.sum(); // 집계
+// 더 간단한 대안: Holder 패턴 (volatile, synchronized 불필요)
+public class SingletonHolder {
+    private SingletonHolder() {}
+
+    private static class Holder {
+        // JVM의 클래스 로딩 메커니즘이 thread-safe 초기화를 보장
+        static final SingletonHolder INSTANCE = new SingletonHolder();
+    }
+
+    public static SingletonHolder getInstance() {
+        return Holder.INSTANCE;
+    }
+}
 ```
 
-### 100,000 TPS (대규모 서비스)
-
-이 규모에서는 단일 JVM의 락 기반 동기화가 병목이 됩니다. lock-free 알고리즘, Virtual Thread, 그리고 비동기 처리가 필수입니다.
+### BlockingQueue를 이용한 스레드 안전 생산자-소비자
 
 ```java
-// 100K TPS: Virtual Thread + 비동기 파이프라인
-// Spring Boot 3.2+ application.properties:
-// spring.threads.virtual.enabled=true
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
-// 직접 구현 시 Virtual Thread per request
-try (ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor()) {
-    List<Future<Response>> futures = requests.stream()
-        .map(req -> exec.submit(() -> processRequest(req)))
-        .collect(Collectors.toList());
-    // I/O 대기 중 Virtual Thread가 Carrier 해제 → OS 스레드 낭비 없음
+public class BlockingQueueDemo {
+    private final BlockingQueue<String> queue = new LinkedBlockingQueue<>(100);
+
+    // 생산자 — queue.put()은 가득 차면 자동으로 블로킹
+    public void producer() throws InterruptedException {
+        while (true) {
+            String data = fetchData(); // 데이터 수집
+            queue.put(data);           // 큐 가득 차면 블로킹 (wait/notify 내장)
+        }
+    }
+
+    // 소비자 — queue.take()는 비면 자동으로 블로킹
+    public void consumer() throws InterruptedException {
+        while (true) {
+            String data = queue.take(); // 큐 비면 블로킹
+            process(data);
+        }
+    }
+
+    private String fetchData() { return "data"; }
+    private void process(String data) { System.out.println("처리: " + data); }
 }
-
-// lock-free 자료구조로 공유 상태 최소화
-ConcurrentHashMap<String, LongAdder> metrics = new ConcurrentHashMap<>();
-metrics.computeIfAbsent("api.calls", k -> new LongAdder()).increment();
-
-// 핵심 원칙: 공유 가변 상태를 최소화하고, 공유가 불가피하면 lock-free 연산 사용
 ```
 
-100K TPS 이상에서는 단일 JVM의 한계를 넘어 **메시지 큐(Kafka, RabbitMQ)** 와 **분산 캐시(Redis)** 로 상태를 외부화하는 아키텍처가 필요합니다.
+### CompletableFuture — 비동기 파이프라인
 
----
+```java
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-## 왜 이 기술인가? — Java 스레드 vs 대안들
+public class CompletableFutureDemo {
+    private static final ExecutorService executor =
+        new ThreadPoolExecutor(4, 8, 60L, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(1000),
+            new ThreadPoolExecutor.CallerRunsPolicy());
 
-| 비교 항목 | Java Thread (OS 스레드) | Virtual Thread (Java 21+) | Reactive (WebFlux) |
-|-----------|------------------------|--------------------------|---------------------|
-| 프로그래밍 모델 | 동기식 (직관적) | 동기식 (직관적) | 비동기 파이프라인 |
-| I/O 대기 처리 | 스레드 블로킹 (비효율) | Carrier 반납 (효율적) | 논블로킹 콜백 |
-| 최대 동시 수 | 수천 개 | 수백만 개 | 스레드 수에 무관 |
-| 디버깅 편의 | 높음 (스택 트레이스 직관적) | 높음 | 낮음 (체인 추적 어려움) |
-| 학습 곡선 | 낮음 | 낮음 | 높음 |
-| CPU 바운드 성능 | 좋음 | 좋음 | 좋음 |
-| I/O 바운드 처리량 | 제한적 | 매우 높음 | 매우 높음 |
+    public static void main(String[] args) throws Exception {
+        CompletableFuture<String> future = CompletableFuture
+            .supplyAsync(() -> fetchUser(1), executor)       // 비동기 사용자 조회
+            .thenApplyAsync(user -> fetchOrders(user), executor) // 비동기 주문 조회
+            .thenApplyAsync(orders -> formatReport(orders), executor) // 비동기 리포트 생성
+            .exceptionally(ex -> "오류 발생: " + ex.getMessage()); // 예외 처리
 
-**언제 synchronized를 쓰고 ReentrantLock을 쓰는가?**
+        // 두 작업 병렬 실행 후 결합
+        CompletableFuture<String> combined = CompletableFuture
+            .allOf(
+                CompletableFuture.supplyAsync(() -> "작업A", executor),
+                CompletableFuture.supplyAsync(() -> "작업B", executor)
+            )
+            .thenApply(v -> "모든 작업 완료");
 
-`synchronized`는 코드가 짧고 단순할 때, 재진입만 필요할 때 선택합니다. `ReentrantLock`은 `tryLock()` 타임아웃이 필요하거나, 공정 락(fairness)이 필요하거나, Condition을 여러 개 써야 할 때, Virtual Thread의 피닝(pinning)을 방지해야 할 때 선택합니다.
+        System.out.println(future.get());
+        System.out.println(combined.get());
+        executor.shutdown();
+    }
 
-**언제 AtomicInteger를 쓰고 synchronized를 쓰는가?**
-
-단일 변수의 원자적 연산(카운터, 플래그)에는 `AtomicInteger`가 낫습니다. lock-free이므로 경합이 적을 때 더 빠릅니다. 여러 변수를 함께 원자적으로 변경해야 하는 복합 연산은 `synchronized`나 `ReentrantLock`이 필요합니다.
-
----
-
-## 면접 포인트
-
-**Q1. synchronized와 ReentrantLock의 차이를 설명하세요.**
-
-`synchronized`는 JVM 내장 키워드로 자동 락 해제, 재진입 지원을 제공합니다. `ReentrantLock`은 `java.util.concurrent` 패키지의 클래스로 `tryLock()` 타임아웃, 공정 락 옵션, `Condition`을 통한 세밀한 대기/신호 제어가 가능합니다. Virtual Thread 환경에서는 `synchronized` 블록 내 블로킹 I/O가 피닝을 유발하므로 `ReentrantLock`을 권장합니다. 반드시 `finally`에서 `unlock()`을 호출해야 합니다.
-
-**Q2. volatile 키워드는 무엇을 보장하고 무엇을 보장하지 않나요?**
-
-`volatile`은 가시성(visibility)을 보장합니다. 한 스레드의 쓰기가 다른 스레드의 읽기에 즉시 반영됩니다. CPU 캐시를 우회하고 메인 메모리에 직접 접근합니다. 단, 원자성(atomicity)은 보장하지 않습니다. `volatile int count; count++`는 읽기-수정-쓰기 세 단계라 여전히 경쟁 조건이 발생합니다. 원자성이 필요하면 `AtomicInteger`나 `synchronized`를 사용해야 합니다.
-
-**Q3. 데드락의 4가지 조건을 설명하고 회피 방법을 말씀하세요.**
-
-상호 배제(하나의 스레드만 자원 점유), 점유 대기(자원을 점유한 채로 다른 자원 대기), 비선점(점유한 자원을 강제로 빼앗을 수 없음), 순환 대기(A→B→A 같은 순환 의존성). 이 중 하나만 깨도 데드락이 방지됩니다. 실무에서는 락 획득 순서를 항목의 `identityHashCode` 기준으로 고정하거나, `tryLock()` 타임아웃을 사용합니다.
-
-**Q4. Executors.newFixedThreadPool()을 직접 쓰면 안 되는 이유는?**
-
-`newFixedThreadPool`은 내부적으로 `LinkedBlockingQueue(Integer.MAX_VALUE)`를 사용합니다. 작업 처리보다 제출 속도가 빠르면 큐에 수백만 개의 작업이 쌓여 OOM이 발생합니다. 실무에서는 `ThreadPoolExecutor`를 직접 생성해 큐 크기와 거부 정책을 명시적으로 설정해야 합니다.
-
-**Q5. CountDownLatch와 CyclicBarrier의 차이는?**
-
-`CountDownLatch`는 일회성입니다. N개의 이벤트가 발생할 때까지 하나 이상의 스레드가 대기합니다. 재사용 불가능합니다. `CyclicBarrier`는 재사용 가능합니다. N개의 스레드가 모두 배리어에 도달할 때까지 서로 대기하고, 이후 모두 동시에 재개합니다. 다단계 병렬 처리에 적합합니다.
+    static String fetchUser(int id) { return "User" + id; }
+    static String fetchOrders(String user) { return user + "'s orders"; }
+    static String formatReport(String orders) { return "Report: " + orders; }
+}
+```
 
 ---
 
 ## 정리
 
-Java 스레드와 동시성 프로그래밍의 핵심을 표로 정리합니다.
+Java 동시성 프로그래밍의 핵심은 **왜(WHY)**를 이해하는 것입니다.
 
-| 목적 | 권장 도구 |
-|------|----------|
-| 단순 비동기 작업 | `CompletableFuture.supplyAsync()` |
-| 결과 반환 비동기 | `ExecutorService.submit(Callable)` |
-| 상호 배제 | `synchronized` 또는 `ReentrantLock` |
-| 읽기 많은 캐시 | `ReadWriteLock` 또는 `StampedLock` |
-| 원자적 카운터 | `AtomicInteger` / `LongAdder` (고경합) |
-| 스레드 안전 Map | `ConcurrentHashMap` |
-| 생산자-소비자 | `BlockingQueue` (LinkedBlocking/ArrayBlocking) |
-| 일회성 대기 | `CountDownLatch` |
-| 반복 동기화 | `CyclicBarrier` |
-| 접근 수 제한 | `Semaphore` |
-| 스레드별 상태 | `ThreadLocal` (반드시 remove()) |
-| 대규모 I/O 처리 | `Virtual Thread` (Java 21+) |
-| 분할 정복 병렬화 | `ForkJoinPool` + `RecursiveTask` |
+| 도구 | 적용 상황 | 핵심 메커니즘 |
+|------|-----------|--------------|
+| `volatile` | 단순 플래그, 가시성만 필요 | 메모리 배리어, MESI |
+| `synchronized` | 일반 임계 구역 | 모니터 락, 락 에스컬레이션 |
+| `ReentrantLock` | tryLock, 다중 Condition | AQS, CLH 큐 |
+| `AtomicXxx` | 단일 변수 원자 연산 | CAS, CMPXCHG |
+| `ThreadPoolExecutor` | 작업 병렬 처리 | 워커 스레드, 블로킹 큐 |
+| `CountDownLatch` | 일회성 N개 이벤트 대기 | AQS state 카운트다운 |
+| `CyclicBarrier` | 반복 집결점 | ReentrantLock + Condition |
+| `Semaphore` | 자원 접근 수 제한 | AQS permit 관리 |
+| `ForkJoinPool` | 분할 정복 병렬 처리 | Work-Stealing, Deque |
 
-동시성 프로그래밍의 황금률: **공유 가변 상태를 최소화하라.** 공유가 필요하다면 불변 객체, 동시성 컬렉션, 적절한 동기화 도구를 사용하고, 반드시 리소스를 올바르게 해제하세요.
-
----
-## 면접 포인트
-
-**Q1. synchronized와 ReentrantLock의 선택 기준은?**
-`synchronized`는 블록 진입/탈출 시 자동으로 락을 획득/해제하므로 코드가 간결하고 예외 시에도 안전합니다. `ReentrantLock`은 타임아웃(`tryLock(1, SECONDS)`), 인터럽트 가능한 락 획득, 공정 락(`new ReentrantLock(true)`), 조건 변수(`Condition`) 등 고급 기능을 제공합니다. 단순 임계 구역 보호는 `synchronized`, 타임아웃·페어니스·복수 조건이 필요하면 `ReentrantLock`을 선택합니다. `ReentrantLock`은 반드시 `finally`에서 `unlock()`을 호출해야 합니다.
-
-**Q2. volatile이 가시성은 보장하지만 원자성은 보장하지 못하는 이유는?**
-`volatile`은 CPU 캐시를 우회해 메인 메모리에서 직접 읽고 씁니다. 다른 스레드의 쓰기가 즉시 보입니다(가시성). 그러나 `count++`는 read → increment → write 세 단계로, 두 스레드가 동시에 read를 하면 같은 값을 읽고 둘 다 +1 후 쓰면 한 번만 증가합니다(원자성 없음). 단순 플래그(`boolean running`)처럼 단일 쓰기/읽기는 `volatile`로 충분합니다. 복합 연산은 `AtomicInteger.incrementAndGet()`이나 `synchronized`를 사용합니다.
-
-**Q3. 데드락이 발생하는 조건과 방지 방법은?**
-데드락 4가지 필요 조건: ① 상호 배제(락은 하나의 스레드만 보유) ② 점유 대기(락을 가진 채 다른 락 대기) ③ 비선점(락 강제 회수 불가) ④ 순환 대기(A→B→A 순환 의존). 방지: ① 락 획득 순서를 전역적으로 고정(Lock Ordering) ② `tryLock(timeout)`으로 타임아웃 후 획득한 락 반환 ③ 가능하면 단일 락 사용 ④ 락 없는 알고리즘(`ConcurrentHashMap`, `AtomicReference`) 사용. 실무에서는 락 순서 문서화와 코드 리뷰가 가장 현실적인 방지책입니다.
-
-**Q4. ThreadPoolExecutor의 파라미터 설정 기준은?**
-`corePoolSize`: 기본 스레드 수. 서비스 평균 동시 요청 수. `maxPoolSize`: 피크 시 최대 스레드 수. CPU 연산이면 `Runtime.getRuntime().availableProcessors()`, I/O 대기가 많으면 더 크게. `queueCapacity`: 큐 크기. 0이면 SynchronousQueue(즉시 스레드 생성), Integer.MAX_VALUE면 OOM 위험. 권장: `maxPoolSize × 평균 처리 시간(초)` 정도. `keepAliveTime`: core 초과 스레드의 유휴 시간. `RejectedExecutionHandler`: CallerRunsPolicy(호출자 스레드 직접 실행)가 Back-pressure 역할.
-
-**Q5. 스레드 안전한 싱글턴 구현 방법들의 차이는?**
-`synchronized` 메서드: 매 호출마다 락 오버헤드. `Double-Checked Locking + volatile`: 첫 생성 이후 락 없이 동작. `volatile` 없으면 부분 초기화 객체가 노출될 수 있음. `Initialization-on-demand Holder`: 정적 내부 클래스를 사용해 클래스 로딩 메커니즘이 스레드 안전을 보장. 락 없이 lazy 초기화. `Enum 싱글턴`: 직렬화·리플렉션에도 안전. 현재 가장 권장되는 방식. 실무에서는 Spring의 `@Bean`이 기본으로 싱글턴을 관리하므로 직접 싱글턴 패턴을 구현할 일이 드뭅니다.
+동시성 버그는 재현이 어렵고 디버깅이 어렵습니다. 설계 단계에서 **공유 상태를 최소화**하고, 공유가 불가피하면 **가장 단순한 도구**를 선택하고, 선택한 도구의 **내부 동작**을 이해한 상태에서 사용해야 합니다.

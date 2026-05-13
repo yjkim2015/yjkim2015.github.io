@@ -1,5 +1,5 @@
 ---
-title: "Java 컬렉션 프레임워크"
+title: "Java 컬렉션 프레임워크 — 내부 구조 완전 분석"
 categories:
 - JAVA
 toc: true
@@ -7,11 +7,9 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-ArrayList를 써야 할지 LinkedList를 써야 할지, HashMap과 TreeMap의 차이는 무엇인지 — 컬렉션 선택 하나가 성능을 10배 이상 바꿀 수 있다. 내부 구조를 알아야 올바른 선택이 가능하다.
+ArrayList와 LinkedList 중 무엇을 고를지, HashMap이 왜 멀티스레드에서 무한루프를 일으키는지, ConcurrentHashMap이 어떻게 락 없이 읽기를 처리하는지 — 이 질문들에 정확히 답하려면 내부 자료구조와 JVM 메모리 모델을 함께 알아야 한다. 선택 하나가 성능을 10배 이상 바꾸고, 실수 하나가 프로덕션 장애를 만든다.
 
-> **비유로 먼저 이해하기**: 컬렉션은 정리함의 종류와 같다. 순서대로 쌓아두는 서랍(List), 중복 없이 담는 바구니(Set), 이름표를 붙여 찾는 사물함(Map) — 무엇을 담고 어떻게 꺼낼지에 따라 적합한 용기가 다르다.
-
-Java 컬렉션 프레임워크(Java Collections Framework, JCF)는 데이터를 저장하고 조작하기 위한 통합된 아키텍처를 제공합니다. 인터페이스, 구현체, 알고리즘으로 구성되며, 실무에서 가장 자주 사용되는 핵심 API 중 하나입니다.
+> **비유로 먼저 이해하기**: HashMap은 수천 개의 우편함이 있는 아파트 단지다. 편지(key)를 받으면 동호수(hashCode)를 계산해 해당 우편함(bucket)에 넣는다. 같은 동호수 우편함에 편지가 너무 많이 쌓이면(8개 초과) 더 효율적인 색인 시스템(Red-Black Tree)으로 교체한다. 이 비유 하나로 HashMap의 설계 결정 대부분이 설명된다.
 
 ---
 
@@ -23,122 +21,483 @@ Java 컬렉션 프레임워크(Java Collections Framework, JCF)는 데이터를 
 graph LR
     COL["Collection"] --> LIST["List: 순서O 중복O"]
     COL --> SET["Set: 순서X 중복X"]
-    COL --> QUEUE["Queue: FIFO"]
-    MAP["Map"] --> KV["Key-Value 쌍"]
+    COL --> QUE["Queue/Deque"]
+    MAP["Map: K-V 쌍"] --> HM["HashMap계열"]
+    MAP --> TM["TreeMap계열"]
 ```
 
 ### 핵심 인터페이스 요약
 
 | 인터페이스 | 특징 | 대표 구현체 |
 |-----------|------|------------|
-| `Collection` | 모든 컬렉션의 루트 | - |
 | `List` | 인덱스 기반, 순서 보장, 중복 허용 | ArrayList, LinkedList |
-| `Set` | 중복 불허, 순서 미보장(구현체마다 다름) | HashSet, TreeSet |
-| `Queue` | FIFO 큐, offer/poll/peek | PriorityQueue, ArrayDeque |
+| `Set` | 중복 불허, 순서 미보장(구현체별 상이) | HashSet, TreeSet |
+| `Queue` | FIFO, offer/poll/peek | PriorityQueue, ArrayDeque |
 | `Deque` | 양방향 큐 (Double Ended Queue) | ArrayDeque, LinkedList |
-| `Map` | Key-Value 쌍, Key 중복 불허 | HashMap, TreeMap |
+| `Map` | Key-Value 쌍, Key 중복 불허 | HashMap, TreeMap, ConcurrentHashMap |
 
 ---
 
-## 2. List 구현체
+## 2. HashMap 내부 구조 완전 분석
 
-### 2-1. ArrayList
+### 2-1. 버킷 배열 + 연결 리스트 + Red-Black Tree
 
-가장 많이 사용되는 List 구현체로, **내부적으로 Object 배열**을 사용합니다.
+HashMap의 핵심은 **배열(버킷) + 체이닝(Chaining)** 조합이다. 버킷은 `Node<K,V>[]` 배열이며, 각 버킷에는 해시가 같은 항목들이 연결 리스트로 달린다. Java 8부터는 한 버킷의 항목이 8개를 초과하면 Red-Black Tree로 전환한다.
 
-#### 내부 구조
-
-```mermaid
-graph LR
-    I0["[0]A"] --- I1["[1]B"] --- I2["[2]C"] --- I3["[3]D"] --- I4["[4]null"] --- I5["...null x6"]
-    I3 --> SIZE["size=4 / capacity="]
-```
-
-#### 동적 확장 (grow)
-
-배열이 꽉 차면 새로운 배열을 생성하고 기존 데이터를 복사합니다.
-
-```mermaid
-graph LR
-    OLD["기존 배열 (capacity=10"]
-    NEW["새 배열 생성 (capacity="]
-    OLD -->|"Arrays.copyOf() +"| NEW
-```
-
-Java 소스 코드 (OpenJDK):
 ```java
-private Object[] grow(int minCapacity) {
-    int oldCapacity = elementData.length;
-    if (oldCapacity > 0 || elementData != DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
-        int newCapacity = ArraysSupport.newLength(oldCapacity,
-                minCapacity - oldCapacity, /* minimum growth */
-                oldCapacity >> 1           /* preferred growth: 1.5배 */);
-        return elementData = Arrays.copyOf(elementData, newCapacity);
-    } else {
-        return elementData = new Object[Math.max(DEFAULT_CAPACITY, minCapacity)];
+// OpenJDK HashMap 내부 구조 (핵심 필드)
+public class HashMap<K, V> {
+    // 버킷 배열 — 항상 2의 거듭제곱 크기
+    transient Node<K,V>[] table;
+
+    // 현재 저장된 항목 수
+    transient int size;
+
+    // 구조적 변경 횟수 (fail-fast Iterator를 위한 modCount)
+    transient int modCount;
+
+    // 리사이징 임계값 = capacity * loadFactor
+    int threshold;
+
+    // 기본 0.75
+    final float loadFactor;
+
+    // 트리화 임계값
+    static final int TREEIFY_THRESHOLD   = 8;   // 버킷 원소 수 > 8 시 트리 전환
+    static final int UNTREEIFY_THRESHOLD = 6;   // 원소 수 <= 6 시 다시 리스트로
+    static final int MIN_TREEIFY_CAPACITY = 64; // 전체 capacity < 64이면 트리화 대신 resize
+
+    // 일반 노드 (연결 리스트)
+    static class Node<K,V> implements Map.Entry<K,V> {
+        final int hash;
+        final K key;
+        V value;
+        Node<K,V> next;   // 다음 노드 포인터
+    }
+
+    // 트리 노드 (Red-Black Tree, Node 상속)
+    static final class TreeNode<K,V> extends LinkedHashMap.Entry<K,V> {
+        TreeNode<K,V> parent;
+        TreeNode<K,V> left;
+        TreeNode<K,V> right;
+        TreeNode<K,V> prev;  // 언트리화 시 연결 리스트 복원용
+        boolean red;
     }
 }
 ```
 
-#### 시간복잡도
+```mermaid
+graph LR
+    ARR["버킷 배열"] --> B0["[0] null"]
+    ARR --> B3["[3] Node"]
+    ARR --> B7["[7] TreeNode"]
+    B3 --> N1["Alice=30"] --> N2["Bob=25"]
+    B7 --> TR["RB-Tree root"]
+```
 
-| 연산 | 시간복잡도 | 설명 |
-|------|-----------|------|
-| `add(E e)` | O(1) amortized | 배열 끝에 추가. 확장 시 O(n)이지만 분할 상환 O(1) |
-| `add(int i, E e)` | O(n) | i 이후 원소를 전부 한 칸 이동 |
-| `get(int i)` | O(1) | 인덱스 직접 접근 |
-| `remove(int i)` | O(n) | i 이후 원소를 한 칸 앞으로 이동 |
-| `contains(Object o)` | O(n) | 순차 탐색 |
-| `size()` | O(1) | 필드 참조 |
+### 2-2. 해시 함수 — h ^ (h >>> 16) 스프레딩
 
-#### 코드 예제
+**왜 단순히 hashCode()를 쓰지 않는가?**
+
+hashCode()의 상위 비트는 버킷 인덱스 계산(index = hash & (n-1))에 거의 관여하지 않는다. capacity가 16이면 하위 4비트만 사용되므로, 상위 비트가 아무리 달라도 같은 버킷에 몰릴 수 있다. 이를 방지하기 위해 상위 16비트를 하위 16비트에 XOR로 혼합한다.
 
 ```java
-import java.util.ArrayList;
-import java.util.List;
+// OpenJDK HashMap.hash() — 스프레딩 해시 함수
+static final int hash(Object key) {
+    int h;
+    // null 키는 항상 버킷 0에 저장
+    // null이 아니면: hashCode()의 상위 16비트를 하위 16비트에 XOR
+    return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+}
 
-List<String> list = new ArrayList<>(16); // 초기 capacity 지정으로 resize 최소화
-list.add("Apple");
-list.add("Banana");
-list.add(0, "Avocado"); // O(n): 앞 삽입은 비쌈
+// 버킷 인덱스 계산 (putVal 내부)
+// (n - 1) & hash  ← n이 2의 거듭제곱이므로 % 연산 대신 비트 AND 사용
+int index = (n - 1) & hash;
+```
 
-// 인덱스 접근 O(1)
-String first = list.get(0); // "Avocado"
+```java
+// 예시: hashCode = 0xABCD_1234
+// h           = 1010 1011 1100 1101 | 0001 0010 0011 0100
+// h >>> 16    = 0000 0000 0000 0000 | 1010 1011 1100 1101
+// h ^ h>>>16  = 1010 1011 1100 1101 | 1011 1001 1111 1001
+//                              ↑ 상위 비트가 하위에 반영됨
+// capacity=16 → index = (16-1) & result → 하위 4비트만 사용
+// 스프레딩 덕분에 상위 비트 정보도 인덱스에 반영된다
+```
 
-// 중간 삭제 O(n)
-list.remove(1); // "Apple" 삭제, 이후 원소 이동
+### 2-3. 왜 capacity는 반드시 2의 거듭제곱인가
 
-// 예측 가능한 크기라면 초기 capacity를 지정해 resize 비용 제거
-List<String> optimized = new ArrayList<>(1000);
+**비트 AND로 모듈러 연산을 대체하기 위해서다.**
+
+- 일반 모듈러: `hash % n` → 나눗셈 명령어, CPU 비용 큼
+- 2의 거듭제곱: `hash & (n-1)` → 비트 AND 한 번, 극도로 빠름
+
+```java
+// capacity=16 (10000₂)이면
+// n-1 = 15 (01111₂)
+// hash & 15 → 하위 4비트만 남김 = 0~15 범위 보장
+
+// 만약 capacity=15 (비2의거듭제곱)라면
+// hash & 14 → 홀수 버킷(1,3,5...) 절대 사용 불가 → 절반 낭비
+
+// HashMap 생성 시 요청 capacity를 2의 거듭제곱으로 올림
+static final int tableSizeFor(int cap) {
+    int n = -1 >>> Integer.numberOfLeadingZeros(cap - 1);
+    return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
+}
+// tableSizeFor(13) = 16
+// tableSizeFor(17) = 32
+// tableSizeFor(1000) = 1024
+```
+
+### 2-4. 로드 팩터 0.75 — Poisson 분포에서 유도된 값
+
+**왜 0.75인가?** Java 공식 문서에 명시된 수학적 근거가 있다.
+
+해시 버킷에 항목이 균등하게 분산된다고 가정하면, 한 버킷에 k개의 항목이 들어올 확률은 Poisson 분포를 따른다. 로드 팩터가 0.75일 때 버킷당 평균 항목 수(λ)는 약 0.5이며, 이 때 빈 버킷 확률은 약 60.6%, 항목이 8개 이상인 버킷 확률은 약 0.000006이다. TREEIFY_THRESHOLD = 8은 이 확률이 사실상 0에 가까워지는 지점을 선택한 것이다.
+
+```java
+// 로드 팩터에 따른 시간-공간 트레이드오프
+// loadFactor = 0.5  → 충돌 적음, 메모리 2배 낭비
+// loadFactor = 0.75 → 충돌/메모리 균형 (기본값, Poisson 최적)
+// loadFactor = 1.0  → 메모리 절약, 충돌 증가 → 탐색 성능 저하
+
+// Poisson(λ=0.5)에서 k>=8 확률
+// P(k>=8) ≈ 0.00000006 → 거의 발생하지 않음
+// → 즉, 정상적인 hashCode 구현이라면 트리화는 극히 드물게 발생
+```
+
+### 2-5. 리사이징 — double + rehash
+
+capacity를 2배로 늘리고 기존 항목을 전부 재배치(rehash)한다. 2의 거듭제곱 특성 덕분에 각 항목의 새 버킷 인덱스는 **기존 인덱스** 또는 **기존 인덱스 + 이전 capacity** 둘 중 하나다. 상위 1비트만 확인하면 된다.
+
+```java
+// resize() 핵심 로직 (OpenJDK 단순화)
+Node<K,V>[] newTab = new Node[newCap]; // 새 배열 (2배 크기)
+
+for (Node<K,V> e : oldTab) {
+    if (e.next == null) {
+        // 단일 노드: 새 인덱스 = hash & (newCap - 1)
+        newTab[e.hash & (newCap - 1)] = e;
+    } else if (e instanceof TreeNode) {
+        // 트리 노드: split() → 필요 시 untreeify
+        ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+    } else {
+        // 연결 리스트: lo(하위) / hi(상위) 두 그룹으로 분리
+        Node<K,V> loHead = null, hiHead = null;
+        do {
+            // oldCap 비트가 0이면 기존 인덱스 유지, 1이면 +oldCap
+            if ((e.hash & oldCap) == 0) { /* lo 그룹 */ }
+            else                         { /* hi 그룹 */ }
+        } while ((e = e.next) != null);
+        newTab[j]          = loHead; // 기존 위치 유지
+        newTab[j + oldCap] = hiHead; // 기존 위치 + oldCap
+    }
+}
+```
+
+```java
+// 실전: 1000개 저장 예정 시 리사이징 횟수 제거
+// 1000 / 0.75 = 1333.3 → 다음 2의 거듭제곱 = 2048
+HashMap<String, Integer> map = new HashMap<>(2048);
+// 기본값(16)으로 시작하면: 16→32→64→128→256→512→1024→2048 = 7번 리사이징
+// 초기값 지정 시: 0번 리사이징
 ```
 
 ---
 
-### 2-2. LinkedList
+## 3. HashMap 스레드 안전성 — 왜 위험한가
 
-**이중 연결 리스트(Doubly Linked List)** 로 구현된 List이자 Deque입니다.
+### 3-1. Java 7: 무한루프 버그 (head insertion)
 
-#### 내부 구조
+Java 7의 HashMap은 리사이징 시 **head insertion** 방식을 사용했다. 새 배열에 항목을 추가할 때 기존 연결 리스트 순서가 역전되는데, 두 스레드가 동시에 resize를 시작하면 순환 참조(cycle)가 형성된다.
+
+```java
+// Java 7 transfer() — 이 코드가 경쟁 조건을 유발
+void transfer(Entry[] newTable) {
+    for (Entry<K,V> e : table) {
+        while (null != e) {
+            Entry<K,V> next = e.next;  // ← 스레드 A가 여기서 멈춤
+            int i = indexFor(e.hash, newTable.length);
+            e.next = newTable[i];       // head insertion: 역순 삽입
+            newTable[i] = e;
+            e = next;
+        }
+    }
+}
+// 스레드 A가 e=Node1, next=Node2 저장 후 중단
+// 스레드 B가 resize 완료 → Node2.next = Node1 (역전)
+// 스레드 A 재개 → Node1.next = Node2 → Node2.next = Node1 → 순환!
+// 이후 get() 시 해당 버킷 탐색에서 무한루프 발생 → CPU 100%
+```
+
+### 3-2. Java 8: tail insertion으로 수정, 그러나 여전히 unsafe
+
+Java 8은 **tail insertion**으로 바꿔 순환 참조 버그를 제거했다. 하지만 스레드 안전하지 않다는 본질은 그대로다.
+
+```java
+// Java 8 resize() — tail insertion, 순서 보존
+for (int j = 0; j < oldCap; ++j) {
+    Node<K,V> loHead = null, loTail = null;
+    Node<K,V> hiHead = null, hiTail = null;
+    Node<K,V> e;
+    while ((e = table[j]) != null) {
+        // tail에 추가 → 순서 보존, 순환 참조 없음
+        if (loTail == null) loHead = e;
+        else loTail.next = e;
+        loTail = e;
+    }
+}
+// 무한루프는 없어졌지만:
+// 1. 두 스레드가 동시에 put() → 한 항목이 소실될 수 있음
+// 2. get()과 put()이 동시에 → 불완전한 노드를 읽을 수 있음
+// 3. resize 중 get() → 잘못된 버킷에서 탐색 → null 반환
+```
+
+```java
+// 동시성 카운터의 경쟁 조건 예시
+Map<String, Integer> counter = new HashMap<>();
+
+// 스레드 1, 2가 동시에 실행
+counter.put("hits", counter.getOrDefault("hits", 0) + 1);
+//            ↑ read           ↑ +1          ↑ write
+// 두 스레드 모두 0을 읽고 1을 write → 최종값 1 (2가 되어야 함)
+// 데이터 유실!
+
+// 해결: ConcurrentHashMap + 원자적 연산
+ConcurrentHashMap<String, Integer> safeCounter = new ConcurrentHashMap<>();
+safeCounter.merge("hits", 1, Integer::sum); // 원자적
+```
+
+---
+
+## 4. ConcurrentHashMap 내부 — CAS + synchronized per-node
+
+### 4-1. Java 7: 세그먼트 락 방식의 한계
+
+Java 7은 HashMap을 **Segment** 단위로 분할하고 각 Segment에 ReentrantLock을 걸었다. 기본 16개 세그먼트 → 최대 16개 스레드가 병렬로 쓰기 가능.
 
 ```mermaid
 graph LR
-    HEAD(["head"])
-    TAIL(["tail"])
-    A["prev=null | A | ne"]
-    B["prev | B | next"]
-    C["prev | C | next=nu"]
-    HEAD --> A
-    A --> B
-    B --> A
-    B --> C
-    C --> B
-    C --- TAIL
+    CHM["ConcurrentHashMap"] --> S0["Seg[0] Lock"]
+    CHM --> S1["Seg[1] Lock"]
+    CHM --> SD["Seg[15] Lock"]
+    S0 --> B0["bucket 0~n/16"]
+    S1 --> B1["bucket n/16~n/8"]
 ```
 
-각 노드(Node)는 이전/다음 노드의 참조와 데이터를 보관합니다:
+문제점: 세그먼트가 16개로 고정되어 64코어 서버에서도 최대 16 스레드만 병렬 쓰기 가능. 세그먼트 크기 불균형 시 한 세그먼트에 부하 집중.
+
+### 4-2. Java 8: CAS + synchronized per-node
+
+세그먼트를 완전히 제거하고 **버킷 단위**로 락을 세분화했다. 빈 버킷에 첫 항목을 삽입할 때는 CAS(Compare-And-Swap)로 락 없이 처리한다.
 
 ```java
-// LinkedList 내부 Node 클래스 (OpenJDK)
+// ConcurrentHashMap.putVal() 핵심 로직 (단순화)
+final V putVal(K key, V value, boolean onlyIfAbsent) {
+    int hash = spread(key.hashCode()); // h ^ (h >>> 16) & HASH_BITS
+
+    for (Node<K,V>[] tab = table;;) {
+        Node<K,V> f; int n, i, fh;
+
+        if (tab == null)
+            tab = initTable(); // CAS로 초기화 (락 없음)
+
+        else if ((f = tabAt(tab, i = (n-1) & hash)) == null) {
+            // 버킷이 비어 있음 → CAS로 락 없이 삽입
+            if (casTabAt(tab, i, null, new Node<>(hash, key, value)))
+                break; // 성공 시 즉시 반환
+            // 실패 시 (다른 스레드가 먼저 삽입) → loop 재시도
+        }
+
+        else if ((fh = f.hash) == MOVED)
+            tab = helpTransfer(tab, f); // 리사이징 중 → 협력 이전
+
+        else {
+            // 버킷에 항목이 있음 → 해당 버킷의 head 노드에만 synchronized
+            synchronized (f) {
+                if (tabAt(tab, i) == f) { // 락 후 재확인 (double-check)
+                    if (fh >= 0) { /* 연결 리스트 삽입 */ }
+                    else if (f instanceof TreeBin) { /* 트리 삽입 */ }
+                }
+            }
+            if (binCount >= TREEIFY_THRESHOLD) treeifyBin(tab, i);
+        }
+    }
+    addCount(1L, binCount); // size 업데이트 (baseCount + CounterCell)
+    return null;
+}
+```
+
+### 4-3. size() 근사 카운팅 — baseCount + CounterCell, @Contended 패딩
+
+**왜 size()가 부정확할 수 있는가?** 동시 쓰기가 많을 때 단일 `long count` 변수를 AtomicLong으로 업데이트하면 **false sharing**이 발생한다. 여러 스레드가 같은 캐시 라인을 무효화시키며 경합한다.
+
+ConcurrentHashMap은 이를 피하기 위해 `baseCount`와 분산된 `CounterCell` 배열을 사용한다.
+
+```java
+// ConcurrentHashMap 카운팅 구조
+private transient volatile long baseCount; // 경합이 없을 때 직접 업데이트
+
+// @Contended: JVM이 이 필드를 별도 캐시 라인에 패딩
+// 서로 다른 CounterCell이 같은 캐시 라인에 있으면 false sharing 발생
+@sun.misc.Contended
+static final class CounterCell {
+    volatile long value; // 스레드별 카운터
+}
+private transient volatile CounterCell[] counterCells;
+
+// addCount() 동작 원리
+private final void addCount(long x, int check) {
+    CounterCell[] cs = counterCells;
+    if (cs != null || !U.compareAndSetLong(this, BASECOUNT, b = baseCount, b + x)) {
+        // CAS 실패(경합 발생) → 스레드를 특정 CounterCell로 분산
+        CounterCell c;
+        if ((c = cs[ThreadLocalRandom.getProbe() & (cs.length - 1)]) != null)
+            U.compareAndSetLong(c, CELLVALUE, v = c.value, v + x);
+        else
+            fullAddCount(x, ...); // CounterCell 배열 확장
+    }
+}
+
+// size() = baseCount + sum(counterCells)
+// 계산 시점에 다른 스레드가 추가/삭제 중이면 근사값
+public int size() {
+    long n = sumCount();
+    return n < 0 ? 0 : n > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) n;
+}
+```
+
+```java
+// 실전 사용 — 원자적 복합 연산
+ConcurrentHashMap<String, List<String>> multiMap = new ConcurrentHashMap<>();
+
+// computeIfAbsent: 키 없을 때만 새 값 생성 (원자적)
+multiMap.computeIfAbsent("fruits", k -> new ArrayList<>()).add("apple");
+
+// merge: 값 합산 (원자적)
+ConcurrentHashMap<String, Long> counter = new ConcurrentHashMap<>();
+counter.merge("api.calls", 1L, Long::sum);
+
+// 정확한 대용량 카운터: LongAdder 사용 권장
+ConcurrentHashMap<String, LongAdder> adderMap = new ConcurrentHashMap<>();
+adderMap.computeIfAbsent("hits", k -> new LongAdder()).increment();
+long total = adderMap.get("hits").sum();
+```
+
+---
+
+## 5. ArrayList 내부 구조
+
+### 5-1. 동적 배열과 1.5배 증가 — amortized O(1) 증명
+
+ArrayList는 `Object[]` 배열을 내부적으로 보유한다. 배열이 꽉 차면 1.5배 크기의 새 배열을 만들고 `System.arraycopy()`로 복사한다.
+
+**왜 1.5배인가?** 2배면 메모리 낭비가 크고, 1.2배면 리사이징이 너무 자주 발생한다. 1.5배가 amortized O(1) 보장 + 메모리 효율의 균형점이다.
+
+```java
+// OpenJDK ArrayList.grow()
+private Object[] grow(int minCapacity) {
+    int oldCapacity = elementData.length;
+    if (oldCapacity > 0) {
+        int newCapacity = ArraysSupport.newLength(
+            oldCapacity,
+            minCapacity - oldCapacity, // 최소 증가량
+            oldCapacity >> 1           // 선호 증가량: oldCapacity / 2 = 1.5배
+        );
+        return elementData = Arrays.copyOf(elementData, newCapacity);
+    }
+    return elementData = new Object[Math.max(DEFAULT_CAPACITY, minCapacity)];
+}
+// newLength = Math.max(minCapacity, oldCapacity + oldCapacity/2)
+// oldCapacity=10 → newCapacity=15
+// oldCapacity=100 → newCapacity=150
+```
+
+**Amortized O(1) 증명**: n번 add() 시 총 복사 비용은 얼마인가?
+
+```
+capacity 변화: 10 → 15 → 22 → 33 → ...
+복사 비용:      10   15   22   33   ...
+
+총 비용 = 10 + 15 + 22 + ... ≈ 10 × (1 + 1.5 + 1.5² + ...) ≤ 10 × (1/(1-1/1.5)) = 10 × 3 = 30
+→ n번 add()의 총 비용 = O(n)
+→ 한 번의 add() 평균 비용 = O(n)/n = O(1) (amortized)
+
+2배 증가의 경우: 총 비용 = O(2n) = O(n), 평균 = O(1)
+1.5배 증가의 경우: 총 비용 = O(3n) = O(n), 평균 = O(1)
+→ 증가 비율 r > 1이면 amortized O(1) 성립
+```
+
+### 5-2. System.arraycopy — JVM intrinsic
+
+`Arrays.copyOf()`는 내부적으로 `System.arraycopy()`를 호출하며, 이는 JVM intrinsic이다. HotSpot JVM은 이를 CPU의 `SIMD` 명령어(SSE, AVX)를 이용한 벡터 복사로 최적화한다. 따라서 단순 반복문보다 수십 배 빠르다.
+
+```java
+// System.arraycopy는 native 메서드 — JVM이 CPU 레벨 최적화 수행
+public static native void arraycopy(Object src, int srcPos,
+                                    Object dest, int destPos, int length);
+
+// 중간 삽입 시 arraycopy 사용
+public void add(int index, E element) {
+    // index 이후 원소를 한 칸 뒤로 이동
+    System.arraycopy(elementData, index,
+                     elementData, index + 1,
+                     size - index);  // 이동할 원소 수 = size - index
+    elementData[index] = element;
+    size++;
+}
+// index=0(맨 앞 삽입)이면 size개 원소 전체 이동 → O(n)
+// index=size(맨 뒤 삽입)이면 0개 이동 → O(1)
+```
+
+### 5-3. RandomAccess 마커 인터페이스
+
+`ArrayList`는 `RandomAccess` 인터페이스를 구현한다. 이 인터페이스에는 메서드가 없다. 순수한 **마커(marker)** 역할로, "이 컬렉션은 get(index)가 O(1)"임을 알린다.
+
+```java
+// RandomAccess 인터페이스 — 메서드 없음, 마커만
+public interface RandomAccess {}
+
+// ArrayList: implements RandomAccess 있음
+// LinkedList: implements RandomAccess 없음
+
+// 알고리즘이 RandomAccess 여부를 확인해 최적화
+public static <T> void shuffle(List<T> list, Random rnd) {
+    int size = list.size();
+    if (size < SHUFFLE_THRESHOLD || list instanceof RandomAccess) {
+        // O(1) 인덱스 접근 가능 → Fisher-Yates 직접 적용
+        for (int i = size; i > 1; i--)
+            swap(list, i-1, rnd.nextInt(i));
+    } else {
+        // O(n) 인덱스 접근 → 배열로 복사 후 셔플, 다시 복사
+        Object[] arr = list.toArray();
+        // ... 셔플 후 list에 다시 set
+    }
+}
+
+// Collections.binarySearch 도 동일 패턴
+// RandomAccess → O(log n), 아니면 O(n log n)
+```
+
+---
+
+## 6. LinkedList — 왜 거의 선택하지 않는가
+
+### 6-1. 이중 연결 리스트 구조
+
+```mermaid
+graph LR
+    HEAD["head"] --> N1["prev=null A next"]
+    N1 --> N2["prev B next"]
+    N2 --> N3["prev C next=null"]
+    N3 --> TAIL["tail"]
+    N2 --> N1
+    N3 --> N2
+```
+
+```java
+// LinkedList.Node — 양방향 포인터 포함
 private static class Node<E> {
     E item;
     Node<E> next;
@@ -150,1135 +509,927 @@ private static class Node<E> {
         this.prev = prev;
     }
 }
+// 객체 오버헤드: 헤더 16B + item 참조 8B + next 8B + prev 8B = 40B/node
+// String "hello" 저장 시: Node 40B + String 객체 48B 이상 = 88B+
+// ArrayList는 참조 8B만 추가
 ```
 
-#### 시간복잡도
+### 6-2. 캐시 지역성(Cache Locality) 문제
 
-| 연산 | 시간복잡도 | 설명 |
-|------|-----------|------|
-| `addFirst(E e)` / `addLast(E e)` | O(1) | head/tail 포인터만 변경 |
-| `add(int i, E e)` | O(n) | i번째 노드까지 순차 탐색 후 삽입 |
-| `get(int i)` | O(n) | i번째 노드까지 순차 탐색 |
-| `remove(Object o)` | O(n) | 탐색 O(n) + 포인터 변경 O(1) |
-| `removeFirst()` / `removeLast()` | O(1) | head/tail 포인터만 변경 |
+LinkedList가 이론상 중간 삽입이 O(1)이지만 실제로 느린 이유는 **CPU 캐시 미스**다.
 
-#### ArrayList vs LinkedList 선택 기준
-
-```java
-// LinkedList가 유리한 경우: 양 끝 삽입/삭제가 빈번할 때
-Deque<String> deque = new LinkedList<>();
-deque.addFirst("first");  // O(1)
-deque.addLast("last");    // O(1)
-deque.removeFirst();      // O(1)
-
-// ArrayList가 유리한 경우: 랜덤 접근, 순차 읽기
-List<String> list = new ArrayList<>();
-String val = list.get(500); // O(1) — LinkedList라면 O(n)
 ```
+ArrayList 메모리 레이아웃:
+[A][B][C][D][E][F][G][H] ← 연속 메모리, 캐시 라인 한 번에 로드
+순차 탐색 시 캐시 미스 거의 없음
 
-> **실무 팁**: 대부분의 경우 ArrayList가 빠릅니다. LinkedList는 캐시 지역성(cache locality)이 나쁘고, 노드마다 prev/next 포인터 오버헤드(객체 헤더 포함 약 24~32 bytes/node)가 있습니다. 큐/덱 목적이라면 `ArrayDeque`이 더 좋습니다.
+LinkedList 메모리 레이아웃:
+[Node_A: 주소0x1000] → [Node_B: 주소0x8340] → [Node_C: 주소0x2f10] → ...
+각 노드가 힙 전체에 흩어져 있음 → 매 노드 접근마다 캐시 미스 가능성
 
----
-
-### 2-3. Vector
-
-`ArrayList`와 동일한 배열 기반 구조이지만, **모든 메서드에 `synchronized`** 가 붙어 있어 스레드 안전합니다.
-
-```java
-// Vector의 add 메서드 — 메서드 전체에 synchronized
-public synchronized boolean add(E e) {
-    modCount++;
-    add(e, elementData, elementCount);
-    return true;
-}
-```
-
-단점: 단일 스레드 환경에서도 락을 획득해야 하므로 `ArrayList`보다 느립니다. **Java 1.0 시대 레거시 클래스**이므로 새 코드에서는 사용을 피하세요.
-
----
-
-### 2-4. CopyOnWriteArrayList
-
-**쓰기 시 배열 전체를 복사**하는 스레드 안전 List입니다. `java.util.concurrent` 패키지에 속합니다.
-
-```mermaid
-graph LR
-    OLD["기존 readers → 배열 A,B,C"]
-    WRITE["쓰기: 새 배열 복사"] --> REF["참조 교체"]
-    REF --> NEW["new readers → 배열 A,B,C,D"]
+현대 CPU L1 캐시 미스 패널티: ~100 사이클
+캐시 히트: ~4 사이클
+→ 캐시 미스 한 번 = 캐시 히트 25번 비용
 ```
 
 ```java
-import java.util.concurrent.CopyOnWriteArrayList;
+// 벤치마크 결과 예시 (JMH, 10만 원소, 순차 읽기)
+// ArrayList iterate: ~2ms
+// LinkedList iterate: ~15ms (캐시 미스로 7배 느림)
 
-CopyOnWriteArrayList<String> cowList = new CopyOnWriteArrayList<>();
-cowList.add("A");
-
-// 읽기는 락 없음 — 매우 빠름
-for (String s : cowList) {
-    // 반복 중 다른 스레드가 add해도 ConcurrentModificationException 없음
-    System.out.println(s);
-}
+// 중간 삽입 벤치마크 (5만 번째 위치에 삽입)
+// ArrayList: System.arraycopy 덕분에 실제로는 LinkedList와 대등하거나 더 빠름
+// → 탐색(O(n))이 있어도 캐시 효율이 LinkedList보다 좋음
 ```
 
-| 특성 | CopyOnWriteArrayList | Collections.synchronizedList |
-|------|---------------------|------------------------------|
-| 읽기 성능 | 락 없음 (매우 빠름) | 매 읽기마다 락 |
-| 쓰기 성능 | 배열 전체 복사 (느림) | 락만 획득 (상대적으로 빠름) |
-| 반복 안전성 | 항상 안전 (스냅샷) | 수동으로 동기화 필요 |
-| 적합한 상황 | 읽기 多, 쓰기 少 | 읽기/쓰기 균형 |
+### 6-3. Deque로서의 LinkedList vs ArrayDeque
 
----
-
-## 3. Set 구현체
-
-### 3-1. HashSet
-
-**내부적으로 `HashMap`을 사용**합니다. 원소를 HashMap의 Key로, dummy 값(`PRESENT`)을 Value로 저장합니다.
+LinkedList는 `Deque` 인터페이스를 구현한다. 하지만 큐/스택 용도에는 `ArrayDeque`가 훨씬 낫다.
 
 ```java
-// HashSet 내부 (OpenJDK)
-private transient HashMap<E,Object> map;
-private static final Object PRESENT = new Object();
+// LinkedList를 Deque로 사용
+Deque<String> linkedDeque = new LinkedList<>();
+linkedDeque.addFirst("A"); // O(1), 그러나 Node 객체 생성 비용
+linkedDeque.addLast("B");  // O(1), 그러나 GC 압력 증가
 
-public boolean add(E e) {
-    return map.put(e, PRESENT) == null;
-}
-```
+// ArrayDeque: 원형 배열 기반
+Deque<String> arrayDeque = new ArrayDeque<>();
+arrayDeque.addFirst("A"); // O(1)amortized, 배열 인덱스 이동만
+arrayDeque.addLast("B");  // O(1)amortized
 
-#### equals / hashCode 계약
-
-HashSet의 중복 판단 과정:
-
-```mermaid
-graph LR
-    A["add() 호출"] --> B["hashCode() → 버킷 결정"]
-    B --> C{"버킷에 원소?"}
-    C -->|NO| D["저장"]
-    C -->|YES| E{"equals() 같음?"}
-    E -->|true| F["중복 무시"]
-    E -->|false| G["충돌 저장"]
-```
-
-**계약(Contract)**:
-- `a.equals(b)` 가 `true`이면 `a.hashCode() == b.hashCode()` 이어야 합니다.
-- 역은 성립하지 않아도 됩니다 (해시 충돌 허용).
-
-```java
-// 잘못된 예: equals만 재정의하고 hashCode를 재정의하지 않음
-class BadKey {
-    String name;
-    @Override
-    public boolean equals(Object o) {
-        return ((BadKey) o).name.equals(this.name);
-    }
-    // hashCode 미재정의 → Object의 기본 hashCode(메모리 주소 기반) 사용
-    // equals는 같지만 hashCode가 달라 HashSet에 중복 저장됨!
-}
-
-Set<BadKey> set = new HashSet<>();
-set.add(new BadKey("kim")); // hashCode = 1234
-set.add(new BadKey("kim")); // hashCode = 5678 → 다른 버킷 → 중복 허용!
-System.out.println(set.size()); // 2 (잘못된 결과)
-
-// 올바른 예
-class GoodKey {
-    String name;
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof GoodKey)) return false;
-        return name.equals(((GoodKey) o).name);
-    }
-    @Override
-    public int hashCode() {
-        return Objects.hash(name); // name 기반 hashCode
-    }
-}
-```
-
-#### 해시 충돌 처리 — 체이닝 → 트리화 (Java 8+)
-
-Java 7까지는 같은 버킷에 충돌이 많아지면 연결 리스트가 길어져 탐색이 O(n)으로 악화됩니다. 특히 `hashCode()`가 잘못 구현된 클래스를 키로 사용하면 모든 원소가 같은 버킷에 몰려 HashMap이 사실상 연결 리스트처럼 동작합니다. Java 8은 이 문제를 트리화(Treeify)로 해결했습니다.
-
-```mermaid
-graph LR
-    B3A["Java7 버킷"] --> NA["A→X→M O(n)"]
-    B3B["Java8+ 버킷"] --> TREE["RB-Tree O(logn)"]
-    TREE --> L["왼쪽"]
-    TREE --> R["오른쪽"]
+// ArrayDeque가 빠른 이유:
+// 1. 연속 메모리 → 캐시 지역성 우수
+// 2. 객체 생성 없음 → GC 부담 없음
+// 3. 원형 배열: head/tail 포인터만 이동
 ```
 
 ---
 
-### 3-2. LinkedHashSet
+## 7. TreeMap — Red-Black Tree와 NavigableMap
 
-`HashSet`을 상속하며, 내부적으로 **`LinkedHashMap`을 사용**해 **삽입 순서를 유지**합니다.
+### 7-1. Red-Black Tree 구조와 회전 연산
+
+TreeMap은 **Red-Black Tree**로 구현된다. 이 트리는 5가지 규칙으로 균형을 유지한다.
+
+```
+Red-Black Tree 규칙:
+1. 모든 노드는 RED 또는 BLACK
+2. 루트는 반드시 BLACK
+3. 모든 리프(nil)는 BLACK
+4. RED 노드의 두 자식은 반드시 BLACK (RED 연속 불가)
+5. 모든 경로의 BLACK 노드 수 동일 (black-height 동일)
+
+이 규칙으로 트리 높이 ≤ 2 * log₂(n+1) 보장
+→ 삽입/삭제/탐색 모두 O(log n) 보장
+```
 
 ```java
-Set<String> linked = new LinkedHashSet<>();
-linked.add("Banana");
-linked.add("Apple");
-linked.add("Cherry");
+// 삽입 후 균형 복구: 회전(rotation) + 색상 변경(recolor)
+// 예: 우회전 (right rotation at node y)
+//     y              x
+//    / \    →      / \
+//   x   C         A   y
+//  / \                / \
+// A   B              B   C
+//
+// 회전은 O(1): 포인터 3개만 변경
 
-System.out.println(linked); // [Banana, Apple, Cherry] — 삽입 순서 유지
-// HashSet이라면: [Apple, Banana, Cherry] (순서 미보장)
+// TreeMap 삽입 예시
+TreeMap<String, Integer> map = new TreeMap<>();
+map.put("Mango",  3);  // 루트=Mango(BLACK)
+map.put("Apple",  1);  // Apple은 Mango 왼쪽(RED)
+map.put("Orange", 5);  // Orange는 Mango 오른쪽(RED), recolor 발생
+map.put("Banana", 2);  // 삽입 후 회전 필요 가능성
+
+// 항상 정렬 순서 유지
+System.out.println(map.firstKey()); // Apple
+System.out.println(map.lastKey());  // Orange
 ```
 
-내부적으로 이중 연결 리스트로 각 버킷의 원소들을 삽입 순서로 연결합니다.
+### 7-2. Comparable / Comparator 필수인 이유
 
-```mermaid
-graph LR
-    B2["bucket[2] Banana"]
-    B7["bucket[7] Apple"]
-    B4["bucket[4] Cherry"]
-    H(["head"]) --> BN["Banana"] --> AP["Apple"] --> CH["Cherry"] --> T(["tail"])
-    T --> CH --> AP --> BN --> H
-```
-
----
-
-### 3-3. TreeSet
-
-**Red-Black Tree** 기반의 `NavigableSet` 구현체입니다. 원소를 **항상 정렬된 상태**로 유지합니다.
-
-#### Red-Black Tree 구조
-
-```mermaid
-graph LR
-    N5["5(B)"] --> N3["3(R)"]
-    N5 --> N7["7(R)"]
-    N3 --> N1["1(B)"]
-    N7 --> N9["9(B)"]
-    RULE["루트=BLACK, RED자식=BLACK"]
-```
-
-#### Comparable vs Comparator
+TreeMap은 Key를 삽입할 때마다 **비교(compare)** 연산으로 위치를 결정한다. Comparable이나 Comparator 없이는 위치를 알 수 없으므로 `ClassCastException`이 발생한다.
 
 ```java
-// 1. Comparable 구현 (자연 순서)
-class Student implements Comparable<Student> {
-    String name;
-    int score;
+// 기본: Comparable (자연 순서)
+TreeMap<Integer, String> intMap = new TreeMap<>(); // Integer는 Comparable 구현
+intMap.put(3, "three");
+intMap.put(1, "one");
+intMap.put(2, "two");
+System.out.println(intMap); // {1=one, 2=two, 3=three}
 
-    @Override
-    public int compareTo(Student other) {
-        return Integer.compare(this.score, other.score); // 점수 오름차순
-    }
-}
+// Comparable 없는 클래스를 Key로 → ClassCastException
+class RawPoint { int x, y; } // Comparable 미구현
+TreeMap<RawPoint, String> bad = new TreeMap<>();
+bad.put(new RawPoint(), "a"); // ClassCastException!
 
-TreeSet<Student> byScore = new TreeSet<>();
-byScore.add(new Student("Kim", 90));
-byScore.add(new Student("Lee", 80));
-
-// 2. Comparator 지정 (커스텀 순서)
-TreeSet<String> byLength = new TreeSet<>(
-    Comparator.comparingInt(String::length).thenComparing(Comparator.naturalOrder())
+// Comparator 지정으로 해결
+TreeMap<RawPoint, String> good = new TreeMap<>(
+    Comparator.comparingInt((RawPoint p) -> p.x).thenComparingInt(p -> p.y)
 );
-byLength.add("Banana");
-byLength.add("Apple");
-byLength.add("Fig");
-System.out.println(byLength); // [Fig, Apple, Banana] — 길이 순
+
+// 역순 TreeMap
+TreeMap<String, Integer> reverseMap = new TreeMap<>(Comparator.reverseOrder());
+reverseMap.put("C", 3); reverseMap.put("A", 1); reverseMap.put("B", 2);
+System.out.println(reverseMap); // {C=3, B=2, A=1}
 ```
 
-#### NavigableSet 범위 검색
+### 7-3. NavigableMap — 범위 검색 API
 
 ```java
-TreeSet<Integer> ts = new TreeSet<>(Set.of(1, 3, 5, 7, 9, 11));
+TreeMap<Integer, String> tm = new TreeMap<>();
+for (int i : new int[]{1, 3, 5, 7, 9, 11}) tm.put(i, "v" + i);
 
-System.out.println(ts.headSet(6));          // [1, 3, 5]      — 6 미만
-System.out.println(ts.tailSet(6));          // [7, 9, 11]     — 6 이상
-System.out.println(ts.subSet(3, 9));        // [3, 5, 7]      — [3, 9)
-System.out.println(ts.floor(6));            // 5              — 6 이하 최대
-System.out.println(ts.ceiling(6));          // 7              — 6 이상 최소
-System.out.println(ts.higher(5));           // 7              — 5 초과 최소
-System.out.println(ts.lower(5));            // 3              — 5 미만 최대
-```
+// 경계 탐색
+tm.floorKey(6);    // 5  (6 이하 최대 키)
+tm.ceilingKey(6);  // 7  (6 이상 최소 키)
+tm.lowerKey(5);    // 3  (5 미만 최대 키)
+tm.higherKey(5);   // 7  (5 초과 최소 키)
 
-| 연산 | 시간복잡도 |
-|------|-----------|
-| `add`, `remove`, `contains` | O(log n) |
-| `first`, `last` | O(log n) |
-| `headSet`, `tailSet`, `subSet` | O(log n) (뷰 생성) |
+// 범위 뷰 (실제 서브맵, 원본과 연동)
+tm.subMap(3, true, 9, false); // [3, 9) → {3, 5, 7}
+tm.headMap(6);                // [1, 6) → {1, 3, 5}
+tm.tailMap(6);                // [6, ∞) → {7, 9, 11}
 
----
+// 내림차순 뷰
+NavigableMap<Integer, String> desc = tm.descendingMap();
+desc.firstKey(); // 11
 
-### 3-4. EnumSet
-
-**Enum 타입 전용** Set으로, 내부적으로 **비트 벡터(bit vector)** 를 사용합니다.
-
-#### 왜 빠른가?
-
-```mermaid
-graph LR
-    MON["MON=0"] --- TUE["TUE=1"] --- WED["WED=2"] --- FRI["FRI=4"]
-    MASK["EnumSet.of(MON,WED)"]
-    OPS["add/remove → bit연산"]
-```
-
-- Enum 상수가 64개 이하 → `RegularEnumSet` (long 하나)
-- 65개 이상 → `JumboEnumSet` (long 배열)
-
-```java
-import java.util.EnumSet;
-
-enum Permission { READ, WRITE, EXECUTE, DELETE }
-
-EnumSet<Permission> adminPerms = EnumSet.allOf(Permission.class);
-EnumSet<Permission> readOnly   = EnumSet.of(Permission.READ);
-EnumSet<Permission> noDelete   = EnumSet.complementOf(EnumSet.of(Permission.DELETE));
-
-// 비트 연산 기반이라 모든 연산이 O(1)
-adminPerms.containsAll(readOnly); // true
+// 실전: IP 라우팅 테이블
+TreeMap<String, String> routes = new TreeMap<>();
+routes.put("10.0.0.0",   "ISP-A");
+routes.put("172.16.0.0", "ISP-B");
+routes.put("192.168.0.0","LAN");
+// 10.0.5.100 이 속하는 네트워크 찾기
+Map.Entry<String, String> route = routes.floorEntry("10.0.5.100");
+System.out.println(route.getValue()); // ISP-A (최장 접두사 매칭 근사)
 ```
 
 ---
 
-## 4. Map 구현체
+## 8. HashSet — HashMap의 얇은 래퍼
 
-### 4-1. HashMap
-
-Java 컬렉션에서 가장 많이 사용되는 Map 구현체입니다.
-
-#### 내부 해시 버킷 구조
-
-```mermaid
-graph LR
-    B1["버킷[1]"] --> N1["Alice=30"]
-    B3["버킷[3]"] --> N3a["Bob=25"] --> N3b["Carol=28"]
-    PUT["put(Dave,35)→버킷배정"]
-```
-
-#### 초기 용량(initialCapacity)과 로드 팩터(loadFactor)
+### 8-1. 내부 구현: HashMap + PRESENT 더미 객체
 
 ```java
-// 기본값: capacity=16, loadFactor=0.75
-HashMap<String, Integer> map = new HashMap<>();
+// HashSet 전체 구현 핵심 (OpenJDK)
+public class HashSet<E> extends AbstractSet<E> {
+    private transient HashMap<E, Object> map;
 
-// 리사이징 임계값: capacity × loadFactor = 16 × 0.75 = 12
-// 원소가 12개를 초과하면 capacity를 2배(32)로 확장하고 rehashing
-```
+    // 모든 Key에 대해 동일한 더미 Value 사용
+    private static final Object PRESENT = new Object();
+    // PRESENT는 static final → 모든 HashSet 인스턴스가 공유
+    // 메모리 낭비 최소화: Value 자리를 단 하나의 객체로 채움
 
-**리사이징 비용 예측이 가능하다면 초기 용량을 지정하세요:**
+    public boolean add(E e) {
+        return map.put(e, PRESENT) == null;
+        // HashMap.put이 null 반환 = 새로 삽입됨 = true
+        // HashMap.put이 PRESENT 반환 = 이미 있었음 = false (중복)
+    }
 
-```java
-// 1000개 원소를 저장할 예정이라면:
-// capacity = ceil(1000 / 0.75) + 1 = 1335 → 다음 2의 거듭제곱 = 2048
-int expectedSize = 1000;
-int initialCapacity = (int) (expectedSize / 0.75) + 1;
-HashMap<String, Integer> optimized = new HashMap<>(initialCapacity);
-```
+    public boolean contains(Object o) {
+        return map.containsKey(o); // 키 존재 여부만 확인
+    }
 
-#### Java 8 트리화 (Treeify)
+    public boolean remove(Object o) {
+        return map.remove(o) == PRESENT;
+    }
 
-```java
-// HashMap 상수
-static final int TREEIFY_THRESHOLD = 8;   // 버킷 원소 8개 초과 시 트리화
-static final int UNTREEIFY_THRESHOLD = 6; // 원소 6개 이하로 감소 시 복원
-static final int MIN_TREEIFY_CAPACITY = 64; // 전체 capacity가 64 미만이면 트리화 대신 resize
-```
-
-```mermaid
-graph LR
-    A["충돌 7개: LinkedList"]
-    B{"8번째 충돌 발생<br>capacity >= 64?"}
-    C["TreeNode로 변환<br>(R"]
-    D["capacity 2배 확장<br>"]
-    A --> B
-    B -->|YES| C
-    B -->|NO| D
-```
-
-#### 시간복잡도
-
-| 연산 | 평균 | 최악 (모든 원소 같은 버킷) |
-|------|------|--------------------------|
-| `put` | O(1) | O(log n) [Java 8+, 트리화 후] |
-| `get` | O(1) | O(log n) |
-| `remove` | O(1) | O(log n) |
-| `containsKey` | O(1) | O(log n) |
-
-```java
-Map<String, Integer> wordCount = new HashMap<>();
-String[] words = {"apple", "banana", "apple", "cherry", "banana", "apple"};
-
-for (String word : words) {
-    wordCount.merge(word, 1, Integer::sum); // getOrDefault + put 보다 간결
+    public Iterator<E> iterator() {
+        return map.keySet().iterator(); // HashMap의 키 집합 이터레이터
+    }
 }
-System.out.println(wordCount); // {apple=3, banana=2, cherry=1}
-
-// computeIfAbsent: 키 없을 때만 계산
-Map<String, List<String>> groups = new HashMap<>();
-groups.computeIfAbsent("fruits", k -> new ArrayList<>()).add("apple");
-groups.computeIfAbsent("fruits", k -> new ArrayList<>()).add("banana");
-// groups: {fruits=[apple, banana]}
 ```
+
+**왜 HashMap을 재사용하는가?** 코드 중복 제거와 구현 일관성 보장. HashMap의 해시, 트리화, 리사이징 로직을 그대로 활용한다. 단점은 HashMap 버킷당 Key + PRESENT 참조 두 개를 저장하므로 순수 키 저장 대비 오버헤드가 있지만, PRESENT를 공유하므로 실제 추가 비용은 Map.Entry 객체 크기뿐이다.
 
 ---
 
-### 4-2. LinkedHashMap — LRU 캐시 구현
+## 9. LinkedHashMap — 삽입/접근 순서 유지 메커니즘
 
-`HashMap`을 상속하며, 이중 연결 리스트로 **삽입 순서** 또는 **접근 순서(accessOrder)**를 유지합니다.
+### 9-1. 이중 연결 리스트 오버레이 구조
+
+LinkedHashMap은 HashMap을 상속하면서, 모든 Entry를 삽입 순서(또는 접근 순서)로 연결하는 **이중 연결 리스트**를 추가로 유지한다.
+
+```java
+// LinkedHashMap.Entry — HashMap.Node에 before/after 추가
+static class Entry<K,V> extends HashMap.Node<K,V> {
+    Entry<K,V> before; // 이전 삽입/접근 항목
+    Entry<K,V> after;  // 다음 삽입/접근 항목
+
+    Entry(int hash, K key, V value, Node<K,V> next) {
+        super(hash, key, value, next);
+    }
+}
+
+// head ↔ Entry_A ↔ Entry_B ↔ Entry_C ↔ tail (이중 연결)
+// HashMap 버킷: [A], [B], [C] (해시 기반 분산)
+// 이 두 구조가 동시에 유지됨
+```
 
 ```mermaid
 graph LR
-    A1["A"] --> B1["B"] --> C1["C"]
-    C1 --> B1 --> A1
-    B2["B"] --> C2["C"] --> A2["A 최근→tail"]
-    A2 --> C2 --> B2
+    HEAD["head"] --> EA["Entry_A"]
+    EA --> EB["Entry_B"]
+    EB --> EC["Entry_C"]
+    EC --> TAIL["tail"]
+    EB --> EA
+    EC --> EB
 ```
 
-#### LRU 캐시 구현
+### 9-2. 접근 순서(accessOrder) + LRU 캐시 구현
 
 ```java
-import java.util.LinkedHashMap;
-import java.util.Map;
-
+// accessOrder=true: get/put 시 해당 항목을 tail로 이동
 public class LRUCache<K, V> extends LinkedHashMap<K, V> {
     private final int maxSize;
 
     public LRUCache(int maxSize) {
-        // accessOrder=true: get/put 시 해당 항목을 tail(최근)으로 이동
-        super(maxSize, 0.75f, true);
+        // capacity는 충분히 크게(maxSize+1), loadFactor 0.75f, accessOrder=true
+        super(maxSize + 1, 0.75f, true);
         this.maxSize = maxSize;
     }
 
+    // 이 메서드가 true를 반환하면 가장 오래된 항목(head.after) 자동 제거
     @Override
     protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-        // 크기 초과 시 가장 오래된(head) 항목 자동 제거
         return size() > maxSize;
+    }
+
+    // 스레드 안전이 필요하면 synchronized 래핑 또는 별도 락 사용
+}
+
+// 사용 예
+LRUCache<Integer, String> cache = new LRUCache<>(3);
+cache.put(1, "A");  // 순서: [1]
+cache.put(2, "B");  // 순서: [1, 2]
+cache.put(3, "C");  // 순서: [1, 2, 3]
+cache.get(1);       // 1 접근 → tail로 이동: [2, 3, 1]
+cache.put(4, "D");  // 용량 초과 → head.after = 2 제거: [3, 1, 4]
+
+System.out.println(cache.containsKey(2)); // false (evicted)
+System.out.println(cache.containsKey(1)); // true (최근 접근됨)
+```
+
+```java
+// removeEldestEntry의 동작 원리
+// LinkedHashMap.afterNodeInsertion() 호출 시
+void afterNodeInsertion(boolean evict) {
+    LinkedHashMap.Entry<K,V> first;
+    if (evict && (first = head) != null && removeEldestEntry(first)) {
+        K key = first.key;
+        removeNode(hash(key), key, null, false, true); // head 제거
+    }
+}
+```
+
+---
+
+## 10. PriorityQueue — 배열 기반 이진 힙
+
+### 10-1. 왜 배열 기반인가 (노드 기반 대비)
+
+이진 힙은 **완전 이진 트리(Complete Binary Tree)** 이므로 배열로 완벽하게 표현할 수 있다.
+
+```
+배열 인덱스와 트리 위치 관계:
+부모 인덱스 = (i - 1) / 2
+왼쪽 자식  = 2 * i + 1
+오른쪽 자식 = 2 * i + 2
+
+배열: [1, 3, 2, 7, 5, 8, 4]
+       ↑루트
+트리:        1
+           /   \
+          3     2
+         / \   / \
+        7   5 8   4
+```
+
+배열 기반의 장점:
+- 포인터 없음 → 메모리 절약 (노드 기반 대비 헤더+포인터 오버헤드 제거)
+- 연속 메모리 → 캐시 효율 우수
+- 부모/자식 인덱스 계산이 비트 연산으로 가능 (i>>1, i<<1)
+
+### 10-2. heapify 알고리즘 — 초기 힙 구성
+
+```java
+// n개 원소를 가진 배열을 힙으로 변환: O(n)
+// 단순히 n번 offer()하면 O(n log n)이지만
+// 아래 방식은 O(n) — 수학적으로 증명됨
+
+// PriorityQueue.heapify() (생성자에서 Collection 전달 시 호출)
+private void heapify() {
+    final Object[] es = queue;
+    int n = size, i = (n >>> 1) - 1; // 마지막 내부 노드부터 역순
+    final Comparator<? super E> cmp = comparator;
+    if (cmp == null) {
+        for (; i >= 0; i--)
+            siftDownComparable(i, (E) es[i], es, n);
+    } else {
+        for (; i >= 0; i--)
+            siftDownUsingComparator(i, (E) es[i], es, n, cmp);
     }
 }
 
-LRUCache<String, String> cache = new LRUCache<>(3);
-cache.put("A", "val_A");
-cache.put("B", "val_B");
-cache.put("C", "val_C");
-cache.get("A");           // A 접근 → A가 최근으로 이동: B ↔ C ↔ A
-cache.put("D", "val_D"); // 용량 초과 → 가장 오래된 B 제거: C ↔ A ↔ D
-System.out.println(cache.containsKey("B")); // false (evicted)
+// siftDown: 부모가 자식보다 크면 교환, 힙 속성 복구
+private static <T> void siftDownComparable(int k, T x, Object[] es, int n) {
+    Comparable<? super T> key = (Comparable<? super T>) x;
+    int half = n >>> 1;
+    while (k < half) {
+        int child = (k << 1) + 1; // 왼쪽 자식
+        Object c = es[child];
+        int right = child + 1;
+        if (right < n && ((Comparable<? super T>) c).compareTo((T) es[right]) > 0)
+            c = es[child = right]; // 더 작은 자식 선택
+        if (key.compareTo((T) c) <= 0) break;
+        es[k] = c;
+        k = child;
+    }
+    es[k] = x;
+}
+```
+
+```java
+// 실전 사용: K번째 최솟값 찾기
+public static int findKthSmallest(int[] nums, int k) {
+    // Max-Heap, 크기 k 유지
+    PriorityQueue<Integer> maxHeap = new PriorityQueue<>(Collections.reverseOrder());
+    for (int num : nums) {
+        maxHeap.offer(num);
+        if (maxHeap.size() > k) maxHeap.poll(); // k+1번째가 들어오면 최대값 제거
+    }
+    return maxHeap.peek(); // 힙의 루트 = k번째 최솟값
+}
+
+// 다익스트라 알고리즘에서의 활용
+record State(int node, int dist) {}
+PriorityQueue<State> pq = new PriorityQueue<>(Comparator.comparingInt(State::dist));
+pq.offer(new State(0, 0));
+while (!pq.isEmpty()) {
+    State cur = pq.poll(); // 현재까지 최단 거리 노드
+    // 인접 노드 처리...
+}
 ```
 
 ---
 
-### 4-3. TreeMap
+## 11. Iterator — fail-fast vs fail-safe
 
-**Red-Black Tree** 기반 `NavigableMap`으로, Key를 항상 정렬된 상태로 유지합니다.
+### 11-1. fail-fast: modCount 검사
 
-```java
-TreeMap<String, Integer> scores = new TreeMap<>();
-scores.put("Charlie", 85);
-scores.put("Alice", 92);
-scores.put("Bob", 78);
-
-System.out.println(scores);              // {Alice=92, Bob=78, Charlie=85} — Key 오름차순
-System.out.println(scores.firstKey());  // Alice
-System.out.println(scores.lastKey());   // Charlie
-System.out.println(scores.floorKey("Bz")); // Bob — "Bz" 이하 최대 Key
-System.out.println(scores.ceilingKey("Bz")); // Charlie — "Bz" 이상 최소 Key
-
-// 범위 조회
-Map<String, Integer> sub = scores.subMap("Alice", "Charlie"); // [Alice, Charlie)
-System.out.println(sub); // {Alice=92, Bob=78}
-
-// 내림차순
-NavigableMap<String, Integer> desc = scores.descendingMap();
-System.out.println(desc); // {Charlie=85, Bob=78, Alice=92}
-```
-
----
-
-### 4-4. ConcurrentHashMap
-
-멀티스레드 환경에서 안전한 Map입니다.
-
-#### Java 7: 세그먼트 락(Segment Lock)
-
-```mermaid
-graph LR
-    S0["Seg-0 ReentrantLock"]
-    S1["Seg-1 ReentrantLock"]
-    SD["... (기본 16개)"]
-    NOTE["다른 세그먼트→병렬"]
-```
-
-#### Java 8: CAS + synchronized (버킷 단위 락)
-
-```mermaid
-sequenceDiagram
-    버킷_비어있음?->>CAS로_락_없이_삽입: 예
-    버킷_비어있음?->>버킷_head_synchronized: 아니오
-```
+Java 컬렉션의 대부분 Iterator는 **fail-fast**다. 반복 중 컬렉션이 구조적으로 변경(add/remove)되면 `ConcurrentModificationException`을 즉시 던진다.
 
 ```java
-import java.util.concurrent.ConcurrentHashMap;
+// ArrayList 내부 modCount 메커니즘
+public class ArrayList<E> {
+    protected transient int modCount = 0; // 구조적 변경 횟수
 
-ConcurrentHashMap<String, Integer> map = new ConcurrentHashMap<>();
+    public boolean add(E e) {
+        modCount++; // 구조 변경 시마다 증가
+        // ...
+    }
 
-// 스레드 안전한 원자적 연산
-map.put("count", 0);
-map.compute("count", (k, v) -> v == null ? 1 : v + 1); // 원자적
-map.merge("count", 1, Integer::sum);                    // 원자적
+    private class Itr implements Iterator<E> {
+        int expectedModCount = modCount; // 생성 시점의 modCount 저장
 
-// putIfAbsent: 키 없을 때만 삽입 (원자적)
-map.putIfAbsent("new_key", 100);
+        public E next() {
+            checkForComodification();
+            // ...
+        }
 
-// 동시성 높은 집계
-long total = map.reduceValues(1, v -> (long) v, Long::sum); // 병렬 집계
+        final void checkForComodification() {
+            if (modCount != expectedModCount)
+                throw new ConcurrentModificationException();
+            // modCount가 바뀌었다 = 반복 중 구조 변경됨
+        }
+    }
+}
 ```
 
-#### Hashtable vs Collections.synchronizedMap vs ConcurrentHashMap
+**왜 즉시 던지는가?** 구조 변경 후 계속 반복하면 원소를 건너뛰거나 중복 방문하는 등 **조용한 오류(silent bug)** 가 생긴다. 예외를 즉시 던져 버그를 명확히 알리는 것이 fail-fast의 설계 철학이다.
 
-| 특성 | Hashtable | synchronizedMap | ConcurrentHashMap |
-|------|-----------|-----------------|-------------------|
-| 락 범위 | 메서드 전체 | 메서드 전체 | 버킷 단위 |
-| 동시 읽기 | 불가 | 불가 | 가능 (락 없음) |
-| null Key/Value | 불허 | 허용 | 불허 |
-| 성능 | 낮음 | 낮음 | 높음 |
-| 추천 여부 | 레거시 | 비추천 | 권장 |
+```java
+// ConcurrentModificationException 발생 케이스
+List<String> list = new ArrayList<>(Arrays.asList("A", "B", "C", "D"));
 
----
+// 위험 1: 향상된 for 루프 안에서 remove
+for (String s : list) {
+    if (s.equals("B")) list.remove(s); // ConcurrentModificationException!
+}
 
-### 4-5. WeakHashMap
+// 위험 2: 두 개의 Iterator 동시 사용 (하나가 수정)
+Iterator<String> it1 = list.iterator();
+Iterator<String> it2 = list.iterator();
+it1.next();
+it1.remove(); // modCount 증가
+it2.next();   // ConcurrentModificationException!
 
-Key에 **약한 참조(WeakReference)** 를 사용하는 Map입니다.
+// 올바른 방법 1: Iterator.remove() 사용
+Iterator<String> it = list.iterator();
+while (it.hasNext()) {
+    if (it.next().equals("B")) it.remove(); // 안전 (modCount 동기화)
+}
 
-```mermaid
-graph LR
-    HM["HashMap: 강한 참조 유지"]
-    WM["WeakHashMap: 약한 참조"]
-    HM -->|"GC 대상 아님"| HM
-    WM -->|"외부 참조 없으면 GC"| WM
+// 올바른 방법 2: removeIf (Java 8+)
+list.removeIf(s -> s.equals("B"));
+
+// 올바른 방법 3: 역방향 인덱스 루프
+for (int i = list.size() - 1; i >= 0; i--) {
+    if (list.get(i).equals("B")) list.remove(i);
+}
+```
+
+### 11-2. fail-safe: CopyOnWriteArrayList
+
+**fail-safe** Iterator는 반복 중 컬렉션이 변경되어도 예외를 던지지 않는다. 대신 **스냅샷(snapshot)** 을 기반으로 반복한다.
+
+```java
+// CopyOnWriteArrayList의 Iterator — 생성 시점 배열의 스냅샷 사용
+static final class COWIterator<E> implements ListIterator<E> {
+    private final Object[] snapshot; // 생성 시점 배열 참조 (불변)
+    private int cursor;
+
+    private COWIterator(Object[] elements, int initialCursor) {
+        cursor = initialCursor;
+        snapshot = elements; // 현재 배열 참조만 복사 (배열 자체는 복사 안 함)
+    }
+
+    public E next() {
+        return (E) snapshot[cursor++]; // 스냅샷에서 읽음
+        // 다른 스레드가 add/remove해도 snapshot은 변경 없음
+    }
+}
+
+// 쓰기 연산: 새 배열 생성 + 원자적 참조 교체
+public boolean add(E e) {
+    synchronized (lock) {
+        Object[] elements = getArray();
+        int len = elements.length;
+        Object[] newElements = Arrays.copyOf(elements, len + 1); // 새 배열 복사
+        newElements[len] = e;
+        setArray(newElements); // 참조 교체 (volatile write)
+        return true;
+    }
+}
+// Iterator가 참조하는 snapshot은 이전 배열 → 쓰기 후에도 영향 없음
 ```
 
 ```java
-import java.util.WeakHashMap;
-
-WeakHashMap<Object, String> cache = new WeakHashMap<>();
-
-Object key1 = new Object();
-Object key2 = new Object();
-cache.put(key1, "value1");
-cache.put(key2, "value2");
-
-System.out.println(cache.size()); // 2
-
-key1 = null; // key1에 대한 강한 참조 제거
-System.gc();  // GC 힌트 (보장은 아님)
-
-// GC 후 key1 Entry가 자동 제거될 수 있음
-System.out.println(cache.size()); // 1 (또는 2, GC 타이밍에 따라)
-```
-
-**주요 사용 사례**: 메타데이터 캐시 (객체에 부가 정보를 붙이되, 객체가 사라지면 정보도 자동 제거).
-
----
-
-## 5. Queue / Deque
-
-### 5-1. PriorityQueue
-
-**최소 힙(Min-Heap)** 으로 구현된 우선순위 큐입니다. `poll()`을 호출하면 항상 **가장 작은 원소**가 반환됩니다.
-
-#### 힙 구조 (배열로 표현)
-
-```mermaid
-graph LR
-    N1["1(idx0)"] --> N3["3(idx1)"]
-    N1 --> N2["2(idx2)"]
-    N3 --> N7["7(idx3)"]
-    N2 --> N5["5(idx5)"]
-    RULE["부모=(i-1)/2, 자식=2i+1"]
-```
-
-#### 주요 연산 시간복잡도
-
-| 연산 | 시간복잡도 | 설명 |
-|------|-----------|------|
-| `offer(E e)` | O(log n) | 배열 끝에 삽입 후 sift-up |
-| `poll()` | O(log n) | 루트 제거 후 sift-down |
-| `peek()` | O(1) | 루트(최솟값) 조회만 |
-| `contains(Object o)` | O(n) | 선형 탐색 |
-| `remove(Object o)` | O(n) | 탐색 O(n) + sift O(log n) |
-
-```java
-import java.util.PriorityQueue;
-import java.util.Collections;
-
-// 기본: Min-Heap (오름차순)
-PriorityQueue<Integer> minHeap = new PriorityQueue<>();
-minHeap.offer(5);
-minHeap.offer(1);
-minHeap.offer(3);
-System.out.println(minHeap.poll()); // 1 (최솟값)
-System.out.println(minHeap.poll()); // 3
-
-// Max-Heap (내림차순)
-PriorityQueue<Integer> maxHeap = new PriorityQueue<>(Collections.reverseOrder());
-maxHeap.offer(5);
-maxHeap.offer(1);
-maxHeap.offer(3);
-System.out.println(maxHeap.poll()); // 5 (최댓값)
-
-// 커스텀 우선순위: Task 처리 순서
-record Task(String name, int priority) {}
-PriorityQueue<Task> taskQueue = new PriorityQueue<>(
-    Comparator.comparingInt(Task::priority)
+// fail-safe 실전
+CopyOnWriteArrayList<String> cowList = new CopyOnWriteArrayList<>(
+    Arrays.asList("A", "B", "C")
 );
-taskQueue.offer(new Task("저우선", 10));
-taskQueue.offer(new Task("고우선", 1));
-taskQueue.offer(new Task("중우선", 5));
-System.out.println(taskQueue.poll().name()); // "고우선"
+
+for (String s : cowList) {
+    // 반복 중 다른 스레드가 add("D") 호출해도 예외 없음
+    // 단, "D"는 현재 반복에서 보이지 않음 (스냅샷 기반)
+    System.out.println(s); // A, B, C
+}
 ```
 
 ---
 
-### 5-2. ArrayDeque
+## 12. 불변 컬렉션 — List.of() vs Collections.unmodifiableList()
 
-**원형 배열(Circular Array)** 기반의 Deque(Double Ended Queue)입니다. Stack과 Queue 모두 대체 가능합니다.
-
-#### 원형 배열 구조
-
-```mermaid
-graph LR
-    INIT["초기: [null][null][n"]
-    AFTER["addFirst(Z): [null"]
-    RULE["addFirst: head=(he"]
-    INIT --> AFTER --> RULE
-```
+### 12-1. 결정적 차이: 뷰 vs 진정한 불변
 
 ```java
-import java.util.ArrayDeque;
-import java.util.Deque;
+// Case 1: Collections.unmodifiableList — 원본의 뷰(View)
+List<String> original = new ArrayList<>(Arrays.asList("A", "B", "C"));
+List<String> view = Collections.unmodifiableList(original);
 
-// Stack으로 사용 (LIFO)
-Deque<String> stack = new ArrayDeque<>();
-stack.push("first");    // addFirst()
-stack.push("second");   // addFirst()
-System.out.println(stack.pop()); // "second" (removeFirst())
+view.add("D");        // UnsupportedOperationException (쓰기 차단)
+original.add("D");    // 성공
+System.out.println(view.size()); // 4 — 원본 변경이 뷰에 반영됨!
+// view는 불변이 아니라 "수정 금지 뷰"
 
-// Queue로 사용 (FIFO)
-Deque<String> queue = new ArrayDeque<>();
-queue.offer("first");   // addLast()
-queue.offer("second");  // addLast()
-System.out.println(queue.poll()); // "first" (removeFirst())
+// Case 2: List.of() — Java 9+, 진정한 불변
+List<String> immutable = List.of("A", "B", "C");
+immutable.add("D");   // UnsupportedOperationException
+// 어떤 경로로도 내용 변경 불가
 
-// Stack 클래스보다 ArrayDeque를 권장하는 이유:
-// - Stack은 Vector 상속 → 불필요한 synchronized 오버헤드
-// - ArrayDeque는 synchronized 없음 → 단일 스레드에서 더 빠름
+// Case 3: List.copyOf() — Java 10+, 방어적 복사 + 불변
+List<String> copy = List.copyOf(original);
+original.add("E");
+System.out.println(copy.size()); // 4 — 원본 변경이 반영되지 않음
 ```
 
----
-
-### 5-3. 블로킹 큐 (BlockingQueue) — 생산자-소비자 패턴
-
-`BlockingQueue` 인터페이스는 스레드 간 안전한 데이터 교환을 위한 **블로킹 연산**을 제공합니다.
-
-#### LinkedBlockingQueue
-
-내부적으로 **연결 리스트** 사용. 생산자/소비자 각각 별도 Lock(putLock/takeLock)으로 동시성을 높입니다.
+### 12-2. List.of()가 null을 허용하지 않는 이유
 
 ```java
-import java.util.concurrent.LinkedBlockingQueue;
+List<String> withNull = List.of("A", null, "B"); // NullPointerException!
 
-// 용량 제한 있는 큐
-LinkedBlockingQueue<String> queue = new LinkedBlockingQueue<>(100);
+// 이유: Fail-Fast 설계 철학
+// null을 허용하면 나중에 NPE가 어디서 발생했는지 추적하기 어려움
+// List.of()는 생성 시점에 null 검사하여 버그를 즉시 발견하게 함
 
-// 생산자 스레드
-Thread producer = new Thread(() -> {
-    try {
-        for (int i = 0; i < 200; i++) {
-            queue.put("item-" + i); // 큐가 가득 차면 블로킹
-        }
-    } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+// null 허용이 필요하면:
+List<String> withNullAllowed = new ArrayList<>();
+withNullAllowed.add("A");
+withNullAllowed.add(null);
+withNullAllowed.add("B");
+List<String> unmod = Collections.unmodifiableList(withNullAllowed); // null 허용
+
+// 또한 List.of()는 내부 구현이 최적화됨
+// List.of(e1, e2) → List12 클래스 (2개 전용 배열 없는 구현)
+// List.of(e1,...,e10) → ListN 클래스 (배열 기반)
+// Collections.unmodifiableList는 래퍼 객체 추가
+```
+
+### 12-3. 불변 컬렉션 성능 장점
+
+```java
+// 불변 컬렉션은 방어적 복사 비용을 제거
+public class Config {
+    private final List<String> allowedHosts;
+
+    // 가변 리스트를 받을 때: 방어적 복사 필요
+    public Config(List<String> hosts) {
+        this.allowedHosts = List.copyOf(hosts); // 복사 1회
     }
-});
 
-// 소비자 스레드
-Thread consumer = new Thread(() -> {
-    try {
-        while (true) {
-            String item = queue.take(); // 큐가 비면 블로킹
-            System.out.println("처리: " + item);
-        }
-    } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+    // 반환 시: 다시 복사 필요 없음 (불변이므로 직접 반환)
+    public List<String> getAllowedHosts() {
+        return allowedHosts; // 추가 복사 없음, 안전
     }
-});
+}
+
+// 멀티스레드에서 공유 안전 (읽기 전용이므로 락 불필요)
+List<String> sharedConfig = List.of("host1", "host2", "host3");
+// 모든 스레드가 동일한 참조 공유, 동기화 비용 0
 ```
-
-#### ArrayBlockingQueue
-
-내부적으로 **고정 크기 배열** 사용. 단일 Lock 사용(LinkedBlockingQueue보다 처리량이 낮을 수 있음).
-
-```java
-import java.util.concurrent.ArrayBlockingQueue;
-
-// 반드시 초기 용량 지정 필요 (고정 크기)
-ArrayBlockingQueue<Integer> queue = new ArrayBlockingQueue<>(50);
-
-// offer: 즉시 반환 (타임아웃 버전도 있음)
-boolean added = queue.offer(42);                          // 가득 차면 false
-boolean addedWithTimeout = queue.offer(42, 1, TimeUnit.SECONDS); // 1초 대기
-
-// poll: 즉시 반환 (타임아웃 버전도 있음)
-Integer val = queue.poll();                               // 비었으면 null
-Integer valWithTimeout = queue.poll(1, TimeUnit.SECONDS); // 1초 대기
-```
-
-#### BlockingQueue 메서드 비교
-
-| 동작 | 예외 발생 | 특수 값 반환 | 블로킹 | 타임아웃 |
-|------|----------|------------|--------|--------|
-| 삽입 | `add(e)` | `offer(e)` | `put(e)` | `offer(e, t, unit)` |
-| 제거 | `remove()` | `poll()` | `take()` | `poll(t, unit)` |
-| 조회 | `element()` | `peek()` | - | - |
 
 ---
 
-## 6. 시간복잡도 총정리 표
+## 13. 시간복잡도 총정리
 
 ### List
 
 | 구현체 | add(끝) | add(중간) | get(index) | remove(index) | contains |
 |--------|---------|----------|-----------|--------------|---------|
-| ArrayList | O(1)* | O(n) | O(1) | O(n) | O(n) |
+| ArrayList | O(1) amortized | O(n) | O(1) | O(n) | O(n) |
 | LinkedList | O(1) | O(n) | O(n) | O(n) | O(n) |
 | CopyOnWriteArrayList | O(n) | O(n) | O(1) | O(n) | O(n) |
 
-*amortized (분할 상환)
+### Set / Map
 
-### Set
-
-| 구현체 | add | remove | contains | 순서 |
-|--------|-----|--------|---------|------|
-| HashSet | O(1)* | O(1)* | O(1)* | X |
-| LinkedHashSet | O(1)* | O(1)* | O(1)* | 삽입 순서 |
-| TreeSet | O(log n) | O(log n) | O(log n) | 정렬 순서 |
-| EnumSet | O(1) | O(1) | O(1) | Enum 선언 순서 |
-
-*평균 (최악 O(log n), Java 8+ 트리화)
-
-### Map
-
-| 구현체 | put | get | remove | containsKey | 순서 |
-|--------|-----|-----|--------|------------|------|
-| HashMap | O(1)* | O(1)* | O(1)* | O(1)* | X |
-| LinkedHashMap | O(1)* | O(1)* | O(1)* | O(1)* | 삽입/접근 순서 |
-| TreeMap | O(log n) | O(log n) | O(log n) | O(log n) | Key 정렬 |
-| ConcurrentHashMap | O(1)* | O(1)* | O(1)* | O(1)* | X |
-| WeakHashMap | O(1)* | O(1)* | O(1)* | O(1)* | X |
+| 구현체 | add/put | get | remove | contains | 순서 |
+|--------|---------|-----|--------|---------|------|
+| HashSet/HashMap | O(1) avg | O(1) avg | O(1) avg | O(1) avg | X |
+| LinkedHashSet/Map | O(1) avg | O(1) avg | O(1) avg | O(1) avg | 삽입/접근 순 |
+| TreeSet/TreeMap | O(log n) | O(log n) | O(log n) | O(log n) | 정렬 순 |
+| ConcurrentHashMap | O(1) avg | O(1) avg | O(1) avg | O(1) avg | X |
+| EnumSet/EnumMap | O(1) | O(1) | O(1) | O(1) | Enum 선언 순 |
 
 ### Queue / Deque
 
 | 구현체 | offer | poll | peek | contains |
 |--------|-------|------|------|---------|
 | PriorityQueue | O(log n) | O(log n) | O(1) | O(n) |
-| ArrayDeque | O(1)* | O(1) | O(1) | O(n) |
+| ArrayDeque | O(1) amortized | O(1) | O(1) | O(n) |
 | LinkedBlockingQueue | O(1) | O(1) | O(1) | O(n) |
-| ArrayBlockingQueue | O(1) | O(1) | O(1) | O(n) |
 
 ---
 
-## 7. 동시성 컬렉션 정리
+## 14. 면접 포인트 5개 — 깊은 WHY 답변
 
-### Collections.synchronizedXxx vs Concurrent 계열
+### Q1. HashMap의 로드 팩터가 0.75인 이유는 무엇인가?
+
+> **표면 답변**: 시간-공간 트레이드오프의 균형점이다.
+>
+> **심층 답변**: Java 공식 문서(JavaDoc)에 Poisson 분포 근거가 명시된다. 로드 팩터 0.75일 때 버킷당 평균 원소 수(λ)는 약 0.5이고, 이 조건에서 한 버킷에 8개 이상이 들어올 확률은 약 0.00000006(약 천만 분의 일)이다. TREEIFY_THRESHOLD=8은 이 확률이 사실상 0에 가까워지는 지점을 선택한 것이다. 로드 팩터를 0.5로 낮추면 충돌은 줄지만 메모리가 2배 필요하고, 1.0으로 높이면 충돌이 증가해 연결 리스트 탐색이 O(n)에 가까워진다. 0.75는 이 두 극단 사이의 수학적으로 정당화된 균형점이다.
+
+### Q2. Java 7의 HashMap이 멀티스레드에서 무한루프를 일으키는 원리는?
+
+> **표면 답변**: 리사이징 시 경쟁 조건이 발생한다.
+>
+> **심층 답변**: Java 7 `transfer()` 메서드는 새 배열에 노드를 head insertion 방식으로 이전한다. 두 스레드 T1, T2가 동시에 resize를 시작하면: T1이 e=Node1, next=Node2를 기록하고 멈춘다. T2가 resize를 완료한다 — head insertion이므로 연결 리스트 순서가 역전되어 Node2.next=Node1이 된다. T1이 재개되어 Node1을 새 배열에 삽입하고 다음으로 Node2를 처리한다. Node2.next=Node1이므로 다시 Node1을 처리한다 — Node1.next=Node2 → 순환 참조 형성. 이후 `get()`이 해당 버킷을 탐색하면 Node1↔Node2를 무한히 순환하며 CPU를 100% 소모한다. Java 8은 tail insertion으로 전환해 이 버그를 제거했지만, 데이터 유실과 가시성 문제는 여전히 존재해 스레드 안전하지 않다.
+
+### Q3. ConcurrentHashMap의 size()가 정확하지 않을 수 있는 이유는?
+
+> **표면 답변**: 동시 수정 중 size를 읽으면 부정확하다.
+>
+> **심층 답변**: ConcurrentHashMap은 카운팅에 `baseCount + CounterCell[]` 분산 구조를 사용한다. 동시 쓰기가 많을 때 단일 `AtomicLong`으로 count를 관리하면 모든 스레드가 같은 캐시 라인에 접근해 **false sharing**이 발생한다. 이를 피하기 위해 스레드마다 다른 `CounterCell`에 기록하고, `size()`는 `baseCount + sum(counterCells)`를 계산한다. 이 합산 자체가 원자적 연산이 아니므로, 합산 중 다른 스레드가 add/remove를 수행하면 결과가 순간적으로 부정확할 수 있다. 정확한 일관된 카운트가 필요하면 외부 동기화나 별도 `AtomicLong` 유지가 필요하다. 이 설계는 **정확성보다 처리량(throughput)을 우선**한 의도적 트레이드오프다.
+
+### Q4. ArrayList의 add(E)가 amortized O(1)인 이유를 수식으로 설명하라.
+
+> **표면 답변**: 가끔 O(n) 비용이 발생하지만 평균을 내면 O(1)이다.
+>
+> **심층 답변**: 초기 capacity c₀에서 시작해 1.5배씩 증가한다. n번 add() 시 리사이징 횟수는 log₁.₅(n/c₀) ≈ log(n)번 발생하며, i번째 리사이징 비용은 c₀ × 1.5^(i-1)이다. 총 복사 비용 = c₀ × (1 + 1.5 + 1.5² + ... + 1.5^k) ≤ c₀ × 1/(1-1/1.5) × 1.5^k = c₀ × 3 × (n/c₀) = 3n = O(n). n번 add()의 총 비용이 O(n)이므로 1번 add() 평균 비용 = O(n)/n = O(1). 증가 비율 r > 1이면 기하급수 합이 수렴하므로 어떤 r > 1이어도 amortized O(1)이 성립한다. r이 클수록 상수 계수가 커지고 메모리 낭비도 커진다. Java의 1.5배는 이 상수를 3으로 제한하면서 메모리 낭비를 최대 50%로 통제하는 균형점이다.
+
+### Q5. LinkedList가 이론상 중간 삽입 O(1)임에도 실전에서 ArrayList보다 느린 이유는?
+
+> **표면 답변**: 캐시 지역성이 나쁘다.
+>
+> **심층 답변**: 시간복잡도는 알고리즘의 연산 횟수를 세지만, 현대 컴퓨터에서 연산 비용은 메모리 계층에 따라 크게 다르다. L1 캐시 접근은 ~4 사이클, 메인 메모리 접근은 ~200 사이클로 50배 차이가 난다. ArrayList는 연속 메모리 배열이므로 순차 접근 시 프리페처(prefetcher)가 다음 원소를 미리 캐시에 로드한다. 반면 LinkedList의 각 노드는 힙 전체에 흩어져 있어 매 노드마다 캐시 미스(cache miss)가 발생한다. 중간 삽입 역시 탐색(O(n) 캐시 미스)이 선행되어야 하므로, 실제 측정에서 ArrayList의 `System.arraycopy`(CPU SIMD 명령어, 캐시 내 연속 복사)가 LinkedList의 포인터 탐색보다 빠른 경우가 많다. 덱(Deque) 용도라면 `ArrayDeque`가 연속 메모리와 O(1) 양단 접근을 모두 제공하므로 LinkedList를 선택할 이유가 거의 없다.
+
+---
+
+## 15. 극한 시나리오
+
+### 시나리오 1: hashCode()가 모두 같은 값을 반환하는 악의적 클래스
 
 ```java
-// 방법 1: Collections.synchronizedXxx 래퍼
-List<String>  syncList = Collections.synchronizedList(new ArrayList<>());
-Map<String, Integer> syncMap = Collections.synchronizedMap(new HashMap<>());
-
-// 반복 시 반드시 수동 동기화 필요!
-synchronized (syncList) {
-    Iterator<String> it = syncList.iterator();
-    while (it.hasNext()) {
-        System.out.println(it.next());
+// 취약한 hashCode 구현
+class BrokenKey {
+    String value;
+    @Override public int hashCode() { return 42; } // 항상 같은 값!
+    @Override public boolean equals(Object o) {
+        return o instanceof BrokenKey && value.equals(((BrokenKey)o).value);
     }
 }
 
-// 방법 2: Concurrent 계열 (권장)
-import java.util.concurrent.*;
+HashMap<BrokenKey, String> map = new HashMap<>();
+// 모든 항목이 버킷 42에 쌓임
+// Java 7: 연결 리스트 → get() O(n) → 1만 건이면 1만 번 비교
+// Java 8: 연결 리스트 → 8개 초과 시 RB-Tree → get() O(log n)
 
-ConcurrentHashMap<String, Integer> concMap = new ConcurrentHashMap<>();
-CopyOnWriteArrayList<String> cowList = new CopyOnWriteArrayList<>();
-ConcurrentLinkedQueue<String> clQueue = new ConcurrentLinkedQueue<>();
+// 실전 공격 사례:
+// 공격자가 hashCode 충돌을 유도하는 문자열 조합을 대량 전송
+// Java 7 HashMap 기반 웹 파라미터 파싱 → O(n²) 처리 → DoS
+// Java 8: 트리화로 O(n log n)으로 완화, String의 hash32() 무작위화
 
-// Concurrent 계열은 반복 중 수동 동기화 불필요 (약한 일관성 보장)
-for (String s : cowList) {
-    System.out.println(s); // 안전
+// 방어: Java 8+ + 적절한 hashCode 구현 + 입력 크기 제한
+// String.hashCode()는 결정론적이므로 동일 JVM 내에서는 같은 값
+// 외부 입력으로 유도 가능 → 파라미터 수 제한 필수
+```
+
+### 시나리오 2: 100만 건 ConcurrentHashMap에서 compute() 경합
+
+```java
+// 100개 스레드, 100만 개의 키에 동시 계수
+int THREADS = 100;
+int KEYS = 1_000_000;
+ConcurrentHashMap<Integer, Long> map = new ConcurrentHashMap<>(KEYS * 2);
+
+// 방법 1: compute() — 키 단위 synchronized, 경합 낮음
+map.compute(key, (k, v) -> v == null ? 1L : v + 1);
+
+// 방법 2: LongAdder — 더 세밀한 분산, false sharing 없음
+ConcurrentHashMap<Integer, LongAdder> adderMap = new ConcurrentHashMap<>(KEYS * 2);
+adderMap.computeIfAbsent(key, k -> new LongAdder()).increment();
+// LongAdder 내부도 CounterCell[] 분산 구조 — 극한 경합에서 compute()보다 빠름
+
+// 방법 3: 핫 키 샤딩 (특정 키에 부하 집중 시)
+int SHARDS = 64;
+ConcurrentHashMap<Integer, LongAdder>[] shards = new ConcurrentHashMap[SHARDS];
+Arrays.fill(shards, new ConcurrentHashMap<>());
+// 키 + 스레드 ID 기반으로 샤드 선택 → 경합 1/64로 감소
+```
+
+### 시나리오 3: ArrayList resize 폭탄 — OOM 없이 백만 건 처리
+
+```java
+// 나쁜 패턴: 크기 모르는 상태에서 기본 capacity로 시작
+List<byte[]> data = new ArrayList<>();
+// 백만 건 추가 시:
+// 16 → 24 → 36 → ... → 수십 번 리사이징
+// 리사이징마다 새 배열 생성 후 복사 — 피크 메모리 = 현재 배열 + 새 배열
+// 최악 피크: 기존 배열 크기의 2.5배 메모리 일시 점유
+
+// 개선 1: 크기 알면 초기화
+List<byte[]> data2 = new ArrayList<>(1_000_000);
+// 리사이징 0번, 피크 메모리 = 배열 크기만
+
+// 개선 2: 스트림 파이프라인 (메모리 최소화)
+long count = Files.lines(Paths.get("big.txt"))
+    .filter(line -> line.contains("ERROR"))
+    .count(); // 중간 List 없음 — O(1) 메모리
+
+// 개선 3: 배치 처리 + trimToSize()
+List<String> batch = new ArrayList<>(10_000);
+for (int i = 0; i < 1_000_000; i++) {
+    batch.add(processRecord(i));
+    if (batch.size() == 10_000) {
+        flush(batch);
+        batch.clear();
+        // clear()는 size=0, capacity 유지 → 재할당 없음
+    }
 }
 ```
 
-### 동시성 컬렉션 선택 가이드
+### 시나리오 4: TreeMap으로 시계열 데이터 범위 조회
 
-| 상황 | 권장 컬렉션 |
-|------|------------|
-| 멀티스레드 Map | `ConcurrentHashMap` |
-| 읽기 多, 쓰기 少 List | `CopyOnWriteArrayList` |
-| 생산자-소비자 큐 (유계) | `ArrayBlockingQueue` |
-| 생산자-소비자 큐 (무계) | `LinkedBlockingQueue` |
-| 동시성 단순 큐 | `ConcurrentLinkedQueue` |
-| 동시성 덱 | `ConcurrentLinkedDeque` |
-| 동시성 우선순위 큐 | `PriorityBlockingQueue` |
+```java
+// 10만 건의 시계열 이벤트, 특정 시간 구간 조회
+TreeMap<Long, List<Event>> timeline = new TreeMap<>();
+
+// 데이터 삽입
+long now = System.currentTimeMillis();
+for (Event e : events) {
+    timeline.computeIfAbsent(e.timestamp(), k -> new ArrayList<>()).add(e);
+}
+
+// 최근 1시간 이벤트 조회: O(log n + k), k=결과 수
+long oneHourAgo = now - 3_600_000L;
+NavigableMap<Long, List<Event>> recent = timeline.tailMap(oneHourAgo, true);
+
+// 특정 구간: O(log n + k)
+NavigableMap<Long, List<Event>> window = timeline.subMap(
+    startTime, true,
+    endTime, true
+);
+
+// 가장 가까운 과거 이벤트: O(log n)
+Map.Entry<Long, List<Event>> prev = timeline.floorEntry(queryTime);
+
+// 같은 작업을 HashMap으로 하려면 전체 스캔 O(n)
+// TreeMap: O(log n) — 10만 건이면 약 17번 비교만으로 구간 시작점 탐색
+```
+
+### 시나리오 5: 멀티스레드 환경에서 LinkedHashMap LRU 캐시 동시성 버그
+
+```java
+// 흔한 실수: LinkedHashMap은 스레드 안전하지 않음
+// accessOrder=true 시 get()도 구조를 변경하므로 더욱 위험
+
+// 잘못된 구현
+class UnsafeLRU<K, V> extends LinkedHashMap<K, V> {
+    // accessOrder=true + 멀티스레드 = 데이터 손상
+    // get()이 연결 리스트를 재정렬하는 과정에서 경쟁 발생
+}
+
+// 올바른 구현 1: Collections.synchronizedMap 래핑
+Map<K, V> lru = Collections.synchronizedMap(
+    new LinkedHashMap<K, V>(128, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(Map.Entry<K,V> e) {
+            return size() > 128;
+        }
+    }
+);
+// 반복 시 반드시 동기화 블록 필요
+synchronized (lru) {
+    for (Map.Entry<K, V> e : lru.entrySet()) { /* ... */ }
+}
+
+// 올바른 구현 2: Caffeine 캐시 라이브러리 (프로덕션 권장)
+// com.github.ben-manes.caffeine:caffeine
+Cache<String, String> cache = Caffeine.newBuilder()
+    .maximumSize(1000)
+    .expireAfterAccess(10, TimeUnit.MINUTES)
+    .build();
+cache.get(key, k -> loadFromDB(k)); // 스레드 안전 + 고성능
+```
 
 ---
 
-## 8. 실무 선택 가이드
-
-### List 선택
+## 16. 동시성 컬렉션 선택 가이드
 
 ```mermaid
 graph LR
-    L0["순서가 중요한 데이터를 저장하고"]
-    L1{"랜덤 접근(get)이 많은가?"}
-    L2["ArrayList<br>(캐시 지"]
-    L3{"양 끝 삽입/삭제만 하는가?"}
-    L4["ArrayDeque (큐/덱 목적"]
-    L5["ArrayList<br>(Link"]
-    L0 --> L1
-    L1 -->|YES| L2
-    L1 -->|NO| L3
-    L3 -->|YES| L4
-    L3 -->|NO| L5
+    MT["멀티스레드?"] -->|Yes| RW{"읽기/쓰기 비율"}
+    MT -->|No| ST["단일스레드 컬렉션"]
+    RW -->|"읽기>>쓰기"| COW["CopyOnWriteArrayList"]
+    RW -->|"쓰기 빈번"| CHM["ConcurrentHashMap"]
+    RW -->|"Queue 필요"| BQ["BlockingQueue 계열"]
 ```
 
-### Set 선택
-
-```mermaid
-graph LR
-    S0["중복 없는 컬렉션"]
-    Q1{"정렬?"}
-    Q2{"삽입순서?"}
-    Q3{"Enum?"}
-    S0 --> Q1
-    Q1 -->|YES| TreeSet
-    Q1 -->|NO| Q2
-    Q2 -->|YES| LinkedHashSet
-    Q2 -->|NO| Q3
-    Q3 -->|YES| EnumSet
-    Q3 -->|NO| HashSet
-```
-
-### Map 선택
-
-```mermaid
-graph LR
-    A["Map 선택"] -->|"멀티스레드"| B["ConcurrentHashMap"]
-    A -->|"Key 정렬"| C["TreeMap"]
-    A -->|"순서 보존"| D["LinkedHashMap"]
-    A -->|"Key=Enum"| E["EnumMap"]
-    A -->|"기본"| F["HashMap"]
-```
-
-### 상황별 선택 예제
+| 상황 | 권장 컬렉션 | 이유 |
+|------|------------|------|
+| 멀티스레드 Map (빈번한 쓰기) | `ConcurrentHashMap` | 버킷 단위 락, CAS 삽입 |
+| 읽기 多 / 쓰기 少 List | `CopyOnWriteArrayList` | 읽기 락 없음, 쓰기 O(n) |
+| 생산자-소비자 (유계 큐) | `ArrayBlockingQueue` | 고정 크기, 단일 락 |
+| 생산자-소비자 (무계 큐) | `LinkedBlockingQueue` | 동적 크기, 분리 락 |
+| 우선순위 + 블로킹 | `PriorityBlockingQueue` | 힙 + 블로킹 지원 |
+| 대기 없는 동시성 큐 | `ConcurrentLinkedQueue` | CAS 기반, lock-free |
 
 ```java
-// 1. 대용량 데이터 순차 처리 → ArrayList
-List<Record> records = new ArrayList<>(100_000);
-// 이유: 연속 메모리 → CPU 캐시 적중률 높음
+// 생산자-소비자 패턴 완전 구현
+import java.util.concurrent.*;
 
-// 2. 이력 순서 보존 로그 → LinkedHashMap
-Map<String, String> auditLog = new LinkedHashMap<>();
-auditLog.put("2026-01-01", "로그인");
-auditLog.put("2026-01-02", "수정");
-// 삽입 순서대로 이터레이션 보장
+class ProducerConsumer {
+    private final BlockingQueue<String> queue = new LinkedBlockingQueue<>(100);
 
-// 3. 멤버십 체크 (수백만 건) → HashSet
-Set<Long> blockedUserIds = new HashSet<>(1_000_000);
-boolean isBlocked = blockedUserIds.contains(userId); // O(1)
+    void produce(String item) throws InterruptedException {
+        queue.put(item);        // 큐 가득 차면 자동 블로킹
+    }
 
-// 4. IP 대역 범위 검색 → TreeMap
-TreeMap<String, String> ipRoutes = new TreeMap<>();
-ipRoutes.put("10.0.0.0", "route_A");
-ipRoutes.put("192.168.0.0", "route_B");
-String route = ipRoutes.floorEntry("10.0.1.5").getValue(); // 범위 매칭
+    String consume() throws InterruptedException {
+        return queue.take();    // 큐 비면 자동 블로킹
+    }
 
-// 5. 스레드 풀 작업 큐 → ArrayBlockingQueue
-BlockingQueue<Runnable> workQueue = new ArrayBlockingQueue<>(200);
-ThreadPoolExecutor pool = new ThreadPoolExecutor(
-    4, 8, 60L, TimeUnit.SECONDS, workQueue
+    // 타임아웃 버전
+    boolean tryProduce(String item) throws InterruptedException {
+        return queue.offer(item, 100, TimeUnit.MILLISECONDS);
+    }
+
+    String tryConsume() throws InterruptedException {
+        return queue.poll(100, TimeUnit.MILLISECONDS); // null 반환 가능
+    }
+}
+```
+
+---
+
+## 17. 실무 선택 가이드
+
+### 상황별 최적 컬렉션
+
+```java
+// 1. 순차 처리 + 랜덤 접근 → ArrayList (초기 capacity 지정)
+List<Record> records = new ArrayList<>(expectedSize);
+
+// 2. 빠른 키 존재 확인 → HashSet (O(1) 평균)
+Set<Long> blockedIds = new HashSet<>(1_000_000);
+boolean blocked = blockedIds.contains(userId);
+
+// 3. 정렬 + 범위 검색 → TreeMap
+TreeMap<LocalDateTime, Event> events = new TreeMap<>();
+events.subMap(from, to).values(); // 특정 기간 이벤트
+
+// 4. 삽입 순서 보존 Map → LinkedHashMap
+Map<String, String> headers = new LinkedHashMap<>(); // HTTP 헤더 순서 유지
+
+// 5. LRU 캐시 → LinkedHashMap(accessOrder=true) + synchronized
+// 또는 Caffeine 라이브러리
+
+// 6. 멀티스레드 카운터 → ConcurrentHashMap + LongAdder
+ConcurrentHashMap<String, LongAdder> stats = new ConcurrentHashMap<>();
+stats.computeIfAbsent("request", k -> new LongAdder()).increment();
+
+// 7. 권한/플래그 집합 → EnumSet (비트 연산, O(1))
+EnumSet<Permission> perms = EnumSet.of(Permission.READ, Permission.WRITE);
+
+// 8. 우선순위 작업 큐 → PriorityQueue
+PriorityQueue<Task> taskQueue = new PriorityQueue<>(
+    Comparator.comparingInt(Task::priority)
 );
 
-// 6. 권한 집합 → EnumSet
-EnumSet<Permission> userPerms = EnumSet.of(Permission.READ, Permission.WRITE);
-if (userPerms.contains(Permission.DELETE)) { /* ... */ }
-
-// 7. 캐시 (메모리 민감) → WeakHashMap
-WeakHashMap<Object, CachedData> cache = new WeakHashMap<>();
-// 키 객체가 GC되면 캐시 항목도 자동 제거
-
-// 8. 이벤트 리스너 목록 (읽기 多) → CopyOnWriteArrayList
-CopyOnWriteArrayList<EventListener> listeners = new CopyOnWriteArrayList<>();
-// 리스너 등록/해제는 드물고 이벤트 발생(읽기)은 빈번
+// 9. 스택/큐 → ArrayDeque (Stack/LinkedList보다 빠름)
+Deque<String> stack = new ArrayDeque<>();
+Deque<String> queue = new ArrayDeque<>();
 ```
 
-### 컬렉션 사용 시 자주 하는 실수
+### 자주 하는 실수와 수정
 
 ```java
-// 실수 1: for 루프 안에서 List.remove()
-// → ConcurrentModificationException 발생
+// 실수 1: for-each 중 remove → ConcurrentModificationException
 List<String> list = new ArrayList<>(Arrays.asList("A", "B", "C"));
-for (String s : list) {
-    if (s.equals("B")) list.remove(s); // 위험!
-}
-// 올바른 방법: Iterator 또는 removeIf
+// 위험
+for (String s : list) { if (s.equals("B")) list.remove(s); }
+// 수정
 list.removeIf(s -> s.equals("B")); // Java 8+
 
-// 실수 2: HashMap에 가변 객체를 Key로 사용
+// 실수 2: equals()만 재정의, hashCode() 미재정의
+// → HashSet에 중복 저장, HashMap에서 get() null 반환
+class Key {
+    String id;
+    @Override public boolean equals(Object o) { /* ... */ }
+    // hashCode() 누락!
+}
+// 수정: IDE의 "Generate equals() and hashCode()" 사용
+
+// 실수 3: 가변 객체를 HashMap Key로 사용
 Map<List<Integer>, String> map = new HashMap<>();
-List<Integer> key = new ArrayList<>(List.of(1, 2, 3));
+List<Integer> key = new ArrayList<>(List.of(1, 2));
 map.put(key, "value");
-key.add(4); // key 변경 → hashCode 변경 → map에서 찾을 수 없음!
-map.get(key); // null 반환
+key.add(3); // hashCode 변경 → map.get(key)가 null 반환
+// 수정: 불변 객체만 Key로 (String, Integer, record 등)
 
-// 실수 3: Arrays.asList() 결과에 add/remove
-List<String> fixed = Arrays.asList("A", "B", "C");
-fixed.add("D"); // UnsupportedOperationException!
-// 올바른 방법:
-List<String> mutable = new ArrayList<>(Arrays.asList("A", "B", "C"));
+// 실수 4: Arrays.asList() 결과에 구조적 변경
+List<String> list2 = Arrays.asList("A", "B"); // 고정 크기 List
+list2.add("C");    // UnsupportedOperationException!
+list2.set(0, "X"); // 이건 가능 (크기 변경 아님)
+// 수정
+List<String> mutable = new ArrayList<>(Arrays.asList("A", "B"));
 
-// 실수 4: HashMap null 처리 누락
+// 실수 5: Collections.unmodifiableList()를 진정한 불변으로 착각
+List<String> src = new ArrayList<>(List.of("A", "B"));
+List<String> view = Collections.unmodifiableList(src);
+src.add("C");
+System.out.println(view.size()); // 3 — 원본 변경 반영됨
+// 수정: List.copyOf(src) 사용
+
+// 실수 6: HashMap null 키/값 처리 누락
 Map<String, Integer> map2 = new HashMap<>();
-int count = map2.get("key"); // NullPointerException! (auto-unboxing)
-// 올바른 방법:
+int count = map2.get("key"); // NullPointerException (auto-unboxing null)
+// 수정
 int count2 = map2.getOrDefault("key", 0);
 ```
 
 ---
 
-## 왜 이 기술인가?
-
-Java Collections Framework를 사용하는 이유는 **인터페이스-구현체 분리 설계**와 **풍부한 알고리즘 지원** 때문이다.
-
-| 대안 | 비교 | 결론 |
-|------|------|------|
-| 배열(Array) | 크기 고정, 제네릭 미지원, 유틸 메서드 부재 | 성능 극한 상황에서만 선택 |
-| Java Collections | 크기 동적, 제네릭, Iterator/Stream 통합 | 일반 업무 로직의 표준 |
-| Apache Commons Collections | Java 표준에 없는 멀티맵·양방향맵 제공 | 특수 자료구조 필요 시 추가 |
-| Eclipse Collections | 원시 타입 컬렉션, 메모리 효율 우선 | 대용량 숫자 처리 시 유리 |
-| Guava ImmutableCollections | 불변 컬렉션, 방어적 복사 제거 | 공유 상태 안전 보장 필요 시 |
-
-**선택 가이드**
-- 순서 보장 + 랜덤 접근 → `ArrayList`
-- 빠른 삽입/삭제(중간) → `LinkedList` (단, 캐시 미스 주의)
-- 중복 제거 + 순서 불필요 → `HashSet`
-- 정렬 유지 → `TreeSet` / `TreeMap`
-- 삽입 순서 유지 Map → `LinkedHashMap`
-- 멀티스레드 읽기 압도적 → `CopyOnWriteArrayList`
-- 멀티스레드 쓰기 빈번 → `ConcurrentHashMap`
-
----
-
-## 실무에서 자주 하는 실수
-
-### 실수 1: ArrayList를 무조건 기본 컬렉션으로 사용
-
-ArrayList는 인덱스 조회(O(1))에 강하지만 중간 삽입/삭제(O(n))가 느립니다. 큐나 덱(deque) 용도로 ArrayList를 사용하면 매 연산마다 배열 이동이 발생합니다.
-
-```java
-// 나쁜 예: ArrayList로 큐 구현
-List<Task> queue = new ArrayList<>();
-queue.add(task);           // 뒤에 추가 O(1)
-queue.remove(0);           // 앞에서 제거 O(n) — 전체 이동 발생!
-
-// 좋은 예: ArrayDeque 사용
-Deque<Task> queue = new ArrayDeque<>();
-queue.offer(task);         // O(1)
-queue.poll();              // O(1)
-```
-
-### 실수 2: HashMap의 초기 용량을 지정하지 않음
-
-HashMap은 기본 초기 용량이 16이고 load factor가 0.75입니다. 저장할 데이터 수를 미리 알고 있다면 초기 용량을 지정해 리해시(rehash)를 방지해야 합니다.
-
-```java
-// 나쁜 예: 1000개를 저장할 Map을 기본 용량으로 생성
-Map<String, User> users = new HashMap<>(); // 16 → 32 → 64 → ... 리해시 반복
-
-// 좋은 예: 예상 크기 / 0.75 + 1 로 초기 용량 지정
-Map<String, User> users = new HashMap<>(1334); // 1000 / 0.75 ≈ 1334
-```
-
-### 실수 3: 멀티스레드 환경에서 일반 HashMap 사용
-
-HashMap은 스레드 안전하지 않습니다. 동시 수정 시 무한 루프(Java 7)나 데이터 손실(Java 8+)이 발생할 수 있습니다.
-
-```java
-// 위험: 멀티스레드에서 공유 HashMap
-Map<String, Integer> counter = new HashMap<>();
-// 여러 스레드가 동시에 put() 호출 → 데이터 손실
-
-// 개선: ConcurrentHashMap + 원자적 업데이트
-Map<String, Integer> counter = new ConcurrentHashMap<>();
-counter.merge(key, 1, Integer::sum);
-
-// 단순 카운터는 LongAdder가 더 효율적
-ConcurrentHashMap<String, LongAdder> counter2 = new ConcurrentHashMap<>();
-counter2.computeIfAbsent(key, k -> new LongAdder()).increment();
-```
-
-### 실수 4: LinkedList를 랜덤 접근에 사용
-
-LinkedList는 순차 탐색(O(n))만 지원합니다. `get(index)` 호출 시 head부터 순서대로 탐색하므로 대용량 리스트에서 극도로 느립니다.
-
-```java
-// 나쁜 예: LinkedList에서 인덱스 접근
-List<String> list = new LinkedList<>();
-// 10만 건 추가 후
-String item = list.get(50000); // head부터 50000번 탐색 O(n)
-
-// 좋은 예: 인덱스 접근이 필요하면 ArrayList
-List<String> list2 = new ArrayList<>();
-String item2 = list2.get(50000); // 배열 인덱스 직접 접근 O(1)
-```
-
-### 실수 5: Collections.unmodifiableList()를 불변으로 착각
-
-`Collections.unmodifiableList()`는 뷰(view)를 반환합니다. 원본 리스트가 변경되면 뷰도 변경됩니다. 진정한 불변 컬렉션은 `List.copyOf()`를 사용해야 합니다.
-
-```java
-List<String> original = new ArrayList<>(Arrays.asList("a", "b", "c"));
-List<String> view = Collections.unmodifiableList(original);
-
-original.add("d");
-System.out.println(view.size()); // 4 — 뷰도 변경됨!
-
-// 진정한 불변 복사본 (Java 10+)
-List<String> immutable = List.copyOf(original);
-original.add("e");
-System.out.println(immutable.size()); // 4 — 변경 없음
-```
-
----
-
-
-## 면접 포인트
-
-**Q1. ArrayList와 LinkedList의 시간복잡도 차이를 설명하고, 어떤 상황에서 각각을 선택하나요?**
-> ArrayList는 인덱스 접근 O(1), 중간 삽입/삭제 O(n). LinkedList는 중간 삽입/삭제 O(1)(노드 참조 시), 인덱스 접근 O(n). 실무에서는 캐시 지역성(cache locality) 때문에 LinkedList가 이론상 유리한 상황에서도 ArrayList가 더 빠른 경우가 많다. 중간 삽입이 정말 빈번하다면 LinkedList보다 `ArrayDeque`나 배치 처리를 먼저 고려한다.
-
-**Q2. HashMap의 내부 동작 원리와 Java 8에서 바뀐 점은?**
-> key.hashCode()로 버킷 인덱스 계산 → 같은 버킷에 충돌 시 연결 리스트로 체이닝. Java 8부터 같은 버킷의 엔트리가 8개 초과 시 Red-Black Tree로 변환(treeifyBin)해 최악 탐색이 O(n)→O(log n)으로 개선됨. loadFactor 기본값 0.75는 시간-공간 트레이드오프의 실험적 최적값.
-
-**Q3. ConcurrentHashMap과 Collections.synchronizedMap의 차이점은?**
-> `synchronizedMap`은 모든 연산에 단일 락(map 전체) → 동시성 낮음. `ConcurrentHashMap`은 Java 8부터 버킷 레벨 CAS + synchronized(해당 버킷만)로 세분화 → 읽기는 락 없음, 쓰기는 버킷 단위 락. 복합 연산(check-then-act)은 `computeIfAbsent`, `merge` 등 원자적 메서드 사용 필수.
-
-**Q4. HashSet의 중복 제거 원리를 설명하세요. equals()만 재정의하면 되나요?**
-> HashSet은 내부적으로 HashMap 사용. 저장 시 hashCode()로 버킷 결정 후 equals()로 동등성 비교. hashCode()를 재정의하지 않으면 두 객체가 equals()로 같아도 다른 버킷에 들어가 중복 제거 실패. **반드시 hashCode()와 equals()를 함께 재정의**해야 한다.
-
-**Q5. List.of()와 new ArrayList()의 차이는 무엇인가요?**
-> `List.of()`는 Java 9+ 불변 리스트 — 수정 시 UnsupportedOperationException. null 원소 불허. 방어적 복사 없이 공유해도 안전. `Collections.unmodifiableList()`는 원본 리스트의 뷰(원본 변경 시 함께 변경). 진정한 불변이 필요하면 `List.copyOf()` 또는 Guava `ImmutableList.copyOf()` 사용.
-
----
-
-## 극한 시나리오
-
-### 100 TPS (소규모 서비스)
-
-이 규모에서는 컬렉션 선택이 성능에 미치는 영향이 크지 않습니다. 코드 가독성과 안전성을 우선시하고, 기본 구현체(`ArrayList`, `HashMap`, `HashSet`)를 사용하면 충분합니다. 동시성 컬렉션도 필요 없습니다.
-
-```java
-// 100 TPS: 단순 HashMap으로 충분, 초기 capacity 지정으로 resize 비용 제거
-Map<String, UserSession> sessions = new HashMap<>(256); // 예상 동시 세션 수
-List<Order> pendingOrders = new ArrayList<>(64);
-Set<String> processedIds = new HashSet<>(128);
-```
-
-### 10,000 TPS (중규모 서비스)
-
-멀티스레드 환경에서 컬렉션이 공유되기 시작합니다. `HashMap` 대신 `ConcurrentHashMap`이 필요하며, 읽기/쓰기 패턴에 따라 `CopyOnWriteArrayList`를 검토합니다. 초기 capacity 설정이 resize 비용을 줄이는 데 중요해집니다.
-
-```java
-// 10K TPS: 동시성 컬렉션 + 초기 용량 최적화
-
-// 세션 저장소 — 스레드 안전 필수
-ConcurrentHashMap<String, Session> sessionStore =
-    new ConcurrentHashMap<>(4096); // 예상 동시 세션에 맞게 초기화
-
-// 원자적 집계 — 일반 Map은 race condition 발생
-sessionStore.merge(userId, newSession, (old, neu) -> neu); // 원자적 교체
-
-// 이벤트 리스너 — 읽기(이벤트 발행)가 쓰기(등록/해제)보다 압도적으로 많음
-CopyOnWriteArrayList<EventListener> listeners = new CopyOnWriteArrayList<>();
-// 이벤트 발행 시 락 없이 읽기 → 10K TPS에서도 병목 없음
-
-// 캐시 크기 제한 — LinkedHashMap LRU로 메모리 통제
-Map<Long, ProductInfo> productCache = Collections.synchronizedMap(
-    new LinkedHashMap<Long, ProductInfo>(1024, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<Long, ProductInfo> eldest) {
-            return size() > 1000; // 최대 1000개 유지
-        }
-    }
-);
-```
-
-### 100,000 TPS (대규모 서비스)
-
-단일 JVM의 인메모리 컬렉션만으로는 상태를 관리하기 어렵습니다. `ConcurrentHashMap`의 세밀한 설정과 lock-free 연산이 필수이며, 대용량 집합 조회는 `BloomFilter` 같은 확률적 자료구조를 도입해야 합니다.
-
-```java
-// 100K TPS: 세밀한 동시성 제어
-
-// concurrencyLevel 힌트 제공 (Java 8+에서는 무시되지만 명시적 문서화 효과)
-ConcurrentHashMap<String, AtomicLong> counters =
-    new ConcurrentHashMap<>(1024, 0.75f, 64); // 64개 동시 쓰기 예상
-
-// compute()로 원자적 업데이트 — synchronized 없이 안전
-counters.compute("api.calls", (k, v) -> v == null ? new AtomicLong(1) : v);
-counters.get("api.calls").incrementAndGet(); // lock-free increment
-
-// 차단 목록 조회 (수백만 건) — HashSet은 메모리 사용量이 큼
-// Guava BloomFilter: 메모리 1/10, 오탐률 1% 허용 시
-// BloomFilter<String> blocklist = BloomFilter.create(
-//     Funnels.stringFunnel(StandardCharsets.UTF_8), 10_000_000, 0.01);
-
-// 핫 파티션 방지 — 키에 샤딩 적용
-int shardCount = 16;
-List<ConcurrentHashMap<String, Object>> shards = IntStream.range(0, shardCount)
-    .mapToObj(i -> new ConcurrentHashMap<String, Object>(256))
-    .collect(Collectors.toList());
-// 특정 키가 한 Map에 집중되지 않도록 분산
-ConcurrentHashMap<String, Object> getShard(String key) {
-    return shards.get(Math.abs(key.hashCode()) % shardCount);
-}
-```
-
-100K TPS를 넘으면 인메모리 컬렉션의 한계를 인식해야 합니다. 세션은 Redis, 메시지는 Kafka, 통계 집계는 별도 스트림 처리 플랫폼(Flink, Spark)으로 외부화하는 아키텍처가 필요합니다.
-
----
 ## 요약
 
-Java 컬렉션 프레임워크는 **인터페이스-구현체 분리 원칙**을 따르므로, 변수 타입은 인터페이스(`List`, `Map`, `Set`)로 선언하고 구현체는 필요에 따라 교체하는 것이 좋은 설계입니다.
+Java 컬렉션의 내부 구조를 이해하면 선택이 자연스러워진다.
+
+- **HashMap**: 해시 스프레딩(h^h>>>16) + 버킷 배열 + 체이닝/트리화(8/6 임계값) + 0.75 로드 팩터(Poisson 기반) + 2의 거듭제곱 capacity(비트 AND 최적화)
+- **ConcurrentHashMap**: 빈 버킷은 CAS, 충돌 버킷은 synchronized per-node, 카운팅은 baseCount+CounterCell(@Contended)
+- **ArrayList**: 1.5배 증가(amortized O(1)), System.arraycopy(JVM intrinsic), RandomAccess 마커
+- **LinkedList**: 40B/node 오버헤드 + 캐시 미스 → 대부분의 경우 ArrayList/ArrayDeque가 우위
+- **TreeMap**: Red-Black Tree + Comparable/Comparator 필수 + NavigableMap 범위 API
+- **LinkedHashMap**: HashMap 상속 + 이중 연결 리스트 오버레이 → LRU 캐시 구현의 표준
+- **Iterator**: fail-fast(modCount 검사), fail-safe(COW 스냅샷)
+- **불변 컬렉션**: `List.of()`는 null 불허 + 진정한 불변, `unmodifiableList()`는 원본의 뷰
 
 ```java
-// 좋은 예: 인터페이스로 선언
-List<String> list = new ArrayList<>();
-Map<String, Integer> map = new HashMap<>();
-Set<String> set = new HashSet<>();
+// 설계 원칙: 인터페이스로 선언, 구현체는 교체 가능하게
+List<String>  list = new ArrayList<>();  // 구현체 교체 자유
+Map<K, V>     map  = new HashMap<>();    // 필요 시 TreeMap으로 교체
+Set<String>   set  = new HashSet<>();    // 중복 제거
 
-// 나쁜 예: 구현체로 선언 (불필요한 결합도)
-ArrayList<String> list2 = new ArrayList<>(); // 피하세요
+// 멀티스레드: 처음부터 동시성 컬렉션 사용
+ConcurrentHashMap<K, V> safeMap = new ConcurrentHashMap<>();
+// 나중에 Collections.synchronizedMap()으로 래핑하는 것은 임시방편
 ```
-
-성능 최적화가 필요하다면 **초기 capacity 지정**, **적절한 구현체 선택**, **불필요한 박싱/언박싱 제거** 순서로 접근하는 것을 권장합니다.
-
----
-## 면접 포인트
-
-**Q1. HashMap의 내부 동작 원리와 시간복잡도는?**
-키를 `hashCode()`로 해싱해 버킷 인덱스를 계산합니다. 같은 버킷에 여러 키가 들어오면 LinkedList로 연결(체이닝). Java 8부터 버킷 내 항목이 8개 이상이면 LinkedList → Red-Black Tree로 전환해 최악 경우 O(n) → O(log n)으로 개선합니다. 기본 load factor는 0.75로, 75% 채워지면 capacity를 2배로 늘리고 전체 rehashing이 발생합니다. 초기 capacity를 예상 크기 / 0.75로 설정하면 rehashing 비용을 줄일 수 있습니다.
-
-**Q2. ConcurrentHashMap이 Hashtable과 다른 이유는?**
-Hashtable은 모든 메서드에 `synchronized`를 걸어 동시 읽기도 불가합니다. ConcurrentHashMap은 Java 8부터 각 버킷별 CAS(Compare-And-Swap) + synchronized를 적용해 다른 버킷의 읽기/쓰기는 블로킹 없이 진행합니다. 이론상 CPU 코어 수만큼 병렬 처리 가능. 단, `size()`는 정확하지 않을 수 있으며(추정값), 복합 연산 원자성은 `computeIfAbsent()` 등 전용 메서드로 보장해야 합니다.
-
-**Q3. ArrayList vs LinkedList 실무 선택 기준은?**
-ArrayList: 인덱스 접근 O(1), 중간 삽입/삭제 O(n)(이후 요소 이동). 메모리 연속 배치로 캐시 지역성 좋음. 대부분의 경우 ArrayList가 빠릅니다. LinkedList: 양 끝 삽입/삭제 O(1)이지만 각 노드가 prev/next 포인터를 가져 메모리 오버헤드 2배. 인덱스 접근 O(n). 실무에서 LinkedList가 ArrayList보다 빠른 경우는 거의 없습니다. Deque가 필요하면 `ArrayDeque`를 사용합니다.
-
-**Q4. equals()/hashCode() 계약이 깨지면 어떤 문제가 생기는가?**
-`hashCode()`를 override하지 않고 `equals()`만 override하면: 동일한 값을 가진 두 객체가 다른 hashCode를 반환합니다. HashMap에 첫 번째 객체로 put하고 두 번째 객체로 get하면 null을 반환합니다. HashSet에 같은 값 객체를 두 번 add하면 중복이 저장됩니다. 반드시 `equals()`와 `hashCode()`를 함께 override해야 합니다.
-
-**Q5. EnumSet이 HashSet보다 빠른 이유는?**
-EnumSet은 내부적으로 long 비트마스크를 사용합니다. Enum 상수가 64개 이하면 단일 long(RegularEnumSet), 이상이면 long 배열(JumboEnumSet)로 구현됩니다. 합집합은 비트 OR(`|`), 교집합은 AND(`&`), 차집합은 AND NOT으로 처리합니다. 해싱이 전혀 없어 HashSet 대비 훨씬 빠르고 메모리 효율이 높습니다. Enum 타입이 확정된 경우 항상 EnumSet을 우선 고려합니다.
