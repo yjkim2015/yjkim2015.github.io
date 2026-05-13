@@ -182,20 +182,13 @@ public class Money {
 ## 5. Domain Event — 왜 컨텍스트 간 결합을 끊어야 하는가
 
 ```mermaid
-sequenceDiagram
-    participant Client
-    participant OrderService
-    participant EventPublisher
-    participant InventoryService
-    participant NotificationService
-
-    Client->>OrderService: 주문 생성 요청
-    OrderService->>OrderService: Order.place() 실행
-    OrderService->>EventPublisher: OrderPlaced 이벤트 발행
-    EventPublisher->>InventoryService: OrderPlaced 구독
-    EventPublisher->>NotificationService: OrderPlaced 구독
-    InventoryService->>InventoryService: 재고 차감
-    NotificationService->>NotificationService: 주문 확인 메일 발송
+graph LR
+    CL["Client"] -->|"주문 생성"| OS["OrderService"]
+    OS -->|"OrderPlaced 발행"| EP["EventPublisher"]
+    EP -->|"구독"| IS["InventoryService"]
+    EP -->|"구독"| NS["NotificationService"]
+    IS -->|"재고 차감"| IS
+    NS -->|"메일 발송"| NS
 ```
 
 **Domain Event**는 "도메인에서 중요한 일이 일어났다"는 사실을 표현합니다. `OrderPlaced`, `OrderCancelled`, `PaymentCompleted` — 과거형 이름이 핵심입니다. 이미 일어난 사실이므로 변경할 수 없습니다.
@@ -456,30 +449,14 @@ public class OrderController {
 ## 9. 주문 생성 전체 흐름 — sequenceDiagram
 
 ```mermaid
-sequenceDiagram
-    participant Client
-    participant Controller as OrderController (Inbound Adapter)
-    participant UseCase as PlaceOrderUseCase (Port)
-    participant AppService as OrderApplicationService
-    participant Domain as Order (Aggregate Root)
-    participant ProdPort as ProductQueryPort (Port)
-    participant Repo as OrderRepository (Port)
-    participant JPA as JpaOrderRepository (Outbound Adapter)
-
-    Client->>Controller: POST /api/orders
-    Controller->>Controller: Request → Command 변환
-    Controller->>UseCase: placeOrder(command)
-    UseCase->>AppService: 구현체 호출
-    AppService->>ProdPort: findByIds(productIds)
-    ProdPort-->>AppService: List<Product>
-    AppService->>Domain: Order.create() + addItem() + place()
-    Domain->>Domain: 비즈니스 불변식 검증 + 이벤트 등록
-    AppService->>Repo: save(order)
-    Repo->>JPA: 구현체로 위임
-    JPA->>JPA: Entity 변환 + persist
-    JPA-->>Repo: 저장 완료
-    AppService->>AppService: Domain Events 발행
-    Controller-->>Client: 201 Created + OrderId
+graph LR
+    CL["Client"] -->|"POST /api/orders"| CT["Controller"]
+    CT -->|"placeOrder(cmd)"| AS["AppService"]
+    AS -->|"findByIds"| PP["ProductQueryPort"]
+    AS -->|"Order.create"| DM["Order Aggregate"]
+    AS -->|"save(order)"| RP["OrderRepository"]
+    RP -->|"위임"| JA["JpaRepository"]
+    CT -->|"201 Created"| CL
 ```
 
 ---
@@ -512,22 +489,12 @@ public class OrderDiscountDomainService {
 ## 11. 이벤트 기반 Bounded Context 간 통신 흐름
 
 ```mermaid
-sequenceDiagram
-    participant Order as 주문 컨텍스트
-    participant Outbox as Outbox Table (DB)
-    participant Relay as Event Relay (Polling)
-    participant Kafka as Kafka Broker
-    participant Inventory as 재고 컨텍스트
-    participant Notification as 알림 컨텍스트
-
-    Order->>Order: Order.place() + 이벤트 등록
-    Order->>Outbox: ORDER_PLACED 이벤트 저장 (같은 트랜잭션)
-    Relay->>Outbox: 미발행 이벤트 폴링
-    Relay->>Kafka: OrderPlaced 이벤트 발행
-    Kafka->>Inventory: OrderPlaced 소비
-    Kafka->>Notification: OrderPlaced 소비
-    Inventory->>Inventory: 재고 차감
-    Notification->>Notification: 주문 확인 메일 발송
+graph LR
+    OR["주문 컨텍스트"] -->|"이벤트 저장"| OB["Outbox Table"]
+    RL["Event Relay"] -->|"폴링"| OB
+    RL -->|"OrderPlaced 발행"| KF["Kafka"]
+    KF -->|"소비"| IN["재고 컨텍스트"]
+    KF -->|"소비"| NT["알림 컨텍스트"]
 ```
 
 왜 Outbox 패턴이 필요한가? 주문 저장과 이벤트 발행이 원자적으로 이루어지지 않으면 문제가 생깁니다. 주문은 DB에 저장됐는데 Kafka 발행이 실패하면? 재고가 차감되지 않습니다. Outbox 패턴은 이벤트를 DB에 같은 트랜잭션으로 저장하고, 별도 프로세스가 안전하게 Kafka에 발행합니다. 이벤트 발행의 원자성을 보장합니다.
@@ -537,18 +504,13 @@ sequenceDiagram
 ## 12. Port/Adapter 호출 흐름 — 테스트 관점
 
 ```mermaid
-sequenceDiagram
-    participant Test as 단위 테스트
-    participant AppService as OrderApplicationService
-    participant MockRepo as MockOrderRepository
-    participant MockEvent as MockEventPublisher
-
-    Test->>MockRepo: Mock 주입 (인터페이스 기반)
-    Test->>MockEvent: Mock 주입
-    Test->>AppService: placeOrder(command) 호출
-    AppService->>MockRepo: save(order)
-    AppService->>MockEvent: publish(event)
-    Test->>Test: 검증: save 호출됐는가? 이벤트 발행됐는가?
+graph LR
+    TS["단위 테스트"] -->|"Mock 주입"| MR["MockRepo"]
+    TS -->|"Mock 주입"| ME["MockEvent"]
+    TS -->|"placeOrder"| AS["AppService"]
+    AS -->|"save(order)"| MR
+    AS -->|"publish(event)"| ME
+    TS -->|"검증"| TS
 ```
 
 헥사고날 아키텍처의 가장 큰 장점 중 하나가 테스트입니다. Application Service를 테스트할 때 JPA나 Kafka 없이 Mock으로 대체할 수 있습니다. Outbound Port가 인터페이스이기 때문입니다. 도메인 로직 테스트에 DB 컨테이너가 필요 없습니다. 테스트가 빠르고 독립적입니다.

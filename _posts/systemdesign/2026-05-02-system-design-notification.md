@@ -111,12 +111,12 @@ SMS:          100만 건/일 →  11 QPS
 ## 전체 아키텍처
 
 ```mermaid
-sequenceDiagram
-    B->>C: 호출
-    C->>D: 호출
-    C->>E: 호출
-    D->>F: 실패
-    E->>F: 실패
+graph LR
+    A[API 서버] -->|발행| B[Kafka]
+    B -->|소비| C[워커]
+    C -->|푸시| D[APNs/FCM]
+    C -->|SMS| E[Twilio]
+    C -->|이메일| F[SES]
 ```
 
 ---
@@ -128,17 +128,11 @@ sequenceDiagram
 APNs(Apple)와 FCM(Google)은 각각 다른 프로토콜과 토큰 형식을 사용한다. 푸시 워커는 기기 타입을 보고 분기한다:
 
 ```mermaid
-sequenceDiagram
-    participant API as 알림API
-    participant K as Kafka
-    participant W as 워커
-    API->>K: 발행_비동기
-    K->>W: 소비
-    alt iOS
-    W->>APNs: HTTP/2 → 200 OK
-    else Android
-    W->>FCM: HTTP → success
-    end
+graph LR
+    A[알림API] -->|발행 비동기| B[Kafka]
+    B -->|소비| C[워커]
+    C -->|iOS: HTTP/2| D[APNs]
+    C -->|Android: HTTP| E[FCM]
 ```
 
 왜 API가 즉시 202를 반환하는가? 실제 전송은 수백ms~수초가 걸린다. 동기로 기다리면 API 서버의 스레드가 모두 블로킹된다. Kafka에 발행하고 즉시 반환한다.
@@ -148,17 +142,11 @@ sequenceDiagram
 Twilio가 장애나면 SMS가 전혀 안 간다. 주문 완료 SMS가 안 오면 고객 불안이 폭증한다. **공급자 이중화**:
 
 ```mermaid
-sequenceDiagram
-    participant W as Worker
-    participant T as Twilio
-    participant N as Nexmo
-    W->>T: SMS 발송
-    alt 성공
-    T-->>W: 200 OK
-    else 3회 실패
-    W->>N: 대체 발송
-    N-->>W: 결과
-    end
+graph LR
+    A[Worker] -->|SMS 발송| B[Twilio]
+    B -->|200 OK| A
+    B -->|3회 실패| C[Nexmo]
+    C -->|대체 발송 결과| A
 ```
 
 ---

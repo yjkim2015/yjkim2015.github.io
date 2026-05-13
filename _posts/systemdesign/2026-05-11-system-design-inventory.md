@@ -159,29 +159,23 @@ graph LR
 **재고 차감 정상 흐름 (Redis Lua)**
 
 ```mermaid
-sequenceDiagram
-    participant OS as 주문서비스
-    participant IS as 재고 API
-    participant R as Redis
-    OS->>IS: 재고 차감 요청
-    IS->>R: Lua 스크립트 실행
-    R-->>IS: 차감 성공 (남은 재고 반환)
-    IS->>IS: Kafka 이벤트 발행
-    IS-->>OS: 예약 성공
+graph LR
+    A[주문서비스] -->|재고 차감 요청| B[재고 API]
+    B -->|Lua 스크립트| C[Redis]
+    C -->|차감 성공| B
+    B -->|Kafka 이벤트 발행| B
+    B -->|예약 성공| A
 ```
 
 **Redis 장애 시 DB 폴백 흐름**
 
 ```mermaid
-sequenceDiagram
-    participant OS as 주문서비스
-    participant IS as 재고 API
-    participant DB as 재고 DB
-    OS->>IS: 재고 차감 요청
-    IS->>IS: Redis 연결 실패 감지
-    IS->>DB: 낙관적 락으로 차감
-    DB-->>IS: 차감 완료 (version 증가)
-    IS-->>OS: 예약 성공 (TPS 저하 허용)
+graph LR
+    A[주문서비스] -->|재고 차감 요청| B[재고 API]
+    B -->|Redis 실패 감지| B
+    B -->|낙관적 락 차감| C[재고 DB]
+    C -->|version 증가| B
+    B -->|예약 성공| A
 ```
 
 ---
@@ -437,15 +431,12 @@ public ReservationResult reserve(long skuId, int warehouseId, int quantity) {
 **타임딜 요청 처리 흐름**
 
 ```mermaid
-sequenceDiagram
-    participant U as 고객
-    participant IS as 재고 API
-    participant R as Redis
-    U->>IS: 타임딜 구매 클릭
-    IS->>IS: Rate Limit 체크
-    IS->>R: Lua 원자 차감 시도
-    R-->>IS: 성공 (재고 있음)
-    IS-->>U: 주문 큐 진입
+graph LR
+    A[고객] -->|타임딜 구매 클릭| B[재고 API]
+    B -->|Rate Limit 체크| B
+    B -->|Lua 원자 차감| C[Redis]
+    C -->|성공/재고있음| B
+    B -->|주문 큐 진입| A
 ```
 
 ### 재고 불일치 — Redis와 DB 수치가 다름

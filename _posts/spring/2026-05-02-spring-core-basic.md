@@ -302,14 +302,14 @@ public class OrderServiceImpl implements OrderService {
 ### 5.4 주입 방법 결정 흐름
 
 ```mermaid
-flowchart LR
+graph LR
     A["DI 방법 선택"] --> B{"필수 의존관계?"}
-    B -->|"예 — 없으면 동작 불가"| C["1️⃣ 생성자 주입"]
-    B -->|"아니오 — 없어도 됨"| D{"런타임 변경 필요?"}
-    D -->|"예"| E["2️⃣ 수정자 주입"]
+    B -->|"예"| C["생성자 주입"]
+    B -->|"아니오"| D{"런타임 변경 필요?"}
+    D -->|"예"| E["수정자 주입"]
     D -->|"아니오"| C
-    C --> G["장점: final, 테스트 쉬움,"]
-    E --> H["장점: 선택적 의존관계,"]
+    C --> G["final/테스트 용이"]
+    E --> H["선택적 의존관계"]
 ```
 
 ---
@@ -517,15 +517,11 @@ public class ShoppingCart {
 ### 8.3 싱글톤 빈에서 프로토타입 빈 사용 — 흔히 빠지는 함정
 
 ```mermaid
-sequenceDiagram
-    participant Client
-    participant Singleton
-    participant Prototype
-    Note over Singleton,Prototype: 초기화 시 1회만 주입(고정)
-    Client->>Singleton: logic_ 요청1
-    Singleton->>Prototype: count__ = 1
-    Client->>Singleton: logic_ 요청2
-    Singleton->>Prototype: count__ = 2 새 인스턴스 아님!
+graph LR
+    CLI["Client"] -->|"logic 요청1"| SING["Singleton"]
+    SING -->|"count=1"| PROTO["Prototype(고정)"]
+    CLI -->|"logic 요청2"| SING
+    SING -->|"count=2(같은 인스턴스!)"| PROTO
 ```
 
 싱글톤 빈이 생성될 때 프로토타입 빈이 주입됩니다. 이후 싱글톤 빈은 계속 살아있고, 그 안의 프로토타입 빈도 계속 같은 인스턴스를 참조합니다. 프로토타입 빈이 "요청마다 새 인스턴스"라는 의미가 완전히 사라집니다.
@@ -584,16 +580,12 @@ public class MyLogger {
 CGLIB 프록시를 사용하면 진짜 `MyLogger` 대신 껍데기 프록시를 주입합니다. `log()` 메서드가 호출되는 순간, 프록시가 "현재 HTTP 요청에 해당하는 진짜 `MyLogger`"를 찾아서 실제 메서드를 위임합니다.
 
 ```mermaid
-sequenceDiagram
-    participant C as Controller (singleton)
-    participant P as MyLogger Proxy (singleton 가짜)
-    participant R as Real MyLogger (request-scoped 진짜)
-    Note over C,P: 컨테이너 초기화 — 프록시만 주입됨
-    C->>P: log_ 호출
-    P->>P: 현재 HTTP 요청에 해당하는 진짜 빈 조회
-    P->>R: 실제 log_ 위임
-    R-->>C: 처리 완료
-    Note over R: HTTP 요청 종료 시 소멸
+graph LR
+    C["Controller(singleton)"] -->|"log 호출"| P["MyLogger Proxy"]
+    P -->|"진짜 빈 조회"| P
+    P -->|"실제 log 위임"| R["Real MyLogger(request)"]
+    R -->|"처리 완료"| C
+    R -->|"요청 종료 시"| DEST["소멸"]
 ```
 
 ---

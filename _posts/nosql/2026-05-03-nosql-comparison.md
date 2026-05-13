@@ -237,9 +237,8 @@ graph LR
 > **비유:** Polyglot Persistence는 **대형 병원**과 같다. 내과, 외과, 안과, 치과가 각각 전문 장비를 갖추고 있다. 환자(데이터)의 증상에 따라 적절한 과(DB)로 보내는 것이다. 모든 환자를 내과(RDBMS)에서만 보겠다고 하면, 수술이 필요한 환자에게도 약만 처방하게 된다.
 
 ```mermaid
-flowchart LR
-    API["API Gateway"]
-    API --> US["회원 서비스"]
+graph LR
+    API["API Gateway"] --> US["회원 서비스"]
     API --> PD["상품 서비스"]
     API --> OD["주문/결제"]
     API --> SR["검색 서비스"]
@@ -396,10 +395,10 @@ Cassandra는 파티션 키를 해시 함수에 넣어 0~2^63 범위의 토큰을
 ## 8. 핵심 정리
 
 ```mermaid
-graph TB
-    R["Redis"] ---|조합| M["MongoDB"]
-    M ---|조합| C["Cassandra"]
-    C ---|조합| N["Neo4j"]
+graph LR
+    R["Redis"] ---|"조합"| M["MongoDB"]
+    M ---|"조합"| C["Cassandra"]
+    C ---|"조합"| N["Neo4j"]
 ```
 
 | 구분 | Redis | MongoDB | Cassandra | Neo4j |

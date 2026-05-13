@@ -129,15 +129,12 @@ graph LR
 **리뷰 작성 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant RS as 리뷰 서비스
-    participant K as Kafka
-    U->>RS: 리뷰 작성 요청
-    RS->>RS: DB 저장 (대기 상태)
-    RS-->>U: 즉시 응답
-    RS->>K: 스팸 탐지 이벤트 발행
-    K-->>RS: 판정 결과 → 공개/차단
+graph LR
+    A[사용자] -->|리뷰 작성| B[리뷰 서비스]
+    B -->|DB 저장 대기| B
+    B -->|즉시 응답| A
+    B -->|스팸탐지 이벤트| C[Kafka]
+    C -->|공개/차단 판정| B
 ```
 
 ---
@@ -157,14 +154,11 @@ sequenceDiagram
 **스팸 탐지 파이프라인 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant K as Kafka
-    participant R as 규칙엔진
-    participant M as ML모델
-    K->>R: review.created 이벤트
-    R->>R: IP빈도/MinHash 검사
-    R->>M: 규칙 통과 → ML 판정
-    M-->>K: 스팸점수 → 공개/차단/검토
+graph LR
+    A[Kafka] -->|review.created| B[규칙엔진]
+    B -->|IP/MinHash 검사| B
+    B -->|규칙 통과| C[ML모델]
+    C -->|스팸점수 판정| A
 ```
 
 ---

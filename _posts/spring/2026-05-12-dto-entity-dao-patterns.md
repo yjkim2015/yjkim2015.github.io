@@ -547,18 +547,14 @@ public record UserResponse(
 ## 4. API 요청 처리 전체 흐름
 
 ```mermaid
-sequenceDiagram
-    Client->>Controller: POST /users (JSON)
-    Controller->>Controller: @Valid 검증
-    Controller->>Service: createUser(RequestDTO)
-    Service->>Service: RequestDTO→Entity 변환
-    Service->>Repository: save(entity)
-    Repository->>DB: INSERT SQL
-    DB->>Repository: 저장된 Entity 반환
-    Repository->>Service: Entity 반환
-    Service->>Service: Entity→ResponseDTO 변환
-    Service->>Controller: ResponseDTO 반환
-    Controller->>Client: 201 Created (JSON)
+graph LR
+    CLI["Client"] -->|"POST /users(JSON)"| CTR["Controller"]
+    CTR -->|"@Valid→RequestDTO"| SVC["Service"]
+    SVC -->|"DTO→Entity→save"| REPO["Repository"]
+    REPO -->|"INSERT SQL"| DB["DB"]
+    DB -->|"Entity 반환"| SVC
+    SVC -->|"Entity→ResponseDTO"| CTR
+    CTR -->|"201 Created"| CLI
 ```
 
 각 계층이 자신의 역할만 수행한다. Controller는 HTTP를 다루고, Service는 비즈니스와 변환을 담당하며, Repository는 영속성만 처리한다. 이 경계가 명확하면 각 계층을 독립적으로 테스트할 수 있다.

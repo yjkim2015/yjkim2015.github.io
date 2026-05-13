@@ -30,30 +30,22 @@ graph LR
 ### 장애 발생과 데이터 유실 경로
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant B1 as Broker1(Leader)
-    participant B2 as Broker2
-    P->>B1: offset 99,100 전송_acks=1
-    B1-->>P: ACK 수신
-    Note over B1: 장애! 팔로워 미복제
-    Note over B2: 최신 offset=98
-    Note over P,B2: 99,100 영구 유실
+graph LR
+    P["Producer"] -->|"off99,100 전송"| B1["Broker1 Leader"]
+    B1 -->|"ACK"| P
+    B1 -->|"장애! 미복제"| B2["Broker2 off=98"]
+    B2 -->|"99,100 유실"| LOST["영구 유실"]
 ```
 
 ### acks=all 설정 시 시나리오
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant B1 as Broker1(Leader)
-    participant B2 as Broker2
-    P->>B1: 전송_acks=all, min.insync=2
-    B1->>B2: 복제
-    B2-->>B1: 완료
-    B1-->>P: ACK
-    Note over B1: 장애! B2가 새 리더→유실 없음
-    Note over P: ISR=1 < min.insync.replicas=2 → 쓰기 거부
+graph LR
+    P["Producer"] -->|"acks=all"| B1["Broker1 Leader"]
+    B1 -->|"복제"| B2["Broker2"]
+    B2 -->|"완료"| B1
+    B1 -->|"ACK"| P
+    B1 -->|"장애→B2 새리더"| SAFE["유실 없음"]
 ```
 
 ### Unclean Leader Election 위험
@@ -86,17 +78,14 @@ props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 ### 리밸런싱 타이밍 문제
 
 ```mermaid
-sequenceDiagram
-    participant CA as Consumer A
-    participant K as Kafka
-    participant CB as Consumer C
-    CA->>K: poll_ off50~52
-    Note over CA: off50,51 처리완료
-    Note over CA,K: 리밸런싱(C 합류)
-    CA->>K: offset=51 커밋
-    K->>CB: P0 할당
-    CB->>K: poll_ off52~
-    Note over CB: off52 중복 처리!
+graph LR
+    CA["Consumer A"]
+    K["Kafka"]
+    CB["Consumer C"]
+    CA -->|"off50~52 poll"| K
+    CA -->|"리밸런싱→off51 커밋"| K
+    K -->|"P0 할당"| CB
+    CB -->|"off52 중복처리!"| K
 ```
 
 ### 상세 타임라인
@@ -527,12 +516,16 @@ graph LR
 ### Kafka의 방어 메커니즘
 
 ```mermaid
-sequenceDiagram
-    Broker1_epoch_5->>Controller: 리더 확인
-    Controller->>Broker1_epoch_5: epoch 5 구 리더
-    Broker1_epoch_5->>Producer: NotLeaderException
-    Producer->>Controller: 새 리더 조회
-    Controller->>Producer: Broker2_epoch 6
+graph LR
+    B1["Broker1 epoch5"]
+    C["Controller"]
+    P["Producer"]
+    B2["Broker2 epoch6"]
+    B1 -->|"리더 확인"| C
+    C -->|"구 리더 거절"| B1
+    B1 -->|"NotLeaderException"| P
+    P -->|"새 리더 조회"| C
+    C -->|"Broker2 epoch6"| B2
 ```
 
 ### 네트워크 파티션 시나리오별 영향
@@ -574,16 +567,15 @@ props.put(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, 1000);
 ### 중복 발생 메커니즘
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer (멱등성 없음)
-    participant B as Broker
-    P->>B: msg_A 전송
-    Note over B: 메시지 저장 완료
-    B-->>P: ACK 전송
-    Note over P: 네트워크 지연으로 ACK 손실!
-    Note over P: 타임아웃 → msg(A) 재전송
-    P->>B: msg_A 재전송
-    Note over B: msg(A) 또 저장 → 중복! Partition: A, B, A_dup, C
+graph LR
+    P["Producer(멱등성없음)"]
+    B["Broker"]
+    ACK["ACK 손실"]
+    DUP["msg_A 중복저장"]
+    P -->|"msg_A 전송"| B
+    B -->|"저장→ACK"| ACK
+    ACK -->|"타임아웃→재전송"| P
+    P -->|"msg_A 재전송"| DUP
 ```
 
 ### 타임아웃 관련 설정들
@@ -603,15 +595,13 @@ props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
 ### 순서 역전 시나리오
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant B as Broker
-    Note over P,B: IN_FLIGHT=5, 멱등성 없음
-    P->>B: msg1_실패→msg2_성공→msg1 재시도
-    Note over B: [msg2,msg1] 순서역전!
-    Note over P,B: IN_FLIGHT=1
-    P->>B: msg1→msg2 순서대로
-    Note over B: [msg1,msg2] 순서보장
+graph LR
+    P1["IN_FLIGHT=5"]
+    B1["msg2→msg1 역전"]
+    P2["IN_FLIGHT=1"]
+    B2["msg1→msg2 보장"]
+    P1 -->|"msg1실패→msg2→재시도"| B1
+    P2 -->|"msg1→msg2 순서대로"| B2
 ```
 
 ### 완전한 해결: Idempotent Producer

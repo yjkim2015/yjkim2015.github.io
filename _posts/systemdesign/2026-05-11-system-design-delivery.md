@@ -122,14 +122,11 @@ graph LR
 **주문 접수 → 배차 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant O as 주문 서비스
-    participant W as 창고 선택기
-    participant D as 배차 서버
-    O->>W: 주문 확정, 창고 선택 요청
-    W-->>O: 최적 창고 ID + ETA
-    O->>D: 배차 요청
-    D-->>O: 기사 배정 완료
+graph LR
+    A[주문 서비스] -->|창고 선택 요청| B[창고 선택기]
+    B -->|최적 창고+ETA| A
+    A -->|배차 요청| C[배차 서버]
+    C -->|기사 배정 완료| A
 ```
 
 ---
@@ -157,13 +154,11 @@ sequenceDiagram
 SSE 서버는 Redis Pub/Sub를 구독하여 특정 기사 위치 변경 시 해당 기사를 추적 중인 고객에게만 이벤트를 전송합니다.
 
 ```mermaid
-sequenceDiagram
-    participant D as 기사앱
-    participant K as Kafka
-    participant R as Redis+InfluxDB
-    D->>K: GPS 좌표 전송 (5초 간격)
-    K->>R: Redis 최신위치 갱신 + InfluxDB 이력저장
-    R-->>D: SSE로 고객앱에 실시간 Push
+graph LR
+    A[기사앱] -->|GPS 5초 간격| B[Kafka]
+    B -->|최신위치 갱신| C[Redis]
+    B -->|이력 저장| D[InfluxDB]
+    C -->|SSE Push| E[고객앱]
 ```
 
 기사 앱이 5초마다 GPS 좌표를 Kafka에 발행하면, Consumer가 Redis(최신 위치)와 InfluxDB(이력)에 동시에 저장합니다. SSE 서버는 Redis Pub/Sub를 구독해 고객 화면에 즉시 반영합니다.

@@ -140,17 +140,12 @@ graph LR
 **Sentinel 페일오버 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant S as Sentinel
-    participant M as Master
-    participant R as Replica
-    S->>M: PING (매 1초)
-    Note over M: 응답 없음 (down-after-ms 초과)
-    Note over S: SDOWN 판정 → quorum 투표
-    Note over S: ODOWN 확정 → 리더 Sentinel 선출
-    S->>R: SLAVEOF NO ONE
-    R-->>S: 마스터 전환 완료
-    Note over S: +switch-master 이벤트 발행
+graph LR
+    S["Sentinel"] -->|"PING 매 1초"| M["Master"]
+    M -->|"응답없음→SDOWN"| S
+    S -->|"quorum→ODOWN"| S
+    S -->|"SLAVEOF NO ONE"| R["Replica"]
+    R -->|"마스터 전환 완료"| S
 ```
 
 | 단계 | 동작 | 소요 시간 |
@@ -244,15 +239,12 @@ graph LR
 **Cluster MOVED 리디렉션 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant N1 as Node-1
-    participant N2 as Node-2
-    C->>N1: GET user:1001
-    N1-->>C: MOVED 7638 node2:6379
-    Note over C: 슬롯 캐시 갱신
-    C->>N2: GET user:1001
-    N2-->>C: 데이터 반환
+graph LR
+    C["Client"] -->|"GET user:1001"| N1["Node-1"]
+    N1 -->|"MOVED→node2"| C
+    C -->|"슬롯 캐시 갱신"| C
+    C -->|"GET user:1001"| N2["Node-2"]
+    N2 -->|"데이터 반환"| C
 ```
 
 | 구분 | MOVED | ASK |

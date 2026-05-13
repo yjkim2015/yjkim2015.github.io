@@ -292,14 +292,12 @@ routes:
 ## 요청 처리 전체 흐름
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant GW as Gateway
-    participant SVC as Service
-    C->>GW: HTTP 요청
-    GW->>GW: JWT 검증/Rate Limit
-    GW->>SVC: 서비스 호출
-    SVC-->>C: 응답
+graph LR
+    C["클라이언트"] --> GW["Gateway"]
+    GW --> AUTH["JWT검증/RateLimit"]
+    AUTH --> SVC["서비스"]
+    SVC --> RESP["응답 반환"]
+    RESP --> C
 ```
 
 ---

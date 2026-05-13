@@ -223,15 +223,11 @@ XAUTOCLAIM orders processing-group consumer-2 60000 0-0 COUNT 10
 **XREADGROUP 정상 처리 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant P as Producer
-    participant S as Redis Stream
-    participant C as Consumer
-    P->>S: XADD orders * event ORDER_PLACED
-    C->>S: XREADGROUP GROUP g1 consumer-1 >
-    S-->>C: 메시지 전달 + PEL 기록
-    C->>S: XACK orders g1 msg-id
-    Note over S: PEL에서 제거 완료
+graph LR
+    P["Producer"] -->|"XADD"| S["Redis Stream"]
+    C["Consumer"] -->|"XREADGROUP"| S
+    S -->|"메시지+PEL 기록"| C
+    C -->|"XACK"| S
 ```
 
 ### "0" vs ">" — 재시작 시 필수 패턴
@@ -395,16 +391,12 @@ public class OrderEventConsumer {
 컨슈머 장애 시 PEL에 메시지가 쌓입니다. XAUTOCLAIM으로 살아있는 컨슈머가 가져가 재처리합니다. `min-idle-time`은 평균 처리시간 × 3 이상으로 설정해야 정상 처리 중인 메시지를 빼앗지 않습니다.
 
 ```mermaid
-sequenceDiagram
-    participant D as Dead Consumer
-    participant S as Redis Stream
-    participant A as Active Consumer
-    D->>S: XREADGROUP (메시지 수신, PEL 기록)
-    Note over D: 장애 발생 — ACK 없음
-    Note over S: PEL idle time 60초 초과
-    A->>S: XAUTOCLAIM orders g1 60000 0-0
-    S-->>A: idle 메시지 재할당
-    A->>S: XACK orders g1 msg-id
+graph LR
+    D["Dead Consumer"] -->|"XREADGROUP"| S["Redis Stream"]
+    D -->|"장애→ACK없음"| S
+    A["Active Consumer"] -->|"XAUTOCLAIM"| S
+    S -->|"idle 메시지 재할당"| A
+    A -->|"XACK"| S
 ```
 
 ```java

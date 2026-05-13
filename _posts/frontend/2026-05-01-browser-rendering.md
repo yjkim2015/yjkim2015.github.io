@@ -28,7 +28,7 @@ toc_label: 목차
 ## 브라우저 렌더링 전체 파이프라인
 
 ```mermaid
-flowchart LR
+graph LR
     HTML["HTML/CSS"] --> RT["렌더 트리"]
     JS["JS"] -->|"DOM 수정"| RT
     RT --> LAYOUT["Layout"]
@@ -51,7 +51,7 @@ DOM은 **동적으로 변경 가능**합니다. 자바스크립트로 노드를 
 #### HTML → DOM 변환 과정
 
 ```mermaid
-flowchart LR
+graph LR
     A["바이트"] --> B["문자"]
     B --> C["토큰"]
     C --> D["노드"]
@@ -172,7 +172,7 @@ body div p span { color: red; }
 DOM + CSSOM을 합쳐 **실제로 화면에 그려질 노드만** 포함한 트리입니다. 비시각적 노드는 제외됩니다.
 
 ```mermaid
-flowchart LR
+graph LR
     DOM["DOM: html, body, h"]
     RT["렌더 트리: body, h1, p"]
     EXCL["제외: span(display:n"]
@@ -201,7 +201,7 @@ flowchart LR
 Reflow는 **계산 비용이 가장 큽니다**. 특정 요소의 크기가 바뀌면 부모·형제·자식 노드 모두에 영향을 줄 수 있기 때문입니다. 예를 들어 `<table>` 의 셀 하나가 바뀌면 테이블 전체가 다시 계산됩니다.
 
 ```mermaid
-flowchart LR
+graph LR
     A["렌더 트리 노드"] --> B["뷰포트 크기 참조"]
     B --> C["박스 모델 계산"]
     C --> D["위치 결정"]
@@ -321,7 +321,7 @@ transform: translateZ(0);          /* 핵 (hack), 남용 금지 */
 첫 화면 렌더링을 빠르게 하는 전략입니다. 핵심은 **렌더 블로킹 리소스를 최소화**하는 것입니다.
 
 ```mermaid
-flowchart LR
+graph LR
     A["render-blocking 제거"] --> B["Critical CSS 인라인"]
     B --> C["JS defer/async"]
     C --> D["Reflow 배치 처리"]
@@ -403,16 +403,11 @@ list.appendChild(fragment);  // Reflow 1번만
 이벤트가 DOM 트리를 통해 전파되는 방식입니다.
 
 ```mermaid
-sequenceDiagram
-    participant WIN as window
-    participant DOC as document
-    participant BTN as button
-    Note over WIN,BTN: 캡처링 (위→아래)
-    WIN->>DOC: 전파
-    DOC->>BTN: 타깃 도착
-    Note over WIN,BTN: 버블링 (아래→위)
-    BTN->>DOC: 버블링
-    DOC->>WIN: 버블링
+graph LR
+    WIN["window"] -->|"캡처링"| DOC["document"]
+    DOC -->|"캡처링"| BTN["button"]
+    BTN -->|"버블링"| DOC
+    DOC -->|"버블링"| WIN
 ```
 
 ```javascript

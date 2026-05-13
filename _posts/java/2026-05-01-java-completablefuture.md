@@ -48,11 +48,10 @@ String result = future.get(); // 블로킹
 `CompletableFuture`는 비동기 작업의 결과를 미래에 "완성"할 수 있는 컨테이너다. 작업이 완료되기 전에도 다음에 할 일(콜백)을 미리 등록해 둘 수 있다.
 
 ```mermaid
-flowchart LR
+graph LR
     A["supplyAsync()"] --> B["작업 실행 중"]
-    B --> C{"완료?"}
-    C -->|"성공"| D["thenApply/thenComp"]
-    C -->|"실패"| E["exceptionally/hand"]
+    B -->|"성공"| D["thenApply"]
+    B -->|"실패"| E["exceptionally"]
     D --> F["최종 결과"]
     E --> F
 ```
@@ -254,15 +253,12 @@ CompletableFuture<User> future = CompletableFuture
 병렬 실행과 결과 조합이 CompletableFuture의 가장 강력한 기능이다.
 
 ```mermaid
-sequenceDiagram
-    api1_->>allOf_완료대기: 호출
-    _api2_->>allOf_완료대기: 호출
-    _api3->>allOf_완료대기: 호출
-    api2->>allOf_완료대기: 호출
-    api3->>allOf_완료대기: 호출
-    us-east_->>anyOf_첫완료: 호출
-    _eu-west->>anyOf_첫완료: 호출
-    eu->>anyOf_첫완료: 호출
+graph LR
+    A1["api1"] --> ALL["allOf 완료대기"]
+    A2["api2"] --> ALL
+    A3["api3"] --> ALL
+    U["us-east"] --> ANY["anyOf 첫완료"]
+    E["eu-west"] --> ANY
 ```
 
 ### thenCombine — 두 Future 결과 합치기

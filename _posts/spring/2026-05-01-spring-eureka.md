@@ -26,10 +26,10 @@ date: 2026-05-01
 4️⃣ **Heartbeat**: 인스턴스가 살아있음을 주기적으로 알린다
 
 ```mermaid
-sequenceDiagram
-    Service->>EurekaServer: Heartbeat 10초
-    Client->>Service: HTTP 호출
-    Service->>EurekaServer: Deregister
+graph LR
+    SVC["Service"] -->|"Heartbeat 10초"| ES["EurekaServer"]
+    CL["Client"] -->|"HTTP 호출"| SVC
+    SVC -->|"Deregister"| ES
 ```
 
 ---
@@ -37,10 +37,10 @@ sequenceDiagram
 ## Eureka 아키텍처
 
 ```mermaid
-sequenceDiagram
-    Order_Service->>Eureka_Server_1: Discover
-    Eureka_Server_1->>Order_Service: 인스턴스 목록
-    Order_Service->>User_Service: HTTP 직접 호출
+graph LR
+    OS["Order Service"] -->|"Discover"| ES["Eureka Server"]
+    ES -->|"인스턴스 목록"| OS
+    OS -->|"HTTP 직접 호출"| US["User Service"]
 ```
 
 ---

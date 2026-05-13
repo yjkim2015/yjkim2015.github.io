@@ -156,14 +156,11 @@ curl -X POST http://order-service:8080/actuator/refresh
 3️⃣ 모든 클라이언트가 이벤트를 수신하고 Config Server에서 새 설정을 가져온다
 
 ```mermaid
-sequenceDiagram
-    participant DEV as Dev
-    participant CS as ConfigServer
-    participant SVC as Services
-    DEV->>CS: push _ bus-refresh
-    CS->>SVC: 이벤트 발행
-    SVC->>CS: 새 설정 fetch
-    Note over SVC: 재배포 없이 적용
+graph LR
+    DEV["Dev"] -->|"bus-refresh 호출"| CS["Config Server"]
+    CS -->|"이벤트 발행"| SVC["Services"]
+    SVC -->|"새 설정 fetch"| CS
+    SVC --> DONE["재배포없이 적용"]
 ```
 
 ---

@@ -156,16 +156,12 @@ Cache-Aside는 애플리케이션이 캐시 존재를 인식하고 직접 관리
 ### 동작 원리
 
 ```mermaid
-sequenceDiagram
-    participant App as 앱서버
-    participant R as Redis
-    participant DB as Database
-    App->>R: GET product:123
-    R-->>App: nil (Cache Miss)
-    App->>DB: SELECT * FROM products WHERE id=123
-    DB-->>App: product data
-    App->>R: SET product:123 {data} EX 3600
-    App-->>App: 응답 반환
+graph LR
+    APP["앱서버"] -->|"GET product:123"| R["Redis"]
+    R -->|"nil (Cache Miss)"| APP
+    APP -->|"SELECT"| DB["Database"]
+    DB -->|"product data"| APP
+    APP -->|"SET EX 3600"| R
 ```
 
 ### 코드 구현

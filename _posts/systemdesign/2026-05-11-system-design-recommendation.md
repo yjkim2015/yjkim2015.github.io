@@ -127,14 +127,12 @@ graph LR
 **추천 요청 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant A as API서버
-    participant C as 후보생성기
-    A->>C: 후보 요청 (2,000개)
-    C-->>A: CF+CB 후보 병합
-    A->>A: 랭킹 모델 스코어링
-    A-->>U: 상위 20개 반환
+graph LR
+    A[사용자] -->|추천 요청| B[API서버]
+    B -->|후보 요청 2000개| C[후보생성기]
+    C -->|CF+CB 병합| B
+    B -->|랭킹 스코어링| B
+    B -->|상위 20개 반환| A
 ```
 
 ---
@@ -287,13 +285,10 @@ public class ReRankingService {
 Flink에서 사용자별 최근 1시간 조회 카테고리를 슬라이딩 윈도우로 집계해 Redis에 기록합니다. 클릭 후 5분 안에 추천에 반영됩니다.
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant K as Kafka
-    participant RS as Redis
-    U->>K: 클릭 이벤트 발행
-    K->>RS: Flink 집계 후 피처 업데이트
-    RS-->>U: 5분 내 추천 반영
+graph LR
+    A[사용자] -->|클릭 이벤트| B[Kafka]
+    B -->|Flink 집계| C[Redis]
+    C -->|5분내 반영| A
 ```
 
 ---

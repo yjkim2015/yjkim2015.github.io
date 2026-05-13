@@ -226,14 +226,11 @@ class ConsistentHashRing:
 DynamoDB, Cassandra, Riak이 이 방식을 쓴다. 리더 없이 모든 노드가 읽기/쓰기를 처리할 수 있다.
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant N1 as 노드1
-    participant N2 as 노드2
-    C->>N1: put_key, val
-    C->>N2: put_key, val
-    N1-->>C: OK
-    N2-->>C: OK_W=2 달성
+graph LR
+    A[Client] -->|put key,val| B[노드1]
+    A -->|put key,val| C[노드2]
+    B -->|OK| A
+    C -->|OK W=2 달성| A
 ```
 
 ### Quorum — W + R > N

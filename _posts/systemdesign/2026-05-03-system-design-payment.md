@@ -159,14 +159,11 @@ graph LR
 > **비유:** 결제 흐름은 레스토랑 계산서 처리와 같습니다. 손님이 카드를 내밀면(결제 요청), 직원이 단말기에 긁고(PG 요청), 카드사가 승인하면(PG 승인), 영수증이 나옵니다(결제 완료). 중간에 통신이 끊기면 재시도해야 하는데, 이때 이중 결제가 발생할 수 있습니다.
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant PS as 결제서비스
-    participant PG as PG사
-    U->>PS: 결제 요청
-    PS->>PG: 승인 요청
-    PG-->>PS: 승인 응답
-    PS-->>U: 결제 완료
+graph LR
+    A[사용자] -->|결제 요청| B[결제서비스]
+    B -->|승인 요청| C[PG사]
+    C -->|승인 응답| B
+    B -->|결제 완료| A
 ```
 
 ### 결제 상태 머신
@@ -474,14 +471,11 @@ class PaymentSaga:
 ### 환불 흐름
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant RS as 환불서비스
-    participant PG as PG사
-    U->>RS: 환불 요청
-    RS->>PG: PG 취소 요청
-    PG-->>RS: 취소 응답
-    RS-->>U: 환불 완료
+graph LR
+    A[사용자] -->|환불 요청| B[환불서비스]
+    B -->|PG 취소 요청| C[PG사]
+    C -->|취소 응답| B
+    B -->|환불 완료| A
 ```
 
 ### PG 취소 실패 시 처리
@@ -780,11 +774,11 @@ PCI DSS(Payment Card Industry Data Security Standard)는 카드 데이터를 다
 ### 토큰화 흐름
 
 ```mermaid
-sequenceDiagram
-    B->>A: 토큰반환
-    A->>C: 토큰_결제요청
-    C->>B: 승인요청
-    B->>C: 승인결과
+graph LR
+    A[PG사] -->|토큰 반환| B[우리 서버]
+    B -->|토큰 결제요청| C[결제앱]
+    C -->|승인 요청| A
+    A -->|승인 결과| C
 ```
 
 카드번호는 PG사 서버에만 존재하고 우리 서버를 거치지 않습니다. 우리는 토큰만 저장합니다. 해커가 우리 DB를 털어도 카드번호는 없습니다.

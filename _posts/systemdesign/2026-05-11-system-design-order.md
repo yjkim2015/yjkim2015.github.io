@@ -154,29 +154,23 @@ graph LR
 **주문 생성 정상 흐름 (Saga)**
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant OS as 주문서비스
-    participant PS as 결제서비스
-    U->>OS: 주문 생성 요청
-    OS->>OS: DB 저장 + Outbox 기록
-    OS-->>U: 주문번호 반환
-    OS->>PS: OrderCreated 이벤트
-    PS->>PS: PG사 결제 요청
-    PS-->>OS: PaymentCompleted 이벤트
+graph LR
+    A[사용자] -->|주문 생성| B[주문서비스]
+    B -->|DB+Outbox 저장| B
+    B -->|주문번호 반환| A
+    B -->|OrderCreated| C[결제서비스]
+    C -->|PG사 결제| C
+    C -->|PaymentCompleted| B
 ```
 
 **결제 실패 시 Saga 보상 흐름**
 
 ```mermaid
-sequenceDiagram
-    participant OS as 주문서비스
-    participant PS as 결제서비스
-    participant IS as 재고서비스
-    PS->>OS: PaymentFailed 이벤트
-    OS->>OS: 주문 상태 → PAYMENT_FAILED
-    OS->>IS: 재고 선점 해제 요청
-    IS-->>OS: InventoryReleased 이벤트
+graph LR
+    A[결제서비스] -->|PaymentFailed| B[주문서비스]
+    B -->|상태 PAYMENT_FAILED| B
+    B -->|재고 해제 요청| C[재고서비스]
+    C -->|InventoryReleased| B
 ```
 
 ---

@@ -163,11 +163,11 @@ tomcat_threads_busy_threads / tomcat_threads_config_max_threads
 ### 세 개념의 관계
 
 ```mermaid
-sequenceDiagram
-    SLI->>SLO: 측정
-    SLO->>SLA: 근거
-    SLA->>SLO: 기준
-    SLO->>SLI: 목표
+graph LR
+    SLI["SLI 측정값"] -->|"측정"| SLO["SLO 목표"]
+    SLO -->|"근거"| SLA["SLA 계약"]
+    SLA -->|"기준"| SLO
+    SLO -->|"목표"| SLI
 ```
 
 > **비유:** 학교 시험에 비유하면 이해가 쉽다.

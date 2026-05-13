@@ -144,12 +144,12 @@ WebSocket 연결 수: DAU의 30% 동시 접속 = 1억 5천만 연결
 기존 HTTP는 **우체국** 방식입니다. 내가 편지를 보내야(요청) 답장이 옵니다(응답). 하지만 채팅은 **전화** 방식이어야 합니다. 상대방이 말하면 즉시 내 귀에 들려야 합니다.
 
 ```mermaid
-sequenceDiagram
-    Server->>Client: empty
-    Client->>Server: Long Poll
-    Server->>Client: 메시지 도착
-    Client->>Server: HTTP Upgrade_WS
-    Server->>Client: 101 Switching
+graph LR
+    A[Server] -->|empty| B[Client]
+    B -->|Long Poll| A
+    A -->|메시지 도착| B
+    B -->|HTTP Upgrade WS| A
+    A -->|101 Switching| B
 ```
 
 | 방식 | 지연시간 | 서버 부하 | 실시간성 | 사용 케이스 |
@@ -410,13 +410,12 @@ graph LR
 
 ```mermaid
 graph LR
-    Snow["Snowflake ID"]
-    Snow --> T["41비트: 타임스탬프(ms)"]
-    Snow --> M["10비트: 머신 ID"]
-    Snow --> S["12비트: 시퀀스"]
-    T --> Benefit1["시간순 정렬 가능"]
-    M --> Benefit2["전역 유일성 보장"]
-    S --> Benefit3["초당 4096 × 1024 = 4"]
+    A[Snowflake ID] -->|41비트| B[타임스탬프ms]
+    A -->|10비트| C[머신 ID]
+    A -->|12비트| D[시퀀스]
+    B -->|시간순 정렬| E[정렬 가능]
+    C -->|분산 고유성| F[전역 유일]
+    D -->|초당 4096개| G[고처리량]
 ```
 
 ```java
@@ -585,13 +584,11 @@ graph LR
 그룹 채팅은 1:1 채팅의 단순한 확장이 아닙니다. 메시지 하나를 보내면 **최대 99명에게 동시에 전달**해야 하므로 팬아웃 문제가 핵심입니다.
 
 ```mermaid
-sequenceDiagram
-    participant A as 사용자A
-    participant S1 as 채팅서버
-    participant K as Kafka
-    A->>S1: WS 그룹 메시지
-    S1->>K: 발행
-    K->>K: 팬아웃_WS/FCM
+graph LR
+    A[사용자A] -->|WS 그룹 메시지| B[채팅서버]
+    B -->|발행| C[Kafka]
+    C -->|팬아웃 WS| D[멤버 서버]
+    C -->|팬아웃 FCM| E[오프라인 푸시]
 ```
 
 ### 팬아웃 전략: Write-time vs Read-time
@@ -640,14 +637,11 @@ Read-time 팬아웃 (Twitter Timeline 방식):
 텍스트 메시지와 달리 미디어 파일은 크기가 수 MB~수 GB입니다. WebSocket으로 직접 보내면 연결이 오래 점유되어 다른 메시지가 지연됩니다.
 
 ```mermaid
-sequenceDiagram
-    participant A as UserA
-    participant UP as Upload/S3
-    participant S as Chat/UserB
-    A->>UP: POST /upload
-    UP-->>A: media_url
-    A->>S: WS 이미지메시지
-    S->>A: WS 썸네일 URL
+graph LR
+    A[UserA] -->|POST /upload| B[Upload/S3]
+    B -->|media_url| A
+    A -->|WS 이미지메시지| C[Chat서버]
+    C -->|WS 썸네일 URL| A
 ```
 
 ### 미디어 최적화 전략

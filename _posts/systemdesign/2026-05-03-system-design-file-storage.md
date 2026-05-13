@@ -207,11 +207,10 @@ S3 내구성 복제:        3 AZ 동기 복제 — 추가 100~200ms
 ### 업로드 흐름 상세
 
 ```mermaid
-sequenceDiagram
-    B->>C: 호출
-    C->>A: 필요블록
-    A->>B: PUT block
-    A->>B: complete
+graph LR
+    A[클라이언트] -->|필요 블록 요청| B[청크 서버]
+    B -->|PUT block| C[블록 스토어]
+    B -->|complete| C
 ```
 
 ### 왜 SHA-256인가 — MD5·CRC32와 비교
@@ -285,14 +284,11 @@ GET /upload/{session_id}/status
 ### 다운로드 순서
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant API
-    participant CDN
-    C->>API: GET /file/id/metadata
-    API-->>C: 블록목록_CDN URL
-    C->>CDN: GET hash_캐시히트
-    CDN-->>C: 블록 반환 후 재조립
+graph LR
+    A[Client] -->|GET /file/id/metadata| B[API]
+    B -->|블록목록+CDN URL| A
+    A -->|GET hash 캐시히트| C[CDN]
+    C -->|블록 반환 재조립| A
 ```
 
 ### CDN 활용 전략
@@ -353,7 +349,7 @@ OT 변환 결과:
 Google Drive는 파일 단위로는 **LWW + 버전 이력 보존**을 사용합니다. 즉, 충돌 시 두 버전 모두 저장하고 사용자에게 선택권을 줍니다. Google Docs (실시간 편집)은 OT를 사용합니다.
 
 ```mermaid
-flowchart LR
+graph LR
     CONFLICT["충돌 감지"]
     LWW["단순 파일 충돌 → LWW + 버"]
     OT["실시간 텍스트 편집 → OT"]

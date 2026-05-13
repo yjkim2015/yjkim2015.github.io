@@ -183,15 +183,9 @@ dt.isAfter(LocalDateTime.now())
 `Instant`는 1970-01-01T00:00:00Z(UTC)를 기준으로 경과한 초와 나노초를 저장합니다. 전 세계 어디서도 동일한 절대 시각을 나타냅니다. `ZonedDateTime`은 `Instant` + 지역 시간대(`ZoneId`)의 조합으로, 서울 14:30과 뉴욕 01:30이 사실 같은 순간임을 표현합니다.
 
 ```mermaid
-sequenceDiagram
-    participant I as Instant(UTC)
-    participant S as ZonedDateTime(Seoul)
-    participant N as ZonedDateTime(NewYork)
-    Note over I: 2026-05-01T05:30:00Z
-    I->>S: atZone_Asia/Seoul → _09:00
-    I->>N: atZone_America/New_York → -04:00
-    Note over S: 2026-05-01T14:30:00+09:00
-    Note over N: 2026-05-01T01:30:00-04:00
+graph LR
+    I["Instant(UTC)"] -->|"Asia/Seoul +09"| S["Seoul 14:30"]
+    I -->|"New_York -04"| N["NewYork 01:30"]
 ```
 
 ### Instant — 머신 시간 (Unix epoch 기준)

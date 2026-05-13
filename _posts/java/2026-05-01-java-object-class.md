@@ -574,11 +574,11 @@ try (Resource r = new Resource()) {
 `wait()`, `notify()`, `notifyAll()`은 Java의 내장 모니터(Monitor) 메커니즘을 활용합니다. `synchronized` 블록으로 진입할 때 스레드는 해당 객체의 모니터 락을 획득하고, `wait()`을 호출하면 **락을 반납하고** WAITING 상태로 전환됩니다. 락을 반납하기 때문에 다른 스레드가 `synchronized` 블록에 진입할 수 있습니다. `notify()`를 받으면 다시 락을 경쟁해 획득한 후 실행을 재개합니다.
 
 ```mermaid
-sequenceDiagram
-    생산자->>모니터: 버퍼 가득→wait_
-    모니터->>생산자: 락 반납 WAITING
-    소비자->>모니터: 소비 후 notifyAll_
-    모니터->>생산자: 생산자 깨움→재개
+graph LR
+    PD["생산자"] -->|"버퍼 가득→wait"| MON["모니터"]
+    MON -->|"락 반납 WAITING"| PD
+    CS["소비자"] -->|"소비 후 notifyAll"| MON
+    MON -->|"생산자 깨움"| PD
 ```
 
 ```java

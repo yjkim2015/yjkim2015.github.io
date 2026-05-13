@@ -302,12 +302,12 @@ graph LR
 ### 전체 검색 흐름
 
 ```mermaid
-sequenceDiagram
-    B->>C: 호출
-    C->>D: 호출
-    D->>E: miss
-    D->>F: 호출
-    E->>F: 호출
+graph LR
+    A[앱] -->|검색 요청| B[API 서버]
+    B -->|Geohash 조회| C[Redis]
+    C -->|캐시 미스| D[MySQL]
+    D -->|결과| B
+    B -->|결과 반환| A
 ```
 
 ### MySQL 스키마 — Geohash 인덱스
@@ -430,14 +430,11 @@ def search_nearby_shops(lat: float, lon: float,
 라이더 앱은 5초마다 GPS 좌표를 서버로 전송합니다. 초당 20,000건의 위치 업데이트를 처리해야 합니다.
 
 ```mermaid
-sequenceDiagram
-    participant Rider as 라이더 앱
-    participant WS as 위치 서버
-    participant Redis as Redis
-    Rider->>WS: WS lat, lon
-    WS->>Redis: HSET rider 위치
-    WS->>Redis: PUBLISH 위치정보
-    Redis->>Rider: 실시간 푸시
+graph LR
+    A[라이더 앱] -->|WS lat,lon| B[위치 서버]
+    B -->|HSET rider 위치| C[Redis]
+    B -->|PUBLISH 위치정보| C
+    C -->|실시간 푸시| A
 ```
 
 ### Redis 위치 저장 구조

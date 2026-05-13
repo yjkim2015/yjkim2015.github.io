@@ -20,28 +20,14 @@ RestTemplate으로 외부 API를 호출하는 서비스가 있다. 외부 API가
 운영 중인 주문 서비스가 외부 결제 API를 RestTemplate으로 호출하고 있었다. 평소 결제 API 응답은 200ms였다. 어느 날 결제사 서버 이슈로 응답 시간이 3,000ms로 늘어났다.
 
 ```mermaid
-sequenceDiagram
-    participant C as 클라이언트
-    participant T1 as Tomcat Thread-1
-    participant T2 as Tomcat Thread-2
-    participant TN as Tomcat Thread-200
-    participant P as 결제 API (3초 지연)
-
-    C->>T1: 주문 요청 #1
-    T1->>P: HTTP 요청
-    Note over T1: 블로킹 대기 3초... 아무것도 못 함
-
-    C->>T2: 주문 요청 #2
-    T2->>P: HTTP 요청
-    Note over T2: 블로킹 대기 3초... 아무것도 못 함
-
-    C->>TN: 주문 요청 #200
-    TN->>P: HTTP 요청
-    Note over TN: 블로킹 대기 3초...
-
-    Note over C: 요청 #201 → 큐 대기 → 타임아웃
-    Note over C: 요청 #202 → 큐 대기 → 타임아웃
-    Note over C: 서비스 전체 다운
+graph LR
+    CLI["클라이언트"] -->|"요청#1"| T1["Tomcat T1"]
+    CLI -->|"요청#2"| T2["Tomcat T2"]
+    CLI -->|"요청#200"| TN["Tomcat T200"]
+    T1 -->|"블로킹 3초"| PAY["결제API(지연)"]
+    T2 -->|"블로킹 3초"| PAY
+    TN -->|"블로킹 3초"| PAY
+    CLI -->|"요청#201→타임아웃"| DOWN["서비스 다운"]
 ```
 
 스레드 200개가 전부 `InputStream.read()`에서 멈춰있다. 각 스레드는 대기 중에도 스택 메모리(기본 1MB)를 점유한다. 200개 스레드가 동시에 블로킹되면 200MB의 스택이 낭비되고, OS 스케줄러는 아무 일도 안 하는 스레드를 계속 컨텍스트 스위칭한다.
@@ -75,14 +61,11 @@ java.lang.Thread.State: WAITING (on object monitor)
 **스레드가 요청을 보내고 응답이 올 때까지 아무것도 하지 않고 대기한다.** 응답이 오면 그 자리에서 다음 줄을 실행한다.
 
 ```mermaid
-sequenceDiagram
-    participant T as Thread-1
-    participant IO as 외부 I/O
-
-    T->>IO: 요청 전송
-    Note over T: ⏸ WAITING 상태<br/>메모리 점유 중<br/>CPU 사용 없음<br/>(약 3초)
-    IO-->>T: 응답 도착
-    Note over T: ▶ 다음 로직 실행
+graph LR
+    T["Thread-1"] -->|"요청 전송"| IO["외부 I/O"]
+    T -->|"WAITING(3초)"| WAIT["메모리점유/CPU없음"]
+    IO -->|"응답 도착"| T
+    T -->|"응답 처리"| DONE["다음 로직 실행"]
 ```
 
 스레드 타임라인으로 보면 다음과 같다.
@@ -102,21 +85,12 @@ Thread-3:                     기다리는 중 (큐)
 **스레드가 요청을 보내고 즉시 리턴된다.** 작업이 완료됐는지 스레드가 직접 주기적으로 확인(폴링)한다. 완료됐으면 결과를 처리한다.
 
 ```mermaid
-sequenceDiagram
-    participant T as Thread-1
-    participant CH as NIO Channel
-
-    T->>CH: 요청 (논블로킹 모드)
-    CH-->>T: 즉시 리턴 (데이터 없음)
-    loop 폴링
-        T->>CH: 완료됐나요?
-        CH-->>T: 아직 (null)
-        T->>CH: 완료됐나요?
-        CH-->>T: 아직 (null)
-        T->>CH: 완료됐나요?
-        CH-->>T: 완료! 데이터 반환
-    end
-    Note over T: ▶ 결과 처리
+graph LR
+    T["Thread-1"] -->|"요청(논블로킹)"| CH["NIO Channel"]
+    CH -->|"즉시 리턴"| T
+    T -->|"폴링: 완료?"| CH
+    CH -->|"완료! 데이터 반환"| T
+    T -->|"결과 처리"| DONE["완료"]
 ```
 
 스레드 타임라인으로 보면 다음과 같다.
@@ -135,18 +109,12 @@ Thread-1: [요청]→[폴링]→[폴링]→[폴링]→[폴링]→[폴링]→[완
 **별도 스레드에서 작업을 시작하지만, 결과를 받기 위해 호출 스레드가 블로킹 대기한다.**
 
 ```mermaid
-sequenceDiagram
-    participant T1 as Thread-1 (호출자)
-    participant T2 as Thread-2 (@Async 풀)
-    participant IO as 외부 I/O
-
-    T1->>T2: @Async 메서드 호출
-    Note over T1: future.get() 호출
-    T2->>IO: 요청 전송
-    Note over T1,T2: Thread-1도 블로킹<br/>Thread-2도 블로킹<br/>두 스레드가 동시에 낭비
-    IO-->>T2: 응답 도착
-    T2-->>T1: future 완료
-    Note over T1: ▶ 결과 처리
+graph LR
+    T1["Thread-1(호출자)"] -->|"@Async 호출"| T2["Thread-2(@Async풀)"]
+    T1 -->|"future.get() 블로킹"| WAIT["T1도 블로킹 낭비"]
+    T2 -->|"요청 전송+블로킹"| IO["외부 I/O"]
+    IO -->|"응답"| T2
+    T2 -->|"future 완료"| T1
 ```
 
 스레드 타임라인으로 보면 다음과 같다.
@@ -165,19 +133,12 @@ Thread-2: ──────[요청]──[블로킹 대기]──[응답]──
 **요청을 보내고 콜백/리액터 체인을 등록한 뒤 스레드가 즉시 반환된다.** 응답이 오면 이벤트로 콜백이 실행된다. 호출 스레드는 그 사이에 다른 요청을 처리한다.
 
 ```mermaid
-sequenceDiagram
-    participant T1 as Thread-1 (EventLoop)
-    participant NET as Netty/Selector
-    participant IO as 외부 I/O
-
-    T1->>NET: 요청 + 콜백 등록
-    Note over T1: ▶ 스레드 반환<br/>다른 요청 처리 중
-    NET->>IO: 비동기 TCP 전송
-    Note over T1: 요청 #2 처리 중
-    Note over T1: 요청 #3 처리 중
-    IO-->>NET: 응답 도착 (이벤트)
-    NET->>T1: 콜백 실행
-    Note over T1: ▶ 응답 처리 (콜백)
+graph LR
+    T1["EventLoop Thread"] -->|"요청+콜백 등록"| NET["Netty/Selector"]
+    T1 -->|"스레드 반환→다른요청처리"| OTHER["요청#2/#3 처리"]
+    NET -->|"비동기 TCP 전송"| IO["외부 I/O"]
+    IO -->|"응답 이벤트"| NET
+    NET -->|"콜백 실행"| T1
 ```
 
 스레드 타임라인으로 보면 다음과 같다.
@@ -220,20 +181,14 @@ RestTemplate.getForObject()
 ```
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant T as Tomcat Thread
-    participant RT as RestTemplate
-    participant EXT as 외부 API
-
-    C->>T: HTTP 요청
-    T->>RT: getForObject() 호출
-    RT->>EXT: TCP 커넥션 + HTTP 요청
-    Note over T,RT: SocketInputStream.read() 블로킹<br/>스레드 WAITING 상태<br/>응답 올 때까지 점유
-    EXT-->>RT: HTTP 응답 (3초 후)
-    RT-->>T: 역직렬화된 객체 반환
-    T-->>C: HTTP 응답
-    Note over T: 이제야 다음 요청 처리 가능
+graph LR
+    C["Client"] -->|"HTTP 요청"| T["Tomcat Thread"]
+    T -->|"getForObject"| RT["RestTemplate"]
+    RT -->|"TCP+HTTP 요청"| EXT["외부 API"]
+    RT -->|"read() 블로킹(3초)"| WAIT["WAITING상태"]
+    EXT -->|"HTTP 응답"| RT
+    RT -->|"역직렬화 반환"| T
+    T -->|"HTTP 응답"| C
 ```
 
 **Tomcat 스레드 풀이 동시 처리 상한이다.** `server.tomcat.threads.max`(기본 200)가 곧 서비스 동시 처리 능력이다. 외부 API가 느려지면 그 상한이 순식간에 채워진다.
@@ -272,24 +227,14 @@ WebClient.get().uri(...).retrieve().bodyToMono()
 ```
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant WT as Worker Thread
-    participant EL as Netty EventLoop
-    participant SEL as Selector (OS)
-    participant EXT as 외부 API
-
-    C->>WT: HTTP 요청
-    WT->>EL: WebClient 요청 + Mono 등록
-    Note over WT: 스레드 즉시 반환<br/>다른 요청 처리 가능
-    EL->>SEL: 소켓 writable 등록
-    SEL->>EXT: TCP 패킷 전송
-    Note over EL: EventLoop → 다른 채널 처리 중
-    EXT-->>SEL: TCP 응답 도착
-    SEL->>EL: readable 이벤트 발생
-    EL->>EL: ByteBuf 읽기 + 역직렬화
-    EL->>WT: Mono 콜백 실행 (onNext)
-    WT-->>C: HTTP 응답
+graph LR
+    C["Client"] -->|"HTTP 요청"| WT["Worker Thread"]
+    WT -->|"WebClient+Mono등록"| EL["Netty EventLoop"]
+    WT -->|"즉시 반환"| OTHER["다른 요청 처리"]
+    EL -->|"TCP 전송"| EXT["외부 API"]
+    EXT -->|"응답 이벤트"| EL
+    EL -->|"Mono onNext"| WT
+    WT -->|"HTTP 응답"| C
 ```
 
 **EventLoop 스레드 4개(CPU 코어 수)가 수천 개의 동시 연결을 처리한다.** 소켓 하나당 스레드 하나가 필요 없다. OS의 `epoll`(Linux) 또는 `kqueue`(macOS) 시스템 콜로 수천 개 소켓을 단일 스레드에서 감시한다.
@@ -393,28 +338,14 @@ graph LR
 ### 단계별 스레드 전환
 
 ```mermaid
-sequenceDiagram
-    participant APP as 애플리케이션 스레드
-    participant WC as WebClient
-    participant EL as EventLoop Thread
-    participant SEL as OS Selector (epoll)
-    participant SRV as 외부 서버
-
-    APP->>WC: .retrieve().bodyToMono() 호출
-    WC-->>APP: Mono 객체 즉시 반환
-    APP->>WC: .subscribe() 호출 (구독 시작)
-    Note over APP: 호출 스레드 → EventLoop로 제어 넘김
-    WC->>EL: 요청 실행 위임
-    EL->>SEL: Channel 등록 (OP_WRITE)
-    SEL-->>EL: writable 이벤트
-    EL->>SRV: ByteBuf 전송 (TCP)
-    EL->>SEL: Channel 재등록 (OP_READ)
-    Note over EL: 다른 채널 I/O 처리 중
-    SRV-->>SEL: 응답 데이터 도착
-    SEL-->>EL: readable 이벤트
-    EL->>EL: ByteBuf 수신 + HTTP 파싱
-    EL->>EL: Jackson 역직렬화
-    EL->>APP: Mono.onNext() 콜백 실행
+graph LR
+    APP["앱 스레드"] -->|"bodyToMono/subscribe"| WC["WebClient"]
+    WC -->|"요청 위임"| EL["EventLoop"]
+    EL -->|"Channel등록(epoll)"| SEL["OS Selector"]
+    SEL -->|"TCP 전송"| SRV["외부 서버"]
+    SRV -->|"응답 도착"| SEL
+    SEL -->|"readable 이벤트"| EL
+    EL -->|"Mono.onNext 콜백"| APP
 ```
 
 핵심은 **애플리케이션 스레드가 EventLoop에 요청을 위임하고 즉시 반환**된다는 것이다. 응답이 오면 EventLoop가 콜백을 실행한다. 애플리케이션 스레드와 EventLoop 스레드 간의 제어 흐름 전환이 논블로킹의 핵심이다.

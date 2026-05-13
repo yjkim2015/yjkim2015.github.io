@@ -26,7 +26,7 @@ Spring Batch의 병렬 처리는 **Partitioning, Multi-threaded Step, Parallel S
 Spring Batch에서 성능을 높이는 병렬 처리 방법은 세 가지입니다. 각각의 특성이 뚜렷하므로 상황에 맞게 선택해야 합니다.
 
 ```mermaid
-flowchart LR
+graph LR
     A["병렬 처리 전략"] --> B["Multi-threaded"]
     A --> C["Parallel Step"]
     A --> D["Partitioning"]
@@ -114,12 +114,12 @@ public TaskExecutor taskExecutor() {
 > **비유:** 식당에서 주방(조리 Step)과 홀(세팅 Step)이 동시에 준비하는 것입니다. 주방이 끝나야 홀이 시작되는 게 아니라, 두 팀이 동시에 일합니다. 단, **서로의 결과에 의존하지 않아야** 합니다.
 
 ```mermaid
-sequenceDiagram
-    검증->>재고: 호출
-    검증->>알림: 호출
-    정산->>리포트: 호출
-    재고->>리포트: 호출
-    알림->>리포트: 호출
+graph LR
+    검증["검증"] -->|"병렬"| 재고["재고"]
+    검증 -->|"병렬"| 알림["알림"]
+    정산["정산"] -->|"병렬"| 리포트["리포트"]
+    재고 -->|"완료"| 리포트
+    알림 -->|"완료"| 리포트
 ```
 
 Flow를 사용하여 Step 2a/2b/2c를 병렬로 실행하고, 모두 완료된 후 Step 3이 실행됩니다.
@@ -167,12 +167,14 @@ public Job parallelJob(JobRepository jobRepository,
 > **비유:** 전화번호부를 10명의 사원에게 나눠주는 것입니다. 사원 1은 "가~나", 사원 2는 "다~라"를 담당합니다. 각 사원은 자기 범위만 처리하므로 **절대 충돌하지 않습니다.** 누가 빨리 끝나든 느리게 끝나든, 다른 사원에게 영향을 주지 않습니다.
 
 ```mermaid
-sequenceDiagram
-    Master->>Slave_2: ID 25~50만
-    Master->>Slave_3~4: ID 50~100만
-    Slave_1->>독립_처리: 호출
-    Slave_2->>독립_처리: 호출
-    Slave_3~4->>독립_처리: 호출
+graph LR
+    M["Master"]
+    S1["Slave1(0~25만)"]
+    S2["Slave2(25~50만)"]
+    S3["Slave3/4(50~100만)"]
+    M -->|"분배"| S1
+    M -->|"분배"| S2
+    M -->|"분배"| S3
 ```
 
 ### 4.2 Partitioner 구현
@@ -292,13 +294,17 @@ Master가 파티션 정보만 **메시지 큐(Kafka, RabbitMQ)를 통해 원격 
 > **비유:** 본사(Master)가 지사(Remote Worker)에 업무 지시서를 팩스(메시지 큐)로 보내는 것입니다. 각 지사가 독립적으로 업무를 처리하고 결과를 보고합니다.
 
 ```mermaid
-sequenceDiagram
-    MessageChannelKaf->>Worker1:_R→P→W: 파티션1
-    MessageChannelKaf->>Worker2:_R→P→W: 파티션2
-    MessageChannelKaf->>Worker3:_R→P→W: 파티션3
-    Worker1:_R→P→W->>MessageChannelKaf: 완료 응답
-    Worker2:_R→P→W->>MessageChannelKaf: 완료 응답
-    Worker3:_R→P→W->>MessageChannelKaf: 완료 응답
+graph LR
+    MQ["MessageChannel(Kafka)"]
+    W1["Worker1"]
+    W2["Worker2"]
+    W3["Worker3"]
+    MQ -->|"파티션1"| W1
+    MQ -->|"파티션2"| W2
+    MQ -->|"파티션3"| W3
+    W1 -->|"완료"| MQ
+    W2 -->|"완료"| MQ
+    W3 -->|"완료"| MQ
 ```
 
 ### 5.3 언제 Remote를 선택하는가
@@ -410,7 +416,7 @@ ID 범위로 균등 분할해도, **실제 유효 데이터가 특정 범위에 
 > **비유:** 피자를 8조각으로 나눴는데, 토핑이 한쪽에만 몰려있는 것과 같습니다. 크기는 같지만 실질적인 내용물이 편중되어 있습니다.
 
 ```mermaid
-flowchart LR
+graph LR
     A["파티션1"] --- B["파티션2"]
     B --- C["파티션3"]
     C --- D["파티션4"]

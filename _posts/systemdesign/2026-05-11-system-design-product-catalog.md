@@ -149,30 +149,24 @@ graph LR
 **상품 등록 → ES 인덱싱 흐름**
 
 ```mermaid
-sequenceDiagram
-    participant S as 셀러
-    participant CS as 카탈로그 서비스
-    participant ES as Elasticsearch
-    S->>CS: 상품 등록 요청
-    CS->>CS: MySQL 저장 + Outbox 기록
-    CS-->>S: 등록 완료
-    CS->>ES: Kafka 이벤트 → ES 인덱싱
-    ES-->>CS: 인덱싱 완료 (10초 이내)
+graph LR
+    A[셀러] -->|상품 등록| B[카탈로그 서비스]
+    B -->|MySQL+Outbox 저장| B
+    B -->|등록 완료| A
+    B -->|Kafka 이벤트| C[Elasticsearch]
+    C -->|인덱싱 완료| B
 ```
 
 **ES 장애 시 MySQL 폴백 흐름**
 
 ```mermaid
-sequenceDiagram
-    participant U as 구매자
-    participant CS as 카탈로그 서비스
-    participant ES as Elasticsearch
-    U->>CS: 검색 요청
-    CS->>ES: 검색 쿼리
-    ES-->>CS: 장애 응답
-    CS->>CS: 서킷 브레이커 오픈
-    CS->>CS: MySQL 폴백 쿼리
-    CS-->>U: 기본 검색 결과 반환
+graph LR
+    A[구매자] -->|검색 요청| B[카탈로그 서비스]
+    B -->|검색 쿼리| C[Elasticsearch]
+    C -->|장애 응답| B
+    B -->|서킷브레이커 오픈| B
+    B -->|MySQL 폴백| D[MySQL]
+    D -->|검색 결과| A
 ```
 
 ### 핵심 컴포넌트 역할
@@ -487,15 +481,12 @@ public class CategoryService {
 **캐시 무효화 흐름 (가격 변경 시)**
 
 ```mermaid
-sequenceDiagram
-    participant S as 셀러
-    participant CS as 카탈로그 서비스
-    participant R as Redis
-    S->>CS: 가격 변경 요청
-    CS->>CS: MySQL UPDATE
-    CS->>R: DEL product:detail:{id}
-    R-->>CS: 삭제 완료
-    CS-->>S: 변경 완료
+graph LR
+    A[셀러] -->|가격 변경| B[카탈로그 서비스]
+    B -->|MySQL UPDATE| B
+    B -->|DEL product:detail| C[Redis]
+    C -->|삭제 완료| B
+    B -->|변경 완료| A
 ```
 
 ### ES → MySQL 폴백 구현

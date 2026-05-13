@@ -658,22 +658,13 @@ System.out.println(m1.equals(m2)); // true
 Jackson이 HTTP 요청 Body의 JSON을 Record로 변환하는 과정을 살펴보겠습니다.
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant D as DispatcherServlet
-    participant J as Jackson ObjectMapper
-    participant R as Record Constructor
-
-    C->>D: POST /members {"name":"Kim","email":"kim@test.com"}
-    D->>J: @RequestBody 역직렬화 요청
-    J->>J: Record 타입 감지 (RecordNamingStrategy)
-    J->>J: 컴포넌트 목록 조회 (Reflection API)
-    J->>J: JSON 필드 → 컴포넌트 매핑
-    J->>R: Canonical Constructor 호출<br/>new CreateMemberRequest("Kim","kim@test.com")
-    R-->>J: Record 인스턴스 반환
-    J-->>D: CreateMemberRequest 객체
-    D->>D: @Valid 검증 수행
-    D-->>C: 처리 결과 응답
+graph LR
+    C["Client"] -->|"POST /members"| D["Dispatcher"]
+    D -->|"역직렬화 요청"| J["Jackson"]
+    J -->|"타입감지/매핑"| R["Record생성자"]
+    R -->|"인스턴스 반환"| J
+    J -->|"@Valid 검증"| D
+    D -->|"응답"| C
 ```
 
 Jackson이 일반 클래스를 역직렬화할 때는 "기본 생성자로 인스턴스 생성 → setter로 필드 주입"하는 2단계 방식을 씁니다. Record에는 기본 생성자와 setter가 없으므로, Jackson은 **Canonical Constructor 한 번 호출**로 모든 것을 처리합니다. 이 방식은 생성 직후 유효하지 않은 상태가 존재하지 않으므로 오히려 더 안전합니다.

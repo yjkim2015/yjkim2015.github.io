@@ -418,15 +418,11 @@ class TokenBucket:
 고정 윈도우 카운터의 경계 문제를 해결하면서 메모리도 효율적이다. **실무에서 가장 널리 쓰이는 방식.**
 
 ```mermaid
-sequenceDiagram
-    participant C as 현재 시각 01:15
-    participant P as 이전 윈도우 (00:00~01:00)
-    participant N as 현재 윈도우 (01:00~02:00)
-    Note over C,N: 현재 시각이 현재 윈도우의 25% 경과
-    Note over P: 이전 윈도우: 50건
-    Note over N: 현재 윈도우: 30건
-    Note over C: 추정치 = 50 × (1-0.25) + 30 = 67.5건
-    Note over C: 한도 100건이면 → 허용
+graph LR
+    A[현재시각 01:15] -->|25% 경과| B[현재 윈도우]
+    C[이전 윈도우 50건] -->|가중치 75%| D[추정치 계산]
+    B -->|30건| D
+    D -->|67.5건 < 100| E[허용]
 ```
 
 ```python

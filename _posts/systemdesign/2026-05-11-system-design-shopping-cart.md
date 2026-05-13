@@ -134,30 +134,24 @@ graph LR
 **로그인 시 게스트 장바구니 병합 흐름**
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant CS as Cart Service
-    participant R as Redis
-    U->>CS: 로그인 완료
-    CS->>R: 게스트 장바구니 조회
-    R-->>CS: guestId 항목 반환
-    CS->>R: 회원 장바구니에 수량 합산
-    CS->>R: 게스트 키 삭제
-    CS-->>U: 병합 완료
+graph LR
+    A[사용자] -->|로그인| B[Cart Service]
+    B -->|게스트 카트 조회| C[Redis]
+    C -->|guestId 항목| B
+    B -->|수량 합산 저장| C
+    B -->|게스트 키 삭제| C
+    B -->|병합 완료| A
 ```
 
 **결제 시 재고 Hard Lock 흐름**
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant CS as Cart Service
-    participant IS as 재고 DB
-    U->>CS: 결제 요청
-    CS->>IS: SELECT FOR UPDATE (productId 오름차순)
-    IS-->>CS: 재고 확인
-    CS->>IS: 재고 차감 확정
-    CS-->>U: 주문 생성 완료
+graph LR
+    A[사용자] -->|결제 요청| B[Cart Service]
+    B -->|SELECT FOR UPDATE| C[재고 DB]
+    C -->|재고 확인| B
+    B -->|재고 차감 확정| C
+    B -->|주문 생성 완료| A
 ```
 
 ---

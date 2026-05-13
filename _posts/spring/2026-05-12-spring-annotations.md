@@ -46,20 +46,12 @@ public @interface Repository {
 ### 컴포넌트 스캔 동작원리
 
 ```mermaid
-sequenceDiagram
-    participant App as SpringApplication
-    participant Scanner as ClassPathBeanDefinitionScanner
-    participant Registry as BeanDefinitionRegistry
-    participant Factory as BeanFactory
-
-    App->>Scanner: scan("com.example") 호출
-    Scanner->>Scanner: 클래스패스에서 .class 파일 순회
-    Scanner->>Scanner: @Component 메타 어노테이션 여부 확인
-    Scanner->>Scanner: 필터 조건 적용 (excludeFilters 등)
-    Scanner->>Registry: BeanDefinition 등록
-    Registry->>Factory: 빈 생성 요청
-    Factory->>Factory: 생성자 호출 + 의존성 주입
-    Factory-->>App: 완성된 빈 반환
+graph LR
+    APP["SpringApplication"] -->|"scan 호출"| SC["ClassPathScanner"]
+    SC -->|"@Component 탐지"| REG["BeanDefinitionRegistry"]
+    REG -->|"빈 생성 요청"| FAC["BeanFactory"]
+    FAC -->|"생성자+의존주입"| BEAN["완성된 빈"]
+    BEAN -->|"반환"| APP
 ```
 
 컴포넌트 스캔은 `ClassPathBeanDefinitionScanner`가 지정된 베이스 패키지 하위의 모든 `.class` 파일을 읽어 `@Component` 어노테이션(또는 이를 메타 어노테이션으로 가진 어노테이션)이 붙은 클래스를 `BeanDefinition`으로 등록합니다. 이후 `BeanFactory`가 실제 인스턴스를 생성합니다.
@@ -162,24 +154,13 @@ public class NotificationService {
 ### AOP 프록시 동작원리
 
 ```mermaid
-sequenceDiagram
-    participant Client
-    participant Proxy as @Transactional Proxy (CGLIB)
-    participant Service as OrderService (실제 객체)
-    participant TX as TransactionManager
-
-    Client->>Proxy: placeOrder() 호출
-    Proxy->>TX: 트랜잭션 시작 (BEGIN)
-    Proxy->>Service: placeOrder() 위임 호출
-    Service->>Service: 비즈니스 로직 실행
-    Service-->>Proxy: 정상 반환
-    Proxy->>TX: 커밋 (COMMIT)
-    Proxy-->>Client: 결과 반환
-
-    Note over Proxy,TX: 예외 발생 시
-    Service-->>Proxy: RuntimeException 발생
-    Proxy->>TX: 롤백 (ROLLBACK)
-    Proxy-->>Client: 예외 전파
+graph LR
+    CLI["Client"] -->|"placeOrder 호출"| PRX["@Tx Proxy(CGLIB)"]
+    PRX -->|"BEGIN"| TX["TransactionManager"]
+    PRX -->|"위임"| SVC["OrderService"]
+    SVC -->|"정상→COMMIT"| TX
+    SVC -->|"예외→ROLLBACK"| TX
+    TX -->|"결과 반환"| CLI
 ```
 
 `@Transactional`은 AOP(Aspect-Oriented Programming)로 동작합니다. Spring이 `@Transactional`이 붙은 클래스를 감지하면, 실제 클래스의 **프록시 객체**를 만들어 빈으로 등록합니다. 클라이언트는 프록시와 대화합니다. 프록시가 트랜잭션을 시작하고, 실제 객체에 위임하고, 완료 후 커밋 또는 롤백합니다.
@@ -535,35 +516,13 @@ public class PaymentApiProperties {
 ## 9. 빈 등록 흐름 전체 sequenceDiagram
 
 ```mermaid
-sequenceDiagram
-    participant Boot as SpringApplication.run()
-    participant Context as ApplicationContext
-    participant Scanner as ComponentScanner
-    participant BeanDef as BeanDefinitionRegistry
-    participant BFPP as BeanFactoryPostProcessor
-    participant Factory as DefaultListableBeanFactory
-    participant BPP as BeanPostProcessor
-
-    Boot->>Context: refresh() 호출
-    Context->>Scanner: 컴포넌트 스캔 실행
-    Scanner->>BeanDef: BeanDefinition 등록 (@Component 등)
-    Context->>BFPP: postProcessBeanFactory() 실행
-    Note over BFPP: @ConfigurationProperties 처리
-    Note over BFPP: @PropertySource 처리
-
-    loop 각 빈 생성
-        Context->>Factory: getBean() 요청
-        Factory->>Factory: 생성자 호출 + 의존성 주입
-        Factory->>BPP: postProcessBeforeInitialization()
-        Note over BPP: @Autowired 처리 (AutowiredAnnotationBeanPostProcessor)
-        Factory->>Factory: @PostConstruct 실행
-        Factory->>BPP: postProcessAfterInitialization()
-        Note over BPP: @Transactional 프록시 생성 (AopAutoProxyCreator)
-        Note over BPP: @Async 프록시 생성
-        Factory-->>Context: 완성된 빈 (프록시 포함)
-    end
-
-    Context-->>Boot: 컨텍스트 준비 완료
+graph LR
+    BOOT["SpringApplication.run"] -->|"refresh"| CTX["ApplicationContext"]
+    CTX -->|"컴포넌트 스캔"| SCAN["ComponentScanner"]
+    SCAN -->|"BeanDef 등록"| FAC["BeanFactory"]
+    FAC -->|"생성자+의존주입"| BPP["BeanPostProcessor"]
+    BPP -->|"@Tx 프록시 생성"| BEAN["완성된 빈"]
+    BEAN -->|"준비 완료"| BOOT
 ```
 
 ---
@@ -571,36 +530,13 @@ sequenceDiagram
 ## 10. @Transactional 프록시 상세 흐름 sequenceDiagram
 
 ```mermaid
-sequenceDiagram
-    participant Client as 호출자
-    participant Proxy as CGLIB 프록시
-    participant Interceptor as TransactionInterceptor
-    participant TM as PlatformTransactionManager
-    participant Service as 실제 Service
-    participant DB as DataSource/DB
-
-    Client->>Proxy: service.placeOrder() 호출
-    Proxy->>Interceptor: invoke() 위임
-    Interceptor->>Interceptor: @Transactional 메타데이터 읽기
-    Interceptor->>TM: getTransaction(definition)
-    TM->>DB: 커넥션 획득 + BEGIN
-
-    Interceptor->>Service: placeOrder() 실제 호출
-    Service->>DB: INSERT/UPDATE 실행
-    Service-->>Interceptor: 정상 반환
-
-    Interceptor->>TM: commit(status)
-    TM->>DB: COMMIT
-    TM->>DB: 커넥션 반환
-
-    Interceptor-->>Proxy: 결과 반환
-    Proxy-->>Client: 결과 반환
-
-    Note over Interceptor,TM: RuntimeException 발생 시
-    Service-->>Interceptor: RuntimeException 전파
-    Interceptor->>TM: rollback(status)
-    TM->>DB: ROLLBACK
-    Interceptor-->>Client: 예외 재전파
+graph LR
+    CLI["호출자"] -->|"placeOrder"| PRX["CGLIB 프록시"]
+    PRX -->|"invoke"| IC["TransactionInterceptor"]
+    IC -->|"getTransaction/BEGIN"| TM["TxManager"]
+    TM -->|"커넥션 획득"| DB["DB"]
+    IC -->|"실제 호출"| SVC["Service"]
+    SVC -->|"정상→COMMIT/예외→ROLLBACK"| TM
 ```
 
 ---

@@ -20,9 +20,9 @@ Java는 성능과 객체지향이라는 두 가지 목표를 동시에 추구했
 래퍼 클래스는 기본형을 참조형으로 포장해 두 세계를 연결하는 다리 역할을 합니다.
 
 ```mermaid
-sequenceDiagram
-    Integer/Long->>Object: 호출
-    Double/Boolean->>Object: 호출
+graph LR
+    IL["Integer/Long"] -->|"extends"| OBJ["Object"]
+    DB["Double/Boolean"] -->|"extends"| OBJ
 ```
 
 ### 메모리 저장 방식 비교
@@ -119,14 +119,11 @@ Boolean.parseBoolean("yes")     // false (true/false만 인식)
 오토박싱과 언박싱은 **컴파일러 수준의 문법 설탕(Syntactic Sugar)** 입니다. 소스 코드에 타입 불일치가 있으면 컴파일러가 자동으로 `Integer.valueOf()` 또는 `intValue()` 호출을 삽입합니다. 실행 시점에는 이미 명시적 변환 코드가 들어간 상태입니다.
 
 ```mermaid
-sequenceDiagram
-    participant 소스코드
-    participant 컴파일러
-    participant 바이트코드
-    소스코드->>컴파일러: Integer n = 42;
-    컴파일러->>바이트코드: Integer n = Integer.valueOf_42;
-    소스코드->>컴파일러: int i = n;
-    컴파일러->>바이트코드: int i = n.intValue_;
+graph LR
+    SRC["소스코드"] -->|"Integer n=42"| COMP["컴파일러"]
+    COMP -->|"valueOf(42)"| BC["바이트코드"]
+    SRC -->|"int i=n"| COMP
+    COMP -->|"intValue()"| BC
 ```
 
 ```java

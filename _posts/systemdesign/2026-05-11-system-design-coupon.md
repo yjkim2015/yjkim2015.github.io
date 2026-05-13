@@ -126,14 +126,11 @@ graph LR
 **선착순 쿠폰 발급 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant CS as 발급 서비스
-    participant R as Redis
-    U->>CS: 쿠폰 발급 요청
-    CS->>R: Lua 스크립트 원자 실행
-    R-->>CS: 성공/재고소진/중복
-    CS-->>U: 즉시 결과 반환
+graph LR
+    A[사용자] -->|쿠폰 발급 요청| B[발급 서비스]
+    B -->|Lua 원자 실행| C[Redis]
+    C -->|성공/소진/중복| B
+    B -->|즉시 결과 반환| A
 ```
 
 ---
@@ -324,14 +321,11 @@ public AbuseCheckResult check(Long userId, String ipAddress, String deviceFinger
 **어뷰징 탐지 흐름:**
 
 ```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant AS as 어뷰징 탐지
-    participant R as Redis
-    U->>AS: 쿠폰 발급 요청
-    AS->>R: IP/디바이스/계정 카운터 조회
-    R-->>AS: 시그널 반환
-    AS-->>U: 정상 통과 또는 CAPTCHA
+graph LR
+    A[사용자] -->|발급 요청| B[어뷰징 탐지]
+    B -->|IP/디바이스 카운터| C[Redis]
+    C -->|시그널 반환| B
+    B -->|정상 통과/CAPTCHA| A
 ```
 
 ---

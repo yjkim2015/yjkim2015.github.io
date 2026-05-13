@@ -46,14 +46,11 @@ graph LR
 Prometheus는 **Pull 방식**으로 동작한다. 각 서비스가 메트릭 엔드포인트를 노출하면 Prometheus가 주기적으로 긁어간다(scrape). 서비스가 메트릭을 Push하는 방식(Datadog Agent)과 대비된다. Pull 방식은 Prometheus가 장애나도 서비스에는 영향이 없다는 장점이 있다.
 
 ```mermaid
-sequenceDiagram
-    participant APP as SpringApp
-    participant PROM as Prometheus
-    participant GRAF as Grafana
-    PROM->>APP: Scrape_15초마다
-    APP-->>PROM: 메트릭 반환
-    GRAF->>PROM: PromQL 쿼리
-    PROM-->>GRAF: 데이터 반환
+graph LR
+    PROM["Prometheus"] -->|"Scrape 15초"| APP["SpringApp"]
+    APP -->|"메트릭 반환"| PROM
+    GRAF["Grafana"] -->|"PromQL 쿼리"| PROM
+    PROM -->|"데이터 반환"| GRAF
 ```
 
 ### Prometheus 설정

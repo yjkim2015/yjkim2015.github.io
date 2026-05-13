@@ -318,30 +318,29 @@ public void afterCompletion(HttpServletRequest request,
 ### 정상 흐름 Sequence Diagram
 
 ```mermaid
-sequenceDiagram
-    DispatcherServlet->>DispatcherServlet: preHandle_
-    DispatcherServlet->>Controller: 핸들러 실행
-    Controller->>DispatcherServlet: ModelAndView
-    DispatcherServlet->>Client: postHandle_→응답
+graph LR
+    DS["DispatcherServlet"] -->|"preHandle"| CTR["Controller"]
+    CTR -->|"ModelAndView"| DS
+    DS -->|"postHandle→응답"| CLI["Client"]
 ```
 
 ### preHandle에서 false 반환 시 흐름
 
 ```mermaid
-sequenceDiagram
-    DispatcherServlet->>Interceptor1: preHandle_→false
-    DispatcherServlet->>Interceptor1: afterCompletion_
-    DispatcherServlet->>Client: 401 응답
+graph LR
+    DS["DispatcherServlet"] -->|"preHandle→false"| IC["Interceptor1"]
+    IC -->|"afterCompletion"| DS
+    DS -->|"401 응답"| CLI["Client"]
 ```
 
 ### 예외 발생 시 흐름
 
 ```mermaid
-sequenceDiagram
-    DispatcherServlet->>Interceptor1: preHandle_
-    DispatcherServlet->>DispatcherServlet: 핸들러 실행→예외
-    DispatcherServlet->>Interceptor1: afterCompletion_ex
-    DispatcherServlet->>Client: 에러 응답
+graph LR
+    DS["DispatcherServlet"] -->|"preHandle"| IC["Interceptor1"]
+    DS -->|"핸들러 실행→예외"| ERR["예외 발생"]
+    ERR -->|"afterCompletion(ex)"| IC
+    DS -->|"에러 응답"| CLI["Client"]
 ```
 
 ### 다중 Interceptor 실행 순서 요약
@@ -1308,16 +1307,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
 ## 핵심 포인트 정리
 
 ```mermaid
-mindmap
-  root((Spring Interceptor))
-    위치: DispatcherServlet 이후, Bean 접근 가능
-    메서드
-      preHandle - false 시 중단
-      postHandle - 예외 시 미호출
-      afterCompletion - 항상 호출
-    용도: 인증/인가, 로깅, Rate Limiting
-    주의: 싱글톤, 인스턴스 변수 금지
-    vs Filter: 서블릿 vs Spring MVC 레벨
+graph LR
+    IC["Spring Interceptor"] --> POS["위치: DS 이후/Bean접근"]
+    IC --> PRE["preHandle: false면 중단"]
+    IC --> POST["postHandle: 예외시 미호출"]
+    IC --> AFTER["afterCompletion: 항상호출"]
+    IC --> USE["용도: 인증/로깅/RateLimit"]
 ```
 
 ### 한눈에 보는 핵심 체크리스트

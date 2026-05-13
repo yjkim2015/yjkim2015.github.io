@@ -176,12 +176,12 @@ graph LR
 ## URL 단축 흐름 (쓰기)
 
 ```mermaid
-sequenceDiagram
-    B->>C: 호출
-    C->>D: 존재
-    C->>E: 신규
-    D->>F: 호출
-    E->>F: 호출
+graph LR
+    A[클라이언트] -->|단축 요청| B[API 서버]
+    B -->|존재 확인| C[Redis]
+    C -->|기존 URL| B
+    B -->|신규 저장| D[DB]
+    B -->|short URL 반환| A
 ```
 
 ---

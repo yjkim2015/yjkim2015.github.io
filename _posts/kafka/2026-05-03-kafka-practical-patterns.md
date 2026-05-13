@@ -34,9 +34,9 @@ public void completeOrder(Order order) {
 3번째 발행에서 Kafka 브로커가 잠깐 불안정해서 실패했다고 가정합니다.
 
 ```mermaid
-sequenceDiagram
-    주문->>결제_: 호출
-    주문->>알림_: 호출
+graph LR
+    주문["주문"] -->|"호출"| 결제["결제"]
+    주문 -->|"호출"| 알림["알림"]
 ```
 
 결제와 재고는 이미 처리 중인데 알림과 분석에는 이벤트가 없습니다. DB `@Transactional`은 DB 연산에만 적용되고, Kafka 발행은 **DB 트랜잭션 경계 바깥**에 있습니다.
@@ -100,11 +100,14 @@ graph LR
 ### 방법 D: Outbox 패턴 — DB와 이벤트의 완전한 일관성
 
 ```mermaid
-sequenceDiagram
-    participant DB as DB/Outbox
-    DB->>Debezium: CDC 감지
-    Debezium->>Kafka: 이벤트 발행
-    Kafka->>결제: 컨슈머 처리
+graph LR
+    DB["DB/Outbox"]
+    DZ["Debezium"]
+    K["Kafka"]
+    결제["결제 서비스"]
+    DB -->|"CDC 감지"| DZ
+    DZ -->|"이벤트 발행"| K
+    K -->|"컨슈머 처리"| 결제
 ```
 
 방법 B와 C 모두 DB와 Kafka 사이의 불일치를 해결하지 못합니다. Outbox 패턴은 **DB 트랜잭션 안에서 이벤트를 Outbox 테이블에 함께 저장**하고, CDC(Debezium)가 감지해서 Kafka로 발행합니다. 멀티 토픽 시나리오에서는 **하나의 비즈니스 액션에 여러 이벤트 타입을 Outbox에 넣고, Debezium EventRouter가 토픽별로 라우팅**합니다.

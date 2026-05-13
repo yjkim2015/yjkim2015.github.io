@@ -117,15 +117,11 @@ DAU 1억명, 평균 팔로잉 200명
 게시글을 올리는 순간 모든 팔로워의 피드 캐시에 즉시 복사한다.
 
 ```mermaid
-sequenceDiagram
-    participant A as 게시자
-    participant Worker as 팬아웃 워커
-    participant Cache as Redis 피드 캐시
-    A->>Worker: 게시글 작성
-    Worker->>Cache: LPUSH feed:follower1 post_id
-    Worker->>Cache: LPUSH feed:follower2 post_id
-    Worker->>Cache: LPUSH feed:follower_N post_id
-    Note over Cache: 1000명 팔로워면 1000번 LPUSH
+graph LR
+    A[게시자] -->|게시글 작성| B[팬아웃 워커]
+    B -->|LPUSH follower1| C[Redis 피드캐시]
+    B -->|LPUSH follower2| C
+    B -->|LPUSH follower_N| C
 ```
 
 - **장점**: 피드 읽기가 Redis에서 O(1)으로 즉시 반환
@@ -149,11 +145,11 @@ graph LR
 ### 방법 3: 하이브리드 (실제 인스타그램/트위터 방식)
 
 ```mermaid
-sequenceDiagram
-    B->>C: 일반
-    B->>D: 셀럽
-    C->>E: 호출
-    D->>E: 호출
+graph LR
+    A[게시자] -->|일반 유저| B[쓰기 팬아웃]
+    A -->|셀럽| C[읽기 팬아웃]
+    B --> D[Redis 캐시]
+    C --> D
 ```
 
 대부분의 읽기는 캐시에서 빠르게, 셀럽 게시글만 읽기 시 동적으로 가져온다.
@@ -191,18 +187,12 @@ graph LR
 ## 피드 조회 흐름
 
 ```mermaid
-sequenceDiagram
-    participant App
-    participant C as Redis
-    participant DB as MySQL
-    App->>C: LRANGE feed:uid
-    alt 캐시 히트
-    C-->>App: post_id...
-    App->>DB: SELECT IN_ids
-    else 캐시 미스
-    App->>DB: 팔로잉 최신글
-    App->>C: 재구성
-    end
+graph LR
+    A[App] -->|LRANGE feed:uid| B[Redis]
+    B -->|캐시 히트: post_ids| A
+    A -->|SELECT IN ids| C[MySQL]
+    B -->|캐시 미스| C
+    C -->|최신글| A
 ```
 
 캐시에는 **post_id만** 저장한다. 게시글 내용이 수정되어도 post_id는 변하지 않으므로 항상 최신 내용을 DB에서 조회할 수 있다.

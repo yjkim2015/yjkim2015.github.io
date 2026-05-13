@@ -189,17 +189,15 @@ Spring의 Cache 추상화를 활용하면 L1(Caffeine)과 L2(Redis)를 투명하
 ### 동작 흐름
 
 ```mermaid
-sequenceDiagram
-    participant App
-    participant L1 as L1(Caffeine)
-    participant L2 as L2(Redis)
-    App->>L1: GET key
-    alt Hit
-    L1-->>App: 100ns
-    else Miss
-    App->>L2: GET key
-    L2-->>App: Hit_1ms/Miss→DB
-    end
+graph LR
+    App["App"]
+    L1["L1(Caffeine)"]
+    L2["L2(Redis)"]
+    DB["DB"]
+    App -->|"GET key"| L1
+    L1 -->|"Hit→100ns"| App
+    L1 -->|"Miss→GET key"| L2
+    L2 -->|"Miss→조회"| DB
 ```
 
 아래 코드는 L1+L2 계층형 캐시의 전체 구현이다. `TwoLevelCache` 클래스가 Spring의 `Cache` 인터페이스를 구현하며, 내부적으로 Caffeine(L1)과 Redis(L2)를 순차적으로 조회한다.
@@ -343,13 +341,13 @@ L2(Redis)는 모든 서버가 공유하므로 일관성 문제가 없다. 진짜
 ### Redis Pub/Sub 기반 L1 동기화
 
 ```mermaid
-sequenceDiagram
-    participant SA as 서버A
-    participant Redis as Redis
-    participant SB as 서버B/C
-    SA->>SA: 데이터 변경 _ L1 삭제
-    SA->>Redis: PUBLISH l1:invalidate
-    Redis-->>SB: L1 삭제
+graph LR
+    SA["서버A"]
+    R["Redis"]
+    SB["서버B/C"]
+    SA -->|"데이터변경→L1삭제"| SA
+    SA -->|"PUBLISH l1:invalidate"| R
+    R -->|"L1 삭제"| SB
 ```
 
 L1 동기화에서 중요한 설계 결정이 있다. "내가 보낸 무효화 메시지를 내가 또 처리할 것인가?" 서버 A가 이미 자신의 L1을 지웠는데, 자신이 보낸 Pub/Sub 메시지를 자기도 수신해서 또 지울 필요는 없다. 하지만 이를 구분하는 로직이 더 복잡하고, 한 번 더 지워도 부작용이 없으므로 보통은 구분 없이 처리한다.
