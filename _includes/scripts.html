@@ -89,8 +89,9 @@
       foundExtreme = true;
     }
 
-    // 극한 시나리오 포함, 그 이후 모든 h2를 접기/펼치기로
+    // 극한 시나리오 포함, 그 이후 모든 h2를 접기/펼치기로 (단, 면접 포인트 h2는 제외)
     if (!foundExtreme) return;
+    if (text.indexOf('면접 포인트') !== -1 || text.indexOf('면접포인트') !== -1) return;
 
     var siblings = [];
     var next = h2.nextElementSibling;
