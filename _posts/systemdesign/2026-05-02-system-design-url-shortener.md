@@ -9,682 +9,1203 @@ toc_label: 목차
 
 트위터가 140자 제한이었던 시절, `https://www.example.com/very/long/path?campaign=summer&source=newsletter&medium=email` 같은 URL은 그 자체로 트윗 대부분을 차지했다. bit.ly는 이 문제를 7글자로 해결했다. 단순해 보이지만, 초당 10만 건의 리다이렉트를 100ms 이내에 처리하고 수십 TB의 데이터를 수년간 관리하는 시스템이다. **"짧게 만든다"는 단순한 기능 뒤에 어떤 설계가 숨어있는가.**
 
-## 요구사항 분석
+---
+
+## 1. 요구사항 분석 — 무엇을 만들 것인가
+
+요구사항을 나열하는 것이 아니라, 각 요구사항이 **어떤 설계 결정을 강제하는가**부터 파악해야 한다. 면접에서 요구사항을 읽는 목적은 기능 목록 확인이 아니라 설계 제약 조건 도출이다.
 
 ### 기능 요구사항
 
-1. 긴 URL을 입력하면 짧은 URL 생성
-2. 짧은 URL로 접속하면 원래 URL로 리다이렉트
-3. 사용자 지정 단축 URL 지원 (선택)
-4. 링크 만료 기간 설정 (선택)
+| 기능 | 설계에 미치는 영향 |
+|------|-----------------|
+| 긴 URL → 짧은 URL 생성 | 전역 유일한 코드 생성 전략 필요 (단일 서버? 분산?) |
+| 짧은 URL → 원본으로 리다이렉트 | 읽기 경로 최적화가 핵심. 301 vs 302 결정 필요 |
+| 클릭 분석 (횟수, 국가, 기기) | 리다이렉트 경로에서 이벤트 수집 → 동기 불가, 비동기 파이프라인 필요 |
+| 커스텀 별칭 (`bit.ly/mybrand`) | 코드 생성 공간과 커스텀 공간의 충돌 방지 전략 필요 |
+| 만료 기간 설정 | 만료 URL 처리 — Lazy 검사 vs Eager 배치 정리 선택 |
 
-### 비기능 요구사항 — 왜 이 숫자가 중요한가
-
-```
-읽기:쓰기 = 100:1   → 리다이렉트가 대부분, 캐시 전략이 핵심
-리다이렉트 100ms 이내 → 사용자가 링크를 클릭했는데 느리면 이탈
-99.99% 가용성       → 연간 52분. 이 서비스가 죽으면 모든 bit.ly 링크가 404가 됨
-```
-
-### 규모 추정
+### 비기능 요구사항 — 숫자의 의미
 
 ```
-일일 새 URL 생성:   1억 건
-읽기:쓰기 비율  = 100:1
-일일 리다이렉트:   100억 건
+읽기:쓰기 = 100:1   → 리다이렉트가 전체 부하의 99%. 읽기 경로가 병목
+리다이렉트 100ms 이내 → 사용자가 링크 클릭 후 체감 지연. 캐시 없이 불가능
+99.99% 가용성       → 연간 다운타임 52분. 이 서비스가 죽으면 전 세계 bit.ly 링크가 404
+```
+
+비기능 요구사항 중 **읽기:쓰기 = 100:1** 이 가장 중요하다. 설계의 모든 선택이 "읽기를 어떻게 빠르게 만드는가"로 수렴한다.
+
+---
+
+## 2. 규모 추정 — 숫자로 설계 방향을 결정한다
+
+추정의 목적은 정확한 숫자가 아니다. **어떤 컴포넌트가 병목인가**를 수치로 보여주는 것이다.
+
+```
+일일 새 URL 생성:    1억 건
+읽기:쓰기 비율:      100:1
+일일 리다이렉트:     100억 건
 
 쓰기 QPS  = 1억 / 86,400 ≈ 1,160 QPS
 읽기 QPS  = 1,160 × 100  = 116,000 QPS
-피크 QPS  = 116,000 × 3  ≈ 350,000 QPS
+피크 QPS  = 116,000 × 3  ≈ 350,000 QPS   ← 이게 설계 기준
 
 URL 하나 크기:
-  shortCode: 7B, longURL: 100B, 메타데이터: 30B → 약 137B
+  short_code: 7B
+  long_url:   100B (평균)
+  메타데이터: 30B (user_id, created_at, expires_at)
+  합계:       ≈ 137B
 
+5년 저장량:
+  1억 × 365 × 5 × 137B ≈ 25TB
 10년 저장량:
   1억 × 365 × 10 × 137B ≈ 50TB
 ```
 
----
-
-## 설계 의사결정 로드맵
-
-이 시스템을 설계할 때 내려야 하는 핵심 결정 4가지를 순서대로 짚는다. 각 결정에서 "왜 이 선택인가"를 명확히 하지 않으면 면접에서 "그냥 MD5 해시 쓰면 되지 않나요?"라는 후속 질문에 답할 수 없다.
-
-### 결정 1: 코드 생성 — 랜덤 vs 해시(MD5) vs 카운터(Snowflake+Base62)
-
-**문제**: 어떻게 충돌 없는 7자리 코드를 분산 환경에서 생성하는가? 서버 20대가 동시에 코드를 만들면 중복 가능성이 있다.
-
-| 후보 | 장점 | 단점 | 언제 적합 |
-|------|------|------|----------|
-| 랜덤 문자열 | 구현 단순 | 충돌 확률 존재, 충돌 시 재생성 필요, DB 조회 필수 | 소규모 |
-| MD5 해시 (긴 URL → 해시 앞 7자) | 결정론적, 같은 URL → 같은 코드 | 해시 충돌 가능, 128비트 중 7자리만 사용 | 중복 URL 자동 감지 원할 때 |
-| Snowflake ID + Base62 | 전역 유일 보장, 시간순 정렬, 충돌 없음 | 워커 ID 관리 인프라 필요 | 대규모 분산 |
-
-**우리의 선택: Snowflake ID + Base62**
-- 이유: 서버 20대가 동시에 ID를 생성해도 워커 ID 비트가 다르므로 충돌이 수학적으로 불가능하다. Snowflake ID는 64비트이고 Base62로 인코딩하면 약 7자리가 되어 3.5조 개의 URL 공간을 확보한다. 시간 기반이라 ID 순서가 시간순으로 단조 증가하여 최근 생성 URL을 DB에서 효율적으로 범위 조회할 수 있다.
-- 안 하면: MD5 해시의 앞 7자리를 코드로 쓰면 동일한 7자리 prefix를 공유하는 다른 URL이 존재할 수 있다. 충돌 시 8자리로 늘리거나 재생성하는 로직이 필요하고, 이 과정에서 DB 조회가 추가로 발생한다.
-
-### 결정 2: 리다이렉트 — 301 vs 302
-
-**문제**: 짧은 URL로 접속했을 때 브라우저에 어떤 리다이렉트 상태코드를 반환하는가? 이 결정이 클릭 분석 데이터 수집 가능 여부를 결정한다.
-
-| 후보 | 장점 | 단점 | 언제 적합 |
-|------|------|------|----------|
-| 301 (영구 리다이렉트) | 브라우저가 캐시 → 이후 서버 미경유 → 부하 감소 | 클릭 추적 불가, 브라우저가 직접 이동 | 부하 최소화 우선 |
-| 302 (임시 리다이렉트) | 매번 서버 경유 → 클릭 수·위치·기기 추적 가능 | 서버 부하 높음 | 분석 데이터 필요 |
-
-**우리의 선택: 302**
-- 이유: bit.ly의 수익 모델은 클릭 분석 데이터다. 광고주는 "얼마나 많은 사람이, 어느 나라에서, 어떤 기기로, 몇 시에 클릭했는가"를 구매한다. 301이면 브라우저가 캐시하여 서버를 거치지 않으므로 클릭 이벤트 자체를 수집할 수 없다. 부하 문제는 Redis 캐시로 해결한다.
-- 안 하면: 301로 배포하면 사용자의 브라우저가 단축 URL → 원본 URL 매핑을 캐시한다. 이후 클릭은 서버를 거치지 않아 클릭 카운트가 0으로 기록된다. 광고주에게 제공하는 분석 리포트가 완전히 무의미해진다.
-
-### 결정 3: 저장소 — MySQL vs DynamoDB
-
-**문제**: 10년간 50TB, 읽기:쓰기 = 100:1의 패턴에서 어떤 DB를 선택하는가?
-
-| 후보 | 장점 | 단점 | 언제 적합 |
-|------|------|------|----------|
-| MySQL | ACID, 복잡한 쿼리, 익숙한 운영 | 50TB 단일 인스턴스 한계, 읽기 확장 추가 구성 필요 | 중소 규모 |
-| DynamoDB | 자동 샤딩, 무제한 확장, 관리형 | 복잡한 쿼리 불가, 비용 예측 어려움 | 단순 KV 패턴 |
-| MySQL + Redis | MySQL 영구 저장 + Redis 읽기 캐시로 116K QPS 흡수 | 캐시 일관성 관리 필요 | 읽기 집약적 + 복잡한 관리 쿼리 |
-
-**우리의 선택: MySQL + Redis**
-- 이유: URL 단축기는 `short_code → long_url` 의 단순 KV 패턴이지만, 클릭 분석·사용자별 링크 목록·만료 관리 등 관계형 쿼리가 필요하다. MySQL 마스터에 쓰고, 읽기는 Redis 캐시(히트율 80%)로 처리하여 DB에 도달하는 QPS를 116,000 → 23,200으로 줄인다. 10년 50TB에서는 Consistent Hashing 기반 샤딩으로 확장한다.
-- 안 하면: Redis 없이 MySQL만으로 읽기 116,000 QPS를 감당하면 MySQL 연결 풀이 즉시 고갈된다. MySQL 단일 인스턴스의 실용적 한계는 약 10,000 QPS다.
-
-### 결정 4: 캐시 전략 — TTL vs LRU vs 파레토 기반
-
-**문제**: Redis에 모든 URL을 캐시할 수 없다. 어떤 URL을 캐시하고 어떤 URL을 DB에서 직접 가져오는가?
-
-| 후보 | 장점 | 단점 | 언제 적합 |
-|------|------|------|----------|
-| 고정 TTL | 구현 단순 | 인기 URL도 TTL 만료 후 캐시 미스, 비인기 URL이 캐시 점유 | 단순한 경우 |
-| LRU (최근 사용) | 자동으로 비인기 URL 제거 | 최근에 한 번 조회된 URL이 오래된 인기 URL을 밀어냄 | 일반 캐시 |
-| 파레토 기반 (상위 20% 캐시) | 트래픽 80%를 2.1GB로 커버 | 인기도 추적 로직 필요 | 파레토 분포 따를 때 |
-
-**우리의 선택: 파레토 기반 선별 캐시**
-- 이유: URL 클릭 분포는 파레토 법칙을 따른다. 상위 20% URL이 트래픽 80%를 처리한다. 전체 URL의 20%인 2000만 건 × 107B = 2.1GB만 캐시하면 읽기 QPS의 80%를 Redis에서 처리한다. Redis Sorted Set으로 클릭 수 상위 URL을 추적하고, 순위권 진입 시 캐시에 적재한다.
-- 안 하면: LRU만 쓰면 방송에서 단 한 번 노출된 인기 URL이 캐시를 가득 채우고, 정작 매일 수백 번 클릭되는 URL이 캐시 밖으로 밀려날 수 있다. 핫스팟 URL마다 DB 조회가 발생한다.
+**이 숫자에서 나오는 결론:**
+- 읽기 116,000 QPS → MySQL 단일 인스턴스로 불가능(한계 ~10,000 QPS). Redis 캐시 필수
+- 쓰기 1,160 QPS → MySQL 마스터 1대로 충분. DB 샤딩은 저장량 증가 시점에 필요
+- 10년 50TB → 단일 인스턴스 한계. 수평 샤딩 전략 필요
 
 ---
 
-## 핵심 설계: 7자리 코드를 어떻게 만드는가
+## 3. DB 선택 — WHY MySQL + Redis + Kafka인가
 
-> **비유**: 도서관의 책 청구기호와 같다. 수십만 권의 책에 각각 짧은 고유 번호를 부여하고, 그 번호만 알면 정확한 위치를 찾아갈 수 있다. 번호는 짧아야 하고, 절대 중복되어선 안 된다.
+DB 선택은 "어떤 DB가 좋은가"가 아니라 "이 워크로드에 어떤 DB가 맞는가"의 문제다.
 
-7자리로 얼마나 많은 URL을 표현할 수 있는가? **문자 집합 선택**이 핵심이다.
+### 3-1. MySQL — URL 매핑 영구 저장소
+
+```mermaid
+graph LR
+    API["API 서버"] --> MySQL["MySQL Master"]
+    MySQL --> Replica["Read Replica × N"]
+    API --> Replica
+```
+
+**왜 MySQL인가?**
+
+URL 단축기의 핵심 데이터는 `short_code → long_url` 매핑이다. 얼핏 단순한 Key-Value 처럼 보이지만 다음 쿼리가 필요하다:
+
+- 사용자별 생성한 URL 목록 (`WHERE user_id = ?`)
+- 만료 URL 배치 삭제 (`WHERE expires_at < NOW()`)
+- 동일 긴 URL 재단축 요청 시 기존 코드 반환 (`WHERE long_url = ?`)
+- 클릭 통계와 URL 정보의 JOIN
+
+이 패턴은 **관계형 쿼리가 필요한 구조**다. DynamoDB 같은 NoSQL은 단순 KV 조회에는 강하지만 복잡한 필터·JOIN에서 약하다. MySQL은 이 쿼리들을 인덱스 기반으로 효율적으로 처리한다.
+
+**DynamoDB를 선택하지 않는 이유:** 클릭 분석, 사용자 링크 목록, 만료 관리에서 복잡한 쿼리가 필요하다. DynamoDB는 파티션 키 기반 단순 조회에 최적화되어 있고, 관계형 쿼리를 지원하지 않는다. 운영 규모가 글로벌(Phase 4)로 확장될 때 DynamoDB Global Tables로 전환을 고려한다.
+
+### 3-2. Redis — 리다이렉트 캐시 (sub-ms 지연)
+
+**왜 Redis인가?**
+
+읽기 QPS 116,000을 MySQL이 전부 처리하면 즉시 다운된다. Redis는 메모리 기반으로 단일 인스턴스에서 초당 100만 건 이상의 GET/SET을 처리한다. 리다이렉트 경로(`short_code → long_url` 조회)는 순수한 Key-Value 패턴이라 Redis에 완벽하게 맞는다.
+
+캐시 히트율 80% 목표 시 DB에 도달하는 QPS: `116,000 × 0.2 = 23,200 QPS` — MySQL 한계 이내.
+
+**Memcached를 선택하지 않는 이유:** Redis는 Sorted Set(클릭 수 기반 인기 URL 추적), TTL 자동 만료(URL 만료 동기화), Pub/Sub(이벤트 알림)을 지원한다. Memcached는 단순 KV 캐시만 지원하여 이 추가 기능을 쓸 수 없다.
+
+### 3-3. Kafka — 클릭 이벤트 비동기 수집
+
+**왜 Kafka인가?**
+
+클릭 이벤트(IP, User-Agent, Referer, 타임스탬프)를 리다이렉트 응답 경로에서 동기로 DB에 저장하면 리다이렉트 지연이 증가한다. 목표 응답 시간 100ms 중 DB 쓰기가 50ms를 차지하면 UX가 망가진다.
+
+Kafka는 이벤트를 먼저 디스크에 순서대로 적재하고 Consumer가 비동기로 처리한다. 리다이렉트 요청은 Kafka Produce(~1ms) 후 즉시 302 응답을 반환한다. 분석 저장은 Consumer가 별도로 처리한다.
+
+**SQS/RabbitMQ를 선택하지 않는 이유:** 클릭 이벤트는 초당 수십만 건이 발생한다. Kafka는 이 고처리량에 최적화되어 있고, 이벤트를 7일간 보관하여 재처리(클릭 집계 버그 발생 시 재계산)가 가능하다. SQS/RabbitMQ는 소비된 메시지를 삭제하여 재처리가 불가능하다.
+
+---
+
+## 4. 핵심 설계 결정 — 왜 이 선택인가
+
+### 결정 1: 코드 생성 — Base62 인코딩 + Snowflake ID
+
+**문제:** 서버 20대가 동시에 7자리 코드를 만들 때 중복이 발생하면 안 된다.
+
+먼저 **문자 집합 선택**이다. 7자리로 몇 개의 URL을 표현할 수 있는가:
 
 | 방식 | 문자 수 | 7자리 공간 |
 |------|--------|----------|
 | 숫자만 (0-9) | 10 | 1,000만 |
 | Base62 (0-9, a-z, A-Z) | 62 | **3.5조** |
-| Base64 (+ +, /) | 64 | 4.4조 |
+| Base64 (+ `+`, `/`) | 64 | 4.4조 |
 
-Base62를 선택하는 이유: URL에서 특수문자 없이 3.5조 공간 확보. 10년치 1억 개/일로는 3,650억 개가 필요한데 충분하다.
+**Base62를 선택하는 이유:** URL에 특수문자(`+`, `/`) 없이 3.5조 공간 확보. 10년치 1억 건/일 = 3,650억 개 필요. 3.5조는 이를 10배 수용한다. Base64의 `+`, `/`는 URL 인코딩 시 `%2B`, `%2F`로 변환되어 단축 URL이 깨질 수 있다.
 
-### Base62 인코딩 원리
+```java
+// Base62 인코딩 — 고유 숫자를 7자리 문자열로 변환
+@Component
+public class Base62Encoder {
 
-숫자(고유 ID)를 62진법으로 변환하는 것이다:
+    private static final String CHARS =
+        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final int BASE = 62;
 
-```python
-CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    public String encode(long id) {
+        if (id == 0) return String.valueOf(CHARS.charAt(0));
+        StringBuilder sb = new StringBuilder();
+        while (id > 0) {
+            sb.append(CHARS.charAt((int)(id % BASE)));
+            id /= BASE;
+        }
+        return sb.reverse().toString();
+    }
 
-def encode(num: int) -> str:
-    """고유 ID → Base62 문자열"""
-    if num == 0:
-        return CHARS[0]
-    result = []
-    while num > 0:
-        result.append(CHARS[num % 62])
-        num //= 62
-    return ''.join(reversed(result))
-
-# 12345 → "3D7"
-# 복호화: '3'=3, 'D'=13, '7'=7
-#   3×62² + 13×62 + 7
-# = 3×3844 + 13×62 + 7
-# = 11532 + 806 + 7 = 12345 ✓
+    public long decode(String code) {
+        long result = 0;
+        for (char c : code.toCharArray()) {
+            result = result * BASE + CHARS.indexOf(c);
+        }
+        return result;
+    }
+}
 ```
 
-### 고유 ID를 어떻게 만드는가 — Snowflake ID
+**이제 "고유한 숫자"를 어떻게 만드는가 — Snowflake ID**
 
-Base62 인코딩은 "고유한 숫자"가 있어야 한다. 서버 20대가 동시에 같은 숫자를 생성하면 같은 단축 코드가 나온다. **Snowflake ID**가 이 문제를 해결한다:
+여러 후보를 비교하면:
+
+| 후보 | 장점 | 단점 | 결론 |
+|------|------|------|------|
+| 랜덤 문자열 | 구현 단순 | 충돌 확률 존재, 재시도 필요, 매번 DB 조회 | 소규모만 가능 |
+| MD5 해시 앞 7자리 | 같은 URL → 같은 코드(중복 방지) | 해시 충돌 가능, 7자리 잘라내면 충돌 증가 | 위험 |
+| MySQL AUTO_INCREMENT + Base62 | 충돌 없음 | 서버 수평 확장 시 DB가 단일 병목 | 단일 서버만 |
+| **Snowflake ID + Base62** | 전역 유일, 충돌 없음, 타임스탬프 포함 | 워커 ID 관리 필요 | **채택** |
+
+**Snowflake ID 구조:**
+
+```
+64비트 구성:
+  [1비트: 부호] [41비트: 타임스탬프] [10비트: 워커ID] [12비트: 시퀀스]
+
+41비트 타임스탬프: 2^41ms ≈ 69년
+10비트 워커ID:    최대 1,024대 서버 동시 운영
+12비트 시퀀스:    동일 ms에 서버 1대당 최대 4,096개
+```
+
+서버 20대가 동일한 밀리초에 동시에 ID를 생성해도, 각 서버의 워커 ID 비트가 다르므로 수학적으로 충돌이 불가능하다.
+
+```java
+@Component
+public class SnowflakeIdGenerator {
+
+    private static final long EPOCH = 1700000000000L; // 2023-11-15 기준
+    private static final long WORKER_ID_BITS = 10L;
+    private static final long SEQUENCE_BITS = 12L;
+    private static final long MAX_SEQUENCE = ~(-1L << SEQUENCE_BITS);  // 4095
+    private static final long WORKER_ID_SHIFT = SEQUENCE_BITS;
+    private static final long TIMESTAMP_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS;
+
+    private final long workerId;
+    private long lastTimestamp = -1L;
+    private long sequence = 0L;
+
+    public SnowflakeIdGenerator(@Value("${snowflake.worker-id}") long workerId) {
+        this.workerId = workerId;
+    }
+
+    public synchronized long nextId() {
+        long now = System.currentTimeMillis();
+
+        if (now == lastTimestamp) {
+            sequence = (sequence + 1) & MAX_SEQUENCE;
+            if (sequence == 0) {
+                // 동일 ms에 4096개 초과 — 다음 ms까지 대기
+                now = waitNextMillis(lastTimestamp);
+            }
+        } else {
+            sequence = 0L;
+        }
+
+        lastTimestamp = now;
+        return ((now - EPOCH) << TIMESTAMP_SHIFT)
+             | (workerId << WORKER_ID_SHIFT)
+             | sequence;
+    }
+
+    private long waitNextMillis(long lastTs) {
+        long ts = System.currentTimeMillis();
+        while (ts <= lastTs) ts = System.currentTimeMillis();
+        return ts;
+    }
+}
+```
+
+**Base62 7자리 ← Snowflake ID 흐름:**
 
 ```mermaid
 graph LR
-    T["41비트: 타임스탬프"] --> ID["Snowflake ID"]
-    M["10비트: 머신 ID"] --> ID
-    S["12비트: 시퀀스"] --> ID
-    ID --> BASE62["Base62 → 7자리"]
+    REQ["단축 요청"] --> SF["Snowflake ID 생성"]
+    SF --> B62["Base62 인코딩"]
+    B62 --> CODE["7자리 코드"]
+    CODE --> DB["MySQL 저장"]
 ```
 
-만약 Snowflake 없이 UUID를 쓰면? UUID는 128비트라 Base62로 변환하면 22자리가 넘는다. "짧은" URL이 되지 않는다. 단순 AUTO_INCREMENT를 쓰면? 여러 서버에서 동시에 같은 번호가 나온다.
+### 결정 2: 301 vs 302 리다이렉트 — WHY 302인가
 
----
-
-## 전체 아키텍처
-
-```mermaid
-graph LR
-    A[Client] --> B[API서버]
-    B --> C[Redis]
-    B --> D[MySQL마스터]
-    D --> E[레플리카]
-```
-
----
-
-## URL 단축 흐름 (쓰기)
-
-```mermaid
-graph LR
-    A[클라이언트] -->|단축 요청| B[API 서버]
-    B -->|존재 확인| C[Redis]
-    C -->|기존 URL| B
-    B -->|신규 저장| D[DB]
-    B -->|short URL 반환| A
-```
-
----
-
-## URL 리다이렉트 흐름 (읽기) — 왜 캐시가 필수인가
-
-읽기 QPS가 116,000이다. 이 모두를 DB에서 처리하면 MySQL이 즉시 과부하된다. **캐시 히트율 80%**가 목표다:
-
-```mermaid
-graph LR
-    A[Browser] -->|GET /W7e| B[API]
-    B --> C{Redis hit?}
-    C -->|Yes| D[302 Redirect]
-    C -->|No| E[DB조회]
-    E --> D
-```
-
-### 301 vs 302 — 왜 bit.ly는 302를 쓰는가
+**문제:** 짧은 URL 접속 시 브라우저에 어떤 상태코드를 반환하는가. 이 결정이 클릭 분석 데이터 수집 가능 여부를 결정한다.
 
 | 구분 | 301 (영구) | 302 (임시) |
 |------|-----------|-----------|
-| 브라우저 캐싱 | O — 다음엔 서버 안 거침 | X — 매번 서버 거침 |
+| 브라우저 캐싱 | 캐시함 — 이후 서버 미경유 | 캐시 안 함 — 매번 서버 경유 |
 | 서버 부하 | 낮음 | 높음 |
-| 클릭 추적 | **불가** — 브라우저가 직접 이동 | **가능** — 매번 서버 거쳐감 |
+| 클릭 추적 | **불가** — 브라우저가 서버 없이 직접 이동 | **가능** — 매번 서버를 거쳐 이벤트 수집 |
+| long_url 변경 시 | 반영 안 됨 (캐시된 URL로 이동) | 즉시 반영 |
 
-bit.ly의 수익은 클릭 분석 데이터다. 몇 명이 어디서 어떤 기기로 클릭했는지를 알아야 광고주에게 팔 수 있다. 그래서 302를 쓴다. 순수히 부하 최소화가 목표라면 301이 낫다.
+**302를 선택하는 이유:** bit.ly의 수익 모델은 클릭 분석 데이터다. 광고주가 구매하는 것은 "몇 명이, 어느 나라에서, 어떤 기기로, 몇 시에 클릭했는가"다. 301이면 브라우저가 캐시하여 서버를 거치지 않으므로 클릭 이벤트 자체를 수집할 수 없다. 서버 부하 문제는 Redis 캐시로 해결한다.
+
+**301을 선택하면 어떻게 되는가:** 사용자의 브라우저가 `W7e3p2K → https://example.com/target` 매핑을 캐시한다. 이후 클릭은 서버를 거치지 않아 클릭 카운트가 0으로 기록된다. 분석 리포트가 완전히 무의미해지고, longUrl을 변경해도 캐시된 브라우저는 구 URL로 이동한다.
+
+```java
+@RestController
+@RequestMapping("/")
+public class RedirectController {
+
+    private final UrlService urlService;
+    private final KafkaTemplate<String, ClickEvent> kafkaTemplate;
+
+    @GetMapping("/{shortCode}")
+    public ResponseEntity<Void> redirect(
+            @PathVariable String shortCode,
+            HttpServletRequest request) {
+
+        String longUrl = urlService.getLongUrl(shortCode)
+            .orElseThrow(() -> new UrlNotFoundException(shortCode));
+
+        // 클릭 이벤트 비동기 발행 — 응답 지연 없음
+        ClickEvent event = ClickEvent.builder()
+            .shortCode(shortCode)
+            .ipMasked(maskIp(request.getRemoteAddr()))
+            .userAgent(request.getHeader("User-Agent"))
+            .referer(request.getHeader("Referer"))
+            .clickedAt(Instant.now())
+            .build();
+        kafkaTemplate.send("click-events", shortCode, event);
+
+        // 302 임시 리다이렉트 — 브라우저 캐시 안 함
+        return ResponseEntity.status(HttpStatus.FOUND)
+            .location(URI.create(longUrl))
+            .build();
+    }
+
+    private String maskIp(String ip) {
+        // GDPR: 마지막 옥텟 마스킹 (1.2.3.4 → 1.2.3.x)
+        int lastDot = ip.lastIndexOf('.');
+        return lastDot > 0 ? ip.substring(0, lastDot) + ".x" : ip;
+    }
+}
+```
+
+### 결정 3: 읽기 캐시 전략 — 파레토 기반 선별 캐시
+
+**문제:** Redis에 모든 URL을 캐시할 수 없다. 어떤 URL을 캐시하고 어떤 URL을 DB에서 가져오는가.
+
+| 전략 | 장점 | 단점 |
+|------|------|------|
+| 고정 TTL (모두 캐시) | 구현 단순 | 인기 URL도 TTL 만료 후 미스, 비인기 URL이 공간 점유 |
+| LRU (최근 사용) | 자동으로 비인기 URL 제거 | 최근 단 한 번 조회된 URL이 오래된 인기 URL 밀어냄 |
+| **파레토 기반** | 트래픽 80%를 2GB로 처리 | 인기도 추적 로직 필요 |
+
+URL 클릭 분포는 파레토 법칙을 따른다. 상위 20%의 URL이 전체 트래픽의 80%를 처리한다.
+
+```
+전체 URL = 1억 건 × 0.2 = 상위 2,000만 건
+URL 하나 캐시 크기 = 7B(코드) + 100B(longUrl) = 107B
+필요 Redis 메모리 = 2,000만 × 107B ≈ 2.14GB
+
+Redis 서버 16GB → 충분
+```
+
+**구현 — Redis Sorted Set으로 클릭 수 추적:**
+
+```java
+@Service
+public class CacheWarmingService {
+
+    private static final String HOT_URLS_KEY = "hot_urls";
+    private static final int TOP_N = 1_000_000; // 상위 100만 개 추적
+
+    private final RedisTemplate<String, String> redis;
+    private final UrlRepository urlRepository;
+
+    // 클릭마다 점수 증가
+    public void recordClick(String shortCode) {
+        redis.opsForZSet().incrementScore(HOT_URLS_KEY, shortCode, 1.0);
+    }
+
+    // 매 5분 상위 URL을 캐시에 유지
+    @Scheduled(fixedDelay = 300_000)
+    public void warmTopUrls() {
+        Set<String> topCodes = redis.opsForZSet()
+            .reverseRange(HOT_URLS_KEY, 0, TOP_N - 1);
+
+        if (topCodes == null) return;
+
+        topCodes.forEach(code -> {
+            String cacheKey = "url:" + code;
+            if (!Boolean.TRUE.equals(redis.hasKey(cacheKey))) {
+                urlRepository.findByShortCode(code)
+                    .ifPresent(url -> redis.opsForValue()
+                        .set(cacheKey, url.getLongUrl(), 1, TimeUnit.HOURS));
+            }
+        });
+    }
+}
+```
+
+### 결정 4: 분산 ID 생성 — 왜 각 서버가 독립 생성인가
+
+**문제:** 중앙 ID 생성 서버(Redis INCR)를 두는 방법과 각 서버가 독립 생성하는 방법 중 어느 것인가.
+
+| 방식 | 장점 | 단점 |
+|------|------|------|
+| Redis INCR (중앙 카운터) | 구현 단순, 완벽한 순서 보장 | Redis 단일 장애점. Redis 다운 = 전체 URL 생성 불가 |
+| DB AUTO_INCREMENT | ACID 보장 | 쓰기 병목. DB가 모든 생성 요청의 병목 |
+| **Snowflake (각 서버 독립)** | SPOF 없음, 선형 확장, 충돌 불가 | 워커 ID 설정·관리 필요 |
+
+워커 ID는 Kubernetes 환경에서는 Pod 순번(StatefulSet 인덱스)으로 자동 할당하거나, ZooKeeper/Consul에서 시작 시 발급받는다.
 
 ---
 
-## 데이터베이스 설계
+## 5. 전체 아키텍처
+
+```mermaid
+graph LR
+    Client["Browser/Client"] --> LB["Load Balancer"]
+    LB --> API["API 서버 클러스터"]
+    API --> Redis["Redis Cluster"]
+    API --> MySQL["MySQL Master"]
+    MySQL --> Replica["Read Replica"]
+    API --> Kafka["Kafka"]
+    Kafka --> Flink["Flink Consumer"]
+    Flink --> CH["ClickHouse"]
+```
+
+**각 컴포넌트의 역할:**
+
+- **API 서버**: 단축 URL 생성, 리다이렉트, 클릭 이벤트 Kafka 발행
+- **Redis Cluster**: 리다이렉트 캐시 (sub-ms 응답), 클릭 수 Sorted Set 관리
+- **MySQL Master**: URL 매핑 영구 저장, 쓰기 전용
+- **Read Replica**: 캐시 미스 시 조회, 사용자 링크 목록 쿼리
+- **Kafka**: 클릭 이벤트 버퍼 (리다이렉트 응답 경로 분리)
+- **Flink**: 실시간 클릭 집계 (1분 윈도우)
+- **ClickHouse**: 클릭 분석 쿼리 저장소 (컬럼형 OLAP)
+
+---
+
+## 6. URL 생성 흐름 — 쓰기 경로
+
+```mermaid
+graph LR
+    REQ["POST /shorten"] --> CHECK["동일 URL 캐시 확인"]
+    CHECK -->|"캐시 히트"| EXIST["기존 코드 반환"]
+    CHECK -->|"미스"| SNOW["Snowflake ID 생성"]
+    SNOW --> B62["Base62 인코딩"]
+    B62 --> SAVE["MySQL INSERT"]
+    SAVE --> RET["short URL 반환"]
+```
+
+```java
+@Service
+@RequiredArgsConstructor
+public class UrlShortenService {
+
+    private final SnowflakeIdGenerator idGenerator;
+    private final Base62Encoder encoder;
+    private final UrlRepository urlRepository;
+    private final RedisTemplate<String, String> redis;
+    private final MaliciousUrlChecker maliciousUrlChecker;
+
+    public ShortenResponse shorten(ShortenRequest request) {
+        // 1. 악성 URL 동기 검사 (Google Safe Browsing)
+        if (!maliciousUrlChecker.isSafe(request.getLongUrl())) {
+            throw new MaliciousUrlException("악성 URL로 분류된 주소입니다");
+        }
+
+        // 2. 커스텀 코드 요청 처리
+        if (StringUtils.hasText(request.getCustomAlias())) {
+            return handleCustomAlias(request);
+        }
+
+        // 3. 동일 longUrl 중복 확인 (캐시 → DB 순서)
+        String dedupeKey = "dedup:" + DigestUtils.sha256Hex(request.getLongUrl());
+        String existingCode = redis.opsForValue().get(dedupeKey);
+        if (existingCode != null) {
+            return ShortenResponse.of(existingCode);
+        }
+
+        Optional<UrlMapping> existing = urlRepository.findByLongUrl(request.getLongUrl());
+        if (existing.isPresent()) {
+            redis.opsForValue().set(dedupeKey, existing.get().getShortCode(), 24, TimeUnit.HOURS);
+            return ShortenResponse.of(existing.get().getShortCode());
+        }
+
+        // 4. 신규 코드 생성
+        long id = idGenerator.nextId();
+        String shortCode = encoder.encode(id);
+
+        UrlMapping mapping = UrlMapping.builder()
+            .shortCode(shortCode)
+            .longUrl(request.getLongUrl())
+            .userId(request.getUserId())
+            .expiresAt(request.getExpiresAt())
+            .createdAt(Instant.now())
+            .build();
+
+        urlRepository.save(mapping);
+
+        // 5. 즉시 캐시 적재
+        Duration ttl = request.getExpiresAt() != null
+            ? Duration.between(Instant.now(), request.getExpiresAt())
+            : Duration.ofDays(30);
+
+        if (!ttl.isNegative()) {
+            redis.opsForValue().set("url:" + shortCode, request.getLongUrl(), ttl);
+        }
+
+        return ShortenResponse.of(shortCode);
+    }
+
+    private ShortenResponse handleCustomAlias(ShortenRequest request) {
+        String alias = request.getCustomAlias();
+        validateCustomAlias(alias);  // 예약어·욕설·형식 검사
+
+        UrlMapping mapping = UrlMapping.builder()
+            .shortCode(alias)
+            .longUrl(request.getLongUrl())
+            .userId(request.getUserId())
+            .expiresAt(request.getExpiresAt())
+            .isCustom(true)
+            .build();
+
+        try {
+            urlRepository.save(mapping);
+        } catch (DataIntegrityViolationException e) {
+            throw new AliasAlreadyTakenException("이미 사용 중인 별칭입니다: " + alias);
+        }
+
+        return ShortenResponse.of(alias);
+    }
+}
+```
+
+---
+
+## 7. URL 리다이렉트 흐름 — 읽기 경로
+
+```mermaid
+graph LR
+    HIT["Redis 캐시 히트 (80%)"] --> R302["302 응답"]
+    MISS["캐시 미스 (20%)"] --> DB["Read Replica 조회"]
+    DB --> WARM["Redis 캐시 적재"]
+    WARM --> R302
+```
+
+**캐시 미스 — Cache-Aside 패턴:**
+
+```java
+@Service
+@RequiredArgsConstructor
+public class UrlService {
+
+    private final RedisTemplate<String, String> redis;
+    private final UrlRepository urlRepository;
+    private final CacheWarmingService cacheWarmingService;
+
+    public Optional<String> getLongUrl(String shortCode) {
+        // 1. L1: Redis 캐시 조회 (sub-ms)
+        String cached = redis.opsForValue().get("url:" + shortCode);
+        if (cached != null) {
+            cacheWarmingService.recordClick(shortCode);  // 클릭 수 증가
+            return Optional.of(cached);
+        }
+
+        // 2. L2: DB 조회 (캐시 미스)
+        Optional<UrlMapping> mapping = urlRepository.findByShortCode(shortCode);
+
+        mapping.ifPresent(m -> {
+            // 만료 확인
+            if (m.getExpiresAt() != null && m.getExpiresAt().isBefore(Instant.now())) {
+                return; // 만료 URL은 캐시하지 않음
+            }
+
+            // Redis에 적재 (TTL = URL 만료까지 남은 시간 or 기본 1시간)
+            Duration ttl = m.getExpiresAt() != null
+                ? Duration.between(Instant.now(), m.getExpiresAt())
+                : Duration.ofHours(1);
+
+            redis.opsForValue().set("url:" + shortCode, m.getLongUrl(), ttl);
+            cacheWarmingService.recordClick(shortCode);
+        });
+
+        return mapping.map(UrlMapping::getLongUrl);
+    }
+}
+```
+
+---
+
+## 8. 데이터베이스 설계
 
 ```sql
-CREATE TABLE urls (
-    id          BIGINT      NOT NULL AUTO_INCREMENT,
-    short_code  VARCHAR(7)  NOT NULL,
-    long_url    VARCHAR(2048) NOT NULL,
+-- URL 매핑 테이블
+CREATE TABLE url_mappings (
+    id          BIGINT          NOT NULL,           -- Snowflake ID
+    short_code  VARCHAR(30)     NOT NULL,           -- Base62 코드 또는 커스텀 별칭
+    long_url    VARCHAR(2048)   NOT NULL,
     user_id     BIGINT,
-    created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at  DATETIME,
+    is_custom   BOOLEAN         NOT NULL DEFAULT FALSE,
+    created_at  DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    expires_at  DATETIME(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_short_code (short_code),   -- 단축 코드 중복 방지
-    INDEX idx_long_url (long_url(255)),       -- 동일 URL 재요청 시 빠른 조회
-    INDEX idx_expires_at (expires_at)         -- 만료 배치 작업용
-);
+    UNIQUE  KEY uk_short_code (short_code),          -- 코드 중복 방지
+    INDEX       idx_long_url   (long_url(255)),       -- 동일 URL 재단축 요청 조회
+    INDEX       idx_user_id    (user_id),             -- 사용자별 링크 목록
+    INDEX       idx_expires_at (expires_at)           -- 만료 배치 작업
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 클릭 통계 집계 테이블 (Flink가 적재)
+CREATE TABLE click_stats (
+    short_code  VARCHAR(30)     NOT NULL,
+    period      DATETIME        NOT NULL,            -- 1시간 버킷
+    granularity ENUM('hour','day') NOT NULL,
+    clicks      BIGINT          NOT NULL DEFAULT 0,
+    unique_ips  BIGINT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (short_code, period, granularity),
+    INDEX       idx_period      (period)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-왜 `long_url`에 인덱스를 걸지 않으면 안 되는가? 같은 긴 URL을 두 번 단축 요청할 때 기존 코드를 반환해야 한다. 인덱스 없으면 매번 풀 스캔이다.
+**왜 `long_url`에 인덱스가 필요한가:** 같은 긴 URL을 두 번 단축 요청할 때 기존 코드를 반환해야 한다. `long_url`은 최대 2048자이므로 전체 컬럼에 B-Tree 인덱스를 걸면 페이지가 커진다. `long_url(255)` 프리픽스 인덱스로 타협 — 255자 이내로 구분되는 URL은 인덱스로 처리하고, 충돌 시 full scan으로 확인한다.
+
+**왜 Snowflake ID를 PK로 쓰는가:** AUTO_INCREMENT PK는 MySQL 마스터에서만 생성할 수 있어 서버 수평 확장 시 병목이 된다. Snowflake ID는 각 애플리케이션 서버에서 독립 생성하므로 DB 의존 없이 PK가 결정된다. 시간순 단조 증가라 B-Tree 인덱스 재균형도 최소화된다.
 
 ---
 
-## 캐시 크기 계산
-
-파레토 법칙: 상위 20% URL이 트래픽 80%를 처리한다.
-
-```
-전체 URL 수 = 1억 × 0.2 (상위 20%) = 2,000만 건
-URL 하나 캐시 크기 = 7B + 100B = 107B
-필요 메모리 = 2,000만 × 107B ≈ 2.1GB
-
-→ Redis 서버 1대 (16GB)로 충분
-```
-
-캐시가 없다면? DB에 초당 116,000 쿼리. MySQL 커넥션 풀이 즉시 고갈된다.
-
----
-
-## 확장성 — 언제 샤딩이 필요한가
-
-10년 저장량이 50TB다. 단일 MySQL로는 한계가 있다. 단순 modulo 해싱(`hash % N`)은 샤드를 4개에서 5개로 늘리는 순간 대부분의 키가 다른 샤드로 이동한다. **Consistent Hashing**은 이 문제를 해결한다.
-
-> **비유**: 0~360도 원형 링 위에 샤드와 키를 배치한다. 키는 시계 방향으로 가장 가까운 샤드에 할당된다. 샤드를 추가하면 그 샤드 바로 앞 구간의 키만 이동하면 된다. 전체 키의 `1/N`만 재배치된다.
+## 9. Analytics 파이프라인 — 클릭 이후의 여정
 
 ```mermaid
 graph LR
-    API["API 서버"] --> CH["Consistent Hashing"]
-    CH -->|"구간 A"| S1["샤드 1"]
-    CH -->|"구간 B"| S2["샤드 2"]
-    CH -->|"구간 C"| S3["샤드 3"]
-    S4["샤드 4 추가"] -.->|"전체의 1/N만 재배치"| CH
+    API["API 서버"] --> Kafka["Kafka 토픽"]
+    Kafka --> Flink["Flink 집계"]
+    Kafka --> CH["ClickHouse 원시"]
+    Flink --> Redis["Redis 실시간 카운터"]
+    CH --> Dash["분석 대시보드"]
 ```
 
-**가상 노드(Virtual Nodes)**: 샤드 1대를 링 위에 100개의 가상 노드로 분산 배치한다. 샤드 간 데이터 불균형(핫스팟)을 방지하고, 샤드 추가·제거 시 부하가 여러 샤드에 고르게 분산된다.
+**Kafka Consumer → Flink 집계 흐름:**
 
-```
-modulo 해싱:        샤드 4→5개 증설 시 ~80% 키가 다른 샤드로 이동
-Consistent Hashing: 샤드 4→5개 증설 시 ~20%(1/N)의 키만 이동
-```
-
----
-
-## Analytics 파이프라인 — 클릭 이후의 여정
-
-Kafka로 클릭 이벤트를 보내는 것은 시작일 뿐이다. 실제로 "어떤 링크가 얼마나 클릭됐는가"를 실시간 대시보드와 일별·시간별 집계로 제공하는 전체 파이프라인이 필요하다.
-
-```mermaid
-graph LR
-    Click["클릭 이벤트"] --> Kafka["Kafka"]
-    Kafka --> Flink["Flink"]
-    Kafka --> CH["ClickHouse"]
-    Flink --> Redis["Redis"]
-    CH --> Dashboard["Grafana 대시보드"]
+```java
+// 클릭 이벤트 도메인 모델
+@Data
+@Builder
+public class ClickEvent {
+    private String shortCode;
+    private String ipMasked;      // 마지막 옥텟 마스킹
+    private String userAgent;
+    private String referer;
+    private String country;       // GeoIP 변환 후 채움
+    private Instant clickedAt;
+}
 ```
 
-**ClickHouse — 클릭 분석 저장소**
+```java
+// Kafka Producer — 리다이렉트 후 비동기 발행
+@Component
+@RequiredArgsConstructor
+public class ClickEventPublisher {
 
-ClickHouse는 컬럼형 OLAP DB로 수십억 건의 클릭 로그를 초당 수백만 행 삽입하면서 집계 쿼리도 초 단위로 처리한다. MySQL로 대용량 로그를 집계하면 수십 분이 걸리는 쿼리가 ClickHouse에선 수 초다.
+    private final KafkaTemplate<String, ClickEvent> kafka;
+    private static final String TOPIC = "click-events";
+
+    public void publish(ClickEvent event) {
+        // shortCode를 파티션 키로 사용 → 동일 코드의 이벤트는 같은 파티션
+        kafka.send(TOPIC, event.getShortCode(), event)
+            .addCallback(
+                result -> {},
+                ex -> log.warn("클릭 이벤트 발행 실패: {}", event.getShortCode(), ex)
+            );
+    }
+}
+```
+
+**ClickHouse 원시 이벤트 저장 (OLAP):**
 
 ```sql
--- 시간별 클릭 집계 (ClickHouse)
+-- ClickHouse: 수백억 행 집계를 초 단위로 처리
+CREATE TABLE click_events (
+    short_code  String,
+    ip_masked   String,
+    user_agent  String,
+    country     String,
+    clicked_at  DateTime
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(clicked_at)
+ORDER BY (short_code, clicked_at);
+
+-- 시간별 클릭 집계 쿼리 (수억 행도 수초 처리)
 SELECT
-    toStartOfHour(clicked_at)  AS hour,
-    short_code,
-    count()                    AS clicks,
-    uniq(ip_masked)            AS unique_visitors
+    toStartOfHour(clicked_at)   AS hour,
+    count()                     AS clicks,
+    uniqExact(ip_masked)        AS unique_visitors
 FROM click_events
 WHERE short_code = 'W7e3p2K'
   AND clicked_at >= now() - INTERVAL 7 DAY
-GROUP BY hour, short_code
+GROUP BY hour
 ORDER BY hour DESC;
 ```
 
-**일별/시간별 사전 집계**
-
-원본 이벤트를 매번 집계하면 비용이 크다. Flink가 1분 단위로 집계한 결과를 별도 `click_stats` 테이블에 적재한다:
-
-```sql
-CREATE TABLE click_stats (
-    short_code  VARCHAR(7)  NOT NULL,
-    period      DATETIME    NOT NULL,   -- 1시간 단위 버킷
-    granularity ENUM('hour','day') NOT NULL,
-    clicks      BIGINT      NOT NULL,
-    unique_ips  BIGINT      NOT NULL,
-    PRIMARY KEY (short_code, period, granularity)
-);
-```
-
-**실시간 대시보드**
-
-- Redis에서 현재 시간 기준 최근 1분 클릭 수를 조회해 실시간 수치 표시
-- ClickHouse에서 지난 30일 시계열을 쿼리해 차트 렌더링
-- Grafana + ClickHouse 플러그인 조합이 실무에서 가장 널리 쓰인다
+**왜 ClickHouse인가:** MySQL로 수억 건 클릭 로그를 집계하면 수십 분이 걸린다. ClickHouse는 컬럼형 스토리지로 집계 쿼리에서 MySQL 대비 100~1000배 빠르다. MergeTree 엔진은 초당 수백만 행 삽입을 지원한다.
 
 ---
 
-## URL 만료 처리
+## 10. URL 만료 처리 — Lazy + Eager 조합
 
-```mermaid
-graph LR
-    A["만료 처리 전략"] --> B["Lazy (요청 시 확인)"]
-    A --> C["Eager (배치 정리)"]
-    B --> B1["장점: 구현 단순"]
-    B --> B2["단점: 만료된 행이 DB에 계속"]
-    C --> C1["장점: DB 용량 관리"]
-    C --> C2["단점: 배치 부하"]
+만료 처리에는 두 가지 접근이 있다. 실무에서는 두 가지를 조합한다.
+
+**Lazy 검사 — 요청 시 만료 확인:**
+
+```java
+@GetMapping("/{shortCode}")
+public ResponseEntity<Void> redirect(@PathVariable String shortCode) {
+    UrlMapping mapping = urlRepository.findByShortCode(shortCode)
+        .orElseThrow(() -> new UrlNotFoundException(shortCode));
+
+    // 만료 확인
+    if (mapping.getExpiresAt() != null
+            && mapping.getExpiresAt().isBefore(Instant.now())) {
+        // 410 Gone: 의도적으로 제거된 리소스 (404와 구분)
+        // 검색 엔진이 410을 받으면 색인에서 즉시 제거
+        return ResponseEntity.status(HttpStatus.GONE).build();
+    }
+
+    kafkaTemplate.send("click-events", buildClickEvent(shortCode));
+    return ResponseEntity.status(HttpStatus.FOUND)
+        .location(URI.create(mapping.getLongUrl()))
+        .build();
+}
 ```
 
-실무에서는 **두 가지 조합**: 요청 시 만료 확인(즉시 응답)  + 새벽 배치 정리(DB 정리).
+**Eager 정리 — 새벽 배치 삭제:**
 
-```python
-def redirect(short_code: str):
-    url = db.query("SELECT long_url, expires_at FROM urls WHERE short_code = ?", short_code)
-    if not url:
-        raise NotFoundError()
-    if url.expires_at and url.expires_at < datetime.now():
-        raise GoneError()  # 410 Gone — 영구 삭제된 리소스
-    return RedirectResponse(url.long_url, status_code=302)
+```java
+@Component
+@RequiredArgsConstructor
+public class ExpiredUrlCleaner {
+
+    private final JdbcTemplate jdbc;
+    private final RedisTemplate<String, String> redis;
+
+    // 매일 새벽 3시 실행
+    @Scheduled(cron = "0 0 3 * * *")
+    public void cleanExpiredUrls() {
+        // 만료 후 30일 유예 기간 (분쟁 대응)
+        // LIMIT으로 배치 분할 → 대량 잠금 방지
+        int deleted;
+        do {
+            deleted = jdbc.update("""
+                DELETE FROM url_mappings
+                WHERE expires_at < NOW() - INTERVAL 30 DAY
+                LIMIT 5000
+                """);
+            log.info("만료 URL 삭제: {}건", deleted);
+
+            if (deleted > 0) {
+                try { Thread.sleep(100); } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        } while (deleted == 5000); // 5000건 미만이면 완료
+    }
+}
+```
+
+**왜 410 Gone인가:** 404는 "없거나 임시 오류"를 의미한다. 검색 엔진은 404를 받으면 나중에 재시도할 수 있다고 판단한다. 410은 "의도적으로 영구 삭제"를 의미하여 검색 엔진이 해당 URL을 색인에서 즉시 제거한다.
+
+---
+
+## 11. 수평 확장 — 언제 샤딩이 필요한가
+
+10년 저장량이 50TB다. MySQL 단일 인스턴스로는 한계가 있다. 그러나 처음부터 샤딩을 설계하면 오버엔지니어링이다. 어느 시점에 샤딩이 필요한가:
+
+- 단일 MySQL 인스턴스 저장량 > 5TB
+- 캐시 미스 후 DB 읽기 QPS > 8,000 QPS
+- 쓰기 QPS > 5,000 QPS
+
+**Consistent Hashing 샤딩 전략:**
+
+단순 `hash(short_code) % N` 방식은 샤드 수를 4 → 5로 늘리는 순간 대부분의 키가 다른 샤드로 이동한다 (약 80% 재배치). Consistent Hashing은 샤드 추가 시 전체의 `1/N`만 재배치한다.
+
+```java
+@Component
+public class ConsistentHashRouter {
+
+    private final TreeMap<Long, DataSource> ring = new TreeMap<>();
+    private static final int VIRTUAL_NODES = 150; // 샤드당 가상 노드 수
+
+    public void addShard(String shardId, DataSource ds) {
+        for (int i = 0; i < VIRTUAL_NODES; i++) {
+            long hash = hash(shardId + "#" + i);
+            ring.put(hash, ds);
+        }
+    }
+
+    public DataSource getShardFor(String shortCode) {
+        long hash = hash(shortCode);
+        Map.Entry<Long, DataSource> entry = ring.ceilingEntry(hash);
+        // 링의 끝을 넘어가면 첫 번째 샤드로 wrap-around
+        return entry != null ? entry.getValue() : ring.firstEntry().getValue();
+    }
+
+    private long hash(String key) {
+        // MurmurHash3 — CRC32보다 분산 균일
+        return Hashing.murmur3_128().hashString(key, StandardCharsets.UTF_8)
+            .asLong() & Long.MAX_VALUE;
+    }
+}
+```
+
+**가상 노드 (Virtual Nodes):** 샤드 1대를 링 위에 150개의 가상 노드로 분산 배치한다. 샤드 간 데이터 불균형(핫스팟)을 방지하고, 샤드 추가·제거 시 부하가 여러 샤드에 고르게 분산된다.
+
+```
+modulo 해싱:         샤드 4→5개 시 ~80% 키가 다른 샤드로 이동
+Consistent Hashing:  샤드 4→5개 시 ~20%(1/N)의 키만 이동
 ```
 
 ---
 
+## 12. 보안 — 악성 URL 차단 다중 레이어
 
-## 극한 시나리오
+```java
+@Service
+@RequiredArgsConstructor
+public class MaliciousUrlChecker {
 
-유명 방송에서 bit.ly 링크가 노출되면 순간 트래픽이 평상시 100배가 된다.
+    private final SafeBrowsingClient safeBrowsing;  // Google Safe Browsing API
+    private final RedisTemplate<String, String> redis;
 
-```mermaid
-graph LR
-    Traffic["순간 초당 50만 요청"] --> CDN["CDN Edge<br>301 캐싱"]
-    Traffic --> LB["Auto Scaling<br>서버"]
-    LB --> LocalCache["각 서버 로컬 캐시<br>(Caf"]
-    LB --> Redis["Redis 클러스터<br>캐시 히"]
-    Redis --> DB["DB 조회 극소화"]
+    // 동기 검사 — URL 생성 시 (SLA: 200ms 이내)
+    public boolean isSafe(String url) {
+        // Redis 블랙리스트 먼저 확인 (이미 악성으로 판정된 URL)
+        String hash = DigestUtils.sha256Hex(url);
+        if (Boolean.TRUE.equals(redis.hasKey("blocked:url:" + hash))) {
+            return false;
+        }
+
+        return safeBrowsing.check(url);
+    }
+
+    // 비동기 재검사 — 등록 후 24시간 뒤 (나중에 악성으로 등록된 URL 대응)
+    @KafkaListener(topics = "url-recheck", groupId = "malicious-checker")
+    public void recheckAsync(String shortCode) {
+        urlRepository.findByShortCode(shortCode).ifPresent(mapping -> {
+            if (!isSafe(mapping.getLongUrl())) {
+                // Redis에 차단 플래그 설정
+                redis.opsForValue().set(
+                    "blocked:" + shortCode, "1", 30, TimeUnit.DAYS);
+                log.warn("악성 URL 사후 탐지: {}", shortCode);
+            }
+        });
+    }
+}
 ```
 
-**Hot URL 사전 감지:**
+**커스텀 슬러그 보호:**
 
-```python
-def record_access(short_code: str):
-    redis.zincrby("hot_urls", 1, short_code)  # 클릭마다 점수 증가
+```java
+@Component
+public class CustomAliasValidator {
 
-# 매 5분마다 상위 1000개를 서버 로컬 메모리에 pre-loading
-@scheduler.every(minutes=5)
-def preload_hot_urls():
-    for short_code, _ in redis.zrevrange("hot_urls", 0, 999, withscores=True):
-        local_cache[short_code] = db.get(short_code)
+    private static final Set<String> RESERVED = Set.of(
+        "api", "admin", "health", "login", "signup", "help",
+        "support", "about", "terms", "privacy", "docs", "status"
+    );
+    private static final Pattern VALID_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{4,30}$");
+
+    public void validate(String alias) {
+        if (!VALID_PATTERN.matcher(alias).matches()) {
+            throw new InvalidAliasException("영문, 숫자, _, - 만 사용 가능 (4~30자)");
+        }
+        if (RESERVED.contains(alias.toLowerCase())) {
+            throw new InvalidAliasException("예약된 별칭: " + alias);
+        }
+    }
+}
 ```
 
-이 패턴이 없으면? Redis에도 초당 50만 요청이 몰린다. Redis는 빠르지만 무한하지 않다.
+**클릭 데이터 프라이버시 (GDPR):**
+
+- IP는 저장 전 마지막 옥텟 마스킹 (`1.2.3.4 → 1.2.3.x`)
+- User-Agent는 기기/OS 파싱 후 원본 삭제
+- GDPR 삭제 요청 시 해당 user_id의 click_events를 90일 이내 삭제
 
 ---
 
-## 보안 고려사항
+## 13. Day 1 → Scale 진화
 
-> **비유**: 우편함에 주소를 써두면 누구나 편지를 넣을 수 있듯, URL 단축기는 악성 링크를 "정상처럼 보이게" 위장하는 도구로 악용될 수 있다.
+URL 단축기를 처음부터 Consistent Hashing 샤딩과 Redis Cluster로 구축하면 과잉 설계다. 읽기 QPS와 저장량 규모에 맞게 단계적으로 진화해야 한다.
 
-**악성 URL 차단 — Google Safe Browsing API**
+### Phase 1 — 일 생성 1만 건, 일 리다이렉트 100만 건
 
-단축 URL 생성 시 원본 URL을 Google Safe Browsing API에 조회해 피싱·멀웨어 배포 사이트 여부를 확인한다. 악성으로 판정되면 생성을 거부하고, 이미 생성된 링크가 뒤늦게 악성으로 분류되면 즉시 404로 전환한다.
+**아키텍처:** API 서버 1대 + MySQL + AUTO_INCREMENT + Redis 단일 노드
 
-```python
-def is_safe_url(long_url: str) -> bool:
-    resp = requests.post(SAFE_BROWSING_API, json={
-        "client": {"clientId": "myapp"},
-        "threatInfo": {"threatTypes": ["MALWARE", "SOCIAL_ENGINEERING"],
-                       "urlList": [{"url": long_url}]}
-    })
-    return len(resp.json().get("matches", [])) == 0
+| 항목 | 선택 | 이유 |
+|------|------|------|
+| 코드 생성 | MySQL AUTO_INCREMENT + Base62 | 단일 서버라 충돌 없음 |
+| 리다이렉트 | Redis → MySQL 순서 | 읽기 QPS ~12, MySQL도 충분 |
+| 분석 | MySQL clicks 테이블 직접 INSERT | Kafka 불필요 |
+| 월 비용 | EC2 t3.medium + RDS db.t3.medium | **~$95/월** |
+
+### Phase 2 — 일 생성 100만 건, 일 리다이렉트 1억 건
+
+**아키텍처:** Snowflake ID 도입 + Redis 캐시 + Kafka 비동기 분석
+
+| 항목 | 변경 이유 |
+|------|---------|
+| Snowflake ID | 서버 수평 확장 준비. AUTO_INCREMENT는 DB 병목 |
+| Kafka 도입 | 클릭 분석을 리다이렉트 경로에서 분리. 응답 시간 보호 |
+| 파레토 캐시 | 클릭 수 상위 20% URL 자동 캐시. 히트율 80% 목표 |
+| 월 비용 | EC2 × 3 + RDS Multi-AZ + ElastiCache + Kafka MSK | **~$1,300/월** |
+
+### Phase 3 — 일 생성 1000만 건, 일 리다이렉트 10억 건
+
+**아키텍처:** MySQL 샤딩 + Redis Cluster + ClickHouse 분석
+
+| 항목 | 변경 이유 |
+|------|---------|
+| MySQL 4샤드 | 저장량 10TB 초과, 단일 인스턴스 한계 |
+| Redis Cluster | 캐시 용량 및 고가용성 |
+| ClickHouse 도입 | 수억 건 클릭 집계. MySQL로는 수십 분 → ClickHouse 수초 |
+| 월 비용 | ~$6,800/월 |
+
+### Phase 4 — 일 생성 1억 건, 일 리다이렉트 100억 건 (글로벌)
+
+**아키텍처:** 멀티리전 + DynamoDB 전환 + CDN 엣지 리다이렉트
+
+| 항목 | 변경 이유 |
+|------|---------|
+| MySQL → DynamoDB Global Tables | 자동 샤딩, 멀티리전 복제 |
+| CloudFront Functions | 엣지에서 직접 리다이렉트 (지연 20ms 이하) |
+| 리전별 Snowflake 워커 | 리전 비트로 전역 유일성 보장 |
+| 월 비용 | ~$43,000/월 |
+
+---
+
+## 14. 면접 포인트 5가지
+
+### Q1. 301 vs 302 — 어느 것을 선택하고 그 이유는?
+
+**답변 구조:** 302를 선택한다. 이유는 비즈니스 요구사항에서 시작한다.
+
+301은 브라우저가 캐시하여 이후 요청을 서버에 보내지 않는다. 클릭 추적이 불가능해진다. bit.ly의 수익 모델은 클릭 분석 데이터 판매다. 몇 명이 어느 나라에서, 어떤 기기로, 몇 시에 클릭했는가를 광고주에게 제공한다. 301로 배포하면 브라우저가 캐시하여 클릭 카운트가 0으로 기록된다. 분석 리포트가 완전히 무의미해진다.
+
+부하 문제는 Redis 캐시로 해결한다. 302라도 Redis에서 응답하면 캐시 히트율 80%에서 DB 부하는 원래의 20%로 줄어든다.
+
+**추가 포인트:** 만약 순수하게 URL 단축만 필요하고 분석이 불필요하다면 301이 맞다. 결정은 비즈니스 모델에서 나온다.
+
+### Q2. 코드 생성 전략 — Snowflake vs 랜덤 vs 해시의 트레이드오프는?
+
+**랜덤 Base62:** 구현이 단순하다. 그러나 코드 생성 시마다 DB에서 중복 확인이 필요하다. URL이 쌓일수록 충돌 확률이 증가한다 (생일 역설). 3.5조 공간에서 10억 개가 존재하면 충돌 확률은 `1 - e^(-n²/2m) ≈ 14%`다.
+
+**MD5 해시 앞 7자리:** 같은 URL은 항상 같은 코드가 나와 중복 저장을 자동으로 방지한다. 그러나 128비트 해시를 7자리(42비트)로 잘라내면 충돌이 증가한다. 충돌 발생 시 재생성 로직이 필요하다.
+
+**Snowflake ID + Base62:** 구조적으로 충돌이 불가능하다. 타임스탬프가 포함되어 최근 생성 URL을 날짜 범위로 조회할 수 있다. 워커 ID 관리 인프라가 필요하지만, 이는 Kubernetes StatefulSet 인덱스로 자동화할 수 있다. 대규모 분산 환경의 표준이다.
+
+### Q3. 초당 10만 건 단축 요청을 처리하려면?
+
+병목은 DB 쓰기다. Aurora MySQL 단일 마스터는 약 1~2만 TPS가 한계다.
+
+**해결 방법:**
+
+1. Snowflake ID를 각 서버가 독립 생성 → DB 시퀀스 의존 제거
+2. 코드 사전 생성 풀 (Pre-generation Pool) — 백그라운드 스레드가 코드를 미리 생성해 메모리 큐에 적재, 요청 시 큐에서 꺼냄
+
+```java
+@Component
+public class ShortCodePool {
+
+    private final BlockingQueue<String> pool = new LinkedBlockingQueue<>(10_000);
+    private final SnowflakeIdGenerator idGenerator;
+    private final Base62Encoder encoder;
+
+    @PostConstruct
+    public void init() { refillPool(); }
+
+    public String acquire() throws InterruptedException {
+        return pool.poll(100, TimeUnit.MILLISECONDS);
+    }
+
+    @Scheduled(fixedDelay = 1000)
+    public void refillPool() {
+        int deficit = 10_000 - pool.size();
+        for (int i = 0; i < deficit; i++) {
+            pool.offer(encoder.encode(idGenerator.nextId()));
+        }
+    }
+}
 ```
 
-**커스텀 단축코드 충돌 처리**
+3. 단축 요청을 Kafka에 먼저 쌓고 Consumer가 배치 INSERT → DB 쓰기 I/O 최소화
 
-사용자 지정 코드(`bit.ly/mybrand`)는 DB UNIQUE 제약으로 충돌을 차단한다. 단, 예약어(`api`, `admin`, `health` 등)와 기존 자동 생성 코드 공간이 겹치지 않도록 커스텀 코드 네임스페이스를 분리 관리한다.
+### Q4. 만료된 코드 재사용 정책은?
 
-**클릭 데이터 프라이버시**
+만료된 코드를 즉시 재사용하면 문제가 생긴다. 브라우저 캐시에 구 URL이 남아있을 수 있고, 검색 엔진 색인에 구 URL이 있을 수 있다. 재사용하면 새 URL과 구 URL이 혼재한다.
 
-클릭 이벤트(IP, User-Agent, 리퍼러)는 분석 목적으로 수집되지만 개인 식별이 가능하다. IP는 저장 전 마지막 옥텟을 마스킹(1.2.3.x)하고, GDPR 삭제권 요청 시 해당 사용자의 클릭 로그를 90일 이내에 삭제하는 파이프라인을 갖춘다.
+**안전한 정책:** 만료 후 최소 30일 Grace Period 유지 후 재사용 허용. 또는 만료 코드를 재사용하지 않고 새 코드 생성 (공간 낭비이지만 단순). Base62 7자리 = 3.5조이므로 10년치 URL 3,650억 개를 수용하고도 공간이 남는다. 재사용 없이 운영해도 문제없다.
 
----
+**Redis TTL 동기화:** URL 만료 시 Redis 캐시도 함께 만료되어야 한다. `EXPIREAT` 명령으로 DB의 `expires_at`과 Redis TTL을 동기화한다. URL을 수동 삭제할 때는 `DEL url:{shortCode}`를 즉시 호출한다.
 
-### 꼭 직접 만들어야 하는가? — Build vs Buy
+### Q5. 극한 트래픽 — 방송에서 bit.ly 링크가 노출되면?
 
-| 선택지 | 장점 | 단점 | 적합한 시점 |
-|--------|------|------|-----------|
-| Bitly / TinyURL API | 즉시 사용, 분석 대시보드 내장, 별도 인프라 불필요 | 자체 도메인 제한, 분석 커스텀 불가, 월 100만 건 초과 시 비용 급등 | Phase 1~2 |
-| 직접 구축 | 도메인 브랜딩, 분석 커스텀, 비용 제어 완전 가능 | 초기 구현 부담, 운영·모니터링 필요 | Phase 2~4 |
+유명 방송에서 단축 URL이 노출되면 순간 트래픽이 평소의 100배가 된다. 초당 50만 요청이 단일 URL에 집중된다. 이를 Hot URL 문제라 한다.
 
-**실무 판단 기준**: 월 100만 건 이상, 자체 도메인 필수, 분석 파이프라인 커스텀이 필요할 때 직접 구축으로 전환한다.
+**방어 계층:**
 
-> 핵심: Phase 1에서 직접 구축하면 오버 엔지니어링이고, Phase 3에서 SaaS에 의존하면 비용 폭발이다. 현재 MAU에 맞는 선택을 하고, 병목이 실제로 발생할 때 전환한다.
+```
+1단계: 각 API 서버 로컬 캐시 (Caffeine)
+   → 상위 1,000개 URL을 프로세스 메모리에 보관
+   → 네트워크 없이 마이크로초 응답
 
----
-## Day 1 → Scale 진화
+2단계: Redis 캐시
+   → 로컬 캐시 미스 시 Redis 조회
+   → 수십만 QPS 처리 가능
 
-URL 단축기를 처음부터 Consistent Hashing 샤딩과 Redis Cluster로 만들면 과잉 설계다. 읽기 QPS와 저장량 규모에 맞게 단계적으로 진화해야 한다.
+3단계: DB Read Replica
+   → Redis 미스 시 DB 조회 (전체 요청의 ~1%)
+```
 
-### Phase 1 — 일 생성 1만 건, 일 리다이렉트 100만 건 (스타트업 초기)
+```java
+// 로컬 캐시 (Caffeine) — L1 캐시
+@Bean
+public Cache<String, String> localUrlCache() {
+    return Caffeine.newBuilder()
+        .maximumSize(1_000)          // 상위 1,000개 URL
+        .expireAfterWrite(5, TimeUnit.MINUTES)
+        .recordStats()
+        .build();
+}
 
-**아키텍처**: API 서버 1대 + MySQL + Auto_increment 코드 생성
+// 읽기 순서: L1(로컬) → L2(Redis) → L3(DB)
+public Optional<String> getLongUrl(String shortCode) {
+    // L1
+    String local = localUrlCache.getIfPresent(shortCode);
+    if (local != null) return Optional.of(local);
 
-- 코드 생성: MySQL AUTO_INCREMENT를 Base62로 인코딩 (단일 서버라 충돌 없음)
-- 리다이렉트: MySQL SELECT 후 302 응답 (읽기 QPS ~12, MySQL로 충분)
-- 캐시: 없음 (QPS가 낮아 불필요)
-- 분석: 클릭 이벤트를 MySQL clicks 테이블에 직접 INSERT
+    // L2
+    String cached = redis.opsForValue().get("url:" + shortCode);
+    if (cached != null) {
+        localUrlCache.put(shortCode, cached);
+        return Optional.of(cached);
+    }
 
-**월 비용**
-- EC2 t3.medium × 1: ~$35
-- RDS MySQL db.t3.medium: ~$60
-- 합계: **~$95/월**
-
-### Phase 2 — 일 생성 100만 건, 일 리다이렉트 1억 건 (서비스 성장)
-
-**아키텍처**: Snowflake ID 도입 + Redis 캐시 + 클릭 분석 비동기화
-
-- 코드 생성: Snowflake ID 서버 별도 구축 (서버 수평 확장 준비)
-- 리다이렉트: Redis 캐시 추가 (히트율 80% 목표), 캐시 미스 시 MySQL
-- 읽기 QPS: ~1,160 QPS → Redis 처리, DB는 ~230 QPS만 수신
-- 클릭 분석: Kafka로 비동기화, 리다이렉트 응답 시간에 영향 없도록 분리
-- 파레토 캐시: 클릭 수 상위 20% URL을 Redis Sorted Set으로 추적, 자동 캐시 워밍
-
-**월 비용**
-- EC2 c5.large × 3 (API + Snowflake): ~$300
-- RDS MySQL db.r5.large (Multi-AZ): ~$400
-- ElastiCache Redis r6g.large: ~$200
-- Kafka MSK (2브로커): ~$400
-- 합계: **~$1,300/월**
-
-### Phase 3 — 일 생성 1000만 건, 일 리다이렉트 10억 건 (고성장)
-
-**아키텍처**: MySQL 샤딩 + Redis Cluster + ClickHouse 분석
-
-- 코드 생성: Snowflake ID 클러스터 (워커 10대), 분산 환경 충돌 없음
-- DB 샤딩: Consistent Hashing으로 MySQL 4샤드 분산 (short_code 기준)
-- 읽기: Redis Cluster(6노드), 인기 URL 로컬 캐시(Caffeine) L1 추가
-- 분석: Kafka → Flink → ClickHouse 파이프라인, 시간별 클릭 집계 1초 내 조회
-- URL 만료: 새벽 배치로 expires_at 초과 URL 일괄 삭제, Redis TTL 자동 만료
-
-**월 비용**
-- EC2 c5.2xlarge × 8: ~$2,000
-- RDS MySQL 4샤드 (db.r5.large 각): ~$1,600
-- ElastiCache Redis Cluster: ~$1,200
-- Kafka + Flink + ClickHouse: ~$2,000
-- 합계: **~$6,800/월**
-
-### Phase 4 — 일 생성 1억 건, 일 리다이렉트 100억 건 (글로벌 플랫폼)
-
-**아키텍처**: 멀티리전 + DynamoDB 전환 + CDN 엣지 리다이렉트
-
-- 저장소: MySQL → DynamoDB Global Tables로 전환 (자동 샤딩, 멀티리전 복제)
-- 엣지 리다이렉트: CloudFront Functions에서 Redis 조회 없이 DynamoDB 직접 조회 후 리다이렉트 (서버리스, 지연 20ms 이하)
-- 코드 생성: 리전별 Snowflake ID 워커 (리전 비트로 전역 유일성 보장)
-- 분석: 멀티리전 ClickHouse 클러스터, 국가별 클릭 분석 실시간 제공
-- 보안: Google Safe Browsing API 연동 자동화, 악성 URL 생성 즉시 차단 + 기존 링크 자동 비활성화
-
-**월 비용**
-- DynamoDB Global Tables (읽기 100억 건/일): ~$25,000
-- CloudFront Functions + 엣지 컴퓨팅: ~$10,000
-- 멀티리전 분석 인프라: ~$8,000
-- 합계: **~$43,000/월**
+    // L3
+    return urlRepository.findByShortCode(shortCode)
+        .map(m -> {
+            redis.opsForValue().set("url:" + shortCode, m.getLongUrl(),
+                1, TimeUnit.HOURS);
+            localUrlCache.put(shortCode, m.getLongUrl());
+            return m.getLongUrl();
+        });
+}
+```
 
 ---
 
-## 핵심 메트릭 5개
+## 15. 극한 시나리오 분석
 
-URL 단축기에서 이 다섯 숫자가 동시에 정상이면 서비스는 건강하다. 리다이렉트 지연이 가장 민감한 지표다 — 사용자가 링크를 클릭했을 때 100ms 이상 기다리면 UX가 망가진다.
+### 시나리오 1: Redis 클러스터 전체 다운
+
+**상황:** Redis Cluster 6노드가 네트워크 파티션으로 전부 응답 불가. 캐시 히트율 0%로 떨어진다.
+
+**영향:** 읽기 QPS 116,000이 전부 MySQL DB로 직접 도달한다. MySQL 한계(~10,000 QPS)를 10배 초과. DB 커넥션 풀 고갈 → 리다이렉트 응답 실패.
+
+**방어:**
+1. 각 API 서버 로컬 캐시 (Caffeine) — Redis 없이도 상위 1,000개 URL 응답 가능
+2. Circuit Breaker (Resilience4j) — DB 과부하 시 일부 요청을 즉시 503으로 차단, DB 보호
+3. Read Replica 추가 투입 — 평소에는 캐시 미스만 처리, 비상 시 전체 트래픽 수용
+
+```java
+@Service
+public class UrlService {
+
+    @CircuitBreaker(name = "db-fallback", fallbackMethod = "fallbackUrl")
+    public Optional<String> getLongUrlFromDb(String shortCode) {
+        return urlRepository.findByShortCode(shortCode)
+            .map(UrlMapping::getLongUrl);
+    }
+
+    // DB도 다운 시 fallback — 503 응답
+    public Optional<String> fallbackUrl(String shortCode, Exception ex) {
+        log.error("DB 조회 실패 — circuit open: {}", shortCode);
+        return Optional.empty();  // Controller에서 503 반환
+    }
+}
+```
+
+### 시나리오 2: Snowflake 워커 ID 중복 설정
+
+**상황:** 배포 자동화 버그로 서버 A와 서버 B가 동일한 워커 ID(42번)로 시작한다. 동일 밀리초에 두 서버가 ID를 생성하면 `(타임스탬프 동일) + (워커 ID 동일) + (시퀀스 동일)` 조건이 겹칠 수 있다.
+
+**영향:** 동일한 short_code가 두 URL에 부여된다. MySQL UNIQUE KEY가 두 번째 INSERT를 거부. 한 요청은 HTTP 500으로 실패한다. 더 심각한 경우, 레이스 컨디션으로 두 URL이 모두 INSERT 성공하면 하나의 코드가 두 개의 원본 URL을 가리키는 데이터 오염이 발생한다.
+
+**방어:**
+1. 워커 ID를 Kubernetes Pod 인덱스에서 자동 할당 (`K8S_POD_INDEX` 환경변수)
+2. 시작 시 ZooKeeper/etcd에서 워커 ID를 원자적으로 발급받고, 종료 시 반납
+3. 모니터링: 코드 충돌 건수 메트릭. 하루 1건이라도 알람 → 즉각 워커 ID 설정 점검
+
+### 시나리오 3: 봇에 의한 URL 대량 생성 공격
+
+**상황:** 악의적인 봇이 초당 5,000건의 URL 생성 요청을 보낸다. DB 쓰기 QPS가 한계를 초과하고, 코드 공간이 빠르게 소진된다.
+
+**방어:**
+
+```java
+// Rate Limiter — 사용자별 초당 10건, 미인증 IP별 초당 1건
+@Component
+public class RateLimitFilter implements HandlerInterceptor {
+
+    private final RateLimiter<String> limiter;
+
+    @Override
+    public boolean preHandle(HttpServletRequest req, HttpServletResponse res,
+                              Object handler) throws Exception {
+        String key = extractRateLimitKey(req);  // userId or IP
+        if (!limiter.tryAcquire(key)) {
+            res.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+            res.getWriter().write("{\"error\": \"Rate limit exceeded\"}");
+            return false;
+        }
+        return true;
+    }
+}
+```
+
+추가로 Google reCAPTCHA를 URL 생성 API에 적용하여 봇 요청을 프론트엔드에서 1차 차단한다.
+
+### 시나리오 4: 유명 링크 삭제 요청
+
+**상황:** 기업 법무팀이 특정 단축 URL에 상표권 침해 콘텐츠가 연결된다고 삭제를 요청한다. 해당 URL은 하루 수백만 클릭의 인기 링크다.
+
+**처리 흐름:**
+1. 관리자 API로 `short_code` 비활성화 (`is_active = false` 업데이트)
+2. Redis에서 `url:{shortCode}` 즉시 삭제 (`DEL`)
+3. Redis에 차단 플래그 설정 (`SET blocked:{shortCode} 1`)
+4. 이후 리다이렉트 요청은 차단 안내 페이지로 응답 (HTTP 451 — 법적 이유로 차단)
+5. 각 API 서버 로컬 캐시(Caffeine)도 무효화 → 캐시 무효화 이벤트를 Redis Pub/Sub으로 전파
+
+---
+
+## 16. 실무에서 놓치기 쉬운 케이스
+
+### 케이스 1: 충돌 재시도 없는 랜덤 코드 생성
+
+Snowflake ID 대신 랜덤 Base62를 쓰는 경우, 충돌 시 재시도 로직이 없으면 HTTP 500이 반환된다.
+
+```java
+@Service
+public class RandomCodeShortenService {
+
+    private static final int MAX_RETRIES = 3;
+
+    public String createShortUrl(String longUrl) {
+        for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            String code = generateRandomBase62(7);
+            try {
+                urlRepository.save(new UrlMapping(code, longUrl));
+                return "https://short.ly/" + code;
+            } catch (DataIntegrityViolationException e) {
+                // UNIQUE 충돌 — 재시도
+                log.warn("코드 충돌 {}회차: {}", attempt + 1, code);
+            }
+        }
+        // 3회 재시도 후 Snowflake ID 폴백 (충돌 불가능)
+        return createWithSnowflakeId(longUrl);
+    }
+}
+```
+
+### 케이스 2: 캐시 TTL 설정 누락
+
+```java
+// 나쁜 예: TTL 없이 캐시 — 만료된 URL도 영구 캐시
+redis.opsForValue().set("url:" + code, longUrl);
+
+// 좋은 예: URL 만료 시각과 동기화
+Instant expiresAt = mapping.getExpiresAt();
+if (expiresAt != null) {
+    Duration ttl = Duration.between(Instant.now(), expiresAt);
+    if (ttl.isPositive()) {
+        redis.opsForValue().set("url:" + code, longUrl, ttl);
+    }
+    // ttl이 음수 = 이미 만료 — 캐시하지 않음
+} else {
+    // 만료 없는 URL은 1시간 TTL (메모리 절약)
+    redis.opsForValue().set("url:" + code, longUrl, 1, TimeUnit.HOURS);
+}
+```
+
+### 케이스 3: 분석을 동기 처리해 리다이렉트 지연
+
+```java
+// 나쁜 예: DB 쓰기가 리다이렉트 응답 경로에 포함
+@GetMapping("/{code}")
+public ResponseEntity<Void> redirect(@PathVariable String code) {
+    String longUrl = getLongUrl(code);
+    clickRepository.save(new ClickEvent(code, request.getRemoteAddr())); // 동기 DB 쓰기
+    return ResponseEntity.status(302).location(URI.create(longUrl)).build();
+}
+
+// 좋은 예: Kafka 비동기 발행 (~1ms) 후 즉시 응답
+@GetMapping("/{code}")
+public ResponseEntity<Void> redirect(@PathVariable String code) {
+    String longUrl = getLongUrl(code);
+    kafka.send("click-events", buildEvent(code, request)); // 비동기, ~1ms
+    return ResponseEntity.status(302).location(URI.create(longUrl)).build();
+}
+```
+
+---
+
+## 17. 핵심 메트릭
+
+URL 단축기에서 이 다섯 숫자가 동시에 정상이면 서비스는 건강하다.
 
 | 메트릭 | 정상 기준 | 이상 신호 | 원인 가설 |
 |--------|---------|---------|---------|
 | **리다이렉트 P99** | 100ms 이내 | 500ms 초과 | Redis 캐시 미스 급증, DB 응답 지연, 핫 URL Redis 노드 집중 |
-| **코드 생성 P99** | 50ms 이내 | 200ms 초과 | Snowflake 서버 과부하, DB INSERT 경합, UNIQUE 충돌 재시도 |
-| **캐시 히트율** | 80% 이상 | 60% 미만 | 신규 URL 폭증으로 파레토 분포 깨짐, Redis 메모리 부족으로 LRU 과다 삭제 |
-| **코드 충돌 건수** | 0건/일 | 1건 이상 | Snowflake 워커 ID 중복 설정, 커스텀 코드 네임스페이스 충돌 |
-| **일 생성 URL 수** | 설계 용량 70% 이하 | 90% 초과 | 바이럴 이벤트, 봇에 의한 대량 생성 공격 (Rate Limit 확인) |
+| **코드 생성 P99** | 50ms 이내 | 200ms 초과 | Snowflake 서버 과부하, DB INSERT 경합 |
+| **캐시 히트율** | 80% 이상 | 60% 미만 | 신규 URL 폭증으로 파레토 분포 깨짐, Redis 메모리 부족 |
+| **코드 충돌 건수** | 0건/일 | 1건 이상 | Snowflake 워커 ID 중복 설정 |
+| **일 생성 URL 수** | 설계 용량 70% 이하 | 90% 초과 | 봇 공격, 바이럴 이벤트 |
 
-**핵심 알람 설정 예시**
+**핵심 알람:**
 
 ```
-리다이렉트 P99 > 200ms → PagerDuty P1 (Redis 상태 즉시 확인)
-캐시 히트율 < 70% → Slack 알림 (Redis 메모리·파레토 캐시 워밍 확인)
-코드 충돌 1건 → PagerDuty P0 (Snowflake 워커 ID 설정 즉시 점검)
-일 생성 URL > 설계 용량 85% → Auto Scaling 트리거 + Slack 알림
-악성 URL 탐지 > 100건/시 → Slack 알림 (봇 공격 가능성, IP Rate Limit 강화)
+리다이렉트 P99 > 200ms   → PagerDuty P1 (Redis 상태 즉시 확인)
+캐시 히트율 < 70%        → Slack 알림 (Redis 메모리·캐시 워밍 확인)
+코드 충돌 1건            → PagerDuty P0 (워커 ID 설정 즉시 점검)
+일 생성 URL > 용량 85%   → Auto Scaling 트리거 + Slack 알림
+악성 URL > 100건/시      → Slack 알림 (봇 공격 의심, Rate Limit 강화)
 ```
 
 ---
 
-## 실제 장애 사례
+## 18. 설계 결정 요약
 
-### 사례 1: bit.ly 장애 — 단일 DB 의존과 캐시 없는 아키텍처
-
-**상황**: bit.ly는 초기 성장 과정에서 MySQL 단일 인스턴스에 의존하는 아키텍처를 운영했다. 특정 시점에 트위터에서 인기 있는 단축 URL이 수백만 번 클릭되면서 MySQL 읽기 QPS가 한계를 초과했다. 리다이렉트 응답 시간이 수 초로 늘어나면서 사용자들이 링크를 클릭해도 원본 URL로 이동하지 못하는 상황이 수십 분간 지속됐다. 당시 트위터 링크 상당 부분이 bit.ly를 통해 단축되어 있었기에 파급력이 컸다.
-
-**근본 원인**: 읽기 캐시 없이 모든 리다이렉트 요청이 MySQL에 직접 도달했다. URL 클릭 분포는 파레토를 따라 극소수 URL에 트래픽이 집중되는데, 이 핫 URL들이 매번 DB 조회를 발생시켰다. MySQL 읽기 QPS 한계(~10,000 QPS)를 초과하면서 연결 풀이 고갈됐다.
-
-**해결책**:
-- Redis 캐시 레이어 도입: 상위 20% URL을 Redis에 캐싱, 읽기 QPS의 80%를 DB에서 분리
-- 파레토 캐시 전략: Redis Sorted Set으로 클릭 수 추적, 상위 진입 시 자동 캐시 워밍
-- MySQL Read Replica 추가: 나머지 20% 캐시 미스 트래픽을 레플리카로 분산
-- 핫 URL 로컬 캐시: 각 API 서버에 Caffeine으로 상위 1000개 URL을 in-process 캐싱
-
-**교훈**: URL 단축기는 읽기:쓰기 = 100:1이다. 읽기 경로에 캐시 없이 DB만으로 설계하면 반드시 서비스가 죽는다. 캐시가 핵심 설계 결정이며, 서비스 출시 전부터 포함되어야 한다.
-
-### 사례 2: Instagram UUID 충돌 사고 (2012)
-
-**상황**: Instagram이 급성장하던 2012년, 포토 ID 생성 방식으로 PostgreSQL의 `uuid_generate_v4()` 함수를 사용하고 있었다. 서버 수가 늘어나면서 여러 서버가 동시에 UUID를 생성하는 빈도가 높아졌다. UUIDv4는 122비트 무작위이므로 이론적 충돌 확률은 극히 낮지만, 수백만 건/일의 고빈도 생성 환경에서 실제 충돌이 발생했다. 동일 ID를 가진 두 사진이 생성되면서 한 사진이 다른 사진의 URL로 덮어씌워지는 버그가 발생했다.
-
-**근본 원인**: UUIDv4의 무작위성은 이론적으로 충돌 확률이 매우 낮지만 0이 아니다. 수억 건의 ID를 생성하면 생일 역설(Birthday Paradox)에 의해 충돌 확률이 유의미하게 증가한다. 또한 PostgreSQL의 UUID 생성이 완전한 무작위가 아닌 의사난수(PRNG)였고, PRNG 시드가 서버 간 일부 겹쳤다.
-
-**해결책 (Instagram의 Sharding ID 시스템)**:
-- 커스텀 64비트 ID 시스템 도입: 타임스탬프(41비트) + 샤드 ID(13비트) + 시퀀스(10비트)
-- 이는 Twitter Snowflake와 동일한 구조로, 수학적으로 충돌이 불가능한 전역 유일 ID
-- 각 샤드가 자신의 샤드 ID 비트를 포함하므로 여러 서버가 동시에 생성해도 충돌 없음
-- PostgreSQL 함수로 구현하여 애플리케이션 레이어 변경 최소화
-
-**교훈**: 분산 환경에서 ID 생성은 "충돌 확률이 낮다"로 안심하면 안 된다. 생성 건수가 많아질수록 확률은 현실이 된다. Snowflake ID처럼 구조적으로 충돌이 불가능한 방식을 사용해야 한다. URL 단축기도 동일 원칙이 적용된다 — 랜덤이나 해시 기반 코드 생성은 대규모에서 반드시 충돌 검증 로직이 필요하다.
+| 결정 | 선택 | 왜 이 선택인가 |
+|------|------|--------------|
+| 코드 생성 | Snowflake ID + Base62 | 분산 환경 충돌 불가, 7자리 3.5조 공간 |
+| 리다이렉트 | 302 임시 | 클릭 추적 가능 — 비즈니스 수익 모델 |
+| URL 영구 저장 | MySQL | 관계형 쿼리(사용자 목록, 만료 관리, JOIN) 필요 |
+| 리다이렉트 캐시 | Redis Cluster | 읽기 116K QPS를 DB에서 분리, sub-ms 응답 |
+| 분석 저장 | ClickHouse | 수억 건 집계를 초 단위 처리 |
+| 클릭 이벤트 수집 | Kafka 비동기 | 리다이렉트 응답 경로에서 분리, 재처리 가능 |
+| 수평 확장 | Consistent Hashing | 샤드 추가 시 재배치 최소화 (1/N) |
+| 만료 처리 | Lazy + Eager 배치 조합 | 즉시 응답(Lazy) + DB 용량 관리(Eager) |
+| 악성 URL | Safe Browsing + 비동기 재검사 | 생성 시 동기 차단 + 사후 악성 등록 대응 |
 
 ---
 
-## 실무에서 놓치기 쉬운 케이스
-
-### 1. 악성 URL 은닉 — 단축 URL 뒤에 피싱 사이트가 숨는다
-
-`bit.ly/abc123`을 클릭하기 전에는 목적지 URL을 알 수 없다. 이 특성을 이용해 피싱 사이트·악성코드 배포 사이트로 향하는 단축 URL이 SNS와 이메일로 퍼진다. 사용자 신뢰를 잃으면 서비스 전체가 블랙리스트에 오른다.
-
-**방어 계층 설계:**
-
-```
-URL 등록 시 (동기 검사)
-  → Google Safe Browsing API 호출
-  → 응답 시간 150ms 이내, 악성 판정 시 등록 거부
-
-URL 등록 후 (비동기 재검사)
-  → 등록 24시간 뒤 Kafka Consumer가 재검사 (나중에 악성으로 등록되는 경우 대응)
-  → 악성 판정 시 Redis에 차단 플래그 설정, 리다이렉트 시 경고 페이지로 전환
-
-리다이렉트 시 (실시간 캐시 조회)
-  → Redis: GET blocked:{short_code}
-  → 차단 플래그 있으면 → 경고 중간 페이지 → 사용자가 직접 "계속 진행" 클릭
-```
-
-Google Safe Browsing API 외에 VirusTotal API를 병행하면 탐지율이 높아진다. 단, 응답 지연이 있으므로 비동기 재검사 파이프라인에서 활용하는 것이 적합하다.
-
----
-
-### 2. 만료 URL 리소스 낭비 — 죽은 링크가 DB와 캐시를 잠식한다
-
-1년 후 만료되는 단축 URL이 수억 개 쌓이면 DB와 Redis 모두 만료된 레코드로 채워진다. 리다이렉트 요청마다 "만료됨" 조회가 발생해 DB 읽기 부하가 쓸데없이 늘어난다.
-
-```sql
--- 만료 URL 정리 배치 (매일 새벽 3시 실행)
-DELETE FROM urls
-WHERE expires_at < NOW() - INTERVAL 30 DAY  -- 만료 후 30일 유예 (분쟁 대응)
-LIMIT 10000;  -- 한 번에 최대 1만 건, 대량 락 방지
-```
-
-Redis에서는 `EXPIRE`를 처음 캐싱할 때 TTL과 동기화해 자동 만료되도록 설정한다.
-
-```python
-def cache_url(short_code, long_url, expires_at):
-    ttl = max(0, int(expires_at - time.time()))
-    if ttl > 0:
-        redis.setex(f"url:{short_code}", ttl, long_url)
-    # ttl=0이면 이미 만료 — 캐싱 자체를 건너뜀
-```
-
-만료 URL에 대한 리다이렉트 요청에는 HTTP 410 Gone을 반환한다. 404가 아닌 410은 "의도적으로 제거됐음"을 의미하므로 검색 엔진이 해당 URL을 색인에서 제거한다.
-
----
-
-### 3. 커스텀 슬러그 선점 — 누군가 "apple"을 먼저 등록한다
-
-커스텀 슬러그 기능(`bit.ly/mycompany`)을 허용하면 브랜드명·욕설·경쟁사 이름을 선점하는 스쿼팅이 발생한다. `apple`, `google`, `samsung` 같은 슬러그를 악의적인 사용자가 먼저 등록하면 브랜드 신뢰 문제가 생긴다.
-
-```python
-RESERVED_SLUGS = set([
-    "apple", "google", "amazon", "admin", "api",
-    "login", "signup", "help", "support", "about",
-    # ... 브랜드명·예약어 목록 (정기 업데이트)
-])
-
-PROFANITY_LIST = load_profanity_list()  # 욕설 필터
-
-def validate_custom_slug(slug):
-    if slug in RESERVED_SLUGS:
-        raise ValueError("이미 예약된 슬러그입니다")
-    if slug in PROFANITY_LIST:
-        raise ValueError("사용할 수 없는 단어입니다")
-    if len(slug) < 4 or len(slug) > 30:
-        raise ValueError("슬러그는 4~30자여야 합니다")
-    if not re.match(r'^[a-zA-Z0-9_-]+$', slug):
-        raise ValueError("영문, 숫자, _, -만 사용 가능합니다")
-```
-
-인증된 브랜드 계정에는 자신의 브랜드명 슬러그를 사용할 수 있는 **브랜드 인증** 절차를 별도로 운영한다. 이미 등록된 슬러그라도 상표권 침해 신고를 받으면 강제 이전할 수 있는 관리자 도구가 필요하다.
-
----
-
-## 설계 결정 요약
-
-| 결정 | 선택 | 이유 |
-|------|------|------|
-| 코드 생성 | Snowflake + Base62 | 분산 환경 충돌 없음, 7자리 3.5조 공간 |
-| 리다이렉트 | 302 (임시) | 클릭 추적 가능 |
-| 캐시 | Redis Cluster | 읽기 116k QPS를 DB에서 분리 |
-| DB | Aurora MySQL | ACID + 읽기 레플리카 |
-| 클릭 추적 | Kafka 비동기 | 리다이렉트 응답 시간에 영향 없음 |
-| 샤딩 | Consistent Hashing | 샤드 추가 시 재배치 최소화 |
-
----
-## 실무에서 자주 하는 실수
-
-**실수 1: 충돌 재시도 로직 없이 랜덤 코드 생성**
-Base62 7자리 = 3.5조 조합이지만, 실제 사용 중인 코드가 누적될수록 충돌 확률이 올라갑니다. 충돌 재시도 없이 단순 INSERT 후 실패하면 HTTP 500을 반환하는 구현은 트래픽이 커지면 장애로 이어집니다. 올바른 구현은 DB unique constraint 위반 시 최대 3회 재시도 후 최종 실패 처리입니다.
-
-```java
-public String createShortUrl(String longUrl) {
-    for (int attempt = 0; attempt < 3; attempt++) {
-        String code = generateRandomCode(7); // Base62 7자리
-        try {
-            urlRepository.save(new UrlMapping(code, longUrl));
-            return "https://short.ly/" + code;
-        } catch (DataIntegrityViolationException e) {
-            // 충돌 발생 시 재시도 (최대 3회)
-            log.warn("Code collision on attempt {}: {}", attempt + 1, code);
-        }
-    }
-    // Snowflake ID 기반 코드로 폴백
-    return createWithSnowflakeId(longUrl);
-}
-```
-
-**실수 2: 리다이렉트 캐시에 영구 TTL 설정**
-`redis.set("url:" + code, longUrl)` 후 TTL을 설정하지 않으면 URL이 삭제되어도 Redis에 남아있습니다. 만료된 URL로 리다이렉트가 발생하는 문제. TTL은 URL 만료 시각 - 현재 시각으로 동적 계산해 설정해야 합니다. URL 삭제 시 즉시 `redis.del("url:" + code)` 호출도 필수입니다.
-
-**실수 3: Analytics를 동기로 처리해 리다이렉트 응답 지연**
-클릭 시 IP, User-Agent, Referer를 동기로 DB에 기록하면 리다이렉트 응답이 DB 쓰기 레이턴시만큼 늦어집니다. 5ms → 50ms 증가. Kafka에 클릭 이벤트를 비동기로 발행하고, Consumer가 Analytics DB에 배치 저장하는 구조로 분리해야 합니다. 리다이렉트 응답 시간 목표: < 10ms.
-
-**실수 4: 단일 Redis 노드에서 카운터 관리**
-코드 생성을 Redis INCR로 처리할 경우 단일 노드 장애 시 서비스 전체 불가. Snowflake ID 방식(타임스탬프 + 워커ID + 시퀀스)을 각 서버에서 독립적으로 생성하면 Redis 의존 없이 전역 유일 ID를 확보할 수 있습니다.
-
----
-## 면접 포인트
-
-**Q1. 301 vs 302 리다이렉트의 실무적 차이는?**
-301(영구 이동)은 브라우저가 캐시해 이후 요청을 서버에 보내지 않습니다. 클릭 추적이 불가능해지고, longUrl 변경 시 즉시 반영이 안 됩니다. 302(임시 이동)는 매번 서버를 거치므로 클릭 수 카운팅·A/B 테스트·URL 변경이 모두 가능합니다. bit.ly 같은 상용 서비스는 302를 사용합니다. 단, 302는 캐시 미활용으로 서버 부하가 높으므로 Redis 캐시와 조합이 필수입니다.
-
-**Q2. 코드 생성 전략별 트레이드오프는?**
-MD5 해시: 결정론적이라 같은 URL은 같은 코드(중복 저장 방지)지만 해시 충돌 가능성과 긴 해시를 잘라내는 과정에서 충돌 증가. 랜덤 Base62: 구현 단순하지만 DB에 충돌 체크 쿼리 필요. Snowflake ID + Base62: 전역 유일성 보장, 충돌 없음, 타임스탬프 포함으로 정렬 가능. 대규모 시스템에서는 Snowflake 방식이 표준입니다.
-
-**Q3. 초당 10만 건 단축 요청을 처리하려면?**
-병목은 DB 쓰기입니다. Aurora MySQL 단일 마스터는 약 1~2만 TPS가 한계. 해결: ① 단축 요청을 Kafka에 먼저 쌓고 Consumer가 배치 INSERT ② Snowflake ID를 각 서버가 독립 생성해 DB 시퀀스 의존 제거 ③ 코드 사전 생성(Pre-generation) — 백그라운드로 코드를 미리 만들어 풀에 적재, 요청 시 풀에서 꺼냄. 실제 Bit.ly 아키텍처가 이 방식입니다.
-
-**Q4. 만료된 코드 재사용 정책은?**
-만료된 코드를 즉시 재사용하면, 이전 URL로 캐시된 브라우저가 새 URL로 이동하는 문제가 생깁니다(캐시 오염). 안전한 정책: 만료 후 최소 30일 Grace Period 유지, 이후 재사용 가능. 또는 만료 코드를 재사용하지 않고 새 코드 생성(공간 낭비이지만 단순함). Base62 7자리 = 3.5조이므로 재사용 없이도 수십 년은 충분합니다.
-
-**Q5. URL 단축 서비스에서 악성 URL 차단은?**
-URL 저장 시 Google Safe Browsing API로 악성 여부를 동기 체크합니다(응답 100ms 이내). 기존 단축 URL에 악성으로 신고가 들어오면 Redis에 블록 리스트 추가 후 리다이렉트 시 차단 페이지로 응답. 정기적으로 저장된 URL 목록을 Safe Browsing API로 배치 재검증합니다.
+> URL 단축기는 "짧은 코드를 만든다"는 단순한 기능처럼 보이지만, 읽기:쓰기 100:1 비율이 캐시 전략을, 클릭 분석 수익 모델이 302 선택을, 분산 환경이 Snowflake ID를 강제한다. 모든 설계 결정은 요구사항에서 시작해야 한다. 면접에서 "왜 이 선택인가"를 항상 요구사항으로 거슬러 올라가 설명하는 것이 고점 답변의 핵심이다.
