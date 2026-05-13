@@ -1,5 +1,5 @@
 ---
-title: "Java 제네릭(Generics)"
+title: "Java 제네릭(Generics) 심층 분석"
 categories:
 - JAVA
 toc: true
@@ -7,1493 +7,1712 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-Java 제네릭(Generics)은 클래스, 인터페이스, 메서드를 정의할 때 타입을 파라미터로 사용할 수 있게 해주는 기능입니다. Java 5(2004)에 도입되어 타입 안전성과 코드 재사용성을 동시에 달성하는 핵심 언어 기능으로 자리잡았습니다.
+Java 제네릭은 1995년 출시된 Java에 2004년(Java 5) 뒤늦게 합류한 기능입니다. 단순한 "타입 파라미터 문법" 수준을 넘어, **타입 소거(Type Erasure)**, **브리지 메서드**, **PECS**, **힙 오염**, **Reified 제네릭 부재** 등 JVM 설계 철학이 깊게 녹아 있는 주제입니다. 이 글은 왜 그런 설계를 선택했는지 내부 메커니즘 중심으로 파고듭니다.
 
-> **비유로 이해하기**: 제네릭은 규격화된 박스와 같습니다. "이 박스는 사과만 담는 박스입니다(`Box<Apple>`)"라고 라벨을 붙이면, 다른 물건을 넣으려 할 때 박스 자체가 거부합니다(컴파일 에러). 반면 라벨 없는 박스(Raw 타입 `Box`)는 무엇이든 들어가지만, 꺼낼 때 사과인지 확인하고 손질하는(캐스팅) 번거로움이 생기고, 잘못 확인하면 바나나를 사과로 착각하는 사고(ClassCastException)가 납니다. 제네릭은 이 런타임 사고를 컴파일 타임으로 앞당깁니다.
+> **비유**: 제네릭은 공항 수하물 태그와 같습니다. 비행기(JVM)는 어떤 짐(Object)이든 실을 수 있지만, 탑승 수속 카운터(컴파일러)에서 태그를 붙여 목적지(타입)를 검증합니다. 비행기가 이륙하면(런타임) 태그는 제거되고 짐 자체만 남습니다. 수하물이 뒤바뀌는 사고(ClassCastException)는 지상(컴파일 타임)에서 막아야지, 하늘(런타임)에서 막으면 이미 늦습니다.
 
 ---
 
-## 1. 제네릭이란? 왜 필요한가?
+## 1. 제네릭이 필요한 근본 이유
 
-### 제네릭 도입 전: Object 캐스팅의 문제점
+### Java 5 이전: Object 캐스팅의 구조적 취약점
 
-Java 5 이전에는 컬렉션이 `Object` 타입으로 모든 것을 저장했습니다.
+Java 컬렉션 API 초기 설계는 모든 원소를 `Object`로 받는 구조였습니다. 이는 두 가지 근본적 문제를 일으켰습니다.
 
 ```java
-// Java 5 이전 — 제네릭 없는 코드
-List list = new ArrayList();
-list.add("Hello");
-list.add(123);        // 컴파일 통과 — 실수를 잡을 수 없음
-list.add(new User()); // 컴파일 통과
+// Java 1.4 시대 코드
+List userNames = new ArrayList();
+userNames.add("Alice");
+userNames.add("Bob");
+userNames.add(42);          // 실수 — 컴파일러가 전혀 모름
 
-// 꺼낼 때 반드시 명시적 캐스팅 필요
-String s = (String) list.get(0); // OK
-String s2 = (String) list.get(1); // 런타임 ClassCastException 발생!
+for (int i = 0; i < userNames.size(); i++) {
+    String name = (String) userNames.get(i); // 3번째에서 런타임 폭발
+    System.out.println(name.toUpperCase());
+}
+// java.lang.ClassCastException: class java.lang.Integer
+//   cannot be cast to class java.lang.String
 ```
 
-문제점은 세 가지입니다.
-
-1. **ClassCastException 위험**: 잘못된 타입을 넣어도 컴파일러가 감지하지 못하고 런타임에서 터집니다.
-2. **명시적 캐스팅 필수**: 꺼낼 때마다 `(String)` 같은 캐스팅 코드를 작성해야 합니다.
-3. **의도 불명확**: 이 `List`가 어떤 타입을 담는지 코드만 봐서는 알 수 없습니다.
-
-### 제네릭 도입 후: 타입 안전성 확보
+문제의 핵심은 **에러 발생 시점의 지연**입니다. 42를 넣는 시점(개발)과 ClassCastException이 터지는 시점(운영)이 다릅니다. 프로덕션에서 야간 배치가 수천 건 처리 후 3001번째에서 터지면 이미 데이터는 오염되어 있습니다.
 
 ```java
-// Java 5 이후 — 제네릭 코드
-List<String> list = new ArrayList<>();
-list.add("Hello");
-list.add(123);    // 컴파일 에러! — 실수를 컴파일 타임에 차단
+// Java 5 이후 — 컴파일 타임 차단
+List<String> userNames = new ArrayList<>();
+userNames.add("Alice");
+userNames.add("Bob");
+// userNames.add(42); // 컴파일 에러: incompatible types: int cannot be converted to String
 
-String s = list.get(0); // 캐스팅 불필요
-```
-
-### 타입 안전성 (Type Safety)
-
-제네릭의 핵심 이점은 **컴파일 타임 타입 체크**입니다. 잘못된 타입을 사용하면 프로그램이 실행되기 전에 오류를 발견할 수 있습니다.
-
-```java
-// 타입 안전한 컨테이너
-List<Integer> numbers = new ArrayList<>();
-numbers.add(1);
-numbers.add(2);
-// numbers.add("three"); // 컴파일 에러 — "three"는 Integer가 아님
-
-int sum = 0;
-for (int n : numbers) {  // 언박싱, 캐스팅 없이 바로 사용
-    sum += n;
+for (String name : userNames) { // 캐스팅 코드 자체가 불필요
+    System.out.println(name.toUpperCase());
 }
 ```
 
-컴파일러가 타입을 보장하므로 런타임 `ClassCastException`이 원천적으로 차단됩니다.
+이 변화는 단순한 편의 기능이 아닙니다. **에러 발견 시점을 런타임에서 컴파일 타임으로 당기는** 패러다임 전환입니다.
 
 ---
 
-## 2. 제네릭 클래스와 인터페이스
+## 2. 타입 소거(Type Erasure): Java가 선택한 설계 철학
 
-### 타입 파라미터 명명 관례
+### 왜 타입 소거를 선택했는가 — 하위 호환성의 딜레마
 
-자바 커뮤니티에서 통용되는 단일 대문자 관례입니다.
+Java 5가 출시될 당시 이미 수백만 줄의 Java 코드가 존재했습니다. C#은 .NET 2.0에서 Reified 제네릭(런타임 타입 정보 유지)을 선택했지만, Java는 달랐습니다.
 
-| 파라미터 | 의미 | 주요 사용처 |
-|---------|------|-----------|
-| `T` | Type | 일반적인 타입 |
-| `E` | Element | 컬렉션 원소 |
-| `K` | Key | Map의 키 |
-| `V` | Value | Map의 값 |
-| `N` | Number | 숫자 타입 |
-| `R` | Return | 반환 타입 |
-| `S`, `U`, `V` | 추가 타입 | 두 번째, 세 번째 타입 파라미터 |
+**핵심 제약**: 기존 `List`(Raw 타입)로 작성된 코드가 Java 5 컴파일러와 JVM에서 수정 없이 동작해야 했습니다. 또한 `ArrayList<String>`으로 컴파일된 `.class` 파일이 Java 1.4 런타임에서도 동작해야 했습니다(바이너리 하위 호환성).
 
-### 제네릭 클래스 정의와 사용
+이를 달성하는 유일한 방법은 **제네릭 타입 정보를 컴파일러가 검사 후 소거**하는 것이었습니다. 런타임 JVM은 그대로 두고, 컴파일러 레이어에서만 타입 안전성을 추가한 것입니다.
+
+```mermaid
+graph LR
+    SRC["소스코드 List&lt;String&gt;"] --> JAVAC["javac 컴파일러"]
+    JAVAC --> CHECK["1단계: 타입 검사"]
+    CHECK --> ERASE["2단계: 타입 소거"]
+    ERASE --> CAST["3단계: 캐스팅 삽입"]
+    CAST --> BC["바이트코드 List"]
+    BC --> JVM["JVM 실행"]
+```
+
+### 컴파일 타임에 정확히 무슨 일이 일어나는가
+
+컴파일러는 세 가지 변환을 순서대로 수행합니다.
+
+**변환 1: 타입 파라미터를 바운드 타입으로 교체**
 
 ```java
-// 제네릭 클래스 정의
+// 원본 소스코드
 public class Box<T> {
     private T value;
 
-    public Box(T value) {
-        this.value = value;
-    }
+    public T getValue() { return value; }
+    public void setValue(T value) { this.value = value; }
+}
 
-    public T getValue() {
-        return value;
-    }
+public class NumericBox<T extends Number> {
+    private T value;
+    public double sum() { return value.doubleValue(); }
+}
+```
 
-    public void setValue(T value) {
-        this.value = value;
-    }
+```java
+// 소거 후 바이트코드 (javap -c 로 확인 가능한 형태)
+public class Box {
+    private Object value;       // T → Object (바운드 없으면 Object)
+
+    public Object getValue() { return value; }
+    public void setValue(Object value) { this.value = value; }
+}
+
+public class NumericBox {
+    private Number value;       // T extends Number → Number (첫 번째 바운드)
+    public double sum() { return value.doubleValue(); }
+}
+```
+
+**변환 2: 호출 지점에 자동 캐스팅 삽입**
+
+```java
+// 원본
+List<String> list = new ArrayList<>();
+list.add("hello");
+String s = list.get(0);
+
+// 소거 후 (컴파일러가 생성하는 실제 바이트코드)
+List list = new ArrayList();
+list.add("hello");
+String s = (String) list.get(0); // 컴파일러가 자동으로 체크캐스트 삽입
+```
+
+컴파일러가 자동으로 삽입하는 캐스팅은 **절대 실패하지 않음을 컴파일러가 보장**합니다. 타입 검사가 이미 끝났기 때문입니다. Raw 타입이나 unchecked 경고를 무시하지 않는 한 런타임 ClassCastException은 발생하지 않습니다.
+
+**변환 3: 런타임 타입 동일성 확인**
+
+```java
+List<String> stringList = new ArrayList<>();
+List<Integer> intList = new ArrayList<>();
+
+// 런타임에 동일한 클래스 — 제네릭 타입 파라미터는 이미 소거됨
+System.out.println(stringList.getClass() == intList.getClass()); // true
+System.out.println(stringList.getClass().getName()); // java.util.ArrayList
+
+// instanceof도 마찬가지
+System.out.println(stringList instanceof List);    // true
+System.out.println(stringList instanceof ArrayList); // true
+// System.out.println(stringList instanceof List<String>); // 컴파일 에러!
+```
+
+### 브리지 메서드(Bridge Methods): 다형성 보존 장치
+
+타입 소거로 인해 오버라이드 관계가 깨지는 상황이 생깁니다. 컴파일러는 이를 자동으로 수정하는 **브리지 메서드**를 생성합니다.
+
+```java
+// 원본 코드
+public interface Comparable<T> {
+    int compareTo(T other);
+}
+
+public class Money implements Comparable<Money> {
+    private final long cents;
+
+    public Money(long cents) { this.cents = cents; }
 
     @Override
-    public String toString() {
-        return "Box[" + value + "]";
+    public int compareTo(Money other) {
+        return Long.compare(this.cents, other.cents);
     }
 }
 ```
 
 ```java
-// 사용
-Box<String> stringBox = new Box<>("Hello");
-String s = stringBox.getValue(); // 캐스팅 불필요
+// 타입 소거 후 컴파일러가 실제로 생성하는 바이트코드
+public class Money implements Comparable {
 
-Box<Integer> intBox = new Box<>(42);
-int n = intBox.getValue(); // 자동 언박싱
-
-Box<List<String>> listBox = new Box<>(new ArrayList<>());
-// 타입 파라미터에 제네릭 타입도 사용 가능
-```
-
-**다이아몬드 연산자 (`<>`)**: Java 7부터 오른쪽의 타입 파라미터를 생략하고 `<>`만 써도 컴파일러가 추론합니다.
-
-```java
-// Java 7 이전
-Box<String> box = new Box<String>("Hello");
-
-// Java 7 이후 — 다이아몬드 연산자
-Box<String> box = new Box<>("Hello");
-```
-
-### 다중 타입 파라미터
-
-여러 타입 파라미터를 쉼표로 구분합니다.
-
-```java
-// 두 타입 파라미터를 가진 Pair 클래스
-public class Pair<K, V> {
-    private final K first;
-    private final V second;
-
-    public Pair(K first, V second) {
-        this.first = first;
-        this.second = second;
+    // 원본 메서드 — 소거 후에도 유지
+    public int compareTo(Money other) {
+        return Long.compare(this.cents, other.cents);
     }
 
-    public K getFirst() { return first; }
-    public V getSecond() { return second; }
-
-    public static <K, V> Pair<K, V> of(K first, V second) {
-        return new Pair<>(first, second);
-    }
-
-    @Override
-    public String toString() {
-        return "(" + first + ", " + second + ")";
+    // 브리지 메서드 — 컴파일러 자동 생성 (ACC_BRIDGE | ACC_SYNTHETIC 플래그)
+    // Comparable 인터페이스의 compareTo(Object)를 구현하기 위해 필요
+    public int compareTo(Object other) {
+        return this.compareTo((Money) other); // 실제 메서드로 위임
     }
 }
 ```
 
-```java
-// 사용
-Pair<String, Integer> pair = Pair.of("나이", 30);
-System.out.println(pair.getFirst());  // "나이"
-System.out.println(pair.getSecond()); // 30
+브리지 메서드 없이는 `Comparable` 인터페이스의 `compareTo(Object)`를 구현하지 않으므로 다형성이 깨집니다. `Collections.sort()`는 `Comparable.compareTo(Object)`를 호출하기 때문에 브리지 메서드가 없으면 `Money`를 정렬할 수 없습니다.
 
-Pair<String, List<Integer>> complex = Pair.of("scores", List.of(90, 85, 92));
+```bash
+# javap로 실제 브리지 메서드 확인
+$ javap -verbose Money.class | grep -A3 "bridge"
+# flags: (0x1041) ACC_PUBLIC, ACC_BRIDGE, ACC_SYNTHETIC
+# descriptor: (Ljava/lang/Object;)I
 ```
 
-### 제네릭 인터페이스
+**브리지 메서드가 생기는 또 다른 케이스: 공변 반환 타입**
 
 ```java
-// 제네릭 인터페이스 정의
-public interface Repository<T, ID> {
-    T findById(ID id);
-    List<T> findAll();
-    T save(T entity);
-    void delete(ID id);
+public class Animal {
+    public Animal create() { return new Animal(); }
 }
 
-// 구체 타입으로 구현
-public class UserRepository implements Repository<User, Long> {
+public class Dog extends Animal {
     @Override
-    public User findById(Long id) { /* ... */ }
-
-    @Override
-    public List<User> findAll() { /* ... */ }
-
-    @Override
-    public User save(User user) { /* ... */ }
-
-    @Override
-    public void delete(Long id) { /* ... */ }
+    public Dog create() { return new Dog(); } // 공변 반환 타입
 }
 
-// 여전히 제네릭을 유지하며 구현
-public class InMemoryRepository<T, ID> implements Repository<T, ID> {
-    private final Map<ID, T> store = new HashMap<>();
-
-    @Override
-    public T findById(ID id) {
-        return store.get(id);
-    }
-
-    @Override
-    public List<T> findAll() {
-        return new ArrayList<>(store.values());
-    }
-
-    @Override
-    public T save(T entity) {
-        // ID 추출 로직 필요 (실제로는 별도 처리)
-        return entity;
-    }
-
-    @Override
-    public void delete(ID id) {
-        store.remove(id);
-    }
-}
+// 컴파일러가 Dog에 브리지 메서드 생성
+// public Animal create() { return this.create(); }  // 브리지
+// public Dog create() { return new Dog(); }          // 실제
 ```
 
 ---
 
-## 3. 제네릭 메서드
+## 3. 경계 타입 파라미터(Bounded Type Parameters): extends vs super의 내부 원리
 
-### 정의 문법
+### 상한 경계(Upper Bound): `T extends Type`
 
-타입 파라미터를 반환 타입 앞에 선언합니다.
+상한 경계는 두 가지 역할을 합니다.
 
-```java
-public class GenericUtils {
-
-    // 제네릭 메서드: <T>를 반환 타입 앞에 선언
-    public static <T> T identity(T value) {
-        return value;
-    }
-
-    // 여러 타입 파라미터
-    public static <K, V> Map<V, K> invertMap(Map<K, V> original) {
-        Map<V, K> inverted = new HashMap<>();
-        for (Map.Entry<K, V> entry : original.entrySet()) {
-            inverted.put(entry.getValue(), entry.getKey());
-        }
-        return inverted;
-    }
-
-    // 배열을 리스트로 변환
-    public static <T> List<T> arrayToList(T[] array) {
-        return new ArrayList<>(Arrays.asList(array));
-    }
-
-    // 두 값 중 더 큰 값 반환 (Comparable 바운드)
-    public static <T extends Comparable<T>> T max(T a, T b) {
-        return a.compareTo(b) >= 0 ? a : b;
-    }
-}
-```
-
-### 타입 추론 (Type Inference)
-
-컴파일러가 인수의 타입을 보고 타입 파라미터를 자동으로 추론합니다.
+1. **허용 타입 제한**: T는 반드시 `Type`의 서브타입이어야 함
+2. **메서드 접근 허용**: T를 `Type`처럼 취급하여 `Type`의 메서드를 호출 가능
 
 ```java
-// 명시적 타입 지정 (불필요)
-String result1 = GenericUtils.<String>identity("hello");
-
-// 타입 추론 — 컴파일러가 인수 "hello"를 보고 T=String으로 추론
-String result2 = GenericUtils.identity("hello");
-
-// 메서드 체이닝에서도 추론 가능
-List<String> list = GenericUtils.arrayToList(new String[]{"a", "b", "c"});
-
-// max 메서드 타입 추론
-int bigger = GenericUtils.max(10, 20);       // T=Integer 추론
-String later = GenericUtils.max("apple", "banana"); // T=String 추론
-```
-
-### 제네릭 클래스 vs 제네릭 메서드
-
-```java
-// 제네릭 클래스: 인스턴스 생성 시 타입 고정
-Box<String> box = new Box<>("hello");
-// box는 이제 String 전용, Integer를 넣을 수 없음
-
-// 제네릭 메서드: 호출할 때마다 다른 타입 사용 가능
-public static <T> void printTwice(T value) {
-    System.out.println(value);
-    System.out.println(value);
-}
-
-printTwice("hello");  // T=String
-printTwice(42);       // T=Integer
-printTwice(3.14);     // T=Double
-```
-
-제네릭 메서드는 특정 메서드에만 타입 파라미터가 필요할 때, 클래스 전체에 타입 파라미터를 붙이지 않고 사용하는 방식입니다. 유틸리티 클래스(`Collections`, `Arrays`)에서 주로 볼 수 있는 패턴입니다.
-
----
-
-## 4. 타입 제한 (Bounded Type Parameters)
-
-### 상한 제한 (Upper Bounded — extends)
-
-`T extends 타입`으로 타입 파라미터가 특정 클래스/인터페이스의 서브타입이어야 함을 강제합니다.
-
-```java
-// Number의 서브타입만 허용 (Integer, Double, Long 등)
-public static <T extends Number> double sum(List<T> list) {
+// 경계 없이는 T를 Object로만 취급 — Number의 메서드 호출 불가
+public static <T> double naiveSum(List<T> list) {
     double total = 0;
     for (T element : list) {
-        total += element.doubleValue(); // Number의 메서드 사용 가능
+        // total += element.doubleValue(); // 컴파일 에러! T는 Object
     }
     return total;
 }
-```
 
-```java
-// 사용
-List<Integer> ints = List.of(1, 2, 3, 4, 5);
-System.out.println(sum(ints)); // 15.0
-
-List<Double> doubles = List.of(1.1, 2.2, 3.3);
-System.out.println(sum(doubles)); // 6.6
-
-// sum(List.of("a", "b")); // 컴파일 에러 — String은 Number 서브타입이 아님
-```
-
-상한 제한이 없으면 `T`는 `Object`로만 취급되어 `doubleValue()` 같은 메서드를 호출할 수 없습니다. `extends`로 바운드를 걸면 해당 타입의 메서드를 타입 안전하게 호출할 수 있습니다.
-
-```java
-// Comparable을 구현한 타입만 허용 — 정렬 가능한 원소의 최솟값 찾기
-public static <T extends Comparable<T>> T min(List<T> list) {
-    if (list.isEmpty()) throw new IllegalArgumentException("빈 리스트");
-    T result = list.get(0);
+// T extends Number — T를 Number처럼 취급 가능
+public static <T extends Number> double sum(List<T> list) {
+    double total = 0;
     for (T element : list) {
-        if (element.compareTo(result) < 0) {
-            result = element;
-        }
+        total += element.doubleValue(); // OK — Number의 메서드
     }
-    return result;
+    return total;
 }
+
+// 사용
+System.out.println(sum(List.of(1, 2, 3)));           // 6.0 (Integer)
+System.out.println(sum(List.of(1.5, 2.5)));          // 4.0 (Double)
+System.out.println(sum(List.of(1L, 2L, 3L)));        // 6.0 (Long)
+// System.out.println(sum(List.of("a", "b")));       // 컴파일 에러
 ```
 
-### 다중 바운드 (Multiple Bounds)
+소거 후 `T`는 `Number`로 교체되므로 `doubleValue()` 호출이 가능합니다. 이것이 바운드가 없을 때와의 근본적 차이입니다.
 
-`&`로 여러 타입을 동시에 바운드할 수 있습니다. 클래스는 반드시 첫 번째에 위치해야 하며, 클래스는 최대 하나만 가능합니다.
+### 다중 바운드(Multiple Bounds)와 타입 교차(Type Intersection)
+
+`&`로 여러 타입을 동시에 만족해야 하는 교차 타입을 표현합니다. **클래스는 반드시 첫 번째, 최대 하나**라는 규칙은 JVM의 단일 상속 제약에서 비롯됩니다.
 
 ```java
-// Serializable과 Comparable을 모두 구현한 타입
-public static <T extends Serializable & Comparable<T>> T clamp(
-        T value, T min, T max) {
+// Serializable + Comparable을 동시에 만족하는 타입만 허용
+public static <T extends Serializable & Comparable<T>> T clamp(T value, T min, T max) {
     if (value.compareTo(min) < 0) return min;
     if (value.compareTo(max) > 0) return max;
     return value;
 }
 
-// 인터페이스 두 개 (클래스 없음)
-public interface Printable {
-    void print();
-}
+// String은 Serializable, Comparable<String> 모두 구현
+String result = clamp("mango", "apple", "orange"); // "mango"
+Integer n = clamp(150, 0, 100); // 100
 
-public interface Saveable {
-    void save();
-}
-
-public static <T extends Printable & Saveable> void processItem(T item) {
-    item.print();
-    item.save();
-}
+// 소거 후 T는 첫 번째 바운드인 Serializable로 교체
+// Comparable 메서드는 체크캐스트 삽입 후 호출
 ```
 
+**실전 활용: 직렬화 가능하고 정렬 가능한 캐시 키**
+
 ```java
-// 클래스 + 인터페이스 조합 (클래스가 반드시 첫 번째)
-public static <T extends AbstractEntity & Auditable & Serializable> void audit(T entity) {
-    entity.setModifiedAt(LocalDateTime.now()); // AbstractEntity 메서드
-    entity.recordChange();                      // Auditable 메서드
+public class SortedCache<K extends Serializable & Comparable<K>, V> {
+    private final TreeMap<K, V> store = new TreeMap<>(); // TreeMap은 정렬 필요
+
+    public void put(K key, V value) {
+        store.put(key, value);
+    }
+
+    public List<V> getRange(K from, K to) {
+        return new ArrayList<>(store.subMap(from, true, to, true).values());
+    }
+
+    public byte[] serialize() throws IOException {
+        // K가 Serializable이므로 TreeMap 직렬화 가능
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        new ObjectOutputStream(baos).writeObject(store);
+        return baos.toByteArray();
+    }
 }
+
+SortedCache<String, Integer> cache = new SortedCache<>();
+cache.put("banana", 2);
+cache.put("apple", 1);
+cache.put("cherry", 3);
+List<Integer> result = cache.getRange("apple", "cherry"); // [1, 2, 3]
 ```
 
 ---
 
-## 5. 와일드카드 (Wildcard)
+## 4. PECS: Producer-Extends Consumer-Super의 수학적 근거
 
-와일드카드 `?`는 "알 수 없는 타입"을 나타냅니다. 타입 파라미터 `T`와 달리 와일드카드는 타입을 캡처하지 않습니다.
+### 공변성과 반공변성: 타입 시스템의 기초
 
-### 비한정 와일드카드 (Unbounded Wildcard — ?)
+배열은 **공변(Covariant)**입니다.
 
 ```java
-// List<?>: 어떤 타입의 List든 받을 수 있음
-public static void printList(List<?> list) {
-    for (Object element : list) { // ?는 Object로만 취급
-        System.out.println(element);
-    }
-}
+String[] strings = {"a", "b", "c"};
+Object[] objects = strings; // OK — 배열은 공변
+objects[0] = 42; // 런타임 java.lang.ArrayStoreException!
 ```
 
+배열의 공변성은 런타임에 `ArrayStoreException`으로 타입 안전성을 보장합니다. 그러나 이는 런타임 체크 비용과 예외 위험을 동반합니다.
+
+제네릭은 **불공변(Invariant)**으로 설계되어 이 문제를 컴파일 타임에 차단합니다.
+
 ```java
-// 사용
-printList(List.of(1, 2, 3));
-printList(List.of("a", "b", "c"));
-printList(List.of(1.1, 2.2, 3.3));
+List<String> strings = new ArrayList<>();
+// List<Object> objects = strings; // 컴파일 에러! 불공변
+
+// 만약 허용된다면?
+List<Object> objects = strings; // (가상)
+objects.add(42);                // Integer를 String 리스트에 삽입
+String s = strings.get(0);     // ClassCastException — 이래서 불공변!
 ```
 
-`List<?>`와 `List<Object>`의 차이점이 중요합니다.
+이 불공변 제약이 너무 엄격할 때 유연성을 제공하는 장치가 와일드카드입니다.
+
+### PECS 원칙의 논리적 도출
+
+`? extends T`(상한 와일드카드)는 **공변** 동작을 흉내냅니다. 단, **읽기 전용**이라는 제약을 걸어 안전성을 보장합니다.
 
 ```java
-// List<Object>: Object의 하위타입 List를 받을 수 없음
-public static void wrongPrint(List<Object> list) { }
-
-// wrongPrint(new ArrayList<String>()); // 컴파일 에러!
-// String은 Object의 서브타입이지만 List<String>은 List<Object>의 서브타입이 아님
-
-// List<?>: 모든 타입의 List를 받을 수 있음
-public static void correctPrint(List<?> list) { }
-
-correctPrint(new ArrayList<String>()); // OK
-correctPrint(new ArrayList<Integer>()); // OK
-```
-
-비한정 와일드카드로는 `null` 외에 원소를 추가할 수 없습니다. 컴파일러가 실제 타입을 알 수 없기 때문입니다.
-
-```java
-List<?> list = new ArrayList<String>();
-// list.add("hello"); // 컴파일 에러 — ? 타입에 뭘 넣어야 할지 모름
-list.add(null);        // null은 OK (모든 타입의 공통 값)
-```
-
-### 상한 와일드카드 (Upper Bounded Wildcard — ? extends T)
-
-`? extends T`는 T이거나 T의 서브타입인 알 수 없는 타입을 의미합니다.
-
-```java
-// Number 또는 Number의 서브타입(Integer, Double 등)의 List를 읽기 전용으로 받음
-public static double sumNumbers(List<? extends Number> list) {
-    double total = 0;
-    for (Number n : list) {      // ? extends Number이므로 Number로 읽을 수 있음
-        total += n.doubleValue();
-    }
-    return total;
-}
-```
-
-```java
-// 사용
-List<Integer> ints = List.of(1, 2, 3);
-List<Double> doubles = List.of(1.5, 2.5, 3.5);
-List<Number> numbers = List.of(1, 2.5, 3L);
-
-sumNumbers(ints);    // OK
-sumNumbers(doubles); // OK
-sumNumbers(numbers); // OK
-```
-
-`? extends T`로 선언된 컬렉션에는 `null` 외의 원소를 추가할 수 없습니다. 실제 타입이 `Integer`인지 `Double`인지 알 수 없기 때문입니다.
-
-```java
-List<? extends Number> list = new ArrayList<Integer>();
-// list.add(1);   // 컴파일 에러 — Integer? Double? 무엇을 넣어야?
-// list.add(1.0); // 컴파일 에러
-Number n = list.get(0); // 읽기는 OK — ? extends Number이니 최소한 Number
-```
-
-이 속성을 **공변성(Covariance)**이라고 합니다. `List<? extends Number>`는 `List<Integer>`, `List<Double>` 등의 서브타입을 모두 허용합니다.
-
-### 하한 와일드카드 (Lower Bounded Wildcard — ? super T)
-
-`? super T`는 T이거나 T의 슈퍼타입인 알 수 없는 타입을 의미합니다.
-
-```java
-// Integer 또는 Integer의 슈퍼타입(Number, Object) List에 쓰기 가능
-public static void addIntegers(List<? super Integer> list) {
-    list.add(1);   // OK — ? super Integer이므로 Integer를 추가 가능
-    list.add(2);
-    list.add(3);
-    // Integer n = list.get(0); // 컴파일 에러 — 반환 타입이 ? super Integer, 즉 Object
-    Object obj = list.get(0); // OK — Object로는 읽을 수 있음
-}
-```
-
-```java
-// 사용
-List<Integer> intList = new ArrayList<>();
-List<Number> numList = new ArrayList<>();
-List<Object> objList = new ArrayList<>();
-
-addIntegers(intList); // OK — Integer super Integer
-addIntegers(numList); // OK — Number super Integer
-addIntegers(objList); // OK — Object super Integer
-
-// List<Double>에는 Integer를 추가하는 게 맞지 않으므로:
-// addIntegers(new ArrayList<Double>()); // 컴파일 에러
-```
-
-이 속성을 **반공변성(Contravariance)**이라고 합니다.
-
-### PECS (Producer Extends, Consumer Super) 원칙
-
-Effective Java에서 조슈아 블로크가 제시한 원칙입니다.
-
-- **Producer (데이터를 생산/제공하는 쪽)** → `? extends T` 사용
-- **Consumer (데이터를 소비/받아들이는 쪽)** → `? super T` 사용
-
-```java
-// PECS 적용 예시: src에서 읽어서 dest에 씀
-public static <T> void copy(List<? extends T> src,   // Producer — extends
-                             List<? super T> dest) {  // Consumer — super
-    for (T element : src) {
-        dest.add(element);
-    }
-}
-```
-
-```java
-// 사용
 List<Integer> integers = List.of(1, 2, 3);
+List<? extends Number> numbers = integers; // OK — 읽기 전용이므로 안전
+
+// 읽기: ? extends Number이므로 최소 Number로 보장
+Number n = numbers.get(0); // OK
+// 쓰기: 실제 타입이 Integer인지 Double인지 모르므로 차단
+// numbers.add(1.0); // 컴파일 에러!
+// numbers.add(1);   // 컴파일 에러!
+numbers.add(null); // null만 허용 — 모든 참조 타입의 공통값
+```
+
+`? super T`(하한 와일드카드)는 **반공변** 동작입니다. **쓰기 전용**으로 안전성을 확보합니다.
+
+```java
 List<Number> numbers = new ArrayList<>();
+List<? super Integer> sink = numbers; // OK — Integer의 슈퍼타입
 
-copy(integers, numbers); // OK — Integer는 Number를 extends, Number는 Integer를 super
-
-// Collections.copy의 실제 시그니처도 PECS 원칙을 따름
-// public static <T> void copy(List<? super T> dest, List<? extends T> src)
+// 쓰기: ? super Integer이므로 Integer(와 그 서브타입)는 안전하게 삽입
+sink.add(1);    // OK — Integer는 무조건 ? super Integer를 만족
+sink.add(42);   // OK
+// 읽기: ? super Integer의 상한을 알 수 없으므로 Object로만 취급
+Object obj = sink.get(0); // OK
+// Integer i = sink.get(0); // 컴파일 에러!
 ```
 
-실무 예시를 통해 PECS를 확실히 이해해봅니다.
+### PECS 실전 적용
 
 ```java
-public class Stack<E> {
-    private List<E> elements = new ArrayList<>();
+// Collections.copy의 실제 JDK 시그니처
+public static <T> void copy(List<? super T> dest, List<? extends T> src) {
+    int srcSize = src.size();
+    if (srcSize > dest.size())
+        throw new IndexOutOfBoundsException("Source does not fit in dest");
+    // src에서 읽어서(Producer = extends) dest에 씀(Consumer = super)
+    for (int i = 0; i < srcSize; i++)
+        dest.set(i, src.get(i));
+}
+```
 
-    // 여러 원소를 한꺼번에 push — src는 Producer (읽기만)
+```java
+// 실전: 제네릭 스택의 PECS 적용
+public class GenericStack<E> {
+    private final Deque<E> store = new ArrayDeque<>();
+
+    public void push(E item) { store.push(item); }
+
+    public E pop() { return store.pop(); }
+
+    // src는 Producer — E를 공급함, extends 사용
     public void pushAll(Iterable<? extends E> src) {
-        for (E e : src) {
-            elements.add(e);
-        }
+        for (E e : src) store.push(e);
     }
 
-    // 여러 원소를 한꺼번에 pop — dest는 Consumer (쓰기만)
-    public void popAll(Collection<? super E> dest) {
-        while (!elements.isEmpty()) {
-            dest.add(elements.remove(elements.size() - 1));
-        }
+    // dst는 Consumer — E를 소비함, super 사용
+    public void popAll(Collection<? super E> dst) {
+        while (!store.isEmpty()) dst.add(store.pop());
     }
 }
+
+GenericStack<Number> stack = new GenericStack<>();
+
+// Integer는 Number의 서브타입 — pushAll 가능 (? extends Number)
+stack.pushAll(List.of(1, 2, 3));
+// Double도 OK
+stack.pushAll(List.of(1.1, 2.2));
+
+// Object는 Number의 슈퍼타입 — popAll 가능 (? super Number)
+List<Object> sink = new ArrayList<>();
+stack.popAll(sink);
+System.out.println(sink); // [2.2, 1.1, 3, 2, 1]
 ```
 
+**PECS 없이 작성했다면 발생하는 컴파일 에러**
+
 ```java
-Stack<Number> stack = new Stack<>();
+// PECS 미적용 — 과도하게 제한적
+public void pushAllWrong(Iterable<E> src) { ... }
+// stack.pushAll(intList); // 컴파일 에러! List<Integer> != Iterable<Number>
 
-// pushAll: Integer는 Number를 extends하므로 OK
-List<Integer> ints = List.of(1, 2, 3);
-stack.pushAll(ints);
-
-// popAll: Object는 Number를 super하므로 OK
-List<Object> objects = new ArrayList<>();
-stack.popAll(objects);
+public void popAllWrong(Collection<E> dst) { ... }
+// stack.popAll(objectList); // 컴파일 에러! List<Object> != Collection<Number>
 ```
 
-### 와일드카드 vs 타입 파라미터 선택 기준
+---
+
+## 5. 와일드카드 심층: `?` vs `T`, 캡처 변환
+
+### 비한정 와일드카드(Unbounded Wildcard)와 Object의 차이
 
 ```java
-// 방법 1: 타입 파라미터 사용
-public static <T> void swap(List<T> list, int i, int j) {
-    T temp = list.get(i);
-    list.set(i, list.get(j));
-    list.set(j, temp);
+// List<Object>: 오직 List<Object> 타입만 받음
+public static void printAll(List<Object> list) {
+    for (Object o : list) System.out.println(o);
+}
+printAll(new ArrayList<String>()); // 컴파일 에러! 불공변
+
+// List<?>: 어떤 타입 파라미터의 List든 받음
+public static void printAny(List<?> list) {
+    for (Object o : list) System.out.println(o); // 원소는 Object로 취급
+}
+printAny(new ArrayList<String>());  // OK
+printAny(new ArrayList<Integer>()); // OK
+printAny(new ArrayList<>());        // OK
+```
+
+`List<?>`와 `List<Object>`의 본질적 차이는 **수용 범위**입니다. `List<Object>`는 `List<Object>` 딱 하나만 받지만, `List<?>`는 어떤 타입의 리스트든 받습니다. 단, 원소 타입이 무엇인지 모르므로 `null` 외에는 추가할 수 없습니다.
+
+### 캡처 변환(Capture Conversion)
+
+컴파일러가 `?`를 내부적으로 고유한 타입 변수로 교체하는 과정입니다. 이를 통해 와일드카드로는 표현할 수 없는 연산(swap)을 헬퍼 메서드로 구현합니다.
+
+```java
+// 직접 구현 불가 — ? 타입을 임시 변수에 저장할 수 없음
+public static void swapDirect(List<?> list, int i, int j) {
+    Object temp = list.get(i);
+    // list.set(i, list.get(j)); // 컴파일 에러! set의 인수가 ? 타입
 }
 
-// 방법 2: 와일드카드 사용 (이 경우 내부 헬퍼 메서드 필요)
+// 캡처 변환 활용 — 헬퍼 메서드로 ? 를 T로 캡처
 public static void swap(List<?> list, int i, int j) {
-    swapHelper(list, i, j); // 헬퍼로 타입 캡처
+    swapHelper(list, i, j); // 컴파일러가 ? 를 캡처하여 T로 추론
 }
 
 private static <T> void swapHelper(List<T> list, int i, int j) {
-    T temp = list.get(i);
+    T temp = list.get(i); // T로 캡처되었으므로 가능
     list.set(i, list.get(j));
     list.set(j, temp);
 }
+
+// 사용
+List<String> words = new ArrayList<>(List.of("apple", "banana", "cherry"));
+swap(words, 0, 2);
+System.out.println(words); // [cherry, banana, apple]
 ```
 
-선택 기준은 다음과 같습니다.
+`swapHelper`를 호출하는 순간 컴파일러는 `?`를 고유한 타입 `CAP#1`으로 캡처합니다. `CAP#1`을 `T`에 바인딩하여 `List<CAP#1>`로 처리합니다. 이것이 캡처 변환입니다.
 
-| 상황 | 권장 |
-|------|------|
-| 타입 파라미터가 메서드 내에서 두 번 이상 등장 (반환 타입, 다른 파라미터와 연결) | 타입 파라미터 `<T>` |
-| 단순히 "어떤 타입이든 받겠다"는 의미 | 와일드카드 `?` |
-| 반환 타입에는 | 와일드카드 사용 금지 (호출자가 불편) |
-| 타입 간의 관계를 표현 | 타입 파라미터 `<T>` |
+### `?` vs `T`: 언제 무엇을 쓸 것인가
+
+```java
+// 규칙 1: 타입 파라미터가 여러 곳에 연결되어야 하면 T
+public static <T> T firstOrDefault(List<T> list, T defaultValue) {
+    return list.isEmpty() ? defaultValue : list.get(0);
+    // 반환 타입이 list의 원소 타입과 같아야 함 — T 필수
+}
+
+// 규칙 2: 단순히 "임의 타입"을 의미하면 ?
+public static int size(List<?> list) {
+    return list.size(); // 원소 타입과 무관한 연산
+}
+
+// 규칙 3: 반환 타입에 ?를 쓰면 호출자가 고통받음
+public static List<?> problemMethod() { ... }
+List<?> result = problemMethod();
+// String s = result.get(0); // 컴파일 에러! ? 타입
+// 사용자는 Object로만 처리 가능 — 불편
+```
 
 ---
 
-## 6. 타입 소거 (Type Erasure)
+## 6. 제네릭 메서드: 타입 추론과 정적 메서드 제약
 
-### 컴파일 타임 vs 런타임
+### 타입 추론(Type Inference)의 동작 원리
 
-제네릭 타입 정보는 **컴파일 타임에만 존재**하고, 바이트코드로 컴파일되면 제거됩니다. 이를 타입 소거라 합니다. Java는 기존 코드(제네릭 도입 전)와의 하위 호환성을 위해 이 방식을 선택했습니다.
-
-```java
-// 컴파일 전 소스 코드
-List<String> stringList = new ArrayList<>();
-stringList.add("hello");
-String s = stringList.get(0);
-
-List<Integer> intList = new ArrayList<>();
-intList.add(42);
-Integer n = intList.get(0);
-```
+컴파일러는 메서드 인수의 타입을 분석하여 타입 파라미터를 자동으로 결정합니다. Java 8부터 타입 추론이 대폭 향상되어 대부분의 경우 명시적 타입 지정이 불필요합니다.
 
 ```java
-// 컴파일 후 바이트코드 (의사코드로 표현)
-List stringList = new ArrayList();
-stringList.add("hello");
-String s = (String) stringList.get(0);  // 컴파일러가 캐스팅 삽입
+public class TypeInferenceDemo {
 
-List intList = new ArrayList();
-intList.add(Integer.valueOf(42));
-Integer n = (Integer) intList.get(0);   // 컴파일러가 캐스팅 삽입
+    public static <T> List<T> singletonList(T element) {
+        List<T> list = new ArrayList<>();
+        list.add(element);
+        return list;
+    }
+
+    public static <T> T firstNonNull(T first, T second) {
+        return first != null ? first : second;
+    }
+
+    public static <K, V> Map<K, V> mapOf(K key, V value) {
+        Map<K, V> map = new HashMap<>();
+        map.put(key, value);
+        return map;
+    }
+}
+
+// 타입 추론 예시
+List<String> strList = TypeInferenceDemo.singletonList("hello"); // T=String 추론
+List<Integer> intList = TypeInferenceDemo.singletonList(42);     // T=Integer 추론
+
+// 복잡한 추론: 공통 슈퍼타입 결정
+Number n = TypeInferenceDemo.firstNonNull(1, 2.0); // T=Number (Integer와 Double의 공통 슈퍼)
+Object o = TypeInferenceDemo.firstNonNull("str", 42); // T=Object (String과 Integer의 공통 슈퍼)
+
+// 명시적 타입 지정 (컴파일러가 추론 못할 때)
+List<Number> explicit = TypeInferenceDemo.<Number>singletonList(42);
 ```
 
-런타임에 `List<String>`과 `List<Integer>`는 동일하게 `List`로 보입니다.
+### 다이아몬드 연산자(`<>`)의 내부 동작
 
 ```java
-List<String> stringList = new ArrayList<>();
-List<Integer> intList = new ArrayList<>();
+// Java 7 이전 — 반복되는 타입 지정
+Map<String, List<Integer>> map1 = new HashMap<String, List<Integer>>();
 
-// 런타임에 동일한 클래스
-System.out.println(stringList.getClass() == intList.getClass()); // true
-System.out.println(stringList.getClass()); // class java.util.ArrayList
+// Java 7 이후 — 다이아몬드 연산자
+Map<String, List<Integer>> map2 = new HashMap<>(); // 좌변에서 추론
+
+// Java 9 — 익명 클래스에도 적용
+Comparator<String> comp = new Comparator<>() {      // Java 9+
+    @Override
+    public int compare(String a, String b) {
+        return a.compareTo(b);
+    }
+};
 ```
 
-### 소거 후 바이트코드 변환 규칙
+다이아몬드 연산자는 문법 설탕이 아닙니다. **대상 타입 추론(Target-Type Inference)**이라는 별도 알고리즘으로 좌변의 타입 선언으로부터 우변의 타입 파라미터를 역산합니다.
 
-타입 소거가 왜 존재하는지 이해하면 제약사항이 더 자연스럽게 받아들여집니다. Java 5는 기존 코드(제네릭 없는 Java 1.4 이하)와의 하위 호환성을 유지하면서 제네릭을 도입해야 했습니다. 런타임 JVM은 그대로 두고, 컴파일러만 타입 검사를 추가하는 방식을 선택한 것입니다. 덕분에 제네릭 코드와 레거시 코드가 같은 JVM에서 실행됩니다.
+### 왜 정적 메서드는 클래스 타입 파라미터를 사용할 수 없는가
 
-```mermaid
-graph LR
-    SRC["List String"] --> CHECK["1. 타입 검사"]
-    CHECK --> ERASE["2. 타입 소거"]
-    ERASE --> CAST["3. 캐스팅 삽입"]
-    CAST --> BC["List list 바이트코드"]
-```
-
-컴파일러는 타입 소거 시 다음 규칙을 적용합니다.
-
-1. 바운드가 없는 타입 파라미터 → `Object`로 대체
-2. 상한 바운드가 있는 타입 파라미터 → 첫 번째 바운드 타입으로 대체
+이것은 면접에서 자주 나오는 질문입니다. 답은 **타입 파라미터의 바인딩 시점** 차이에 있습니다.
 
 ```java
-// 원본
-public class Box<T> {
+public class Container<T> {
     private T value;
+
+    // 인스턴스 메서드 — T는 인스턴스 생성 시 바인딩됨 (OK)
     public T getValue() { return value; }
     public void setValue(T value) { this.value = value; }
-}
 
-// 소거 후 (T → Object)
-public class Box {
-    private Object value;
-    public Object getValue() { return value; }
-    public void setValue(Object value) { this.value = value; }
-}
-```
+    // 정적 필드 — 컴파일 에러
+    // private static T staticValue; // 에러!
 
-```java
-// 원본 (바운드 있음)
-public class NumericBox<T extends Number> {
-    private T value;
-    public double doubleValue() { return value.doubleValue(); }
-}
+    // 정적 메서드에서 클래스 T 사용 — 컴파일 에러
+    // public static T getDefault() { return null; } // 에러!
 
-// 소거 후 (T → Number, 첫 번째 바운드)
-public class NumericBox {
-    private Number value;
-    public double doubleValue() { return value.doubleValue(); }
-}
-```
-
-### Bridge 메서드
-
-타입 소거로 인해 다형성이 깨질 수 있을 때 컴파일러가 자동으로 **Bridge 메서드**를 생성합니다.
-
-```java
-// 원본
-public interface Comparable<T> {
-    int compareTo(T o);
-}
-
-public class MyInteger implements Comparable<MyInteger> {
-    private int value;
-
-    @Override
-    public int compareTo(MyInteger other) {
-        return Integer.compare(this.value, other.value);
+    // 정적 메서드 전용 타입 파라미터 — OK (클래스 T와 무관)
+    public static <E> Container<E> of(E element) {
+        Container<E> c = new Container<>();
+        c.value = (E) element; // 내부 캐스팅
+        return c;
     }
 }
 ```
 
-```java
-// 소거 후 컴파일러가 생성하는 코드
-public class MyInteger implements Comparable {
-    private int value;
-
-    // 원본 메서드 (소거됨)
-    public int compareTo(MyInteger other) {
-        return Integer.compare(this.value, other.value);
-    }
-
-    // 컴파일러가 자동 생성한 Bridge 메서드 (다형성 유지)
-    public int compareTo(Object other) { // Comparable.compareTo(Object) 구현
-        return compareTo((MyInteger) other); // 캐스팅 후 위임
-    }
-}
-```
-
-`javap -c MyInteger.class`로 역어셈블하면 Bridge 메서드가 `ACC_BRIDGE`, `ACC_SYNTHETIC` 플래그와 함께 실제로 존재하는 것을 확인할 수 있습니다.
-
-### 제네릭 배열 생성이 불가능한 이유
+`T`는 `new Container<String>()`처럼 **인스턴스를 만들 때** 결정됩니다. 반면 `static` 메서드는 인스턴스 없이 `Container.getDefault()`처럼 호출합니다. 이 시점에 `T`가 무엇인지 결정된 컨텍스트가 없습니다. `Container.getDefault()`를 호출할 때 `T=String`인지 `T=Integer`인지 JVM이 알 수 없습니다.
 
 ```java
-// 컴파일 에러 — 제네릭 배열 생성 불가
-List<String>[] stringLists = new List<String>[10]; // 컴파일 에러!
+// 이것이 왜 문제인지 — 가상 시나리오
+Container<String> cs = new Container<>();
+Container<Integer> ci = new Container<>();
+
+// static T getDefault()가 허용된다면?
+T val1 = Container<String>.getDefault(); // T=String? (불가능한 문법)
+T val2 = Container.getDefault();         // T=??
+
+// 결국 정적 메서드는 별도 타입 파라미터 <E>를 독립적으로 선언해야 함
+Container<String> c = Container.<String>of("hello"); // E=String
 ```
-
-이것이 왜 위험한지 타입 소거와 함께 살펴봅니다.
-
-```java
-// 만약 허용된다면 발생하는 문제 (가상 시나리오)
-List<String>[] stringLists = new List<String>[1]; // 가정
-Object[] objects = stringLists;       // 배열은 공변이므로 OK
-objects[0] = List.of(42);             // 런타임에 List<Integer> 삽입 — 배열은 타입 소거로 검사 못함
-String s = stringLists[0].get(0);    // 런타임 ClassCastException!
-```
-
-배열은 런타임에 원소 타입을 검사하는 **reifiable 타입**이지만, 제네릭은 타입 소거로 런타임에 타입 정보가 없습니다. 이 충돌 때문에 제네릭 배열 생성을 금지합니다.
-
-### instanceof 사용 불가 이유
-
-```java
-List<String> list = new ArrayList<>();
-
-// 컴파일 에러 — 런타임에 타입 파라미터 정보가 없음
-if (list instanceof List<String>) { } // 컴파일 에러!
-
-// OK — 소거된 Raw 타입으로 instanceof 사용
-if (list instanceof List) { }
-
-// OK — 비한정 와일드카드는 허용 (Java 16 패턴 매칭 이전)
-if (list instanceof List<?>) { }
-```
-
-런타임에는 `List<String>`과 `List<Integer>`를 구분할 방법이 없으므로 타입 파라미터를 포함한 `instanceof`는 의미가 없습니다.
 
 ---
 
-## 7. 제네릭 제약사항
+## 7. Reified 제네릭: Java가 갖지 못한 것
 
-### 기본형 사용 불가 (int → Integer)
+### Java의 한계와 C#/Kotlin과의 비교
 
-타입 파라미터는 참조 타입만 가능합니다. 기본형은 `Object`로 소거될 수 없기 때문입니다.
+**C# Reified 제네릭**: 런타임에도 타입 파라미터 정보가 유지됩니다.
 
-```java
-List<int> list = new ArrayList<>();     // 컴파일 에러!
-List<Integer> list = new ArrayList<>(); // OK — 래퍼 클래스 사용
+```csharp
+// C# — 런타임에 타입 정보 보존
+public class Container<T> {
+    public void PrintType() {
+        Console.WriteLine(typeof(T).Name); // 런타임에 접근 가능
+    }
 
-Map<int, String> map = new HashMap<>();         // 컴파일 에러!
-Map<Integer, String> map = new HashMap<>();     // OK
-```
+    public T CreateInstance() {
+        return Activator.CreateInstance<T>(); // new T() 가능
+    }
 
-오토박싱/언박싱으로 실제 사용에서 불편함은 최소화됩니다.
-
-```java
-List<Integer> list = new ArrayList<>();
-list.add(1);   // 오토박싱: int → Integer
-int n = list.get(0); // 언박싱: Integer → int
-```
-
-### static 필드에 타입 파라미터 사용 불가
-
-```java
-public class Box<T> {
-    private T value;          // OK — 인스턴스 필드
-
-    // private static T sharedValue; // 컴파일 에러!
-    // Box<String>.sharedValue와 Box<Integer>.sharedValue가 동일한 필드여야 하는데
-    // T가 무엇인지 알 수 없음
+    public bool IsString() {
+        return typeof(T) == typeof(string); // 런타임 타입 비교
+    }
 }
+
+var c = new Container<string>();
+c.PrintType();    // "String" 출력
+var s = c.CreateInstance(); // new string()
 ```
 
-`static` 필드는 모든 인스턴스가 공유하는데, `Box<String>`의 `T`와 `Box<Integer>`의 `T`가 다르므로 `static T` 필드는 의미가 없습니다.
-
-### new T() 불가 — 타입 파라미터 인스턴스화 불가
+**Java의 소거 방식**: 런타임에는 타입 정보가 없습니다.
 
 ```java
-public class Creator<T> {
-    public T create() {
-        // return new T(); // 컴파일 에러! — 타입 소거로 T가 뭔지 모름
+// Java — 동일 시도 불가
+public class Container<T> {
+    public void printType() {
+        // T.class; // 컴파일 에러!
+        // new T(); // 컴파일 에러!
     }
 }
 ```
 
-해결책은 `Class<T>` 또는 `Supplier<T>`를 전달받는 것입니다.
+**Kotlin의 reified 타입 파라미터**: `inline` 함수를 통해 소거를 우회합니다.
 
-```java
-// Class<T> 전달 방식
-public class Creator<T> {
-    private final Class<T> type;
-
-    public Creator(Class<T> type) {
-        this.type = type;
-    }
-
-    public T create() throws ReflectiveOperationException {
-        return type.getDeclaredConstructor().newInstance();
-    }
+```kotlin
+// Kotlin — inline + reified로 런타임 타입 접근
+inline fun <reified T> isType(value: Any): Boolean {
+    return value is T // 런타임 타입 체크 가능
 }
 
-Creator<ArrayList> creator = new Creator<>(ArrayList.class);
-ArrayList list = creator.create();
-```
-
-```java
-// Supplier<T> 전달 방식 (권장 — 리플렉션 불필요)
-public class Creator<T> {
-    private final Supplier<T> factory;
-
-    public Creator(Supplier<T> factory) {
-        this.factory = factory;
-    }
-
-    public T create() {
-        return factory.get();
-    }
+inline fun <reified T> parseJson(json: String): T {
+    return ObjectMapper().readValue(json, T::class.java) // T::class 접근 가능
 }
 
-Creator<ArrayList<String>> creator = new Creator<>(ArrayList::new);
-ArrayList<String> list = creator.create();
-```
-
-### 제네릭 배열 생성 불가
-
-앞서 설명한 것처럼 `new T[]`는 허용되지 않습니다.
-
-```java
-public class GenericArray<T> {
-    private T[] array;
-
-    @SuppressWarnings("unchecked")
-    public GenericArray(int size) {
-        // array = new T[size]; // 컴파일 에러!
-        array = (T[]) new Object[size]; // 흔히 쓰는 우회 방법 (비검사 경고 발생)
-    }
-
-    // 더 안전한 방법: Class<T>를 받아서 Array.newInstance 사용
-    @SuppressWarnings("unchecked")
-    public GenericArray(Class<T> type, int size) {
-        array = (T[]) java.lang.reflect.Array.newInstance(type, size);
-    }
-}
-```
-
-### 예외 클래스에 제네릭 불가
-
-```java
-// 컴파일 에러 — 제네릭 예외 클래스 정의 불가
-public class GenericException<T> extends Exception { } // 컴파일 에러!
-public class GenericException<T> extends Throwable { } // 컴파일 에러!
-
-// catch 절에 타입 파라미터 사용 불가
-public <T extends Exception> void method() {
-    try {
-        // ...
-    } catch (T e) { // 컴파일 에러!
-    }
-}
-
-// throws 절에는 타입 파라미터 사용 가능
-public <T extends Exception> void method() throws T { // OK
-    // ...
-}
-```
-
-예외는 런타임에 실제 타입이 중요한데 타입 소거로 그 정보가 없기 때문에 제네릭 예외 클래스 정의와 `catch`절 사용이 금지됩니다.
-
----
-
-## 8. 재귀적 타입 바운드 (Recursive Type Bound)
-
-### Comparable 패턴
-
-타입이 자기 자신과 비교 가능한 경우 자주 등장합니다.
-
-```java
-// T는 T 자신과 Comparable해야 함
-public static <T extends Comparable<T>> T max(List<T> list) {
-    if (list.isEmpty()) throw new NoSuchElementException();
-    T result = list.get(0);
-    for (T e : list) {
-        if (e.compareTo(result) > 0) {
-            result = e;
-        }
-    }
-    return result;
-}
-```
-
-```java
 // 사용
-List<String> words = List.of("banana", "apple", "cherry");
-System.out.println(max(words)); // "cherry"
-
-List<Integer> nums = List.of(3, 1, 4, 1, 5, 9);
-System.out.println(max(nums)); // 9
+println(isType<String>("hello"))  // true
+println(isType<Int>("hello"))     // false
+val user: User = parseJson<User>(jsonString)
 ```
 
-`T extends Comparable<T>`는 "T는 T 자신과 비교할 수 있어야 한다"는 재귀적 표현입니다. 실제로 `String`은 `Comparable<String>`, `Integer`는 `Comparable<Integer>`를 구현합니다.
+Kotlin `reified`의 원리: `inline` 함수는 호출 지점에 바이트코드가 복사 붙여넣기됩니다. 컴파일러가 `T`를 실제 타입(예: `String`)으로 교체한 후 인라이닝하므로 런타임에 타입 정보가 유지됩니다. Java는 `inline` 함수 메커니즘이 없으므로 이 방식을 쓸 수 없습니다.
 
-더 유연하게 만들려면 하한 와일드카드와 결합합니다.
+### TypeToken/TypeReference: Java의 우회 방법
 
-```java
-// Comparable<? super T>: T 또는 T의 슈퍼타입과 비교 가능한 경우도 허용
-public static <T extends Comparable<? super T>> T max(List<T> list) {
-    // ...
-}
-```
-
-이는 Collections.max()의 실제 시그니처입니다.
-
-### 빌더 패턴에서의 활용
-
-상속 계층에서 빌더 패턴을 구현할 때 재귀 타입 바운드가 유용합니다.
+**핵심 원리**: 타입 소거로 제네릭 타입 파라미터는 런타임에 사라지지만, **클래스의 제네릭 슈퍼클래스 정보**는 런타임에도 접근 가능합니다(`getGenericSuperclass()`). 익명 클래스를 만들면 이 특성을 활용할 수 있습니다.
 
 ```java
-// 추상 빌더: B는 자신의 서브타입이어야 함 (Self-referential)
-public abstract class Animal {
-    private final String name;
-    private final int age;
-
-    protected Animal(Builder<?> builder) {
-        this.name = builder.name;
-        this.age = builder.age;
-    }
-
-    public abstract static class Builder<B extends Builder<B>> {
-        private String name;
-        private int age;
-
-        @SuppressWarnings("unchecked")
-        public B name(String name) {
-            this.name = name;
-            return (B) this; // 실제 서브타입 반환
-        }
-
-        @SuppressWarnings("unchecked")
-        public B age(int age) {
-            this.age = age;
-            return (B) this;
-        }
-
-        public abstract Animal build();
-    }
-}
-```
-
-```java
-public class Dog extends Animal {
-    private final String breed;
-
-    private Dog(Builder builder) {
-        super(builder);
-        this.breed = builder.breed;
-    }
-
-    public static class Builder extends Animal.Builder<Builder> {
-        private String breed;
-
-        public Builder breed(String breed) {
-            this.breed = breed;
-            return this; // Builder 자신 반환
-        }
-
-        @Override
-        public Dog build() {
-            return new Dog(this);
-        }
-    }
-}
-```
-
-```java
-// 사용 — 메서드 체이닝이 올바른 타입을 반환
-Dog dog = new Dog.Builder()
-        .name("바둑이")  // Animal.Builder<Builder>.name() → Builder 반환
-        .age(3)          // Animal.Builder<Builder>.age() → Builder 반환
-        .breed("진돗개") // Dog.Builder.breed() → Builder 반환
-        .build();
-```
-
-재귀 타입 바운드 없이 `Animal.Builder`의 `name()`, `age()`가 `Animal.Builder`를 반환하면, `Dog.Builder`를 사용하다 `name()`을 호출하면 `Dog.Builder`가 아닌 `Animal.Builder`가 반환되어 이후 `breed()` 호출이 불가합니다.
-
----
-
-## 9. 실무 활용 패턴
-
-### 제네릭 DAO/Repository 패턴
-
-데이터 접근 계층에서 공통 CRUD 로직을 재사용하는 패턴입니다.
-
-```java
-// 엔티티 기반 인터페이스
-public interface CrudRepository<T, ID> {
-    T save(T entity);
-    Optional<T> findById(ID id);
-    List<T> findAll();
-    void deleteById(ID id);
-    boolean existsById(ID id);
-    long count();
-}
-```
-
-```java
-// 추상 구현 — JPA를 사용하는 공통 로직
-public abstract class AbstractJpaRepository<T, ID> implements CrudRepository<T, ID> {
-    private final EntityManager em;
-    private final Class<T> entityClass;
-
-    @SuppressWarnings("unchecked")
-    protected AbstractJpaRepository(EntityManager em) {
-        this.em = em;
-        // 리플렉션으로 실제 타입 파라미터 추출 (슈퍼클래스의 제네릭 타입 인수)
-        ParameterizedType type =
-            (ParameterizedType) getClass().getGenericSuperclass();
-        this.entityClass = (Class<T>) type.getActualTypeArguments()[0];
-    }
-
-    @Override
-    public T save(T entity) {
-        em.persist(entity);
-        return entity;
-    }
-
-    @Override
-    public Optional<T> findById(ID id) {
-        return Optional.ofNullable(em.find(entityClass, id));
-    }
-
-    @Override
-    public List<T> findAll() {
-        String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e";
-        return em.createQuery(jpql, entityClass).getResultList();
-    }
-
-    @Override
-    public void deleteById(ID id) {
-        findById(id).ifPresent(em::remove);
-    }
-
-    @Override
-    public boolean existsById(ID id) {
-        return findById(id).isPresent();
-    }
-
-    @Override
-    public long count() {
-        String jpql = "SELECT COUNT(e) FROM " + entityClass.getSimpleName() + " e";
-        return em.createQuery(jpql, Long.class).getSingleResult();
-    }
-}
-```
-
-```java
-// 구체 Repository — 엔티티별 특수 로직만 추가
-@Repository
-public class UserRepository extends AbstractJpaRepository<User, Long> {
-    public UserRepository(EntityManager em) {
-        super(em);
-    }
-
-    // 공통 CRUD는 상속, 도메인 특화 메서드만 추가
-    public Optional<User> findByEmail(String email) {
-        return em.createQuery(
-                "SELECT u FROM User u WHERE u.email = :email", User.class)
-                .setParameter("email", email)
-                .getResultStream()
-                .findFirst();
-    }
-
-    public List<User> findActiveUsers() {
-        return em.createQuery(
-                "SELECT u FROM User u WHERE u.active = true", User.class)
-                .getResultList();
-    }
-}
-```
-
-### 제네릭 응답 래퍼 (ApiResponse\<T\>)
-
-REST API 응답을 일관된 포맷으로 감싸는 패턴입니다.
-
-```java
-// 제네릭 응답 래퍼
-public class ApiResponse<T> {
-    private final boolean success;
-    private final T data;
-    private final String message;
-    private final String errorCode;
-    private final LocalDateTime timestamp;
-
-    private ApiResponse(boolean success, T data, String message, String errorCode) {
-        this.success = success;
-        this.data = data;
-        this.message = message;
-        this.errorCode = errorCode;
-        this.timestamp = LocalDateTime.now();
-    }
-
-    // 성공 응답 팩토리 메서드
-    public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, data, null, null);
-    }
-
-    public static <T> ApiResponse<T> success(T data, String message) {
-        return new ApiResponse<>(true, data, message, null);
-    }
-
-    // 실패 응답 팩토리 메서드
-    public static <T> ApiResponse<T> failure(String message, String errorCode) {
-        return new ApiResponse<>(false, null, message, errorCode);
-    }
-
-    // 페이지네이션 래퍼
-    public static <T> ApiResponse<PagedResult<T>> paged(
-            List<T> content, int page, int size, long totalElements) {
-        PagedResult<T> paged = new PagedResult<>(content, page, size, totalElements);
-        return success(paged);
-    }
-
-    // getters...
-    public boolean isSuccess() { return success; }
-    public T getData() { return data; }
-    public String getMessage() { return message; }
-    public String getErrorCode() { return errorCode; }
-    public LocalDateTime getTimestamp() { return timestamp; }
-}
-```
-
-```java
-// 페이지네이션 결과 래퍼
-public class PagedResult<T> {
-    private final List<T> content;
-    private final int page;
-    private final int size;
-    private final long totalElements;
-    private final int totalPages;
-
-    public PagedResult(List<T> content, int page, int size, long totalElements) {
-        this.content = content;
-        this.page = page;
-        this.size = size;
-        this.totalElements = totalElements;
-        this.totalPages = (int) Math.ceil((double) totalElements / size);
-    }
-
-    // getters...
-    public List<T> getContent() { return content; }
-    public int getPage() { return page; }
-    public int getSize() { return size; }
-    public long getTotalElements() { return totalElements; }
-    public int getTotalPages() { return totalPages; }
-    public boolean hasNext() { return page < totalPages - 1; }
-    public boolean hasPrevious() { return page > 0; }
-}
-```
-
-```java
-// Controller에서 사용
-@RestController
-@RequestMapping("/api/users")
-public class UserController {
-
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<UserDto>> getUser(@PathVariable Long id) {
-        UserDto user = userService.findById(id);
-        return ResponseEntity.ok(ApiResponse.success(user));
-    }
-
-    @GetMapping
-    public ResponseEntity<ApiResponse<PagedResult<UserDto>>> getUsers(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        List<UserDto> users = userService.findAll(page, size);
-        long total = userService.count();
-        return ResponseEntity.ok(ApiResponse.paged(users, page, size, total));
-    }
-
-    @PostMapping
-    public ResponseEntity<ApiResponse<UserDto>> createUser(
-            @RequestBody CreateUserRequest request) {
-        try {
-            UserDto created = userService.create(request);
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(ApiResponse.success(created, "사용자가 생성되었습니다."));
-        } catch (DuplicateEmailException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiResponse.failure("이미 존재하는 이메일입니다.", "USER_EMAIL_DUPLICATE"));
-        }
-    }
-}
-```
-
-### 타입 안전한 이기종 컨테이너 (Typesafe Heterogeneous Container)
-
-Effective Java 아이템 33에서 소개된 패턴입니다. 서로 다른 타입의 값을 하나의 컨테이너에 타입 안전하게 저장합니다.
-
-```java
-// 이기종 컨테이너: 키가 Class<T>, 값이 T
-public class TypesafeContainer {
-    private final Map<Class<?>, Object> container = new HashMap<>();
-
-    // 타입 안전하게 저장
-    public <T> void put(Class<T> type, T value) {
-        container.put(Objects.requireNonNull(type), value);
-    }
-
-    // 타입 안전하게 조회
-    public <T> T get(Class<T> type) {
-        return type.cast(container.get(type)); // Class.cast()로 안전하게 캐스팅
-    }
-
-    public <T> Optional<T> getOptional(Class<T> type) {
-        return Optional.ofNullable(get(type));
-    }
-
-    public <T> boolean contains(Class<T> type) {
-        return container.containsKey(type);
-    }
-
-    public <T> void remove(Class<T> type) {
-        container.remove(type);
-    }
-}
-```
-
-```java
-// 사용
-TypesafeContainer container = new TypesafeContainer();
-
-container.put(String.class, "hello");
-container.put(Integer.class, 42);
-container.put(Double.class, 3.14);
-container.put(LocalDate.class, LocalDate.now());
-
-String s = container.get(String.class);    // "hello" — 캐스팅 불필요
-int n = container.get(Integer.class);      // 42
-double d = container.get(Double.class);    // 3.14
-LocalDate date = container.get(LocalDate.class);
-
-// 다른 타입을 get하면 null 반환 (ClassCastException 없음)
-Long l = container.get(Long.class); // null
-```
-
-이 패턴의 핵심은 `Class<T>` 자체가 타입 토큰(Type Token)으로 키 역할을 하면서 값의 타입 정보를 보장한다는 점입니다.
-
-```java
-// 한계: 런타임 타입 토큰 — List<String>.class는 존재하지 않음
-// container.put(List<String>.class, ...); // 컴파일 에러!
-
-// 슈퍼 타입 토큰으로 해결 (Guava TypeToken 또는 직접 구현)
-// 익명 클래스의 제네릭 슈퍼클래스 정보는 런타임에도 접근 가능
+// 슈퍼 타입 토큰 (Super Type Token) 구현
 public abstract class TypeToken<T> {
     private final Type type;
 
     protected TypeToken() {
+        // getGenericSuperclass()는 런타임에 제네릭 슈퍼클래스 정보를 반환
+        // new TypeToken<List<String>>(){} 형태의 익명 클래스가 필요
         ParameterizedType superClass = (ParameterizedType) getClass().getGenericSuperclass();
         this.type = superClass.getActualTypeArguments()[0];
     }
 
     public Type getType() { return type; }
+
+    @Override
+    public String toString() { return type.toString(); }
 }
 
 // 사용
 TypeToken<List<String>> token = new TypeToken<List<String>>() {};
-System.out.println(token.getType()); // java.util.List<java.lang.String>
+System.out.println(token.getType());
+// java.util.List<java.lang.String> — 런타임에 제네릭 타입 정보 보존!
+
+TypeToken<Map<String, List<Integer>>> complexToken =
+    new TypeToken<Map<String, List<Integer>>>() {};
+System.out.println(complexToken.getType());
+// java.util.Map<java.lang.String, java.util.List<java.lang.Integer>>
+```
+
+**Jackson의 TypeReference가 이 원리를 사용합니다**
+
+```java
+// Jackson으로 List<User> 역직렬화
+String json = "[{\"name\":\"Alice\"}, {\"name\":\"Bob\"}]";
+
+// TypeReference 없이는 LinkedHashMap 리스트로 역직렬화됨
+List raw = mapper.readValue(json, List.class);
+// ((Map) raw.get(0)).get("name") — 불편하고 타입 불안전
+
+// TypeReference로 List<User> 타입 정보 보존
+List<User> users = mapper.readValue(json, new TypeReference<List<User>>() {});
+// TypeReference<List<User>>의 익명 클래스가 제네릭 슈퍼클래스 정보를 제공
+System.out.println(users.get(0).getName()); // "Alice" — 타입 안전
+```
+
+**Jackson TypeReference의 핵심 구현 원리**
+
+```java
+// Jackson의 TypeReference (단순화)
+public abstract class TypeReference<T> {
+    protected final Type _type;
+
+    protected TypeReference() {
+        Type superClass = getClass().getGenericSuperclass();
+        if (superClass instanceof Class<?>) {
+            throw new IllegalArgumentException("TypeReference는 익명 클래스로 사용해야 합니다");
+        }
+        _type = ((ParameterizedType) superClass).getActualTypeArguments()[0];
+    }
+
+    public Type getType() { return _type; }
+}
 ```
 
 ---
 
-## 실무에서 자주 하는 실수
+## 8. 힙 오염(Heap Pollution)과 @SafeVarargs
 
-**실수 1: Raw 타입 사용으로 타입 안전성 포기**
+### 힙 오염이란 무엇인가
+
+힙 오염은 **제네릭 타입 변수가 실제와 다른 타입의 객체를 가리키는 상태**입니다. 런타임에 ClassCastException을 일으키는 잠재적 폭탄입니다.
 
 ```java
-// 잘못된 코드 — Raw 타입 사용
-List list = new ArrayList();
-list.add("hello");
-list.add(123);          // 컴파일 통과 — 실수를 잡지 못함
-String s = (String) list.get(1); // 런타임 ClassCastException!
+// 힙 오염 발생 시나리오 1: Raw 타입 혼용
+List<String> strings = new ArrayList<>();
+List raw = strings;          // Raw 타입 대입 — 경고 발생
+raw.add(42);                  // Integer를 String 리스트에 삽입 — 컴파일은 됨
 
-// 올바른 코드
-List<String> list = new ArrayList<>();
-// list.add(123); // 컴파일 에러 — 즉시 발견
+String s = strings.get(0);   // 런타임 ClassCastException!
+// 자동 삽입된 체크캐스트: (String) 42 → ClassCastException
 ```
 
-레거시 라이브러리와 연동할 때 어쩔 수 없이 Raw 타입을 다뤄야 한다면, `@SuppressWarnings("unchecked")`를 최소 범위로만 사용하고 반드시 주석으로 이유를 명시하세요.
-
-**실수 2: PECS 원칙 혼동으로 컴파일 에러**
-
 ```java
-// 잘못된 코드 — 읽기용 컬렉션에 쓰기 시도
-public void addNumbers(List<? extends Number> list) {
-    list.add(1); // 컴파일 에러! — ? extends는 읽기 전용
+// 힙 오염 발생 시나리오 2: 비검사 캐스팅
+@SuppressWarnings("unchecked")
+public static <T> List<T> dangerousCast(List<?> list) {
+    return (List<T>) list; // 비검사 캐스팅 — 힙 오염 시작
 }
 
-// 잘못된 코드 — 쓰기용 컬렉션에서 타입 안전 읽기 시도
-public void processNumbers(List<? super Integer> list) {
-    Integer n = list.get(0); // 컴파일 에러! — ? super는 Object로만 읽힘
-}
+List<Integer> integers = List.of(1, 2, 3);
+List<String> strings = dangerousCast(integers); // 경고를 무시하면 컴파일됨
 
-// 올바른 코드 — PECS 적용
-public double sum(List<? extends Number> src) { // 읽기: extends
-    return src.stream().mapToDouble(Number::doubleValue).sum();
-}
-
-public void fillDefaults(List<? super Integer> dest, int count) { // 쓰기: super
-    for (int i = 0; i < count; i++) dest.add(0);
-}
+String s = strings.get(0); // 런타임 ClassCastException!
 ```
 
-**실수 3: 제네릭 클래스에서 static 멤버에 타입 파라미터 사용**
+### 가변 인수(varargs)와 힙 오염
+
+varargs는 배열로 구현됩니다. 제네릭 타입 배열을 만들 수 없음에도 varargs 파라미터로는 만들어집니다. 이것이 힙 오염의 주요 경로입니다.
 
 ```java
-// 잘못된 코드
-public class Counter<T> {
-    private static int count = 0; // OK
-    // private static T defaultValue; // 컴파일 에러!
-    // static 필드는 모든 인스턴스가 공유 → T가 무엇인지 결정 불가
+// 경고: [unchecked] Possible heap pollution from parameterized vararg type
+public static <T> List<T> asList(T... elements) {
+    // elements의 실제 타입은 Object[] (타입 소거)
+    // 하지만 List<T>로 취급됨 — 힙 오염 가능
+    return Arrays.asList(elements);
 }
 
-// 올바른 코드 — static 팩토리 메서드에서는 별도 타입 파라미터 선언
-public class Box<T> {
-    public static <E> Box<E> empty() { // 메서드 레벨 타입 파라미터
-        return new Box<>(null);
+// 극한 시나리오: 힙 오염이 실제로 발생하는 케이스
+static void pollute(List<String>... stringLists) {
+    Object[] objectArrays = stringLists;          // 배열은 공변 — OK
+    objectArrays[0] = List.of(42, 43);            // List<Integer> 삽입
+    String s = stringLists[0].get(0);             // ClassCastException!
+}
+
+// 이 코드는 컴파일 경고를 발생시키며, 실제로 위험함
+pollute(new ArrayList<>(), new ArrayList<>());
+```
+
+### @SafeVarargs: 안전성 보장 선언
+
+`@SafeVarargs`는 메서드 작성자가 "이 varargs 사용은 힙 오염을 일으키지 않음을 보장"한다고 컴파일러에게 약속하는 어노테이션입니다.
+
+```java
+// 안전한 varargs — 배열을 읽기만 하고 외부로 노출하지 않음
+@SafeVarargs
+public static <T> List<T> safeCombine(List<T>... lists) {
+    List<T> result = new ArrayList<>();
+    for (List<T> list : lists) {
+        result.addAll(list); // 읽기만 함 — 안전
     }
+    return result;
+    // lists 배열 자체를 반환하거나 외부에 저장하지 않으므로 안전
 }
+
+// 안전 조건 위반 — @SafeVarargs 붙이면 안 됨
+// public static <T> T[] toArray(T... elements) {
+//     return elements; // 배열 자체를 반환 — 힙 오염 가능
+// }
 ```
 
-**실수 4: 타입 소거 망각으로 instanceof 잘못 사용**
+**@SafeVarargs 사용 조건**
 
 ```java
-// 잘못된 코드 — 컴파일 에러
-if (obj instanceof List<String>) { // 타입 소거로 런타임에 판별 불가
-    List<String> list = (List<String>) obj;
+// 조건 1: final 또는 static 메서드 (재정의 불가여야 함)
+// 조건 2: varargs 파라미터 배열에 쓰기 연산이 없어야 함
+// 조건 3: varargs 배열(또는 복제본)을 외부에 노출하지 않아야 함
+
+@SafeVarargs
+public final <T> void processAll(T... items) { // final 메서드 — OK
+    for (T item : items) process(item); // 읽기만 — OK
 }
 
-// 올바른 코드 1 — 소거된 타입으로 확인 후 안전하게 캐스팅
-if (obj instanceof List<?>) {
-    List<?> list = (List<?>) obj;
-    // 내부 원소를 하나씩 확인
-    if (!list.isEmpty() && list.get(0) instanceof String) {
-        @SuppressWarnings("unchecked")
-        List<String> stringList = (List<String>) list;
-    }
+// Java 9+: private 메서드에도 적용 가능
+@SafeVarargs
+private <T> List<T> collect(T... items) {
+    return new ArrayList<>(Arrays.asList(items));
 }
-```
-
-**실수 5: 제네릭 배열 생성 시도**
-
-```java
-// 잘못된 코드 — 컴파일 에러
-public <T> T[] toArray(List<T> list) {
-    return new T[list.size()]; // 컴파일 에러!
-}
-
-// 올바른 코드 — Supplier나 Class<T> 활용
-public <T> T[] toArray(List<T> list, IntFunction<T[]> arrayFactory) {
-    return list.toArray(arrayFactory.apply(list.size()));
-}
-
-// 사용
-String[] arr = toArray(stringList, String[]::new); // 메서드 참조로 깔끔
 ```
 
 ---
 
+## 9. 재귀 타입 경계(Recursive Type Bounds)
 
-## 극한 시나리오
+### `Comparable<T extends Comparable<T>>`의 의미
 
-### 타입 안전성 vs 유연성
-
-API 설계에서 제네릭의 경계가 성능과 사용성에 직접 영향을 미칩니다. 세 가지 설계 패턴의 트레이드오프를 비교합니다.
-
-**패턴 1: 엄격한 타입 파라미터 — 최대 타입 안전성**
+`T extends Comparable<T>`는 "T는 T 자신과 비교할 수 있어야 한다"는 재귀적 계약입니다.
 
 ```java
-// 타입 관계가 명확히 드러남, 컴파일 타임 오류 보장
-public interface EventBus<E extends Event> {
-    void publish(E event);
-    void subscribe(Class<E> eventType, Consumer<E> handler);
+// 왜 단순히 T extends Comparable이 아닌가?
+public static <T extends Comparable> T wrongMax(List<T> list) {
+    T result = list.get(0);
+    for (T e : list) {
+        // e.compareTo(result)의 결과가 보장되지 않음
+        // T가 Comparable<Integer>인데 String을 비교하면?
+        if (e.compareTo(result) > 0) result = e;
+    }
+    return result;
 }
 
-// 장점: EventBus<OrderEvent>는 OrderEvent만 처리 — 실수 불가
-// 단점: 여러 이벤트 타입을 하나의 버스로 처리 불가
+// 올바른 구현: T extends Comparable<T>
+public static <T extends Comparable<T>> T max(List<T> list) {
+    if (list.isEmpty()) throw new NoSuchElementException();
+    T result = list.get(0);
+    for (T e : list) {
+        if (e.compareTo(result) > 0) result = e; // 타입 안전한 비교
+    }
+    return result;
+}
+
+// 더 유연한 버전 (JDK Collections.max의 실제 시그니처)
+public static <T extends Comparable<? super T>> T maxFlexible(List<T> list) {
+    // ? super T: T 또는 T의 슈퍼타입과 비교 가능하면 허용
+    // 예: Dog extends Animal, Animal implements Comparable<Animal>
+    // Dog는 Comparable<Dog>가 아니라 Comparable<Animal>을 구현
+    // Comparable<? super Dog>는 Comparable<Animal>을 포함하므로 OK
+    T result = list.get(0);
+    for (T e : list) {
+        if (e.compareTo(result) > 0) result = e;
+    }
+    return result;
+}
 ```
 
-**패턴 2: 와일드카드 — 유연성 우선**
+### 빌더 패턴의 재귀 타입 경계: 계층 상속 문제 해결
+
+제네릭 없이 빌더 계층을 만들면 메서드 체이닝이 깨집니다.
 
 ```java
-// 다양한 타입을 하나의 컨테이너로 처리
-public class EventBus {
-    private final Map<Class<?>, List<Consumer<?>>> handlers = new ConcurrentHashMap<>();
+// 문제: 제네릭 없는 빌더 상속
+public abstract class Vehicle {
+    protected String brand;
+    protected int year;
 
-    @SuppressWarnings("unchecked")
-    public <E> void subscribe(Class<E> type, Consumer<E> handler) {
-        handlers.computeIfAbsent(type, k -> new CopyOnWriteArrayList<>())
-                .add(handler);
-    }
+    public abstract static class Builder {
+        protected String brand;
+        protected int year;
 
-    @SuppressWarnings("unchecked")
-    public <E> void publish(E event) {
-        List<Consumer<?>> list = handlers.get(event.getClass());
-        if (list != null) {
-            list.forEach(h -> ((Consumer<E>) h).accept(event));
+        public Builder brand(String brand) {
+            this.brand = brand;
+            return this; // Animal.Builder 반환 — 타입 정보 손실!
+        }
+
+        public Builder year(int year) {
+            this.year = year;
+            return this;
         }
     }
 }
-// 장점: 단일 버스로 모든 이벤트 처리
-// 단점: @SuppressWarnings 불가피, 잘못된 캐스팅 런타임 오류 가능
+
+public class Car extends Vehicle {
+    private int doors;
+
+    public static class Builder extends Vehicle.Builder {
+        private int doors;
+
+        public Builder doors(int doors) {
+            this.doors = doors;
+            return this;
+        }
+    }
+}
+
+// 문제 발생: brand()가 Vehicle.Builder를 반환하므로 doors() 호출 불가
+// new Car.Builder().brand("Toyota").doors(4).build(); // 컴파일 에러!
+// brand() 이후 Vehicle.Builder가 반환되어 doors() 미존재
 ```
 
-**패턴 3: 타입 토큰 — 타입 안전 이기종 컨테이너**
+```java
+// 해결: 재귀 타입 경계로 Self 타입 모사
+public abstract class Vehicle {
+    protected final String brand;
+    protected final int year;
+
+    protected Vehicle(Builder<?> builder) {
+        this.brand = builder.brand;
+        this.year = builder.year;
+    }
+
+    // B는 자기 자신의 서브타입 — Self-referential generic
+    public abstract static class Builder<B extends Builder<B>> {
+        protected String brand;
+        protected int year;
+
+        @SuppressWarnings("unchecked")
+        public B brand(String brand) {
+            this.brand = brand;
+            return (B) this; // 실제 서브타입 B 반환
+        }
+
+        @SuppressWarnings("unchecked")
+        public B year(int year) {
+            this.year = year;
+            return (B) this;
+        }
+
+        public abstract Vehicle build();
+    }
+}
+
+public class Car extends Vehicle {
+    private final int doors;
+    private final String fuelType;
+
+    private Car(Builder builder) {
+        super(builder);
+        this.doors = builder.doors;
+        this.fuelType = builder.fuelType;
+    }
+
+    public static class Builder extends Vehicle.Builder<Builder> {
+        private int doors;
+        private String fuelType;
+
+        public Builder doors(int doors) {
+            this.doors = doors;
+            return this; // Car.Builder 반환
+        }
+
+        public Builder fuelType(String fuelType) {
+            this.fuelType = fuelType;
+            return this;
+        }
+
+        @Override
+        public Car build() {
+            return new Car(this);
+        }
+    }
+}
+
+public class ElectricCar extends Car {
+    private final int range;
+
+    private ElectricCar(Builder builder) {
+        super(builder);
+        this.range = builder.range;
+    }
+
+    // 3단계 계층도 자연스럽게 지원
+    public static class Builder extends Car.Builder {
+        private int range;
+
+        public Builder range(int range) {
+            this.range = range;
+            return this;
+        }
+
+        @Override
+        public ElectricCar build() {
+            return new ElectricCar(this);
+        }
+    }
+}
+
+// 메서드 체이닝이 계층 전반에서 올바른 타입 반환
+ElectricCar tesla = new ElectricCar.Builder()
+        .brand("Tesla")      // Vehicle.Builder<Builder>.brand() → Builder 반환
+        .year(2024)          // Vehicle.Builder<Builder>.year() → Builder 반환
+        .doors(4)            // Car.Builder.doors() → Car.Builder의 B 반환
+        .fuelType("Electric") // Car.Builder.fuelType() → Builder 반환
+        .range(500)          // ElectricCar.Builder.range() → Builder 반환
+        .build();            // ElectricCar
+```
+
+---
+
+## 10. 컬렉션과 제네릭: 공변성과 반공변성 전체 그림
+
+```mermaid
+graph LR
+    INV["불공변 List&lt;T&gt;"] --> EXT["공변 ? extends T"]
+    INV --> SUP["반공변 ? super T"]
+    EXT --> READ["읽기 전용 생산자"]
+    SUP --> WRITE["쓰기 전용 소비자"]
+```
+
+### `List<? extends Number>` vs `List<Number>`: 실제 차이
 
 ```java
-// 100K TPS 이벤트 처리 시스템에서 타입 안전성과 유연성을 모두 달성
-public class TypeSafeEventBus {
-    private final ConcurrentHashMap<Class<?>, CopyOnWriteArrayList<Object>> handlers =
-        new ConcurrentHashMap<>();
+// List<Number>: Number 타입 원소만 직접 보유
+List<Number> numList = new ArrayList<>();
+numList.add(1);      // OK — Integer는 Number
+numList.add(1.5);    // OK — Double은 Number
+numList.add(1L);     // OK — Long은 Number
 
-    public <E extends Event> void subscribe(Class<E> type, Consumer<E> handler) {
-        handlers.computeIfAbsent(type, k -> new CopyOnWriteArrayList<>()).add(handler);
+// List<Integer>를 List<Number>에 대입 불가 — 불공변
+// List<Number> fromInt = new ArrayList<Integer>(); // 컴파일 에러!
+
+// List<? extends Number>: Number 서브타입 리스트라면 무엇이든 대입 가능
+List<? extends Number> wildcardList;
+wildcardList = new ArrayList<Integer>(); // OK
+wildcardList = new ArrayList<Double>();  // OK
+wildcardList = new ArrayList<Number>();  // OK
+
+// 하지만 원소 추가 불가
+// wildcardList.add(1);   // 컴파일 에러!
+// wildcardList.add(1.5); // 컴파일 에러!
+Number n = wildcardList.get(0); // 읽기는 OK
+```
+
+### 실전: 제네릭 컬렉션 유틸리티
+
+```java
+public class CollectionUtils {
+
+    // 합계: Producer (읽기) — extends
+    public static double sum(List<? extends Number> numbers) {
+        return numbers.stream()
+                .mapToDouble(Number::doubleValue)
+                .sum();
+    }
+
+    // 필터 후 다른 컬렉션에 추가: src는 Producer, dest는 Consumer
+    public static <T> void filterAndCollect(
+            List<? extends T> src,
+            List<? super T> dest,
+            Predicate<? super T> predicate) {
+        for (T item : src) {
+            if (predicate.test(item)) {
+                dest.add(item);
+            }
+        }
+    }
+
+    // 변환: Function의 입력은 ? super T (반공변), 출력은 ? extends R (공변)
+    public static <T, R> List<R> transform(
+            List<? extends T> src,
+            Function<? super T, ? extends R> mapper) {
+        List<R> result = new ArrayList<>();
+        for (T item : src) {
+            result.add(mapper.apply(item));
+        }
+        return result;
+    }
+}
+
+// 사용
+List<Integer> scores = List.of(85, 92, 78, 95, 60);
+double avg = CollectionUtils.sum(scores) / scores.size(); // sum은 extends
+
+List<Number> above80 = new ArrayList<>();
+CollectionUtils.filterAndCollect(scores, above80, n -> n.intValue() > 80);
+// scores는 List<Integer> (? extends Number), above80은 List<Number> (? super Integer)
+
+List<String> scoreStrings = CollectionUtils.transform(scores, n -> n + "점");
+System.out.println(scoreStrings); // [85점, 92점, 78점, 95점, 60점]
+```
+
+---
+
+## 11. 리플렉션과 제네릭: Spring DI의 동작 원리
+
+### ParameterizedType과 getActualTypeArguments()
+
+타입 소거에도 불구하고 다음 경우에는 런타임에 제네릭 타입 정보에 접근할 수 있습니다.
+
+1. 클래스의 제네릭 슈퍼클래스 (`getGenericSuperclass()`)
+2. 클래스가 구현한 제네릭 인터페이스 (`getGenericInterfaces()`)
+3. 필드의 제네릭 타입 (`Field.getGenericType()`)
+4. 메서드의 제네릭 파라미터/반환 타입
+
+```java
+import java.lang.reflect.*;
+import java.util.*;
+
+// 런타임 제네릭 타입 정보 접근
+public class ReflectionGenericsDemo {
+
+    // 1. 제네릭 슈퍼클래스 정보
+    static class StringList extends ArrayList<String> {}
+
+    public static void inspectSuperclass() throws Exception {
+        Type superType = StringList.class.getGenericSuperclass();
+        // java.util.ArrayList<java.lang.String>
+
+        if (superType instanceof ParameterizedType pt) {
+            Type[] args = pt.getActualTypeArguments();
+            System.out.println(args[0]); // class java.lang.String
+        }
+    }
+
+    // 2. 제네릭 인터페이스 정보
+    static class UserRepo implements Comparator<String> {
+        @Override
+        public int compare(String a, String b) { return a.compareTo(b); }
+    }
+
+    public static void inspectInterface() {
+        Type[] interfaces = UserRepo.class.getGenericInterfaces();
+        for (Type iface : interfaces) {
+            if (iface instanceof ParameterizedType pt) {
+                System.out.println(pt.getRawType());           // interface java.util.Comparator
+                System.out.println(pt.getActualTypeArguments()[0]); // class java.lang.String
+            }
+        }
+    }
+
+    // 3. 필드의 제네릭 타입
+    static class Container {
+        private Map<String, List<Integer>> data;
+    }
+
+    public static void inspectField() throws Exception {
+        Field field = Container.class.getDeclaredField("data");
+        Type genericType = field.getGenericType();
+
+        if (genericType instanceof ParameterizedType pt) {
+            System.out.println(pt.getRawType()); // interface java.util.Map
+            System.out.println(Arrays.toString(pt.getActualTypeArguments()));
+            // [class java.lang.String, java.util.List<java.lang.Integer>]
+        }
+    }
+
+    // 4. 메서드 파라미터 제네릭 타입
+    static class Service {
+        public void process(List<String> items) {}
+    }
+
+    public static void inspectMethod() throws Exception {
+        Method m = Service.class.getMethod("process", List.class);
+        Type[] paramTypes = m.getGenericParameterTypes();
+        if (paramTypes[0] instanceof ParameterizedType pt) {
+            System.out.println(pt.getActualTypeArguments()[0]); // class java.lang.String
+        }
+    }
+}
+```
+
+### Spring이 이를 어떻게 활용하는가: DI 타입 매칭
+
+Spring의 의존성 주입이 `List<UserRepository>`나 `Optional<UserService>` 같은 제네릭 타입을 올바르게 매칭할 수 있는 비결이 바로 리플렉션 제네릭 정보입니다.
+
+```java
+// Spring DI 시나리오
+@Service
+public class OrderService {
+
+    // Spring은 이 필드의 제네릭 타입 정보를 리플렉션으로 읽어
+    // List<OrderRepository>의 모든 빈을 주입
+    @Autowired
+    private List<OrderRepository> repositories;
+
+    // ResolvableType을 사용하여 Optional<PaymentGateway>의
+    // 실제 타입 파라미터를 분석하여 PaymentGateway 빈을 찾음
+    @Autowired
+    private Optional<PaymentGateway> gateway;
+}
+```
+
+**Spring ResolvableType의 핵심 동작을 직접 구현해보면**
+
+```java
+// Spring의 타입 매칭 핵심 로직 (단순화)
+public class SimpleTypeResolver {
+
+    // 필드의 제네릭 타입 파라미터를 추출
+    public static List<Class<?>> getTypeArguments(Field field) {
+        Type genericType = field.getGenericType();
+        List<Class<?>> result = new ArrayList<>();
+
+        if (genericType instanceof ParameterizedType pt) {
+            for (Type arg : pt.getActualTypeArguments()) {
+                if (arg instanceof Class<?> clazz) {
+                    result.add(clazz);
+                } else if (arg instanceof ParameterizedType nested) {
+                    result.add((Class<?>) nested.getRawType());
+                }
+            }
+        }
+        return result;
+    }
+
+    // 특정 인터페이스의 제네릭 타입 인수 추출
+    // 예: UserRepository가 CrudRepository<User, Long>을 구현할 때
+    //     User와 Long을 추출
+    public static Type[] getInterfaceTypeArguments(Class<?> clazz, Class<?> targetInterface) {
+        for (Type iface : clazz.getGenericInterfaces()) {
+            if (iface instanceof ParameterizedType pt) {
+                if (pt.getRawType() == targetInterface) {
+                    return pt.getActualTypeArguments();
+                }
+            }
+        }
+        return new Type[0];
+    }
+}
+
+// 활용 예시
+public class UserRepository implements CrudRepository<User, Long> {
+    // 구현...
+}
+
+Type[] args = SimpleTypeResolver.getInterfaceTypeArguments(
+    UserRepository.class, CrudRepository.class);
+System.out.println(args[0]); // class User
+System.out.println(args[1]); // class java.lang.Long
+```
+
+### JPA AbstractJpaRepository의 실제 패턴
+
+```java
+// Spring Data JPA의 SimpleJpaRepository가 실제로 하는 일
+public abstract class AbstractRepository<T, ID> {
+    protected final Class<T> entityClass;
+    protected final EntityManager em;
+
+    @SuppressWarnings("unchecked")
+    protected AbstractRepository(EntityManager em) {
+        this.em = em;
+        // 서브클래스의 제네릭 슈퍼클래스 정보에서 T 추출
+        ParameterizedType superType =
+            (ParameterizedType) getClass().getGenericSuperclass();
+        this.entityClass = (Class<T>) superType.getActualTypeArguments()[0];
+        // new UserRepository() → AbstractRepository<User, Long>
+        // → getActualTypeArguments()[0] = User.class
+    }
+
+    public Optional<T> findById(ID id) {
+        return Optional.ofNullable(em.find(entityClass, id));
+        // entityClass가 User.class이므로 em.find(User.class, id)
+    }
+
+    public List<T> findAll() {
+        return em.createQuery(
+            "SELECT e FROM " + entityClass.getSimpleName() + " e",
+            entityClass
+        ).getResultList();
+    }
+}
+
+// 구체 클래스
+@Repository
+public class UserRepository extends AbstractRepository<User, Long> {
+    public UserRepository(EntityManager em) {
+        super(em); // entityClass = User.class 자동 추출
+    }
+
+    public List<User> findByEmail(String email) {
+        return em.createQuery(
+            "SELECT u FROM User u WHERE u.email = :email", User.class)
+            .setParameter("email", email)
+            .getResultList();
+    }
+}
+```
+
+---
+
+## 12. 타입 안전 이기종 컨테이너(Typesafe Heterogeneous Container)
+
+다양한 타입의 값을 하나의 컨테이너에 타입 안전하게 보관하는 Effective Java 아이템 33의 핵심 패턴입니다.
+
+```java
+public class TypesafeContainer {
+    private final Map<Class<?>, Object> map = new HashMap<>();
+
+    // Class<T>가 키이자 타입 증명서 역할
+    public <T> void put(Class<T> type, T value) {
+        map.put(Objects.requireNonNull(type), type.cast(value));
+        // type.cast()로 힙 오염 방지 — 저장 시점에 타입 검증
+    }
+
+    public <T> T get(Class<T> type) {
+        // Class.cast()는 checked cast — ClassCastException 발생 불가
+        // (put에서 이미 검증했으므로)
+        return type.cast(map.get(type));
+    }
+
+    public <T> boolean contains(Class<T> type) {
+        return map.containsKey(type);
+    }
+
+    // 한계: List<String>.class는 존재하지 않음
+    // put(List.class, strings)는 타입 파라미터 정보를 잃음
+}
+
+TypesafeContainer container = new TypesafeContainer();
+container.put(String.class, "hello");
+container.put(Integer.class, 42);
+container.put(LocalDate.class, LocalDate.of(2024, 1, 1));
+
+String s = container.get(String.class);          // "hello" — 캐스팅 불필요
+Integer n = container.get(Integer.class);        // 42
+LocalDate d = container.get(LocalDate.class);    // 2024-01-01
+```
+
+**한계 극복: 슈퍼 타입 토큰 기반 컨테이너**
+
+```java
+public class AdvancedContainer {
+    private final Map<Type, Object> map = new HashMap<>();
+
+    public <T> void put(TypeToken<T> token, T value) {
+        map.put(token.getType(), value);
     }
 
     @SuppressWarnings("unchecked")
-    public <E extends Event> void publish(E event) {
+    public <T> T get(TypeToken<T> token) {
+        return (T) map.get(token.getType());
+    }
+}
+
+AdvancedContainer container = new AdvancedContainer();
+
+// List<String> 타입 정보 보존
+container.put(new TypeToken<List<String>>() {}, List.of("a", "b", "c"));
+container.put(new TypeToken<Map<String, Integer>>() {}, Map.of("score", 100));
+
+List<String> list = container.get(new TypeToken<List<String>>() {});
+System.out.println(list); // [a, b, c]
+```
+
+---
+
+## 13. 제네릭 제약사항: 왜 이런 제한이 있는가
+
+### 기본형 사용 불가: 타입 소거의 직접적 결과
+
+```java
+// 컴파일 에러
+// List<int> list = new ArrayList<>(); // int는 Object의 서브타입이 아님
+
+// 이유: 소거 후 T는 Object가 됨 — int는 Object가 될 수 없음
+// Object value = 42; (오토박싱) → Object value = Integer.valueOf(42)
+// 기본형은 힙이 아닌 스택에 저장 — 제네릭 컬렉션은 힙 기반
+
+List<Integer> list = new ArrayList<>(); // OK — 오토박싱으로 편의성 제공
+list.add(1);    // 오토박싱: int → Integer
+int n = list.get(0); // 언박싱: Integer → int
+```
+
+Java 10부터 Valhalla 프로젝트에서 `List<int>` 지원을 추진 중이지만 아직 프로덕션 릴리즈 전입니다.
+
+### 제네릭 배열 생성 불가: 배열 공변성과의 충돌
+
+```java
+// 컴파일 에러
+// List<String>[] arr = new List<String>[10]; // 에러!
+
+// 왜 위험한가 — 가상 시나리오
+List<String>[] arr = new List<String>[2]; // (가상)
+Object[] objArr = arr;              // 배열은 공변 — OK
+objArr[0] = List.of(1, 2, 3);       // List<Integer> 삽입 — 배열 타입 검사 통과
+// arr[0]은 런타임에 그냥 List (소거됨) — ArrayStoreException 발생 안 함
+String s = arr[0].get(0);           // ClassCastException!
+
+// 대안 1: Object 배열 생성 후 캐스팅 (경고 발생)
+@SuppressWarnings("unchecked")
+List<String>[] arr2 = new List[10]; // Raw 타입 배열로 우회
+
+// 대안 2: List of List 사용 (권장)
+List<List<String>> listOfLists = new ArrayList<>();
+```
+
+### `new T()` 불가: 런타임 타입 부재
+
+```java
+// 불가 — 소거 후 T가 Object이므로 new Object()가 되어버림
+// public <T> T create() { return new T(); }
+
+// 해결 1: Supplier<T> (람다 친화적, 권장)
+public <T> T create(Supplier<T> factory) {
+    return factory.get();
+}
+
+UserService service = create(UserService::new); // 메서드 참조
+
+// 해결 2: Class<T> + 리플렉션
+public <T> T create(Class<T> clazz) {
+    try {
+        return clazz.getDeclaredConstructor().newInstance();
+    } catch (ReflectiveOperationException e) {
+        throw new RuntimeException("인스턴스 생성 실패: " + clazz, e);
+    }
+}
+
+UserService service2 = create(UserService.class);
+
+// 해결 3: 팩토리 패턴 인터페이스
+@FunctionalInterface
+public interface Factory<T> {
+    T create();
+}
+
+public <T> T create(Factory<T> factory) {
+    return factory.create();
+}
+```
+
+### 제네릭 예외 클래스 불가
+
+```java
+// 컴파일 에러 — catch 블록은 런타임 타입으로 매칭되는데 타입 소거로 정보 없음
+// public class GenericException<T extends Exception> extends Exception {}
+// catch (GenericException<IOException> e) {} // 불가
+
+// throws 절에는 타입 파라미터 사용 가능 (컴파일 타임 정보만 필요)
+public <T extends Exception> void execute(Runnable task, Class<T> exType) throws T {
+    try {
+        task.run();
+    } catch (RuntimeException e) {
+        throw exType.cast(e); // 런타임 타입 변환
+    }
+}
+
+// 예외 처리의 현실적 대안
+public class AppException extends RuntimeException {
+    private final String errorCode;
+    private final Object detail; // 타입 파라미터 대신 Object
+
+    public AppException(String errorCode, Object detail, String message) {
+        super(message);
+        this.errorCode = errorCode;
+        this.detail = detail;
+    }
+}
+```
+
+---
+
+## 14. 극한 시나리오
+
+### 시나리오 1: 제네릭 이벤트 버스에서의 힙 오염
+
+100K TPS 이벤트 시스템에서 타입 안전성을 최대화하면서 다양한 이벤트 타입을 지원해야 합니다.
+
+```java
+public class TypeSafeEventBus {
+    // 키: 이벤트 클래스, 값: 해당 타입 핸들러 목록
+    private final ConcurrentHashMap<Class<?>, CopyOnWriteArrayList<Consumer<?>>> handlers =
+            new ConcurrentHashMap<>();
+
+    // 등록 — 타입 안전
+    public <E> void on(Class<E> eventType, Consumer<E> handler) {
+        handlers.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>())
+                .add(handler);
+    }
+
+    // 발행 — 내부에서만 unchecked cast, @SafeVarargs와 유사한 의도
+    @SuppressWarnings("unchecked")
+    public <E> void emit(E event) {
         Class<?> type = event.getClass();
-        // 현재 타입과 모든 슈퍼타입 핸들러 실행 (이벤트 계층 지원)
-        while (type != null && Event.class.isAssignableFrom(type)) {
-            CopyOnWriteArrayList<Object> list = handlers.get(type);
+        // 이벤트 타입 계층 순회 — 부모 타입 핸들러도 실행
+        while (type != null) {
+            CopyOnWriteArrayList<Consumer<?>> list = handlers.get(type);
             if (list != null) {
-                list.forEach(h -> ((Consumer<E>) h).accept(event));
+                for (Consumer<?> h : list) {
+                    ((Consumer<E>) h).accept(event); // 타입 안전성은 on()에서 보장
+                }
             }
             type = type.getSuperclass();
         }
     }
 }
+
+// 사용 — 타입 안전
+TypeSafeEventBus bus = new TypeSafeEventBus();
+
+bus.on(OrderCreatedEvent.class, event -> {
+    // event는 OrderCreatedEvent 타입 — 캐스팅 불필요
+    System.out.println("주문 생성: " + event.getOrderId());
+});
+
+bus.on(OrderEvent.class, event -> {
+    // OrderCreatedEvent가 OrderEvent를 상속하면 이 핸들러도 실행
+    System.out.println("주문 이벤트: " + event.getType());
+});
+
+bus.emit(new OrderCreatedEvent("ORD-001")); // 두 핸들러 모두 실행
 ```
 
-100K TPS 환경에서는 `CopyOnWriteArrayList`로 읽기(이벤트 발행)에 락을 걸지 않아 성능을 확보하고, `ConcurrentHashMap.computeIfAbsent`로 핸들러 등록의 원자성을 보장합니다.
+### 시나리오 2: 제네릭 파이프라인 빌더
+
+```java
+// 타입 안전한 함수형 파이프라인
+public class Pipeline<I, O> {
+    private final Function<I, O> transform;
+
+    private Pipeline(Function<I, O> transform) {
+        this.transform = transform;
+    }
+
+    public static <T> Pipeline<T, T> identity() {
+        return new Pipeline<>(Function.identity());
+    }
+
+    public static <I, O> Pipeline<I, O> of(Function<I, O> fn) {
+        return new Pipeline<>(fn);
+    }
+
+    // 파이프라인 연결 — O가 다음 Pipeline의 I
+    public <R> Pipeline<I, R> then(Pipeline<O, R> next) {
+        return new Pipeline<>(transform.andThen(next.transform));
+    }
+
+    public <R> Pipeline<I, R> then(Function<O, R> fn) {
+        return new Pipeline<>(transform.andThen(fn));
+    }
+
+    public O execute(I input) {
+        return transform.apply(input);
+    }
+}
+
+// 타입이 단계마다 안전하게 추적됨
+Pipeline<String, Integer> pipeline = Pipeline
+        .<String, String>of(String::trim)          // String → String
+        .then(String::toUpperCase)                  // String → String
+        .then(s -> s.split(","))                    // String → String[]
+        .then(arr -> arr.length);                   // String[] → Integer
+
+int count = pipeline.execute("  apple, banana, cherry  "); // 3
+```
+
+### 시나리오 3: 재귀 타입 경계의 극한 — `Enum<E extends Enum<E>>`
+
+JDK의 Enum 클래스 선언은 재귀 타입 경계의 가장 복잡한 예입니다.
+
+```java
+// JDK의 실제 Enum 선언
+public abstract class Enum<E extends Enum<E>> implements Comparable<E>, Serializable {
+    private final String name;
+    private final int ordinal;
+
+    protected Enum(String name, int ordinal) {
+        this.name = name;
+        this.ordinal = ordinal;
+    }
+
+    public final int compareTo(E other) {
+        return this.ordinal - other.ordinal;
+    }
+}
+
+// Color는 Enum<Color>를 상속
+// E = Color, E extends Enum<Color> — Color는 Enum<Color>의 서브타입이어야 함
+public enum Color extends Enum<Color> { // (컴파일러가 자동 처리)
+    RED, GREEN, BLUE
+}
+```
+
+`E extends Enum<E>`의 의미: "E는 반드시 E를 타입 파라미터로 가지는 Enum의 서브타입이어야 한다." 즉 `Color`는 `Enum<Color>`를 상속해야 합니다. 이것이 `Color.RED.compareTo(Color.GREEN)`이 타입 안전하게 컴파일되고, `Color.RED.compareTo(Status.ACTIVE)` 같은 엉뚱한 비교가 컴파일 에러가 나는 이유입니다.
+
+```java
+// Enum의 타입 안전 활용
+public static <E extends Enum<E>> E findByName(Class<E> enumClass, String name) {
+    return Arrays.stream(enumClass.getEnumConstants())
+            .filter(e -> e.name().equalsIgnoreCase(name))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException(
+                    "No enum constant " + enumClass.getSimpleName() + "." + name));
+}
+
+Color color = findByName(Color.class, "red");  // Color.RED
+Status status = findByName(Status.class, "active"); // Status.ACTIVE
+// findByName(Color.class, "active") — 실행시간에 예외, 하지만 타입은 안전
+```
 
 ---
+
+## 면접 포인트 5개
+
+### Q1. 타입 소거가 필요한 이유와 그로 인한 구체적 제약은?
+
+**핵심 WHY**: Java 5는 기존 수백만 줄의 Java 코드와 바이너리 호환성을 유지하면서 제네릭을 도입해야 했습니다. C#처럼 런타임에 타입 정보를 유지하는 Reified 제네릭을 도입하면 JVM을 전면 교체해야 하고, 기존 `.class` 파일과 호환되지 않습니다. 그래서 컴파일러만 수정하고(타입 검사 추가), 런타임 JVM은 그대로 두는 타입 소거를 선택했습니다.
+
+**구체적 제약**:
+- `new T()` 불가 → `Supplier<T>` 또는 `Class<T>` 주입으로 해결
+- `new T[10]` 불가 → `List<T>` 또는 `(T[]) new Object[10]`으로 우회
+- `instanceof List<String>` 불가 → `instanceof List<?>` 사용
+- `static T field` 불가 → T는 인스턴스 단위, static은 클래스 단위
+- `List<String>.class` 없음 → `TypeToken`/`TypeReference`으로 우회
+
+**극한 질문**: "그렇다면 `List<String>`과 `List<Integer>`가 런타임에 같은 클래스인데, Spring은 어떻게 `List<UserRepository>` 주입을 구현하나요?"
+→ Spring은 `Field.getGenericType()`으로 필드의 제네릭 타입 정보를 읽습니다. 선언 정보는 소거되지 않고 바이트코드에 남습니다(`LocalVariable` 정보는 소거되지만 `Field`/`Method` 시그니처는 보존). `ParameterizedType.getActualTypeArguments()`로 `UserRepository.class`를 얻어 해당 빈을 찾습니다.
+
+---
+
+### Q2. PECS 원칙의 수학적 근거와 위반 시 발생하는 실제 문제는?
+
+**핵심 WHY**: 공변성/반공변성의 안전성 보장에서 나옵니다. `List<? extends T>`는 공변 읽기를 허용하지만 쓰기를 막습니다. 왜냐면 `List<Integer>`에 `Double`을 쓰면 안 되는데, 컴파일러는 실제 타입이 `Integer`인지 `Double`인지 모르기 때문입니다. `List<? super T>`는 반공변 쓰기를 허용하지만 타입 보장된 읽기를 막습니다. `List<Number>`에서 꺼낸 것이 `Integer`인지 `Double`인지 모르기 때문입니다.
+
+**위반 시 컴파일 에러**:
+```java
+// extends로 쓰기 시도 — 컴파일 에러
+public void addTo(List<? extends Number> list) {
+    list.add(1);   // 에러: ? extends Number에 Integer 추가 불가
+    list.add(1.0); // 에러: 마찬가지
+}
+
+// super로 타입 안전 읽기 시도 — 컴파일 에러
+public void readFrom(List<? super Integer> list) {
+    Integer i = list.get(0); // 에러: ? super Integer는 Object
+}
+```
+
+**극한 시나리오**: 대용량 데이터 변환 파이프라인에서 PECS 미적용 시 매번 새 타입의 컬렉션을 만들어야 해서 GC 압박이 증가합니다. PECS를 제대로 적용하면 하나의 메서드가 다양한 타입 조합을 처리하므로 코드 중복과 메모리 할당이 줄어듭니다.
+
+---
+
+### Q3. 브리지 메서드가 없으면 무슨 일이 생기는가?
+
+**핵심 WHY**: `Comparable<T>`의 `compareTo(T)`는 소거 후 `compareTo(Object)`가 되어야 합니다. `Money implements Comparable<Money>`에서 `compareTo(Money)` 메서드만 있으면, JVM 입장에서 `Comparable` 인터페이스의 `compareTo(Object)` 메서드가 구현되지 않은 것입니다. 다형성이 깨집니다.
+
+```java
+// 브리지 메서드 없는 세상 (가상)
+Comparable c = new Money(100); // Raw 타입으로 대입
+c.compareTo(new Money(200));   // compareTo(Object) 없음 — AbstractMethodError!
+
+// 브리지 메서드가 있는 현실
+// compareTo(Object other) { return compareTo((Money) other); }
+// 이 브리지가 다형성을 연결함
+```
+
+**확인 방법**: `javap -verbose Money.class | grep -A5 bridge`로 `ACC_BRIDGE | ACC_SYNTHETIC` 플래그를 확인할 수 있습니다.
+
+---
+
+### Q4. `@SafeVarargs`를 붙여야 할 때와 붙이면 안 될 때의 정확한 기준은?
+
+**핵심 WHY**: varargs는 내부적으로 배열로 구현됩니다. `T... items`는 `T[] items`이고, 제네릭 배열은 타입 소거로 `Object[]`가 됩니다. 이 배열에 다른 타입을 넣으면 힙 오염이 발생합니다.
+
+**붙여야 할 때 (안전한 경우)**:
+- varargs 배열에서 읽기만 함
+- varargs 배열을 외부에 노출하지 않음 (반환하거나 외부 변수에 저장 금지)
+
+**붙이면 안 될 때 (위험한 경우)**:
+```java
+// 위험 1: 배열 반환 — 힙 오염 전파
+static <T> T[] dangerous1(T... items) {
+    return items; // 배열 자체를 반환 — 타입 정보 손실
+}
+
+// 위험 2: 다른 컬렉션에 배열 저장
+static <T> void dangerous2(List<T> list, T... items) {
+    list.addAll(Arrays.asList(items));
+    // 위험: list의 타입과 items의 실제 타입이 다를 수 있음
+}
+
+String[] result = dangerous1("a", "b"); // 얼핏 OK
+Object[] objResult = dangerous1("a", "b"); // 여기에 Integer 넣으면 후폭풍
+```
+
+---
+
+### Q5. `List<? extends Number>`에 원소를 추가하지 못하는 이유를 JVM 내부 관점에서 설명하라
+
+**핵심 WHY**: 컴파일러가 `List<? extends Number>`의 실제 타입 파라미터를 알 수 없기 때문입니다. `? extends Number`는 `Number`, `Integer`, `Double`, `Long`, `BigDecimal` 중 어느 것이든 될 수 있습니다.
+
+```java
+List<? extends Number> list = new ArrayList<Integer>(); // 실제는 List<Integer>
+// list.add(1.0); // 만약 허용된다면?
+// → 내부 ArrayList<Integer>에 Double 1.0이 삽입됨
+// → Integer n = ((ArrayList<Integer>) list).get(0);
+// → ClassCastException!
+```
+
+컴파일러는 `list`의 실제 타입이 `List<Integer>`인지 `List<Double>`인지 모릅니다. 어떤 타입을 추가해도 안전하지 않을 수 있으므로 아예 막는 것입니다. `null`만 허용되는 이유는 `null`은 어떤 참조 타입으로도 캐스팅 가능하므로 항상 안전하기 때문입니다.
+
+**반대로 읽기가 안전한 이유**: `? extends Number`이므로 어떤 타입이 실제로 들어있어도 최소한 `Number`임은 보장됩니다. `Number n = list.get(0)`은 항상 성공합니다.
+
+---
+
 ## 정리
 
-제네릭을 올바르게 사용하면 다음 이점을 얻습니다.
+| 개념 | 핵심 메커니즘 | 실무 함의 |
+|------|------------|---------|
+| 타입 소거 | 컴파일 타임 검사 후 런타임에 제거 | instanceof T, new T[], static T 불가 |
+| 브리지 메서드 | 컴파일러가 다형성 복원용 메서드 자동 생성 | javap으로 확인 가능, 리플렉션 주의 |
+| PECS | Producer=extends(읽기), Consumer=super(쓰기) | API 설계 시 와일드카드 방향 결정 기준 |
+| 힙 오염 | 잘못된 캐스팅으로 제네릭 타입 불일치 | @SafeVarargs, unchecked 경고 무시 금지 |
+| TypeToken | 익명 서브클래스로 제네릭 타입 정보 보존 | Jackson TypeReference, Spring ResolvableType |
+| 재귀 타입 경계 | T extends Comparable&lt;T&gt;로 Self 타입 모사 | 빌더 패턴, Enum 계층 구조 |
+| 리플렉션+제네릭 | Field/Method 시그니처는 소거 대상 아님 | Spring DI, JPA AbstractRepository |
+| Reified 부재 | JVM 하위 호환 선택의 결과 | Kotlin inline reified, TypeToken으로 우회 |
 
-| 항목 | 내용 |
-|------|------|
-| **타입 안전성** | 컴파일 타임에 타입 오류를 차단하여 런타임 `ClassCastException` 방지 |
-| **캐스팅 제거** | 컬렉션에서 꺼낼 때 명시적 캐스팅 불필요 |
-| **코드 재사용** | 하나의 클래스/메서드로 여러 타입 처리 가능 |
-| **가독성** | 코드의 의도와 타입 관계가 명확히 드러남 |
+핵심 규칙:
 
-핵심 규칙을 정리하면 다음과 같습니다.
-
-- **PECS**: 데이터를 읽으면 `extends`, 쓰면 `super`
-- **타입 소거**: 제네릭 정보는 런타임에 없음. `instanceof`와 배열 생성에 주의
-- **new T() 불가**: `Supplier<T>` 또는 `Class<T>`를 주입받아 해결
-- **기본형 불가**: 래퍼 클래스(`Integer`, `Double` 등)로 대체
-- **반환 타입에 와일드카드 금지**: 호출자가 불편해짐
-- **재귀 타입 바운드**: 자기 자신과 비교/체이닝이 필요할 때 `T extends Comparable<T>` 패턴 활용
-
----
-## 면접 포인트
-
-**Q1. 타입 소거(Type Erasure)란 무엇이고 어떤 제약을 만드는가?**
-Java 제네릭은 컴파일 타임에만 타입 정보를 사용하고, 런타임에는 소거됩니다. `List<String>`과 `List<Integer>`는 런타임에 모두 `List`입니다. 이로 인한 제약: ① `instanceof List<String>` 불가 → `instanceof List<?>` 사용. ② `new T()` 불가 → Class 객체를 파라미터로 전달 후 `clazz.newInstance()` 사용. ③ `static T field` 불가 — T가 클래스 단위로 공유되면 타입 혼용 위험. Reified 제네릭(런타임 타입 정보 유지)이 없는 Java의 근본적 한계입니다.
-
-**Q2. 와일드카드에서 PECS 원칙이란?**
-Producer Extends, Consumer Super. `? extends T`: 데이터를 읽기(produce)만 하는 경우 — 상한 와일드카드. `List<? extends Number>`에서 읽으면 Number로 처리 가능, 쓰기 불가. `? super T`: 데이터를 쓰기(consume)만 하는 경우 — 하한 와일드카드. `List<? super Integer>`에 Integer를 add 가능, 읽으면 Object로 반환. `Collections.copy(dest, src)`에서 src는 `? extends T`(읽기), dest는 `? super T`(쓰기)로 적용된 전형적인 사례입니다.
-
-**Q3. 제네릭 메서드와 제네릭 클래스의 차이는?**
-제네릭 클래스의 타입 파라미터는 인스턴스 생성 시 확정됩니다. `new Box<String>()`으로 생성하면 해당 인스턴스는 항상 String 박스. 제네릭 메서드의 타입 파라미터는 메서드 호출마다 독립적으로 추론됩니다. static 유틸리티 메서드(`Collections.sort()`, `Arrays.asList()`)는 제네릭 메서드로 구현해 클래스 인스턴스 없이 타입 안전하게 호출합니다.
-
-**Q4. 제네릭 타입의 배열을 생성할 수 없는 이유는?**
-`new T[10]`은 컴파일 에러입니다. 배열은 런타임에 타입을 검사하는데(covariant), 제네릭은 타입 소거로 런타임 타입 정보가 없어서 안전성을 보장할 수 없기 때문입니다. 대신 `Object[]`로 생성 후 캐스팅하거나, `ArrayList<T>`를 사용합니다. `@SuppressWarnings("unchecked")`로 경고를 억제하는 패턴은 실제 타입 안전성을 코드 작성자가 책임져야 합니다.
-
-**Q5. 제네릭에서 공변성(Covariance)이 없는 이유는?**
-`String`은 `Object`의 서브타입이지만, `List<String>`은 `List<Object>`의 서브타입이 아닙니다. 만약 공변이라면: `List<Object> list = new ArrayList<String>(); list.add(new Integer(1));`이 가능해져 String 리스트에 Integer가 들어가는 타입 오염이 발생합니다. 배열은 공변(`String[]`을 `Object[]`에 할당 가능)이지만 런타임에 `ArrayStoreException`으로 잡습니다. 제네릭은 컴파일 타임 타입 안전성을 위해 불공변으로 설계되었습니다.
+- **읽으면 extends, 쓰면 super** — PECS는 암기가 아니라 공변/반공변 원리에서 유도
+- **타입 소거는 컴파일러의 선택, 바이트코드 시그니처는 소거 안 됨** — Spring/JPA가 리플렉션으로 타입 정보를 읽는 이유
+- **unchecked 경고는 타입 안전성의 구멍** — @SuppressWarnings 전 반드시 안전성 직접 증명
+- **브리지 메서드는 JVM의 다형성 보존 장치** — 소거와 OOP 계약의 충돌을 컴파일러가 자동 해결
+- **TypeToken은 제네릭 타입 정보 보존의 유일한 우회책** — Jackson, Guava, Spring 모두 이 원리 사용

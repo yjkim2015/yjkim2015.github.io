@@ -1,5 +1,5 @@
 ---
-title: "데이터베이스 샤딩"
+title: "데이터베이스 샤딩 완전 분석"
 categories:
 - DB
 toc: true
@@ -7,189 +7,427 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-단일 MySQL 서버가 감당할 수 있는 쓰기 TPS 한계에 도달했다. 읽기는 레플리카로 분산했지만 쓰기 병목은 해결되지 않는다. 수직 확장(더 좋은 서버)도 한계가 왔다. 다음 선택지가 샤딩이다.
+단일 MySQL 서버가 쓰기 TPS 한계에 부딪혔다. 읽기는 레플리카로 분산했지만 INSERT/UPDATE는 여전히 Primary 한 대가 감당한다. 수직 확장(더 좋은 서버)은 이미 96코어 / 384GB RAM 머신이라 더 올라갈 곳이 없다. 선택지가 샤딩밖에 남지 않은 순간, 대부분의 팀은 "샤딩이 뭔지는 알겠는데 어디서부터 시작하냐"는 막막함에 빠진다.
 
-> **비유로 먼저 이해하기**: 샤딩은 도서관 분관과 같다. 본관 하나에 책이 너무 많아지면 강남 분관, 강북 분관을 만들어 지역별로 나눠 보관한다. 어느 분관에 가야 하는지 안내(샤드 라우팅)만 잘 되어 있으면 이용자는 불편함이 없다. 파티셔닝은 본관 내부에서 층별로 책을 나누는 것이고, 샤딩은 아예 건물을 여러 채로 짓는 것이다.
+> **비유로 먼저 이해하기**: 샤딩은 도서관 분관 네트워크다. 본관 하나에 책이 너무 많아지면 강남 분관, 강북 분관, 인천 분관을 열어 지역별로 나눠 보관한다. 어느 분관에 가야 하는지 안내(샤드 라우팅)만 잘 되어 있으면 이용자는 불편함이 없다. 파티셔닝은 본관 내부에서 1층은 소설, 2층은 과학으로 나누는 것이고, 샤딩은 아예 건물을 여러 채로 짓는 것이다. 건물이 분리되면 엘리베이터(DB 커넥션)도, 전기(CPU)도, 창고(디스크)도 각자 독립된다.
 
-## 샤딩이란?
+---
 
-**샤딩(Sharding)**은 하나의 데이터셋을 여러 개의 독립적인 데이터베이스 서버(샤드, Shard)에 수평으로 분산하여 저장하는 기법이다. 파티셔닝이 단일 서버 내부에서 데이터를 물리적으로 나누는 것과 달리, 샤딩은 **서버 자체를 여러 대로 늘려** 저장 용량과 처리 능력을 선형으로 확장한다.
+## 1. 왜 단일 DB 서버는 벽에 부딪히는가
 
-파티셔닝과 샤딩의 핵심 차이를 구조적으로 이해하는 것이 중요하다. 파티셔닝은 하나의 서버 안에서 테이블을 물리적으로 분리하므로 CPU, 메모리, 디스크를 여전히 하나의 서버가 공유한다. 반면 샤딩은 각 샤드가 독립된 서버이므로 자원을 완전히 분리한다.
+샤딩을 이해하려면 먼저 단일 서버가 왜 한계를 맞는지 내부 메커니즘부터 이해해야 한다.
+
+### 1-1. 커넥션 한계: 파일 디스크립터와 스레드 오버헤드
+
+MySQL은 클라이언트 커넥션마다 **전용 OS 스레드** 하나를 생성한다(기본 스레딩 모델). 스레드는 스택 메모리를 기본 1MB 예약하므로, 커넥션 10만 개 = 스레드 10만 개 = 100GB 스택만으로 메모리가 고갈된다. 여기에 컨텍스트 스위칭 오버헤드까지 더해지면 커넥션 1만 개만 넘어도 CPU가 실제 쿼리 처리보다 스케줄링에 더 많은 시간을 쓴다.
+
+`max_connections=100000`으로 올려도 OS의 `ulimit -n` (파일 디스크립터 수)와 `vm.max_map_count` 제한을 함께 올리지 않으면 커넥션 자체가 실패한다. 결국 PgBouncer/ProxySQL 같은 커넥션 풀러로 버티다가 한계를 맞는다.
+
+### 1-2. 버퍼 풀 한계: 데이터가 메모리를 초과하는 순간
+
+InnoDB의 Buffer Pool은 자주 쓰는 페이지(16KB)를 메모리에 캐싱한다. 데이터가 Buffer Pool에 들어갈 때는 쿼리가 메모리 속도로 처리된다. 그런데 데이터가 Buffer Pool 크기를 초과하면 필요한 페이지를 디스크에서 읽어와야 한다.
+
+NVMe SSD라도 순차 읽기는 7GB/s, **랜덤 읽기는 1M IOPS** 수준이다. 반면 메모리는 200GB/s를 넘는다. 랜덤 I/O가 폭증하면 레이턴시가 마이크로초에서 밀리초 단위로 치솟는다. 1TB 데이터에서 Buffer Pool이 32GB라면, 워킹 셋(실제로 자주 쓰는 데이터)이 32GB를 초과하는 순간부터 I/O 병목이 시작된다.
+
+### 1-3. 쓰기 락 경합: InnoDB 락 아키텍처의 한계
+
+InnoDB는 인덱스 레코드에 **행 수준 락(Row Lock)**을 건다. 다음 시나리오를 생각해보자.
+
+- 주문 테이블에 분당 100만 건 INSERT가 발생한다.
+- PK가 `AUTO_INCREMENT`라 모든 쓰기가 인덱스 B-Tree의 **맨 오른쪽 리프 페이지** 한 곳에 집중된다.
+- InnoDB의 `innodb_autoinc_lock_mode=1`(기본) 상태에서 AUTO_INCREMENT 락이 INSERT마다 경합한다.
+- 단일 페이지에 대한 **Page Latch** 경합이 폭증한다.
+
+결과: CPU는 넉넉하고 디스크 여유도 있는데 TPS가 수만에서 멈춘다. 병목이 락 경합이기 때문이다. 이 문제는 서버를 아무리 키워도 근본적으로 해결되지 않는다.
+
+### 1-4. 수직 확장의 비용 곡선
+
+| 스펙 | 예시 가격(월) | TPS 증가 |
+|------|-------------|--------|
+| 8코어 64GB | $500 | 기준 |
+| 32코어 256GB | $3,000 (6배) | 약 3배 |
+| 96코어 768GB | $15,000 (30배) | 약 6배 |
+
+비용은 30배 늘었지만 TPS는 6배밖에 늘지 않는다. 수직 확장은 **수익체감의 법칙**이 적용된다. 반면 샤딩은 서버 N대 추가 시 이론상 N배 TPS가 가능하다. 물론 크로스 샤드 오버헤드가 있지만, 올바르게 설계하면 거의 선형으로 스케일된다.
 
 ```mermaid
 graph LR
-    S["MySQL Server"] --> P0["Partition 0"]
-    S --> P1["Partition 1"]
-    S --> P2["Partition 2"]
-    SH0["Shard 0"] --- SH1["Shard 1"]
-    SH1 --- SH2["Shard 2"]
+    PROB["단일 DB 한계"] --> C["커넥션 포화"]
+    PROB --> I["랜덤 I/O 폭증"]
+    PROB --> L["락 경합"]
+    C --> SOL["샤딩"]
+    I --> SOL
+    L --> SOL
 ```
 
-> **핵심**: 파티셔닝은 하나의 서버 안에서 데이터를 나누는 것이고, 샤딩은 서버 자체를 여러 대로 늘리는 것이다. 샤딩에서는 각 샤드가 독립된 CPU, 메모리, 디스크를 가진다.
+---
 
-### 파티셔닝과의 핵심 차이
+## 2. 샤딩이란 무엇인가: 파티셔닝과의 정밀 비교
+
+### 2-1. 파티셔닝: 단일 서버 내 물리 분리
+
+MySQL PARTITION BY RANGE는 **단일 서버 안**에서 데이터를 여러 파일로 쪼갠다. 쿼리 플래너가 파티션 프루닝(Partition Pruning)으로 불필요한 파티션을 건너뛴다. 그러나 CPU, RAM, 네트워크 인터페이스는 여전히 하나다.
+
+```sql
+CREATE TABLE orders (
+    id         BIGINT NOT NULL,
+    created_at DATE   NOT NULL,
+    amount     DECIMAL(12,2)
+)
+PARTITION BY RANGE (YEAR(created_at)) (
+    PARTITION p2023 VALUES LESS THAN (2024),
+    PARTITION p2024 VALUES LESS THAN (2025),
+    PARTITION p2025 VALUES LESS THAN (2026)
+);
+```
+
+`WHERE created_at >= '2025-01-01'`이면 p2023, p2024를 스킵한다. 하지만 서버 디스크가 꽉 차거나 TPS 한계에 도달하면 파티셔닝은 무력하다.
+
+### 2-2. 샤딩: 서버 자체를 분리
+
+샤딩은 파티셔닝의 개념을 서버 경계 밖으로 가져간 것이다. 각 샤드(Shard)는 완전히 독립된 MySQL 인스턴스로 자체 CPU, RAM, 디스크, 커넥션 풀을 가진다.
+
+```mermaid
+graph LR
+    APP["Application"] --> MID["Shard Router"]
+    MID --> S0["Shard 0\n(user 0~24M)"]
+    MID --> S1["Shard 1\n(user 25M~49M)"]
+    MID --> S2["Shard 2\n(user 50M~74M)"]
+    MID --> S3["Shard 3\n(user 75M~)"]
+```
 
 | 항목 | 파티셔닝 | 샤딩 |
 |------|---------|------|
-| 분산 단위 | 단일 서버 내 파티션 | 별개의 서버(샤드) |
-| 확장 방향 | 수직 확장 보완 | 수평 확장 |
-| 투명성 | DB가 자동 처리 | 애플리케이션 또는 미들웨어가 처리 |
-| 크로스 쿼리 | 옵티마이저가 처리 | 애플리케이션에서 수동 집계 |
-| 외래키 | 제약 있음 | 실질적으로 불가 |
-| 구현 복잡도 | 낮음 | 높음 |
+| 분산 단위 | 단일 서버 내 파티션 | 독립 서버(샤드) |
+| 확장 방향 | 스토리지/I/O 분산 | 수평 확장(CPU/RAM/디스크 모두) |
+| 라우팅 주체 | DB 옵티마이저 | 앱/미들웨어 |
+| 크로스 쿼리 | 옵티마이저가 처리 | 앱에서 Scatter-Gather |
+| 외래키 제약 | 제한적 허용 | 사실상 불가 |
+| 구현 복잡도 | 낮음 | 매우 높음 |
+| 적합 상황 | 시계열/대용량 테이블 | 서버 자체 한계 돌파 |
 
 ---
 
-## 왜 샤딩이 필요한가?
+## 3. 샤딩 전략: Range vs Hash vs Directory
 
-### 단일 DB 서버의 한계
+### 3-1. Range-based Sharding: 범위 분할의 단순함과 함정
 
-단일 서버는 하드웨어 물리 한계가 명확하다. 쓰기 처리량의 경우 MySQL 단일 서버는 하드웨어에 따라 다르지만 수만 TPS 수준이며, 대형 서비스는 수십만에서 수백만 TPS를 요구한다. 디스크 측면에서도 단일 서버 SSD는 수십 TB 수준인 반면 대형 서비스는 수백 TB에서 수 PB 데이터를 다뤄야 한다. 메모리(Buffer Pool)가 데이터 크기를 감당하지 못하면 랜덤 I/O가 폭증하고, MySQL max_connections 한계로 동시 연결 수십만 요청을 처리할 수 없다.
+가장 직관적인 방법이다. 샤드 키의 값 범위로 샤드를 결정한다.
 
-수직 확장(Scale-Up)은 한계가 명확하고 비용이 지수적으로 증가한다. 샤딩은 수평 확장(Scale-Out)으로 이 문제를 해결한다.
-
-### 샤딩 도입 시점 판단
-
-샤딩은 최후의 수단이다. 도입 전에 더 단순한 방법들을 모두 시도해야 한다. 인덱스 최적화와 쿼리 튜닝만으로도 수십 배의 성능 향상이 가능하고, 읽기 복제와 캐싱은 대부분의 읽기 부하를 해결한다. 파티셔닝은 단일 서버 내 대용량 테이블 관리에 효과적이다.
-
-```mermaid
-graph LR
-    A["성능 문제"] --> B{"튜닝/캐싱"}
-    B -->|"해결"| Z["완료"]
-    B -->|"미해결"| C{"파티셔닝"}
-    C -->|"해결"| Z
-    C -->|"미해결"| F["샤딩 도입"]
+```
+Shard 0: user_id  1 ~ 25,000,000
+Shard 1: user_id  25,000,001 ~ 50,000,000
+Shard 2: user_id  50,000,001 ~ 75,000,000
+Shard 3: user_id  75,000,001 ~ 100,000,000
 ```
 
----
-
-## 샤딩 전략
-
-### Range-based Sharding
-
-샤드 키의 값 범위를 기준으로 데이터를 분배한다. user_id 1부터 1000만까지는 Shard 0, 1000만1부터 2000만까지는 Shard 1과 같이 명확한 경계를 가진다. 라우팅 로직이 단순하고 범위 쿼리가 특정 샤드 내에서 완결될 수 있다는 장점이 있다.
-
-```mermaid
-graph LR
-    R["라우터"] --> SH0["Shard 0"]
-    R --> SH1["Shard 1"]
-    R --> SH2["Shard 2~N"]
-```
-
-**단점 — 핫스팟(Hot Spot) 문제**
-
-신규 가입자는 항상 높은 user_id를 받으므로 마지막 샤드(Shard 3)에 모든 신규 쓰기가 집중된다. 나머지 샤드는 읽기 위주로 한산해지고, 시간 기반 Range의 경우 가장 최근 파티션이 현재 쓰기를 독점한다. 대응책으로 샤드 프리스플릿(Pre-splitting, 미리 빈 샤드를 할당)이나 핫 샤드 감지 후 자동 분할을 사용한다.
-
-### Hash-based Sharding
-
-샤드 키에 해시 함수를 적용하여 샤드를 결정한다. `shard_id = hash(user_id) % num_shards` 공식으로 데이터를 균등하게 분포시키므로 핫스팟 문제가 적다.
-
-```mermaid
-graph LR
-    K["user_id"] -->|"hash % N"| SH0["Shard 0"]
-    K -->|"hash % N"| SH1["Shard 1"]
-    K -->|"hash % N"| SH2["Shard 2~N"]
-```
-
-**단점 — 노드 추가/제거 시 대규모 재분배**
-
-단순 모듈러 해싱의 치명적 단점은 샤드 수가 바뀔 때 나타난다. 샤드 3개에서 4개로 증가하면 `hash(x) % 3`에서 `hash(x) % 4`로 공식이 바뀌므로 거의 모든 데이터가 잘못된 샤드에 위치하게 된다. 전체 데이터 재분배가 필요하며 이는 사실상 다운타임이나 대규모 마이그레이션을 의미한다. 이 문제를 해결하는 것이 **Consistent Hashing**이다.
-
-### Consistent Hashing
-
-Consistent Hashing은 노드(샤드) 추가/제거 시 최소한의 데이터만 이동하도록 설계된 해시 기법이다. 해시 공간을 원형 링으로 표현하고(0 ~ 2^32-1), 각 샤드 노드를 해시하여 링 위에 배치한다. 각 키도 해시하여 링 위에 배치한 뒤, 키는 링에서 시계 방향으로 가장 가까운 노드에 저장된다.
-
-노드를 추가하면 전체 데이터의 1/N만 이동하면 된다. 예를 들어 N0, N1, N2가 있을 때 N3을 N0과 N1 사이에 추가하면, N1이 담당하던 범위 중 일부만 N3으로 이동한다. 나머지 데이터는 변경이 없다. 반면 단순 모듈러 해싱은 전체 데이터의 약 75%가 이동해야 한다.
-
-```mermaid
-graph LR
-    N0["Node 0(50)"] --- N1["Node 1(150)"]
-    N1 --- N2["Node 2(250)"]
-    N3["Node 3(120)"] --- N1
-    K0["Key A(70)"] --> N0
-    K1["Key B(130)"] --> N3
-    K2["Key C(200)"] --> N2
-```
-
-> **핵심**: Consistent Hashing에서 노드 추가 시 전체 데이터의 1/N만 이동한다. 단순 모듈러 해싱은 거의 전체 데이터가 재배치된다.
-
-#### 가상 노드 (Virtual Nodes)
-
-단순 Consistent Hashing은 노드 수가 적을 때 링 위의 배치가 불균등하여 특정 노드에 데이터가 집중될 수 있다. 이를 해결하기 위해 **가상 노드(Virtual Node, VNode)**를 사용한다.
-
-실제 노드 3개(N0, N1, N2)가 있을 때 각 노드에 100개의 가상 노드를 할당한다. 링 위에는 N0_vn1, N1_vn47, N2_vn91과 같이 300개의 점이 배치되며, 모두 실제 노드에 매핑된다. 이를 통해 링 위 분포가 균등해지고 노드별 부하도 균등해진다. 또한 고성능 서버에는 200개, 저성능 서버에는 100개의 가상 노드를 할당하여 성능 비율대로 부하를 분배할 수 있다.
-
-```mermaid
-graph LR
-    RING["해시 링"] --> N0["Node 0"]
-    RING --> N1["Node 1"]
-    RING --> N2["Node 2"]
-    N0 -->|"가상노드"| RING
-```
-
-### Directory-based Sharding
-
-별도의 **라우팅 테이블(Lookup Table)**에 각 키가 어느 샤드에 있는지 기록한다.
-
-```mermaid
-graph LR
-    C["클라이언트"] --> DS["Shard Directory Se"]
-    DS --> SA["Shard A"]
-    DS --> SB["Shard B"]
-    DS --> SC["Shard C (VIP)"]
-    DS --> SD["Shard D (기업)"]
-```
-
-샤딩 로직이 완전히 유연하며 언제든지 라우팅 테이블을 변경하여 데이터를 재배치할 수 있고, VIP나 기업 계정 같은 특수 조건에 맞는 커스텀 배치가 가능하다. 단, 라우팅 테이블이 단일 장애점(SPOF)이 되고, 모든 쿼리에 라우팅 조회가 추가되므로 레이턴시가 증가한다. 라우팅 서비스 자체를 HA 구성해야 한다.
-
-### Geographic Sharding
-
-사용자의 지리적 위치를 기준으로 샤드를 배치한다. 데이터 주권(Data Sovereignty) 규제 준수에 필수적이다.
-
-```mermaid
-graph LR
-    U1["KR 사용자"] --> SR["Seoul Region Shard"]
-    U2["US 사용자"] --> UR["US-East Region Sha"]
-    U3["EU 사용자"] --> ER["EU-West Region Sha"]
-```
-
----
-
-## 샤드 키(Shard Key) 설계 원칙
-
-샤드 키는 샤딩의 성패를 결정한다. 잘못된 샤드 키는 핫스팟, 크로스 샤드 쿼리 폭증, 재샤딩 비용 등을 초래한다.
-
-좋은 샤드 키는 다섯 가지 조건을 갖춰야 한다. 첫째, **높은 카디널리티**다. 값의 종류가 많아야 균등 분배가 가능하다. gender(M/F)는 샤드 2개만 의미 있지만 user_id는 수천만 종류다. 둘째, **균등한 데이터 분포**다. country_code처럼 KR이 90%를 차지하면 KR 샤드에 집중되므로 hash(user_id)처럼 균등 분포를 보장해야 한다. 셋째, **쿼리 패턴과의 정합성**으로 대부분의 쿼리가 샤드 키를 포함해야 크로스 샤드 쿼리를 최소화한다. 넷째, **변경 불가**로 한번 할당된 샤드 키 값은 변경할 수 없으므로 user_id나 UUID 같은 불변 식별자를 사용한다. 다섯째, **조인 지역성(Join Locality)**으로 자주 함께 조회되는 데이터가 같은 샤드에 있어야 한다. orders와 order_items를 모두 customer_id로 샤딩하면 고객의 전체 주문 내역이 단일 샤드에 존재한다.
-
----
-
-## 크로스 샤드 쿼리 문제
-
-샤딩의 가장 큰 단점은 여러 샤드에 걸친 쿼리가 복잡해진다는 것이다.
-
-### JOIN 문제
-
-단일 DB에서는 `SELECT u.name, o.amount FROM users u JOIN orders o ON u.user_id = o.user_id`가 DB가 알아서 처리한다. 샤딩 환경에서는 같은 user_id로 샤딩된 경우에만 같은 샤드에 위치하므로 JOIN이 가능하다. 다른 키로 샤딩되면 JOIN이 불가하다. 해결책으로는 동일 샤드 키 사용, 비정규화(orders에 user_name 중복 저장), 애플리케이션 레벨 JOIN(각 샤드에서 개별 조회 후 메모리에서 병합), 공유 차원 테이블(작은 참조 테이블은 모든 샤드에 복제)이 있다.
-
-### 집계 쿼리 문제
-
-전체 사용자 수 같은 크로스 샤드 집계는 각 샤드에서 병렬로 부분 집계 후 애플리케이션에서 합산하는 **Scatter-Gather** 패턴을 사용한다. 모든 샤드에 동시에 쿼리를 보내고(Scatter), 결과를 받아 합산한다(Gather).
-
-아래 코드는 `parallelStream()`으로 모든 샤드에 동시에 COUNT 쿼리를 보내고, `.sum()`으로 결과를 합산한다. 샤드가 많을수록 전체 응답 시간이 단일 샤드 응답 시간에 수렴하는 것이 Scatter-Gather 패턴의 핵심이다.
+Java/Spring 구현:
 
 ```java
-// 전체 사용자 수 집계 — 크로스 샤드 집계
+@Component
+public class RangeShardRouter {
+
+    // 각 샤드의 최소 user_id 경계
+    private static final long[] SHARD_BOUNDARIES = {
+        0L, 25_000_001L, 50_000_001L, 75_000_001L
+    };
+    private final List<DataSource> shards;
+
+    public RangeShardRouter(List<DataSource> shards) {
+        this.shards = shards;
+    }
+
+    public DataSource route(long userId) {
+        // 이진 탐색으로 경계 찾기 O(log N)
+        int lo = 0, hi = SHARD_BOUNDARIES.length - 1, idx = 0;
+        while (lo <= hi) {
+            int mid = (lo + hi) / 2;
+            if (SHARD_BOUNDARIES[mid] <= userId) {
+                idx = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return shards.get(idx);
+    }
+}
+```
+
+**장점**: 라우팅 로직 단순, 범위 쿼리(`WHERE user_id BETWEEN 1 AND 1000`)가 단일 샤드 내에서 완결된다.
+
+**치명적 단점 — 핫 파티션(Hot Partition) 문제**
+
+서비스가 성장하면서 신규 가입자 user_id는 계속 증가한다. 즉, **모든 신규 쓰기가 항상 마지막 샤드에 집중**된다. user_id가 1억을 넘으면 Shard 3이 포화되고 Shard 0~2는 읽기만 처리하는 냉동 창고가 된다.
+
+시간 기반 Range(created_at)는 더 심각하다. 오늘 날짜에 해당하는 파티션 하나가 모든 현재 쓰기를 독점한다.
+
+**대응책**: 핫 샤드를 감지하면 해당 범위를 선제적으로 추가 분할하는 **Pre-splitting** 전략을 사용한다. MongoDB의 chunk 자동 분할이 대표적이다.
+
+### 3-2. Hash-based Sharding: 균등 분배와 모듈러의 함정
+
+```
+shard_index = hash(user_id) % num_shards
+```
+
+해시 함수가 균등한 분포를 만들기 때문에 핫스팟이 줄어든다. 하지만 **모듈러 해싱(% N)은 노드 수 변경 시 재앙이 된다**.
+
+샤드가 3개일 때 `hash(x) % 3 = 2`인 키가, 샤드가 4개가 되면 `hash(x) % 4 = 1`이 될 수 있다. 샤드 수가 바뀌면 **전체 데이터의 약 (N-1)/N**이 잘못된 샤드에 위치하게 되어 전체 재분배가 필요하다. 샤드 3개 → 4개: 75% 데이터가 이동해야 한다.
+
+```java
+// 단순 모듈러 — 노드 추가 시 75% 재배치 발생
+public int simpleHash(long userId, int numShards) {
+    return (int) (Math.abs(userId) % numShards);
+}
+
+// 문제: numShards가 3→4로 바뀌면
+// hash(1000) % 3 = 1 → hash(1000) % 4 = 0  // 다른 샤드!
+// hash(2000) % 3 = 2 → hash(2000) % 4 = 3  // 다른 샤드!
+// hash(3000) % 3 = 0 → hash(3000) % 4 = 0  // 같은 샤드 (운 좋음)
+```
+
+이 문제를 근본적으로 해결하는 것이 **Consistent Hashing**이다.
+
+### 3-3. Consistent Hashing: 최소 재배치의 수학적 원리
+
+#### 해시 링의 구조
+
+Consistent Hashing은 해시 공간을 0 ~ 2^32-1의 **원형 링**으로 표현한다. 각 샤드 노드를 해시하여 링 위의 점에 배치한다. 각 키도 해시하여 링 위에 배치한 뒤, **시계 방향으로 가장 가까운 노드**에 배정된다.
+
+```
+링 위 배치 (0 ~ 2^32-1, 시계방향):
+  0 ────── Node A (hash=100) ────── Node B (hash=200) ────── Node C (hash=300) ────── 2^32
+         ↑                       ↑                         ↑
+      Key X(hash=50)          Key Y(hash=150)          Key Z(hash=250)
+       → Node A               → Node B                  → Node C
+```
+
+#### 노드 추가 시 이동량
+
+Node A, B, C가 있을 때 Node D를 B와 C 사이(hash=250)에 추가하면:
+
+- Node C의 책임 범위 `(200, 300]`에서 `(200, 250]`이 Node D로 넘어간다.
+- 이동하는 데이터: **전체의 1/N** (N=4이면 25%)
+- 단순 모듈러 해싱의 75%와 비교하면 압도적 차이
+
+```mermaid
+graph LR
+    NA["Node A\nhash=100"] --> NB["Node B\nhash=200"]
+    NB --> ND["Node D NEW\nhash=250"]
+    ND --> NC["Node C\nhash=300"]
+    NC --> NA
+```
+
+#### 가상 노드(Virtual Node)의 역할
+
+노드가 3~5개일 때 링 위의 배치가 불균등하면 특정 노드가 전체 데이터의 40~50%를 담당하는 불균형이 생긴다. **가상 노드(VNode)**는 이 문제를 해결한다.
+
+실제 노드 3개(N0, N1, N2)에 각각 100개의 가상 노드를 할당한다. 링 위에는 300개의 점이 분산 배치되고, 각 점은 실제 노드로 매핑된다. 300개가 고르게 분포하면 각 노드의 데이터 점유율은 약 33%로 수렴한다.
+
+추가로 고성능 서버에는 VNode 200개, 저성능 서버에는 VNode 100개를 배정하면 **성능에 비례한 부하 분산**도 가능하다.
+
+```java
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.security.MessageDigest;
+
+@Component
+public class ConsistentHashRouter {
+
+    private final SortedMap<Long, DataSource> ring = new TreeMap<>();
+    private static final int VIRTUAL_NODES = 150;
+
+    public ConsistentHashRouter(List<DataSource> nodes) {
+        for (int i = 0; i < nodes.size(); i++) {
+            DataSource node = nodes.get(i);
+            for (int v = 0; v < VIRTUAL_NODES; v++) {
+                long hash = md5Hash("node-" + i + "-vnode-" + v);
+                ring.put(hash, node);
+            }
+        }
+    }
+
+    public DataSource route(long key) {
+        if (ring.isEmpty()) throw new IllegalStateException("No shards available");
+        long hash = md5Hash(String.valueOf(key));
+        // 해당 해시값 이상의 첫 번째 노드(시계방향)
+        SortedMap<Long, DataSource> tail = ring.tailMap(hash);
+        // tail이 비어있으면 링을 한 바퀴 돌아 첫 번째 노드
+        long nodeHash = tail.isEmpty() ? ring.firstKey() : tail.firstKey();
+        return ring.get(nodeHash);
+    }
+
+    private long md5Hash(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(input.getBytes());
+            // 앞 8바이트를 long으로 변환
+            long hash = 0;
+            for (int i = 0; i < 8; i++) {
+                hash = (hash << 8) | (digest[i] & 0xFF);
+            }
+            return hash;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // 노드 추가 — 기존 데이터의 1/N만 이동 필요
+    public void addNode(DataSource node, int nodeIndex) {
+        for (int v = 0; v < VIRTUAL_NODES; v++) {
+            long hash = md5Hash("node-" + nodeIndex + "-vnode-" + v);
+            ring.put(hash, node);
+        }
+        // ring에 추가된 후, 새 노드가 담당할 범위의 데이터를 기존 노드에서 마이그레이션
+    }
+}
+```
+
+### 3-4. Directory-based Sharding: 완전한 유연성, SPOF 위험
+
+별도의 **라우팅 테이블(Shard Directory)**에 각 키가 어느 샤드에 있는지 직접 기록한다. 해시 함수 없이 임의 배치가 가능하다.
+
+```sql
+-- 라우팅 테이블 예시
+CREATE TABLE shard_directory (
+    tenant_id    BIGINT PRIMARY KEY,
+    shard_id     TINYINT NOT NULL,
+    shard_host   VARCHAR(64),
+    migrating_to TINYINT NULL  -- 마이그레이션 중인 목적지 샤드
+);
+
+INSERT INTO shard_directory VALUES
+    (1001, 0, 'shard0.db.internal', NULL),   -- 일반 사용자
+    (9999, 4, 'shard4-vip.db.internal', NULL), -- VIP 전용 샤드
+    (8888, 5, 'shard5-corp.db.internal', NULL); -- 기업 전용 샤드
+```
+
+```java
+@Component
+@RequiredArgsConstructor
+public class DirectoryShardRouter {
+
+    private final JdbcTemplate directoryDb;
+    // 로컬 캐시: 매 요청마다 DB 조회 방지
+    private final LoadingCache<Long, ShardInfo> cache = Caffeine.newBuilder()
+        .maximumSize(100_000)
+        .expireAfterWrite(5, TimeUnit.MINUTES)
+        .build(this::loadShardInfo);
+
+    public DataSource route(long tenantId) {
+        ShardInfo info = cache.get(tenantId);
+        return resolveDataSource(info.shardHost());
+    }
+
+    private ShardInfo loadShardInfo(long tenantId) {
+        return directoryDb.queryForObject(
+            "SELECT shard_id, shard_host FROM shard_directory WHERE tenant_id = ?",
+            (rs, n) -> new ShardInfo(rs.getInt("shard_id"), rs.getString("shard_host")),
+            tenantId
+        );
+    }
+}
+```
+
+**장점**: VIP/기업 테넌트를 전용 샤드에 배치하는 등 완전한 커스텀 배치, 마이그레이션 중 `migrating_to` 컬럼으로 점진적 전환 가능.
+
+**단점**: 라우팅 테이블 서비스가 **SPOF(Single Point of Failure)**가 된다. 캐시를 통해 조회 레이턴시를 줄이더라도 캐시 미스 시 DB 조회가 발생한다. 라우팅 서비스 자체를 Active-Active HA 구성해야 한다.
+
+---
+
+## 4. 샤드 키 설계: 가장 중요한 결정
+
+샤드 키 선택은 샤딩의 성패를 가르는 **돌이킬 수 없는 결정**이다. 잘못 선택하면 전체 재샤딩이라는 수백만 달러짜리 마이그레이션 프로젝트가 기다린다.
+
+### 4-1. 좋은 샤드 키의 5가지 조건
+
+**① 높은 카디널리티(Cardinality)**
+
+값의 종류가 많아야 균등 분배가 가능하다. `gender`(M/F/기타 = 3가지)는 샤드 3개 이상을 만들 수 없다. `user_id`는 수천만~수억 가지다.
+
+```
+gender    → 카디널리티 3   → 샤드 키로 사용 불가
+country   → 카디널리티 ~200  → 한국에 90% 집중되면 hot shard
+email     → 카디널리티 매우 높음, but 쿼리에 거의 안 씀 → 비효율
+user_id   → 카디널리티 수억, 균등 분포 → 이상적
+```
+
+**② 균등한 데이터 분포**
+
+카디널리티가 높아도 값이 편향되면 핫스팟이 생긴다. `created_at`은 최근 날짜에 쓰기가 몰린다. `user_id`는 순서대로 생성되므로 range sharding 시 마지막 샤드에 몰린다. `hash(user_id)`는 균등 분포를 강제한다.
+
+**③ 쿼리 패턴과의 정합성**
+
+쿼리의 WHERE 조건에 샤드 키가 없으면 모든 샤드를 Scatter-Gather해야 한다. 애플리케이션에서 가장 많이 실행되는 쿼리를 분석하고, 그 WHERE 조건에 포함된 컬럼을 샤드 키로 선택한다.
+
+```sql
+-- 이 쿼리가 90%라면 → user_id가 샤드 키여야 한다
+SELECT * FROM orders WHERE user_id = ?
+
+-- 이 쿼리가 90%라면 → tenant_id가 샤드 키여야 한다
+SELECT * FROM orders WHERE tenant_id = ? AND created_at >= ?
+```
+
+**④ 불변성(Immutability)**
+
+샤드 키 값이 변경되면 데이터를 새 샤드로 이동해야 한다. 실시간 서비스에서 이는 사실상 불가능에 가깝다. `email`은 사용자가 변경할 수 있다. `user_id`는 한번 발급하면 변경하지 않는다.
+
+**⑤ 조인 지역성(Join Locality)**
+
+자주 함께 조회되는 테이블은 같은 샤드 키로 샤딩해야 한다. `orders`와 `order_items` 모두 `customer_id`로 샤딩하면, 특정 고객의 주문과 주문 상품이 항상 같은 샤드에 존재한다.
+
+```java
+// 올바른 설계: customer_id로 orders와 order_items를 같이 샤딩
+// → 두 테이블이 항상 같은 샤드 → 로컬 JOIN 가능
+DataSource shard = router.route(customerId);
+JdbcTemplate jdbcTemplate = new JdbcTemplate(shard);
+List<OrderDetail> result = jdbcTemplate.query(
+    """
+    SELECT o.id, o.amount, oi.product_id, oi.quantity
+    FROM orders o
+    JOIN order_items oi ON o.id = oi.order_id
+    WHERE o.customer_id = ?
+    """,
+    ORDER_DETAIL_ROW_MAPPER, customerId
+);
+```
+
+### 4-2. 핫스팟(Hot Spot) 발생 메커니즘
+
+**Celebrity Problem**: 팔로워 1000만 명인 인플루언서가 게시물을 올리면 조회 트래픽이 해당 user_id 샤드에 폭발적으로 집중된다. user_id 기반 해시 샤딩을 사용해도 특정 유명인 user_id가 항상 같은 샤드로 라우팅되므로 그 샤드만 과부하가 된다.
+
+대응책:
+1. 해당 사용자 데이터를 전용 격리 샤드로 이동 (Directory-based sharding)
+2. 핫 데이터를 CDN/Redis로 오프로드하여 DB 접근 자체를 차단
+3. 샤드 키에 랜덤 접미사 추가(`user_id + "_" + random(0,9)`)로 물리적 분산 — 단, 조회 시 10개 샤드 모두 조회 필요
+
+---
+
+## 5. 크로스 샤드 쿼리: Scatter-Gather와 비정규화
+
+### 5-1. 왜 샤드 간 JOIN이 불가능한가
+
+단일 DB의 JOIN은 DB 엔진이 두 테이블 데이터를 같은 메모리 공간에서 처리하므로 네트워크 오버헤드가 없다. 샤딩 환경에서 `users` 테이블이 user_id 기반 샤딩, `products` 테이블이 product_id 기반 샤딩이면, 두 테이블의 데이터는 **서로 다른 서버에 존재**한다. 네트워크를 통해 한쪽 결과를 가져와 메모리에서 조인해야 한다.
+
+데이터 규모가 크면 이 네트워크 전송 비용이 엄청나다. 10만 명의 user 데이터를 Shard 0에서 Shard 1로 전송해서 JOIN하는 것은 실시간 서비스에서는 불가능하다.
+
+### 5-2. Scatter-Gather 패턴
+
+모든 샤드에 병렬로 쿼리를 날리고, 결과를 애플리케이션에서 병합한다. 핵심은 **병렬 실행**이다. 순차적으로 N개 샤드를 조회하면 레이턴시가 N배지만, 병렬이면 가장 느린 샤드의 응답 시간에 수렴한다.
+
+```java
 @Service
 @RequiredArgsConstructor
-public class UserStatsService {
+public class ScatterGatherService {
 
-    private final List<DataSource> shards; // 샤드별 DataSource 목록
+    private final List<DataSource> shards;
+    private final ExecutorService executor =
+        Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
 
+    // 전체 사용자 수 집계
     public long getTotalUserCount() {
-        // 모든 샤드에서 COUNT 조회 후 합산
-        return shards.parallelStream()
-            .mapToLong(shard -> {
+        List<CompletableFuture<Long>> futures = shards.stream()
+            .map(shard -> CompletableFuture.supplyAsync(() -> {
                 try (Connection conn = shard.getConnection();
                      PreparedStatement ps = conn.prepareStatement(
                          "SELECT COUNT(*) FROM users")) {
@@ -197,530 +435,1051 @@ public class UserStatsService {
                     rs.next();
                     return rs.getLong(1);
                 } catch (SQLException e) {
-                    throw new RuntimeException(e);
+                    throw new RuntimeException("Shard query failed", e);
                 }
+            }, executor))
+            .toList();
+
+        return futures.stream()
+            .mapToLong(f -> {
+                try { return f.get(3, TimeUnit.SECONDS); }
+                catch (Exception e) { throw new RuntimeException("Scatter-gather timeout", e); }
             })
             .sum();
     }
+
+    // 크로스 샤드 페이지네이션 — 각 샤드에서 TOP K 가져와 머지 후 전체 TOP K
+    public List<Order> getTopOrdersByAmount(int topK) {
+        List<CompletableFuture<List<Order>>> futures = shards.stream()
+            .map(shard -> CompletableFuture.supplyAsync(() ->
+                queryTopOrders(shard, topK), executor))
+            .toList();
+
+        return futures.stream()
+            .flatMap(f -> {
+                try { return f.get(3, TimeUnit.SECONDS).stream(); }
+                catch (Exception e) { throw new RuntimeException(e); }
+            })
+            // 전체 결과를 금액 역순 정렬 후 상위 K개
+            .sorted(Comparator.comparing(Order::getAmount).reversed())
+            .limit(topK)
+            .toList();
+    }
 }
 ```
 
-> **핵심**: Scatter-Gather 패턴은 모든 샤드에 병렬로 쿼리를 보내고 결과를 합산한다. 샤드 수가 늘어도 전체 응답 시간은 크게 늘지 않는다. 단, 가장 느린 샤드가 전체 응답 시간을 결정한다.
+> **주의**: 크로스 샤드 페이지네이션은 오프셋이 커질수록 비효율적이다. `LIMIT 100 OFFSET 10000`이면 모든 샤드에서 10100건을 가져와 머지 후 100건만 쓴다. 커서 기반 페이지네이션으로 전환하거나, 검색 쿼리는 Elasticsearch로 분리하는 것이 실무 패턴이다.
 
----
+### 5-3. 비정규화 전략: 데이터 중복을 의도적으로 허용
 
-## 크로스 샤드 트랜잭션
-
-단일 DB에서는 ACID 트랜잭션이 보장되지만, 샤딩 환경에서는 여러 샤드에 걸친 트랜잭션이 필요할 때 문제가 복잡해진다.
-
-### 2PC (Two-Phase Commit)
-
-트랜잭션 코디네이터(TC)가 모든 샤드에게 준비(Prepare)를 요청하고, 모두 OK 응답을 받으면 커밋(Commit)을 지시하는 방식이다. 이론적으로 완전한 원자성을 보장하지만, TC 장애 시 모든 샤드가 PREPARED 상태로 블로킹되고 레이턴시가 2번의 네트워크 왕복만큼 증가한다. 하나의 샤드라도 응답이 없으면 전체가 블로킹된다는 가용성 문제도 있다.
-
-```mermaid
-graph LR
-    TC["TC"] -->|"PREPARE"| SA["Shard A"]
-    TC -->|"PREPARE"| SB["Shard B"]
-    SA -->|"OK"| TC
-    SB -->|"OK"| TC
-    TC -->|"COMMIT"| SA
-    TC -->|"COMMIT"| SB
-```
-
-### Saga 패턴
-
-2PC 대신 각 샤드에서 로컬 트랜잭션을 순차적으로 실행하고, 실패 시 이전 단계를 보상(Compensating Transaction)한다. 가용성이 높고 블로킹이 없다는 장점이 있지만, 최종 일관성(Eventual Consistency)만 보장되고 보상 로직이 복잡하다.
-
-주문 생성 시나리오를 예로 들면, Step 1에서 Order 샤드에 주문을 PENDING 상태로 생성하고, Step 2에서 Inventory 샤드에서 재고를 차감하고, Step 3에서 Payment 샤드에서 결제를 처리하고, Step 4에서 Order 샤드에서 주문을 CONFIRMED로 확정한다. Step 3에서 결제 실패 시 Inventory 재고를 복구하고 Order를 취소하는 보상 트랜잭션이 실행된다.
-
-아래 코드는 Spring 이벤트 기반 Choreography Saga 구현이다. 각 단계가 로컬 트랜잭션으로 처리되고, 성공 시 다음 단계를 이벤트로 트리거하며, 실패 시 보상 이벤트를 발행한다. `@EventListener`와 `@Transactional`을 조합하여 각 샤드에서 독립적으로 실행되는 로컬 트랜잭션을 보장한다.
+크로스 샤드 JOIN을 없애는 가장 확실한 방법은 **필요한 데이터를 같은 테이블에 중복 저장**하는 것이다.
 
 ```java
-// Saga 패턴 예시 (Spring + 이벤트 기반)
+// 정규화된 설계 → 크로스 샤드 JOIN 필요
+// orders 테이블: user_id 기반 샤딩
+// users 테이블: user_id 기반 샤딩 (같은 샤드라 다행)
+// 하지만 products: product_id 기반 샤딩 (다른 샤드!)
+
+// 비정규화: orders에 필요한 product 정보를 중복 저장
+@Entity
+@Table(name = "orders")
+public class Order {
+    @Id
+    private Long id;
+    private Long customerId;    // 샤드 키
+
+    // 비정규화: product 정보 중복 저장 → JOIN 불필요
+    private Long productId;
+    private String productName;   // products 테이블에서 복사
+    private String productSku;    // products 테이블에서 복사
+    private BigDecimal unitPrice; // 주문 시점 가격 (변경 불가)
+
+    private Integer quantity;
+    private BigDecimal totalAmount;
+}
+```
+
+products.productName이 변경되면 이미 생성된 orders의 productName은 업데이트하지 않는 것이 원칙이다. 주문 시점의 상품명/가격을 보존해야 하는 비즈니스 요건과도 일치한다.
+
+### 5-4. 글로벌 테이블(Global/Broadcast Table)
+
+조회는 빈번하지만 변경이 드문 소규모 참조 데이터는 **모든 샤드에 동일하게 복제**한다. 국가 코드, 카테고리, 통화 환율 같은 데이터가 대상이다.
+
+```java
 @Service
 @RequiredArgsConstructor
-public class OrderSaga {
+public class GlobalTableSyncService {
 
-    private final OrderShardRepository orderRepo;
-    private final InventoryShardRepository inventoryRepo;
-    private final PaymentShardRepository paymentRepo;
-    private final ApplicationEventPublisher eventPublisher;
+    private final List<DataSource> allShards;
 
-    @Transactional  // Order 샤드 로컬 트랜잭션
-    public Order createOrder(CreateOrderCommand cmd) {
-        Order order = orderRepo.save(Order.pending(cmd));
-        // 이벤트 발행 → Inventory 샤드에서 비동기 처리
-        eventPublisher.publishEvent(new OrderCreatedEvent(order.getId(), cmd.items()));
-        return order;
-    }
-
-    @EventListener
-    @Transactional  // Inventory 샤드 로컬 트랜잭션
-    public void handleOrderCreated(OrderCreatedEvent event) {
-        try {
-            inventoryRepo.decreaseStock(event.orderId(), event.items());
-            eventPublisher.publishEvent(new StockReservedEvent(event.orderId()));
-        } catch (InsufficientStockException e) {
-            // 보상 트랜잭션: 주문 취소
-            eventPublisher.publishEvent(new OrderCancelledEvent(event.orderId(), "재고 부족"));
-        }
-    }
-
-    @EventListener
-    @Transactional  // Order 샤드 보상 트랜잭션
-    public void handleOrderCancelled(OrderCancelledEvent event) {
-        orderRepo.updateStatus(event.orderId(), OrderStatus.CANCELLED, event.reason());
+    // 글로벌 테이블 변경 시 모든 샤드에 동기 반영
+    @Transactional
+    public void updateCategory(Category category) {
+        // 모든 샤드에 동일한 UPDATE 실행
+        allShards.parallelStream().forEach(shard -> {
+            new JdbcTemplate(shard).update(
+                "INSERT INTO categories (id, name, parent_id) VALUES (?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE name = ?, parent_id = ?",
+                category.getId(), category.getName(), category.getParentId(),
+                category.getName(), category.getParentId()
+            );
+        });
     }
 }
 ```
 
-> **핵심**: Saga 패턴은 크로스 샤드 트랜잭션의 현실적인 대안이다. 2PC의 블로킹 문제를 피하는 대신, 중간 상태가 잠깐 노출되는 최종 일관성을 수용한다. 보상 트랜잭션 로직을 반드시 구현해야 한다.
+ShardingSphere에서는 이를 **브로드캐스트 테이블(Broadcast Table)**로 설정하면 자동 복제된다.
+
+```yaml
+# ShardingSphere broadcast table 설정
+spring:
+  shardingsphere:
+    rules:
+      sharding:
+        broadcast-tables:
+          - categories
+          - country_codes
+          - currencies
+```
 
 ---
 
-## 리밸런싱 (샤드 분할/병합)
+## 6. 분산 ID 생성: Snowflake, UUID v7, 시퀀스 서비스
 
-샤드가 증가하면서 데이터 재분배가 필요하다.
+샤딩 환경에서 각 샤드가 독립적인 `AUTO_INCREMENT`를 사용하면 Shard 0의 user_id=1과 Shard 1의 user_id=1이 충돌한다. 전역 유니크 ID 생성 전략이 필수다.
 
-### 샤드 분할
+### 6-1. Snowflake 알고리즘: 내부 구조 완전 해부
 
-Range-based 샤딩에서 Shard 0이 user_id 1 ~ 1000만을 담당하다가 부하가 증가하면, Shard 0a(1 ~ 500만)와 Shard 0b(500만1 ~ 1000만)로 분할한다. 무중단 분할은 Shard 0의 복제본에서 Shard 0b용 데이터 복사를 시작하고, CDC(Change Data Capture)로 바이너리 로그를 실시간 동기화한 뒤, 동기화 완료 후 라우터에서 해당 범위를 Shard 0b로 전환하고, 마지막으로 Shard 0에서 이전된 데이터를 삭제하는 순서로 진행한다.
+Twitter가 2010년에 발표한 64비트 분산 ID 생성 알고리즘이다.
 
-### Consistent Hashing에서의 리밸런싱
+```
+63        22 21      12 11         0
+┌──────────┬───────────┬────────────┐
+│timestamp │ machine ID│  sequence  │
+│ 41 bits  │  10 bits  │  12 bits   │
+└──────────┴───────────┴────────────┘
+```
 
-N0, N1, N2가 있을 때 N3을 N1과 N2 사이에 추가하면, K_c가 N2에서 N3으로 이동하는 것만 필요하다. 전체의 약 1/4만 이동한다.
-
----
-
-## 실무 아키텍처
-
-### 애플리케이션 레벨 샤딩
-
-애플리케이션이 직접 샤드 라우팅을 담당하는 방식이다. `ShardRouter`가 샤드 키를 해시하여 어느 DataSource로 연결할지 결정하고, `ShardedUserRepository`가 적절한 샤드에 쿼리를 보낸다.
-
-`AbstractRoutingDataSource`는 Spring의 내장 기능으로, `determineCurrentLookupKey()`가 반환하는 키에 따라 DataSource를 선택한다. `ShardContextHolder`는 ThreadLocal로 현재 스레드의 샤드 키를 저장하고, AOP(`@Sharded`)로 메서드 진입 시 자동으로 샤드 키를 설정한다. SpEL 표현식을 사용하므로 메서드 인자에서 유연하게 샤드 키를 추출할 수 있다.
+- **Timestamp (41비트)**: `currentTimeMillis - EPOCH`. 2^41ms ≈ 69년. EPOCH를 서비스 시작일로 설정하면 2090년대까지 사용 가능.
+- **Machine ID (10비트)**: 데이터센터(5비트) + 서버(5비트). 최대 1024개 노드.
+- **Sequence (12비트)**: 같은 밀리초 내 순번. 최대 4096/ms. 초당 409만 6천 개.
 
 ```java
-// 샤드 라우터 구현
-@Component
-public class ShardRouter {
-
-    private final List<DataSource> shards;
-    private final int shardCount;
-
-    public ShardRouter(List<DataSource> shards) {
-        this.shards = shards;
-        this.shardCount = shards.size();
-    }
-
-    public DataSource getShardFor(long shardKey) {
-        int shardIndex = (int) (Math.abs(shardKey) % shardCount);
-        return shards.get(shardIndex);
-    }
-
-    public DataSource getShardFor(String shardKey) {
-        int hash = Math.abs(shardKey.hashCode());
-        return shards.get(hash % shardCount);
-    }
-
-    // 전체 샤드에 분산 실행 (Scatter-Gather)
-    public <T> List<T> executeOnAllShards(Function<DataSource, List<T>> query) {
-        return shards.parallelStream()
-            .flatMap(shard -> query.apply(shard).stream())
-            .collect(Collectors.toList());
-    }
-}
-
-// 샤딩된 Repository
-@Repository
-@RequiredArgsConstructor
-public class ShardedUserRepository {
-
-    private final ShardRouter shardRouter;
-
-    public User findById(long userId) {
-        DataSource shard = shardRouter.getShardFor(userId);
-        return new JdbcTemplate(shard)
-            .queryForObject(
-                "SELECT * FROM users WHERE user_id = ?",
-                USER_ROW_MAPPER, userId);
-    }
-
-    public void save(User user) {
-        DataSource shard = shardRouter.getShardFor(user.getUserId());
-        new JdbcTemplate(shard)
-            .update("INSERT INTO users (user_id, name, email) VALUES (?, ?, ?)",
-                user.getUserId(), user.getName(), user.getEmail());
-    }
-
-    // 크로스 샤드 집계
-    public long countAll() {
-        return shardRouter.executeOnAllShards(shard ->
-            List.of(new JdbcTemplate(shard)
-                .queryForObject("SELECT COUNT(*) FROM users", Long.class)))
-            .stream().mapToLong(Long::longValue).sum();
-    }
-}
-```
-
-> **핵심**: `ShardContextHolder`는 ThreadLocal로 요청 스레드에 샤드 키를 바인딩한다. `finally` 블록에서 반드시 `clear()`를 호출해야 스레드 풀 재사용 시 이전 요청의 샤드 키가 오염되지 않는다.
-
-### 미들웨어 샤딩
-
-애플리케이션 코드 변경 없이 미들웨어가 샤딩을 처리한다.
-
-#### Vitess
-
-YouTube에서 MySQL 스케일링을 위해 개발한 오픈소스 미들웨어다. 애플리케이션은 MySQL 프로토콜로 VTGate에 연결하면 되고, 샤딩 로직은 VTGate와 VTTablet이 처리한다.
-
-```mermaid
-graph LR
-    APP["Application"] --> VTG["VTGate (프록시)"]
-    VTG --> VT0["VTTablet"]
-    VTG --> VT1["VTTablet"]
-    VTG --> VT2["VTTablet"]
-```
-
-크로스 샤드 JOIN을 VTGate에서 처리하고, 온라인 스키마 변경(gh-ost 통합), Kubernetes 친화적 운영을 지원한다.
-
-#### ProxySQL
-
-SQL 패턴 기반으로 라우팅 규칙을 설정한다.
-
-```sql
--- ProxySQL 라우팅 규칙 예시 (SQL 파싱)
-INSERT INTO mysql_query_rules
-  (rule_id, active, match_pattern, destination_hostgroup, apply)
-VALUES
-  (1, 1, '^SELECT.*WHERE user_id BETWEEN 1 AND 10000000', 10, 1),
-  (2, 1, '^SELECT.*WHERE user_id BETWEEN 10000001 AND 20000000', 20, 1);
-```
-
-### 미들웨어 vs 애플리케이션 레벨 비교
-
-| 항목 | 애플리케이션 레벨 | 미들웨어 (Vitess/ProxySQL) |
-|------|----------------|--------------------------|
-| 구현 복잡도 | 높음 | 낮음 (코드 변경 최소) |
-| 유연성 | 매우 높음 | 미들웨어 기능에 종속 |
-| 크로스 샤드 쿼리 | 직접 구현 | 미들웨어가 처리 |
-| 성능 | 직접 최적화 가능 | 미들웨어 오버헤드 |
-| 운영 복잡도 | 낮음 | 높음 (미들웨어 관리) |
-| 트랜잭션 | 직접 제어 | 제한적 |
-
----
-
-## 글로벌 유니크 ID 생성
-
-샤딩 환경에서는 각 샤드가 독립적인 `AUTO_INCREMENT`를 사용하므로 ID 충돌이 발생한다. 전역적으로 유니크한 ID가 필요하다.
-
-### Snowflake ID
-
-Twitter가 개발한 64비트 분산 ID 생성 알고리즘이다. 앞 41비트는 밀리초 단위 타임스탬프(약 69년 사용 가능), 다음 10비트는 데이터센터+서버 식별자(최대 1024대), 마지막 12비트는 같은 밀리초 내 시퀀스 번호(최대 4096/ms)로 구성된다. DB 없이 각 서버가 독립적으로 생성할 수 있고, 시간순 정렬이 가능하며, 초당 400만 개 이상 생성 가능하다.
-
-아래 구현에서 `synchronized`로 동시성을 보장하고, 같은 밀리초 내 시퀀스가 소진되면 다음 밀리초까지 대기하는 `waitNextMillis()`를 사용한다. 시계가 뒤로 가는(clock backwards) 경우는 예외를 던져 ID 충돌을 방지한다.
-
-```java
-// Snowflake ID 생성기 구현
 @Component
 public class SnowflakeIdGenerator {
 
-    private static final long EPOCH = 1609459200000L; // 2021-01-01T00:00:00Z
-    private static final long WORKER_ID_BITS  = 10L;
+    // 2024-01-01T00:00:00Z 를 기준 에포크로 사용
+    private static final long EPOCH           = 1704067200000L;
+    private static final long WORKER_BITS     = 10L;
     private static final long SEQUENCE_BITS   = 12L;
-    private static final long MAX_WORKER_ID   = ~(-1L << WORKER_ID_BITS);  // 1023
-    private static final long MAX_SEQUENCE    = ~(-1L << SEQUENCE_BITS);   // 4095
-    private static final long WORKER_SHIFT    = SEQUENCE_BITS;             // 12
-    private static final long TIMESTAMP_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS; // 22
+
+    private static final long MAX_WORKER_ID   = ~(-1L << WORKER_BITS);   // 1023
+    private static final long MAX_SEQUENCE    = ~(-1L << SEQUENCE_BITS); // 4095
+
+    private static final long WORKER_SHIFT    = SEQUENCE_BITS;                  // 12
+    private static final long TIMESTAMP_SHIFT = SEQUENCE_BITS + WORKER_BITS;    // 22
 
     private final long workerId;
     private long lastTimestamp = -1L;
     private long sequence      = 0L;
 
-    public SnowflakeIdGenerator(@Value("${app.worker-id}") long workerId) {
-        if (workerId > MAX_WORKER_ID || workerId < 0) {
-            throw new IllegalArgumentException("Worker ID must be between 0 and " + MAX_WORKER_ID);
+    public SnowflakeIdGenerator(@Value("${app.snowflake.worker-id}") long workerId) {
+        if (workerId < 0 || workerId > MAX_WORKER_ID) {
+            throw new IllegalArgumentException(
+                "Worker ID must be between 0 and " + MAX_WORKER_ID + ", got: " + workerId);
         }
         this.workerId = workerId;
     }
 
     public synchronized long nextId() {
-        long now = System.currentTimeMillis();
+        long now = currentTimeMillis();
 
+        // NTP 시계 역행 감지 — ID 중복 방지
         if (now < lastTimestamp) {
-            throw new RuntimeException("Clock moved backwards");
+            long drift = lastTimestamp - now;
+            if (drift <= 5) {
+                // 5ms 이하의 역행은 대기로 해결
+                now = waitUntil(lastTimestamp);
+            } else {
+                // 5ms 초과 역행은 장애 신호 — 즉시 실패
+                throw new ClockMovedBackwardsException(
+                    "Clock moved backwards by " + drift + "ms. lastTs=" + lastTimestamp);
+            }
         }
 
         if (now == lastTimestamp) {
             sequence = (sequence + 1) & MAX_SEQUENCE;
             if (sequence == 0) {
-                // 같은 밀리초 내 시퀀스 소진 → 다음 밀리초 대기
-                now = waitNextMillis(lastTimestamp);
+                // 같은 밀리초에 4096개 모두 소진 → 다음 밀리초 대기
+                now = waitUntil(lastTimestamp);
             }
         } else {
+            // 새 밀리초 시작 → 시퀀스 리셋
             sequence = 0L;
         }
 
         lastTimestamp = now;
 
-        return ((now - EPOCH) << TIMESTAMP_SHIFT)
+        return ((now - EPOCH)  << TIMESTAMP_SHIFT)
              | (workerId       << WORKER_SHIFT)
              | sequence;
     }
 
-    private long waitNextMillis(long lastTs) {
-        long ts = System.currentTimeMillis();
-        while (ts <= lastTs) ts = System.currentTimeMillis();
-        return ts;
+    private long waitUntil(long target) {
+        long current = currentTimeMillis();
+        while (current <= target) {
+            current = currentTimeMillis();
+        }
+        return current;
+    }
+
+    protected long currentTimeMillis() {
+        return System.currentTimeMillis();
     }
 }
 ```
 
-> **핵심**: Snowflake ID는 시간순 정렬이 가능하므로 B-Tree 인덱스에서 순차 삽입이 일어나 UUID v4 대비 인덱스 단편화가 훨씬 적다. Worker ID 관리와 NTP 시계 동기화가 전제 조건이다.
+**Worker ID 관리가 핵심 위험 요소다.** 여러 인스턴스가 동일한 Worker ID를 사용하면, 같은 밀리초에 동일한 ID가 생성된다. Kubernetes 환경에서 해결책:
 
-### UUID v4 vs Snowflake 비교
+```java
+@Configuration
+public class SnowflakeConfig {
 
-| 항목 | UUID v4 | Snowflake | UUID v7 |
-|------|---------|-----------|---------|
-| 크기 | 128비트 | 64비트 | 128비트 |
-| 시간순 정렬 | 불가 | 가능 | 가능 (앞 48비트) |
-| 인덱스 단편화 | 심각 | 최소 | 낮음 |
-| 구현 복잡도 | 매우 낮음 | 중간 (워커ID 관리) | 낮음 |
-| 라이브러리 지원 | 내장 | 직접 구현 | 증가 중 |
+    @Bean
+    public SnowflakeIdGenerator snowflakeIdGenerator(
+            @Value("${HOSTNAME:pod-0}") String hostname) {
+        // Pod hostname이 "orders-deployment-7d8f9b-pod-3" 형태일 때
+        // 마지막 숫자를 worker ID로 사용 (단순한 경우)
+        // 실제 운영에서는 Redis나 ZooKeeper로 워커 ID를 원자적으로 발급
+        long workerId = acquireWorkerIdFromRedis(hostname);
+        return new SnowflakeIdGenerator(workerId);
+    }
+
+    private long acquireWorkerIdFromRedis(String hostname) {
+        // Redis INCR으로 원자적 발급, TTL 설정으로 인스턴스 종료 시 반환
+        // SET worker:hostname hostname NX EX 3600
+        // INCR global:worker:counter → 워커 ID로 사용
+        throw new UnsupportedOperationException("Redis worker ID registry 구현 필요");
+    }
+}
+```
+
+### 6-2. UUID v7: 시간 정렬 가능한 UUID
+
+UUID v4는 완전 랜덤이라 B-Tree 인덱스에서 **페이지 단편화(Page Fragmentation)**를 유발한다. 랜덤 INSERT는 B-Tree의 임의 위치에 삽입되므로 기존 페이지를 분리(Page Split)하는 일이 잦다.
+
+UUID v7은 앞 48비트가 밀리초 타임스탬프다. 시간순으로 생성되므로 B-Tree의 **오른쪽 끝에 순차 삽입**된다. Page Split이 최소화되고 인덱스 단편화가 크게 줄어든다.
+
+```java
+// Java 21+ UUID v7 구현 예시 (java.util.UUID는 v4까지만 지원)
+// 외부 라이브러리 없이 직접 구현
+public class UuidV7 {
+
+    private static long lastMs = 0;
+    private static int seqHi  = 0; // 12비트 시퀀스 상위
+    private static int seqLo  = 0; // 62비트 시퀀스 하위
+
+    public static synchronized UUID generate() {
+        long ms = System.currentTimeMillis();
+
+        if (ms > lastMs) {
+            lastMs = ms;
+            seqHi  = 0;
+            seqLo  = 0;
+        } else {
+            // 같은 밀리초 내 시퀀스 증가
+            seqLo++;
+            if (seqLo > 0x3FFF) { // 14비트 소진
+                seqLo = 0;
+                seqHi++;
+            }
+        }
+
+        // 128비트 UUID v7 구성
+        // bits 0-47  : timestamp (48비트)
+        // bits 48-51 : version=7 (4비트)
+        // bits 52-63 : seq_hi (12비트)
+        // bits 64-65 : variant=10 (2비트)
+        // bits 66-127: seq_lo (62비트, 나머지는 랜덤)
+        long msb = (ms << 16) | (0x7000L) | (seqHi & 0x0FFF);
+        long lsb = (0x8000_0000_0000_0000L) | ((long) seqLo << 48)
+                 | (ThreadLocalRandom.current().nextLong() & 0x0000_FFFF_FFFF_FFFFL);
+
+        return new UUID(msb, lsb);
+    }
+}
+```
+
+### 6-3. ID 생성 방식 비교
+
+| 방식 | 크기 | 시간 정렬 | 인덱스 단편화 | 구현 복잡도 | 초당 생성량 |
+|------|------|---------|------------|-----------|-----------|
+| AUTO_INCREMENT | 8B | 가능(단일 서버) | 최소 | 없음 | DB 한계 |
+| UUID v4 | 16B | 불가 | 심각 | 없음 | 무제한 |
+| UUID v7 | 16B | 가능 | 낮음 | 낮음 | 무제한 |
+| Snowflake | 8B | 가능 | 최소 | 중간 | 409만/초/노드 |
+| DB Sequence 서비스 | 8B | 가능 | 최소 | 높음 | DB 한계 |
 
 ---
 
-## 샤딩 vs 읽기 복제 vs 캐싱 — 의사결정 트리
+## 7. ShardingSphere: SQL 파이프라인 내부 동작
 
-성능 문제가 발생했을 때 바로 샤딩을 선택하면 안 된다. 단계별로 더 단순한 해결책을 시도해야 한다.
+Apache ShardingSphere는 Java 애플리케이션의 DataSource를 가로채 투명하게 샤딩을 처리하는 미들웨어다. 애플리케이션은 단일 DataSource를 사용하는 것처럼 코드를 작성하고, ShardingSphere가 내부적으로 SQL을 분석하여 올바른 샤드로 라우팅한다.
+
+### 7-1. SQL 처리 파이프라인
 
 ```mermaid
 graph LR
-    A["성능 문제"] --> B{"읽기 과부하?"}
-    B -->|"YES"| C["캐싱 → Read Replica"]
-    C -->|"여전히 부족"| F["샤딩"]
-    B -->|"NO"| D{"쓰기 과부하?"}
-    D -->|"TB 수준"| F
-    D -->|"그 이하"| G["파티셔닝"]
-    D -->|"NO"| I["인덱스 최적화"]
+    SQL["SQL 입력"] --> PAR["SQL Parser"]
+    PAR --> ROU["Shard Router"]
+    ROU --> REW["SQL Rewriter"]
+    REW --> EXE["Executor"]
+    EXE --> MER["Result Merger"]
 ```
 
-### 각 전략의 적합한 상황
+**① SQL Parser**: SQL 문자열을 AST(Abstract Syntax Tree)로 파싱한다. WHERE 절에서 샤드 키 조건을 추출한다.
 
-| 전략 | 적합한 상황 | 구현 비용 | 일관성 |
-|------|------------|---------|-------|
-| 캐싱 (Redis) | 동일 데이터 반복 읽기, 갱신이 드문 경우 | 낮음 | 최종 일관성 |
-| 읽기 복제 | 읽기 트래픽이 쓰기의 수 배 이상, 분석 쿼리 분리 | 낮음 | 복제 지연 허용 |
-| 파티셔닝 | 시계열 데이터, 단일 서버 내 대용량 테이블 | 낮음~중간 | DB 투명 처리 |
-| 샤딩 | 단일 서버 쓰기 한계, 수십 TB 이상 데이터 | 매우 높음 | 복잡한 보장 필요 |
+```sql
+-- 입력 SQL
+SELECT * FROM orders WHERE customer_id = 12345 AND status = 'PAID'
+-- Parser가 추출: customer_id = 12345 → 샤드 키 값 확인
+```
+
+**② Shard Router**: 샤딩 규칙과 샤드 키 값으로 대상 샤드를 결정한다.
+
+```
+customer_id = 12345
+hash(12345) % 4 = 1
+→ 라우팅 대상: Shard 1
+```
+
+**③ SQL Rewriter**: 실제 샤드의 테이블명으로 SQL을 재작성한다.
+
+```sql
+-- 재작성된 SQL (ShardingSphere 내부)
+SELECT * FROM orders_1 WHERE customer_id = 12345 AND status = 'PAID'
+--                  ↑ 샤드 1의 물리 테이블명
+```
+
+**④ Executor**: 대상 샤드에 병렬로 SQL을 실행한다. 크로스 샤드 쿼리라면 여러 샤드에 동시 실행한다.
+
+**⑤ Result Merger**: 각 샤드의 결과를 병합한다. ORDER BY가 있으면 각 샤드의 정렬된 결과를 머지소트로 합친다. GROUP BY는 집계를 재계산한다. LIMIT는 각 샤드에서 `LIMIT offset+count`를 실행한 후 최종 슬라이싱한다.
+
+### 7-2. ShardingSphere 설정 (Spring Boot)
+
+```yaml
+spring:
+  datasource:
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    url: jdbc:shardingsphere:classpath:shardingsphere.yaml
+
+# shardingsphere.yaml
+mode:
+  type: Standalone
+
+dataSources:
+  shard0:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    jdbcUrl: jdbc:mysql://shard0.db.internal:3306/appdb
+    username: app
+    password: ${DB_PASSWORD}
+  shard1:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    jdbcUrl: jdbc:mysql://shard1.db.internal:3306/appdb
+    username: app
+    password: ${DB_PASSWORD}
+  shard2:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    jdbcUrl: jdbc:mysql://shard2.db.internal:3306/appdb
+    username: app
+    password: ${DB_PASSWORD}
+  shard3:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    jdbcUrl: jdbc:mysql://shard3.db.internal:3306/appdb
+    username: app
+    password: ${DB_PASSWORD}
+
+rules:
+  - !SHARDING
+    tables:
+      orders:
+        actualDataNodes: shard${0..3}.orders_${0..3}
+        tableStrategy:
+          standard:
+            shardingColumn: customer_id
+            shardingAlgorithmName: orders_hash_mod
+        keyGenerateStrategy:
+          column: id
+          keyGeneratorName: snowflake
+      order_items:
+        actualDataNodes: shard${0..3}.order_items_${0..3}
+        tableStrategy:
+          standard:
+            shardingColumn: customer_id  # orders와 동일한 샤드 키 → 로컬 JOIN 가능
+            shardingAlgorithmName: orders_hash_mod
+
+    # 브로드캐스트 테이블: 모든 샤드에 복제
+    broadcastTables:
+      - categories
+      - country_codes
+
+    shardingAlgorithms:
+      orders_hash_mod:
+        type: HASH_MOD
+        props:
+          sharding-count: 4
+
+    keyGenerators:
+      snowflake:
+        type: SNOWFLAKE
+        props:
+          worker-id: ${WORKER_ID:0}
+```
+
+### 7-3. 실제 사용 예시 (코드 변경 없음)
+
+```java
+// ShardingSphere 적용 후 코드 — 단일 DB처럼 사용
+@Repository
+@RequiredArgsConstructor
+public class OrderRepository {
+
+    private final JdbcTemplate jdbcTemplate; // ShardingSphere DataSource 주입됨
+
+    public Order findById(long orderId, long customerId) {
+        // ShardingSphere가 customer_id를 보고 자동으로 올바른 샤드에 라우팅
+        return jdbcTemplate.queryForObject(
+            "SELECT * FROM orders WHERE id = ? AND customer_id = ?",
+            ORDER_ROW_MAPPER, orderId, customerId
+        );
+    }
+
+    // 크로스 샤드 쿼리 — ShardingSphere가 자동으로 Scatter-Gather
+    public long countAllOrders() {
+        // ShardingSphere가 모든 샤드에 COUNT 실행 후 합산
+        return jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM orders", Long.class
+        );
+    }
+
+    // 같은 샤드의 두 테이블 JOIN — customer_id 동일 샤드 키라 로컬 JOIN
+    public List<OrderDetail> findOrderWithItems(long customerId, long orderId) {
+        return jdbcTemplate.query(
+            """
+            SELECT o.id, o.amount, oi.product_id, oi.quantity
+            FROM orders o JOIN order_items oi ON o.id = oi.order_id
+            WHERE o.customer_id = ? AND o.id = ?
+            """,
+            ORDER_DETAIL_ROW_MAPPER, customerId, orderId
+        );
+    }
+}
+```
 
 ---
 
-## Spring 애플리케이션 샤딩 통합 예시
+## 8. AbstractRoutingDataSource: Spring 네이티브 샤딩
 
-### AbstractRoutingDataSource 활용
+ShardingSphere 없이 Spring 기본 기능만으로 샤딩을 구현하려면 `AbstractRoutingDataSource`를 활용한다.
 
-Spring의 `AbstractRoutingDataSource`를 활용하면 코드 변경 없이 샤드 라우팅을 투명하게 처리할 수 있다. `ShardContextHolder`가 ThreadLocal로 현재 요청의 샤드 키를 저장하고, `determineCurrentLookupKey()`가 이를 읽어 적절한 DataSource를 선택한다. `@Sharded` AOP 어노테이션은 SpEL 표현식으로 메서드 인자에서 샤드 키를 자동 추출하므로, 서비스 레이어는 샤딩을 의식하지 않아도 된다.
+### 8-1. 전체 구현
 
 ```java
-// 샤드 컨텍스트 홀더
-public class ShardContextHolder {
-    private static final ThreadLocal<Integer> SHARD_KEY = new ThreadLocal<>();
+// 1) 샤드 컨텍스트 — ThreadLocal로 현재 스레드의 샤드 키 저장
+public class ShardContext {
 
-    public static void setShardKey(int shardKey) { SHARD_KEY.set(shardKey); }
-    public static Integer getShardKey()          { return SHARD_KEY.get(); }
-    public static void clear()                   { SHARD_KEY.remove(); }
+    private static final ThreadLocal<Integer> SHARD_INDEX = new InheritableThreadLocal<>();
+
+    public static void set(int shardIndex)  { SHARD_INDEX.set(shardIndex); }
+    public static Integer get()             { return SHARD_INDEX.get(); }
+    public static void clear()              { SHARD_INDEX.remove(); }
 }
 
-// 라우팅 DataSource
-@Configuration
-public class ShardDataSourceConfig {
+// 2) 라우팅 DataSource
+public class ShardingDataSource extends AbstractRoutingDataSource {
 
-    @Bean
-    public DataSource routingDataSource(
-            @Qualifier("shard0") DataSource shard0,
-            @Qualifier("shard1") DataSource shard1,
-            @Qualifier("shard2") DataSource shard2,
-            @Qualifier("shard3") DataSource shard3) {
+    private final int shardCount;
 
-        Map<Object, Object> targetDataSources = new HashMap<>();
-        targetDataSources.put(0, shard0);
-        targetDataSources.put(1, shard1);
-        targetDataSources.put(2, shard2);
-        targetDataSources.put(3, shard3);
+    public ShardingDataSource(Map<Object, Object> targetDataSources, int shardCount) {
+        this.shardCount = shardCount;
+        setTargetDataSources(targetDataSources);
+        afterPropertiesSet();
+    }
 
-        AbstractRoutingDataSource routing = new AbstractRoutingDataSource() {
-            @Override
-            protected Object determineCurrentLookupKey() {
-                Integer shardKey = ShardContextHolder.getShardKey();
-                if (shardKey == null) {
-                    throw new IllegalStateException("샤드 키가 설정되지 않았습니다.");
-                }
-                return Math.abs(shardKey) % 4;  // 4개 샤드
-            }
-        };
-        routing.setTargetDataSources(targetDataSources);
-        routing.setDefaultTargetDataSource(shard0);
-        return routing;
+    @Override
+    protected Object determineCurrentLookupKey() {
+        Integer shardIndex = ShardContext.get();
+        if (shardIndex == null) {
+            // 샤드 키 없으면 기본 샤드 0 사용 (글로벌 테이블 읽기 등)
+            return 0;
+        }
+        return shardIndex;
     }
 }
 
-// 샤딩 AOP — @Sharded 어노테이션으로 자동 샤드 선택
+// 3) DataSource 빈 구성
+@Configuration
+public class ShardDataSourceConfig {
+
+    private static final int SHARD_COUNT = 4;
+
+    @Bean
+    @Primary
+    public DataSource shardingDataSource(
+            @Qualifier("ds0") DataSource ds0,
+            @Qualifier("ds1") DataSource ds1,
+            @Qualifier("ds2") DataSource ds2,
+            @Qualifier("ds3") DataSource ds3) {
+
+        Map<Object, Object> targets = new LinkedHashMap<>();
+        targets.put(0, ds0);
+        targets.put(1, ds1);
+        targets.put(2, ds2);
+        targets.put(3, ds3);
+
+        return new ShardingDataSource(targets, SHARD_COUNT);
+    }
+
+    @Bean("ds0")
+    public DataSource dataSource0() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:mysql://shard0.db.internal:3306/appdb");
+        config.setMaximumPoolSize(20);
+        return new HikariDataSource(config);
+    }
+    // ds1, ds2, ds3 동일 패턴...
+}
+
+// 4) 샤드 라우팅 유틸
+@Component
+public class ShardResolver {
+
+    private static final int SHARD_COUNT = 4;
+
+    public int resolveIndex(long shardKey) {
+        return (int) (Math.abs(shardKey) % SHARD_COUNT);
+    }
+
+    public void setContext(long shardKey) {
+        ShardContext.set(resolveIndex(shardKey));
+    }
+}
+
+// 5) AOP: @ShardedBy 어노테이션으로 자동 라우팅
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Sharded {
-    String keyExpression(); // SpEL 표현식
+public @interface ShardedBy {
+    String value(); // SpEL: "#userId", "#order.customerId"
 }
 
 @Aspect
 @Component
 @RequiredArgsConstructor
-public class ShardingAspect {
+public class ShardRoutingAspect {
 
+    private final ShardResolver shardResolver;
     private final ExpressionParser parser = new SpelExpressionParser();
 
-    @Around("@annotation(sharded)")
-    public Object routeToShard(ProceedingJoinPoint pjp, Sharded sharded) throws Throwable {
-        // SpEL로 메서드 인자에서 샤드 키 추출
-        MethodSignature sig = (MethodSignature) pjp.getSignature();
-        EvaluationContext ctx = new StandardEvaluationContext();
-        String[] paramNames = sig.getParameterNames();
-        Object[] args = pjp.getArgs();
-        for (int i = 0; i < paramNames.length; i++) {
-            ctx.setVariable(paramNames[i], args[i]);
-        }
-        Integer shardKey = parser.parseExpression(sharded.keyExpression())
-                                 .getValue(ctx, Integer.class);
-        ShardContextHolder.setShardKey(shardKey);
+    @Around("@annotation(shardedBy)")
+    public Object around(ProceedingJoinPoint pjp, ShardedBy shardedBy) throws Throwable {
+        long shardKey = extractShardKey(pjp, shardedBy.value());
+        shardResolver.setContext(shardKey);
         try {
             return pjp.proceed();
         } finally {
-            ShardContextHolder.clear();
+            ShardContext.clear(); // 반드시 클리어 — 스레드 풀 오염 방지
+        }
+    }
+
+    private long extractShardKey(ProceedingJoinPoint pjp, String expression) {
+        MethodSignature sig = (MethodSignature) pjp.getSignature();
+        StandardEvaluationContext ctx = new StandardEvaluationContext();
+        String[] names = sig.getParameterNames();
+        Object[] args  = pjp.getArgs();
+        for (int i = 0; i < names.length; i++) ctx.setVariable(names[i], args[i]);
+        return parser.parseExpression(expression).getValue(ctx, Long.class);
+    }
+}
+
+// 6) 서비스 레이어 — 샤딩을 전혀 의식하지 않음
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private final OrderRepository orderRepository;
+
+    @ShardedBy("#customerId")
+    public Order getOrder(long customerId, long orderId) {
+        return orderRepository.findByIdAndCustomerId(orderId, customerId);
+    }
+
+    @ShardedBy("#order.customerId")
+    @Transactional
+    public Order createOrder(Order order) {
+        return orderRepository.save(order);
+    }
+}
+```
+
+---
+
+## 9. 크로스 샤드 트랜잭션: XA 2PC vs Saga
+
+### 9-1. XA 2PC의 내부 동작과 한계
+
+XA(eXtended Architecture) 2PC는 분산 트랜잭션 표준 프로토콜이다. 트랜잭션 매니저(TM)가 **준비(Prepare) → 커밋(Commit)** 두 단계로 원자성을 보장한다.
+
+```
+Phase 1 (Prepare):
+  TM → Shard A: "XA PREPARE tx-1234"  → Shard A: "PREPARED" (redo log 기록)
+  TM → Shard B: "XA PREPARE tx-1234"  → Shard B: "PREPARED" (redo log 기록)
+
+Phase 2 (Commit):
+  TM → Shard A: "XA COMMIT tx-1234"
+  TM → Shard B: "XA COMMIT tx-1234"
+```
+
+```mermaid
+graph LR
+    TM["TM"] -->|"XA PREPARE"| SA["Shard A"]
+    TM -->|"XA PREPARE"| SB["Shard B"]
+    SA -->|"PREPARED"| TM
+    SB -->|"PREPARED"| TM
+    TM -->|"XA COMMIT"| SA
+    TM -->|"XA COMMIT"| SB
+```
+
+**왜 실무에서 2PC를 피하는가**
+
+1. **TM 장애 시 무한 블로킹**: Phase 1 완료 후 TM이 크래시하면 Shard A, B는 PREPARED 상태로 락을 잡은 채 무한 대기한다. TM이 복구될 때까지 해당 행은 완전히 잠긴다.
+
+2. **성능 저하**: 2번의 네트워크 왕복 + 2번의 fsync(redo log 플러시). 레이턴시가 단일 트랜잭션의 3~5배.
+
+3. **가용성 침해**: 하나의 샤드라도 네트워크 파티션이 발생하면 전체 트랜잭션이 실패(블로킹).
+
+4. **CAP 이론**: 2PC는 일관성(C)과 가용성(A) 중 일관성을 선택한다. 샤딩 환경은 분산 시스템이므로 파티션 허용(P)이 필수다.
+
+### 9-2. Saga 패턴: 최종 일관성으로 가용성 확보
+
+Saga는 각 샤드에서 **로컬 트랜잭션**을 순차 실행하고, 실패 시 이전 단계를 **보상 트랜잭션(Compensating Transaction)**으로 되돌리는 패턴이다. 블로킹이 없고 가용성이 높다. 단, 중간 상태가 잠깐 노출되는 **최종 일관성(Eventual Consistency)**을 수용해야 한다.
+
+```mermaid
+graph LR
+    S1["주문 생성\n(PENDING)"] --> S2["재고 차감"]
+    S2 --> S3["결제 처리"]
+    S3 --> S4["주문 확정\n(CONFIRMED)"]
+    S2 -->|"재고 없음"| C1["주문 취소\n(CANCELLED)"]
+    S3 -->|"결제 실패"| C2["재고 복구\n+ 주문 취소"]
+```
+
+```java
+// Choreography Saga — 이벤트 기반으로 각 서비스가 자율적으로 반응
+@Service
+@RequiredArgsConstructor
+public class OrderSagaOrchestrator {
+
+    private final OrderShardRepository    orderRepo;
+    private final InventoryShardRepository inventoryRepo;
+    private final PaymentShardRepository   paymentRepo;
+    private final ApplicationEventPublisher events;
+
+    // Step 1: Order 샤드 로컬 트랜잭션
+    @Transactional
+    public Long startOrderSaga(CreateOrderCommand cmd) {
+        Order order = Order.pending(cmd.customerId(), cmd.productId(), cmd.quantity());
+        Long orderId = orderRepo.save(order);
+        events.publishEvent(new OrderCreatedEvent(orderId, cmd.customerId(),
+                                                   cmd.productId(), cmd.quantity()));
+        return orderId;
+    }
+
+    // Step 2: Inventory 샤드 로컬 트랜잭션
+    @EventListener
+    @Transactional
+    public void onOrderCreated(OrderCreatedEvent event) {
+        try {
+            inventoryRepo.reserve(event.productId(), event.quantity()); // 재고 예약
+            events.publishEvent(new StockReservedEvent(event.orderId(), event.customerId()));
+        } catch (InsufficientStockException ex) {
+            // 보상: 주문 취소
+            events.publishEvent(new OrderCompensationEvent(
+                event.orderId(), event.customerId(), "재고 부족: " + ex.getMessage()));
+        }
+    }
+
+    // Step 3: Payment 샤드 로컬 트랜잭션
+    @EventListener
+    @Transactional
+    public void onStockReserved(StockReservedEvent event) {
+        try {
+            paymentRepo.charge(event.customerId(), orderRepo.getAmount(event.orderId()));
+            events.publishEvent(new PaymentCompletedEvent(event.orderId(), event.customerId()));
+        } catch (PaymentFailedException ex) {
+            // 보상: 재고 복구 + 주문 취소
+            events.publishEvent(new StockCompensationEvent(event.orderId()));
+            events.publishEvent(new OrderCompensationEvent(
+                event.orderId(), event.customerId(), "결제 실패: " + ex.getMessage()));
+        }
+    }
+
+    // Step 4: Order 샤드 — 최종 확정
+    @EventListener
+    @Transactional
+    public void onPaymentCompleted(PaymentCompletedEvent event) {
+        orderRepo.confirm(event.orderId()); // CONFIRMED 상태로 전환
+    }
+
+    // 보상 트랜잭션: 주문 취소
+    @EventListener
+    @Transactional
+    public void onOrderCompensation(OrderCompensationEvent event) {
+        orderRepo.cancel(event.orderId(), event.reason());
+    }
+
+    // 보상 트랜잭션: 재고 복구
+    @EventListener
+    @Transactional
+    public void onStockCompensation(StockCompensationEvent event) {
+        Long productId = orderRepo.getProductId(event.orderId());
+        Integer quantity = orderRepo.getQuantity(event.orderId());
+        inventoryRepo.restore(productId, quantity);
+    }
+}
+```
+
+**Saga의 실제 위험: 멱등성(Idempotency) 보장**
+
+이벤트 브로커(Kafka, RabbitMQ)는 At-Least-Once 전달을 보장한다. 동일 이벤트가 두 번 전달되면 재고가 두 번 차감된다. 각 보상 트랜잭션은 멱등하게 설계해야 한다.
+
+```java
+// 멱등 보상 트랜잭션: saga_events 테이블로 중복 방지
+@Transactional
+public void onOrderCreated(OrderCreatedEvent event) {
+    // 이미 처리된 이벤트인지 확인
+    if (sagaEventRepository.exists(event.eventId())) {
+        log.warn("Duplicate saga event ignored: {}", event.eventId());
+        return;
+    }
+    sagaEventRepository.markProcessed(event.eventId());
+
+    // 실제 처리 로직...
+    inventoryRepo.reserve(event.productId(), event.quantity());
+    events.publishEvent(new StockReservedEvent(event.orderId(), event.customerId()));
+}
+```
+
+### 9-3. 왜 최종 일관성이 종종 더 나은 선택인가
+
+2PC의 강한 일관성은 **모든 샤드가 동시에 응답할 수 있을 때만** 성립한다. 샤딩 환경은 분산 네트워크 위에 있으므로 파티션이 항상 발생할 수 있다. CAP 이론에서 P(파티션 허용)는 포기할 수 없으므로, CA 중 하나를 선택해야 한다.
+
+대부분의 비즈니스 요건을 분석하면 **강한 일관성이 필수인 경우는 생각보다 드물다**. 주문이 1~2초 동안 PENDING 상태로 보여도 최종적으로 CONFIRMED/CANCELLED가 된다면 비즈니스 요건을 충족하는 경우가 많다. 반면 2PC로 인한 다운타임은 즉각적인 매출 손실이다.
+
+---
+
+## 10. 리밸런싱: 온라인 재샤딩
+
+서비스가 성장하면서 샤드 수를 늘려야 하는 시점이 온다. 이를 **재샤딩(Resharding)** 또는 **리밸런싱(Rebalancing)**이라 한다.
+
+### 10-1. Double-Write 전략
+
+가장 안전한 무중단 재샤딩 방법이다. 기존 샤드와 새 샤드에 동시에 쓰면서 점진적으로 읽기를 전환한다.
+
+```
+Phase 1 — 새 샤드 준비:
+  기존 샤드에서 스냅샷 복사 → 새 샤드로 대량 이관
+  CDC(Change Data Capture)로 바이너리 로그 실시간 동기화
+
+Phase 2 — Double-Write 활성화:
+  모든 쓰기를 기존 + 새 샤드 양쪽에 동시 실행
+
+Phase 3 — 읽기 전환:
+  10% 읽기 → 새 샤드
+  50% 읽기 → 새 샤드
+  100% 읽기 → 새 샤드 (새 샤드가 Primary가 됨)
+
+Phase 4 — 기존 샤드 정리:
+  새 샤드에서 읽기 완전 전환 확인 후 기존 샤드의 이전된 범위 데이터 삭제
+  Double-Write 비활성화
+```
+
+```java
+@Component
+@RequiredArgsConstructor
+public class DoubleWriteRouter {
+
+    private final DataSource oldShard;
+    private final DataSource newShard;
+
+    @Value("${sharding.double-write.enabled:false}")
+    private boolean doubleWriteEnabled;
+
+    @Value("${sharding.new-shard.read-percentage:0}")
+    private int newShardReadPercentage; // 0 → 100 점진적 전환
+
+    public void write(long customerId, Runnable writeOperation) {
+        if (doubleWriteEnabled && isNewShardRange(customerId)) {
+            // 기존 샤드에 쓰기
+            executeOnShard(oldShard, writeOperation);
+            // 새 샤드에도 쓰기 (실패해도 기존 샤드 쓰기는 성공 처리)
+            try {
+                executeOnShard(newShard, writeOperation);
+            } catch (Exception e) {
+                log.error("New shard write failed for customerId={}, alerting", customerId, e);
+                // 알림 발송 — 새 샤드 쓰기 실패는 모니터링 대상
+            }
+        } else {
+            executeOnShard(oldShard, writeOperation);
+        }
+    }
+
+    public DataSource routeRead(long customerId) {
+        if (isNewShardRange(customerId)
+                && ThreadLocalRandom.current().nextInt(100) < newShardReadPercentage) {
+            return newShard; // 점진적으로 새 샤드로 읽기 전환
+        }
+        return oldShard;
+    }
+
+    private boolean isNewShardRange(long customerId) {
+        // 새 샤드로 이전할 범위 정의
+        return customerId % 8 >= 4; // 예: 기존 4 샤드 → 신규 4 샤드 추가
+    }
+
+    private void executeOnShard(DataSource shard, Runnable op) {
+        ShardContext.set(/* shard index */0);
+        try {
+            op.run();
+        } finally {
+            ShardContext.clear();
         }
     }
 }
+```
 
-// 사용 예시
-@Service
-public class UserService {
+### 10-2. Shadow Traffic 검증
 
-    @Sharded(keyExpression = "#userId")
-    public User getUser(long userId) {
-        return userRepository.findById(userId);  // 자동으로 올바른 샤드에 연결
-    }
+새 샤드로 완전 전환하기 전에 **Shadow Traffic**으로 검증한다. 실제 요청을 기존 샤드에서 처리하면서, 동일한 요청을 새 샤드에도 비동기로 실행하여 결과를 비교한다.
 
-    @Sharded(keyExpression = "#user.userId")
-    public User createUser(User user) {
-        return userRepository.save(user);
+```java
+@Component
+@RequiredArgsConstructor
+public class ShadowTrafficValidator {
+
+    private final ExecutorService shadowExecutor =
+        Executors.newFixedThreadPool(4);
+
+    public <T> T executeWithShadow(
+            Supplier<T> primaryQuery,
+            Supplier<T> shadowQuery,
+            BiConsumer<T, T> comparator) {
+
+        // Primary 실행 (실제 응답)
+        T primaryResult = primaryQuery.get();
+
+        // Shadow 비동기 실행 (결과 무시, 비교만)
+        shadowExecutor.submit(() -> {
+            try {
+                T shadowResult = shadowQuery.get();
+                comparator.accept(primaryResult, shadowResult);
+            } catch (Exception e) {
+                log.error("Shadow query failed", e);
+                meterRegistry.counter("shadow.error").increment();
+            }
+        });
+
+        return primaryResult; // Primary 결과만 반환
     }
 }
 ```
 
-> **핵심**: `finally` 블록의 `ShardContextHolder.clear()`는 반드시 실행되어야 한다. 스레드 풀에서 스레드가 재사용될 때 이전 요청의 샤드 키가 남아 있으면 잘못된 샤드에 쿼리가 실행된다.
-
 ---
 
+## 11. 샤딩 vs 읽기 레플리카 vs 파티셔닝 vs NoSQL
 
-## 극한 시나리오
+### 11-1. 각 전략의 해결 범위
 
-### 핫 샤드 발생 시 대응
+| 문제 | 읽기 레플리카 | 파티셔닝 | 샤딩 | NoSQL |
+|------|------------|---------|------|-------|
+| 읽기 TPS 과부하 | 해결 | 부분 | 해결 | 해결 |
+| 쓰기 TPS 과부하 | 미해결 | 미해결 | 해결 | 해결 |
+| 디스크 용량 한계 | 미해결 | 미해결 | 해결 | 해결 |
+| 커넥션 포화 | 부분 | 미해결 | 해결 | 해결 |
+| JOIN 복잡한 쿼리 | 가능 | 가능 | 어려움 | 불가/어려움 |
+| ACID 트랜잭션 | 가능 | 가능 | 어려움 | 제한적 |
+| 구현 복잡도 | 낮음 | 낮음 | 매우 높음 | 중간 |
 
-특정 샤드의 CPU가 70%를 넘고 다른 샤드 평균의 2배 이상이면 핫 샤드로 판단한다. 단기 대응으로는 핫 샤드에 Read Replica를 추가하여 읽기 쿼리를 분산한다. 중기 대응으로는 핫 샤드를 2개로 분할하거나, Consistent Hashing이라면 해당 샤드의 가상 노드 수를 감소시킨다.
-
-근본 원인이 **Celebrity Problem**(팔로워 1000만 명인 인플루언서의 게시물 조회 폭발)이라면 해당 사용자의 데이터를 전용 샤드에 격리하거나 CDN/캐시 레이어로 DB 부하를 차단한다. 샤드 키 선택 자체가 오류라면 재샤딩을 검토해야 한다.
+### 11-2. 의사결정 흐름
 
 ```mermaid
 graph LR
-    A["핫 샤드 감지"] --> B{"원인 분석"}
-    B -->|"샤드 키 선택 오류"| C["재샤딩 검토"]
-    B -->|"Celebrity Problem"| D["해당 사용자 전용 샤드 격리"]
-    B -->|"일시적 부하 집중"| E["Read Replica 추가"]
-    E --> F["핫 샤드 분할"]
+    PERF["성능 문제"] --> RQ{"읽기 과부하?"}
+    RQ -->|"YES"| REP["레플리카+캐시"]
+    RQ -->|"NO"| WQ{"쓰기 과부하?"}
+    WQ -->|"TB이하"| PART["파티셔닝"]
+    WQ -->|"TB초과"| SHARD["샤딩"]
+    REP -->|"여전히 부족"| SHARD
 ```
 
-### 샤드 장애 시 가용성
+### 11-3. 언제 NoSQL이 샤딩보다 나은가
 
-각 샤드는 Primary-Replica 구성으로 고가용성을 확보한다. Primary 장애 시 MHA 또는 Orchestrator가 수 초 내에 장애를 감지하고, 자동 Failover로 Replica를 Primary로 승격하며, 라우터가 새 Primary 주소로 연결을 업데이트한다. 짧은 다운타임(수 초~수십 초) 후 정상화된다. RPO(Recovery Point Objective)는 복제 지연만큼의 데이터 손실이 가능하고, RTO(Recovery Time Objective)는 자동 Failover 기준 30초~2분이다.
+RDBMS 샤딩은 **기존 관계형 스키마를 유지하면서 수평 확장**하는 것이 목표다. 처음부터 관계형 모델이 필요하지 않다면 NoSQL이 더 단순하다.
 
-### 다운타임 없는 샤드 추가 마이그레이션
+- **DynamoDB**: 파티션 키를 지정하면 자동 샤딩. 관리 불필요. 하지만 쿼리 패턴이 파티션 키에 고정.
+- **Cassandra**: Consistent Hashing 기반 자동 분산. Write-heavy 워크로드에 최적. 하지만 JOIN, 트랜잭션 없음.
+- **MongoDB**: 자동 청크 분할 및 밸런싱. 하지만 다중 문서 트랜잭션은 오버헤드.
 
-샤드 4개에서 8개로 확장할 때 무중단으로 진행하는 절차다.
+이미 MySQL 기반 서비스가 운영 중이고, 복잡한 JOIN과 ACID 트랜잭션이 필수라면 RDBMS 샤딩이 현실적인 선택이다. 새로운 서비스라면 처음부터 DynamoDB나 Cassandra로 시작하는 것이 운영 부담이 적다.
 
-```mermaid
-graph LR
-    P1["Phase 1"] --> P2["Phase 2"]
-    P2 --> P3["Phase 3"]
-    P3 --> P4["Phase 4"]
-    P4 --> P5["Phase 5"]
-    P5 --> P6["Phase 6"]
+---
+
+## 12. 극한 시나리오
+
+### 시나리오 1: 핫 샤드 폭발 — 인플루언서 라이브 방송
+
+인플루언서 A(팔로워 500만)가 라이브 방송을 시작하는 순간, A의 user_id가 매핑된 Shard 2의 CPU가 95%로 치솟는다. 다른 샤드는 30% 수준이다.
+
+**즉각 대응(분 단위)**:
+1. Redis에 A의 최근 게시물 캐시 (DB 조회 차단)
+2. Shard 2에 Read Replica 즉시 추가, 읽기 트래픽을 Replica로 전환
+3. Shard 2의 Connection Pool 크기를 일시적으로 증가
+
+**중기 대응(시간~일 단위)**:
+1. Directory-based sharding으로 A를 전용 샤드(shard-vip)로 격리
+2. A의 피드를 Fan-out 방식으로 미리 계산하여 Redis에 저장
+3. 다음 라이브 방송 예정자 목록을 사전에 모니터링하고 선제적 격리
+
+**근본 원인이 샤드 키 설계 오류인 경우**: user_id 해시가 균등하지 않음이 밝혀지면 전체 재샤딩 계획 수립.
+
+### 시나리오 2: 샤드 1 디스크 장애 — 데이터 유실 가능성
+
+Shard 1 Primary의 NVMe가 부분 장애. 일부 쓰기가 손실될 수 있는 상황.
+
+**즉각 대응**:
+1. 라우터가 Shard 1 Primary를 헬스체크 실패로 감지 → Replica로 Failover (30초 내)
+2. 애플리케이션은 Shard 1 Replica에 연결 지속
+3. 운영팀: Primary 서버 격리, 디스크 교체 후 Replica에서 데이터 재동기화
+
+**RPO/RTO 계산**:
+- RPO: Replica 복제 지연이 1초였다면 최대 1초 데이터 손실 가능
+- RTO: Orchestrator 자동 Failover 기준 30초~2분
+
+**예방책**:
+- 각 샤드를 Primary + Replica 2개 구성 (semi-sync replication)
+- `rpl_semi_sync_master_wait_for_slave_count=1`로 최소 1개 Replica에 동기 복제 확인 후 커밋 응답
+
+### 시나리오 3: Snowflake Worker ID 충돌 — ID 중복 발생
+
+배포 스크립트 오류로 Pod 3개가 모두 worker_id=0으로 기동된다. 같은 밀리초에 동일한 Snowflake ID가 생성될 수 있다.
+
+**즉각 대응**:
+1. ID 중복 감지 쿼리 실행: `SELECT id, COUNT(*) FROM orders GROUP BY id HAVING COUNT(*) > 1`
+2. 중복이 발견되면 해당 레코드 롤백 및 수동 재처리
+3. worker_id=0 Pod 전체 즉시 재기동 (올바른 worker_id 할당 후)
+
+**근본 해결책**:
+```java
+// Redis를 이용한 원자적 Worker ID 발급
+@PostConstruct
+public void init() {
+    String script = """
+        local id = redis.call('INCR', 'snowflake:worker:counter')
+        if id > 1023 then
+            return redis.error_reply('Worker ID exhausted')
+        end
+        redis.call('SET', 'snowflake:worker:' .. KEYS[1], id, 'EX', 86400)
+        return id
+        """;
+    Long workerId = redisTemplate.execute(
+        new DefaultRedisScript<>(script, Long.class),
+        List.of(hostname)
+    );
+    this.workerId = workerId;
+}
+
+@PreDestroy
+public void cleanup() {
+    // 종료 시 Worker ID 반환
+    redisTemplate.delete("snowflake:worker:" + hostname);
+}
 ```
 
-Phase 4에서 읽기 트래픽을 점진적으로(10% → 50% → 100%) 이전하므로 문제 발생 시 즉시 롤백이 가능하다.
-
----
-## 실무에서 자주 하는 실수
-
-### 1. 샤딩을 너무 일찍 도입
-
-쿼리 최적화나 캐싱으로 해결 가능한 수준에서 샤딩을 도입하면 운영 복잡도만 극단적으로 늘어난다. 단일 서버가 쓰기 TPS 한계에 도달하기 전까지는 샤딩은 과잉이다.
-
-### 2. 잘못된 샤드 키 선택
-
-email, status, country_code처럼 카디널리티가 낮거나 특정 값에 집중되는 컬럼을 샤드 키로 선택하면 핫스팟이 불가피하다. 한번 선택한 샤드 키는 변경이 매우 어려우므로 초기 설계가 중요하다.
-
-### 3. ShardContextHolder.clear() 누락
-
-ThreadLocal을 사용하는 `ShardContextHolder`에서 `clear()`를 누락하면 스레드 풀에서 스레드가 재사용될 때 이전 요청의 샤드 키가 오염된다. `finally` 블록에서 반드시 호출해야 한다.
-
-### 4. 크로스 샤드 트랜잭션을 2PC로 처리
-
-2PC는 TC 장애 시 모든 샤드가 블로킹되는 문제가 있다. 고가용성이 중요한 서비스에서는 Saga 패턴으로 전환하고 최종 일관성을 수용하는 것이 실용적이다.
-
-### 5. Snowflake workerId 중복 할당
-
-여러 인스턴스에서 같은 workerId를 사용하면 같은 밀리초에 동일한 ID가 생성된다. Kubernetes Pod 번호, ZooKeeper 시퀀스, Redis 발급 등의 방법으로 workerId를 유니크하게 관리해야 한다.
-
 ---
 
-## 정리
+## 13. 면접 포인트 5선
 
-샤딩은 강력하지만 운영 복잡도가 극단적으로 높아지는 기법이다. 도입 전 반드시 다음 순서를 확인해야 한다.
+### Q1. 단일 DB 서버가 한계에 부딪히는 메커니즘을 설명하고, 샤딩이 이를 어떻게 해결하는지 설명하라.
 
-1. **쿼리/인덱스 최적화** — 가장 먼저, 비용 없이 수십 배 성능 향상 가능
-2. **캐싱** — Redis로 읽기 부하의 80~90%를 흡수
-3. **읽기 복제** — 쓰기는 Primary, 읽기는 Replica로 분산
-4. **파티셔닝** — 단일 서버 내 대용량 테이블 관리
-5. **수직 확장** — 더 큰 서버로 교체 (한시적 해결)
-6. **샤딩** — 위 모든 방법이 한계에 도달했을 때
+**A.** 단일 서버의 한계는 세 가지 메커니즘에서 온다.
 
-샤딩을 선택했다면 Consistent Hashing으로 리밸런싱 비용을 최소화하고, 샤드 키를 신중하게 설계하고, 크로스 샤드 트랜잭션을 Saga 패턴으로 처리하는 것이 실무에서 검증된 조합이다.
+첫째, **커넥션 포화**: MySQL은 커넥션당 OS 스레드를 생성한다. 커넥션 1만 개 = 스레드 1만 개 = 컨텍스트 스위칭 오버헤드 폭증. 커넥션 풀러(ProxySQL)로 완화하지만 근본 해결이 안 된다.
+
+둘째, **Buffer Pool 초과**: InnoDB Buffer Pool이 데이터 전체를 담지 못하면 랜덤 I/O가 폭증한다. NVMe도 메모리에 비해 200배 이상 느리다.
+
+셋째, **락 경합**: AUTO_INCREMENT INSERT는 B-Tree 맨 오른쪽 리프 페이지와 Page Latch에 집중 경합한다. 서버를 아무리 키워도 해결 안 된다.
+
+샤딩은 이 세 문제를 물리적으로 분리하여 해결한다. N개 샤드 = N개 독립 커넥션 풀 + N개 독립 Buffer Pool + N배로 분산된 락 경합.
+
+### Q2. Consistent Hashing은 왜 모듈러 해싱보다 노드 추가/제거 시 우월한가?
+
+**A.** 모듈러 해싱(`hash(key) % N`)은 N이 바뀌면 거의 모든 키의 매핑이 변경된다. N=3→4이면 약 75%의 데이터가 새 샤드로 이동해야 한다. 이는 사실상 전체 데이터 마이그레이션이다.
+
+Consistent Hashing은 해시 공간을 원형 링(0 ~ 2^32)으로 모델링한다. 노드와 키 모두 링 위에 배치하고, 키는 시계 방향으로 가장 가까운 노드에 배정된다. 노드가 추가되면 새 노드와 그 이전 노드 사이의 키만 이동한다. N개 노드 중 하나 추가 시 **전체의 1/N**만 이동한다.
+
+가상 노드(VNode)를 각 실제 노드에 150개씩 배정하면 링 위 분포가 균등해져 노드 간 부하 불균형 문제도 해결된다. Cassandra, DynamoDB, Redis Cluster가 이 방식을 사용한다.
+
+### Q3. 샤드 키를 user_id로 선택했는데 특정 사용자(인플루언서)로 인한 핫스팟이 발생했다. 어떻게 해결하는가?
+
+**A.** user_id 해시 샤딩은 균등 분산을 보장하지만, **데이터 접근 빈도**의 편향까지 보장하지는 않는다. 팔로워 1000만 명인 인플루언서의 user_id는 항상 같은 샤드로 라우팅되므로 그 샤드에 조회가 집중된다. Celebrity Problem이다.
+
+단계별 해결책:
+1. **즉각적(분~시간)**: 핫 데이터를 Redis에 캐싱하여 DB 접근 자체를 차단.
+2. **중기적(일~주)**: Directory-based sharding으로 해당 사용자를 전용 격리 샤드로 이동. 라우팅 테이블에서 해당 user_id의 샤드 매핑을 전용 샤드로 변경.
+3. **장기적**: Fan-out on Write 모델로 전환. 인플루언서가 게시물을 올리면 팔로워들의 피드 테이블에 미리 복사. 조회 시 DB 접근 없이 자신의 피드 테이블만 읽음.
+
+### Q4. 샤딩 환경에서 크로스 샤드 트랜잭션이 필요할 때 XA 2PC 대신 Saga를 선택하는 이유는?
+
+**A.** XA 2PC는 이론적 원자성을 보장하지만 세 가지 치명적 문제가 있다.
+
+첫째, **코디네이터 장애 시 무한 블로킹**: Phase 1 완료 후 코디네이터가 다운되면 모든 샤드는 PREPARED 락을 잡은 채 무한 대기한다. 코디네이터 복구 전까지 해당 데이터는 완전히 잠긴다.
+
+둘째, **성능**: 2번의 네트워크 왕복 + 각 샤드에서 redo log fsync = 단일 트랜잭션의 3~5배 레이턴시.
+
+셋째, **CAP 이론**: 분산 시스템에서 파티션 허용(P)은 필수이므로, C(일관성)와 A(가용성) 중 선택해야 한다. 2PC는 C를 선택하여 A를 희생한다. 하나의 샤드가 응답 없으면 전체 트랜잭션 실패.
+
+Saga는 각 단계를 로컬 트랜잭션으로 처리하므로 블로킹이 없다. 실패 시 보상 트랜잭션으로 이전 단계를 되돌린다. 최종 일관성을 수용하는 대신 가용성을 확보한다. 대부분의 비즈니스 로직(주문, 결제, 배송)은 최종 일관성으로도 충분하다.
+
+### Q5. 재샤딩(Resharding) 시 무중단으로 진행하는 방법을 단계별로 설명하라.
+
+**A.** 4 샤드 → 8 샤드 확장을 무중단으로 진행하는 Double-Write 전략:
+
+**Phase 1 — 새 샤드 준비 (다운타임 없음)**
+mysqldump 또는 XtraBackup으로 기존 샤드의 스냅샷을 새 샤드로 복사. MySQL 바이너리 로그를 CDC로 실시간 추적하여 복사 중 발생한 변경사항을 새 샤드에 적용.
+
+**Phase 2 — Double-Write 활성화 (다운타임 없음)**
+새 샤드가 기존 샤드와 완전히 동기화되면, 모든 쓰기를 기존 샤드와 새 샤드 양쪽에 동시 실행. 애플리케이션은 여전히 기존 샤드에서 읽기.
+
+**Phase 3 — 점진적 읽기 전환 (다운타임 없음)**
+새 샤드의 읽기 비중을 10% → 30% → 70% → 100%로 서서히 증가. 각 단계에서 에러율, 레이턴시를 모니터링. 문제 발생 시 즉시 롤백(기존 샤드로 100% 복원).
+
+**Phase 4 — 정리 (다운타임 없음)**
+새 샤드 읽기 100% 확인 후 Double-Write 비활성화. 기존 샤드에서 이전된 범위의 데이터 삭제. Consistent Hashing이라면 새 노드의 VNode만 링에 추가하면 전체의 1/N만 이동하여 과정이 훨씬 단순해진다.
+
+Shadow Traffic을 활용하면 Phase 3 이전에 새 샤드의 응답 정확성을 미리 검증할 수 있다.
 
 ---
 
-## 왜 샤딩인가? (vs 파티셔닝 vs 읽기 레플리카)
+## 14. 정리
 
-| 방식 | 해결하는 문제 | 한계 |
-|------|---------------|------|
-| **읽기 레플리카** | 읽기 부하 분산 | 쓰기는 마스터 단일 병목 |
-| **파티셔닝** | 단일 서버 내 대용량 테이블 관리 | 서버 자체 한계(CPU/RAM/디스크) 초과 불가 |
-| **샤딩** | 쓰기 포함 수평 확장, 서버 한계 돌파 | 운영 복잡도, 크로스 샤드 트랜잭션, 재샤딩 비용 |
+샤딩은 **단일 서버의 물리적 한계**를 넘기 위한 수평 확장 기법이다. 쿼리 최적화 → 캐싱 → 읽기 레플리카 → 파티셔닝 → 수직 확장을 모두 소진한 후에야 선택해야 한다. 도입하는 순간 운영 복잡도가 극적으로 증가하기 때문이다.
 
-**실무 판단**: 샤딩은 마지막 수단이다. 읽기 레플리카 → 파티셔닝 → 캐싱 → 수직 확장을 모두 소진한 후 적용한다. 샤딩을 도입하는 순간 운영 복잡도가 3배 이상 증가한다.
+샤딩을 결정했다면 네 가지를 반드시 올바르게 해야 한다.
 
----
+1. **샤드 키**: 카디널리티 높고, 쿼리 패턴과 일치하고, 불변이며, 조인 지역성을 확보하는 컬럼. 잘못된 선택은 전체 재샤딩을 부른다.
 
-## 면접 포인트
+2. **노드 관리**: Consistent Hashing + Virtual Node로 리밸런싱 비용을 최소화한다.
 
-**Q1. 샤드 키 선택 기준은?**
-① 카디널리티가 높아야 균등 분산 가능 ② 쿼리 패턴과 일치해야 크로스 샤드 쿼리 최소화 ③ 변경되지 않는 값이어야 함(변경 시 데이터 이동 필요) ④ 핫스팟이 없어야 함(타임스탬프는 최신 샤드에만 쓰기 집중). `user_id` 해시가 가장 흔한 선택이다.
+3. **분산 ID**: Snowflake(DB 없이 초당 400만 이상, 시간 정렬 가능) 또는 UUID v7(시간 정렬, 인덱스 단편화 낮음)으로 전역 유니크 ID를 보장한다.
 
-**Q2. Consistent Hashing이란?**
-노드를 해시 링에 배치하고 키를 링에서 시계방향으로 가장 가까운 노드에 할당한다. 노드 추가/제거 시 전체 재배분이 아니라 인접 노드의 데이터만 이동한다. 가상 노드(Virtual Node)로 균등 분산을 보완한다. Cassandra, DynamoDB, Redis Cluster가 이 방식을 사용한다.
+4. **트랜잭션**: 크로스 샤드 트랜잭션은 Saga 패턴 + 멱등성 보장으로 가용성을 희생하지 않으면서 최종 일관성을 달성한다.
 
-**Q3. 크로스 샤드 트랜잭션을 어떻게 처리하는가?**
-2PC(Two-Phase Commit)는 이론적으로 가능하지만 코디네이터 장애 시 블로킹, 성능 저하로 실무에서 잘 쓰지 않는다. Saga 패턴으로 각 샤드의 로컬 트랜잭션을 순차 실행하고 실패 시 보상 트랜잭션으로 롤백한다. 최종 일관성을 허용하는 설계가 선행되어야 한다.
-
-**Q4. 재샤딩(Resharding)은 어떻게 하는가?**
-① 새 샤드 추가 후 데이터 범위 이전 ② Consistent Hashing으로 최소 데이터만 이동 ③ 더블 쓰기(신구 샤드 동시 쓰기) → 검증 → 구 샤드 제거 순서로 진행한다. Vitess(MySQL 샤딩 미들웨어)나 Citus(PostgreSQL 분산 확장)가 이 과정을 자동화해준다.
-
-**Q5. 샤딩 없이 대용량을 처리하는 대안은?**
-① NewSQL(CockroachDB, Google Spanner): 분산 ACID를 DB가 내부적으로 처리 ② Aurora Limitless: AWS 관리형 수평 확장 PostgreSQL ③ Citus: PostgreSQL 위에서 샤딩 추상화 ④ 읽기 전용 OLAP는 BigQuery/Redshift로 분리. 직접 샤딩 코드 작성보다 관리형 솔루션이 운영 부담을 크게 줄인다.
+ShardingSphere는 SQL 파싱 → 라우팅 → SQL 재작성 → 실행 → 결과 머지 파이프라인으로 이 복잡성을 상당 부분 추상화해준다. 하지만 내부 동작을 이해하지 못한 채 ShardingSphere에만 의존하면, 문제가 발생했을 때 디버깅이 불가능해진다. 원리를 이해하고 도구를 사용하는 것이 핵심이다.
