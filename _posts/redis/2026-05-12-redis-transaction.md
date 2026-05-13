@@ -1,5 +1,5 @@
 ---
-title: "Redis 트랜잭션 완전 정복 — MULTI/EXEC, Pipeline, WATCH의 동작원리와 함정"
+title: "Redis 트랜잭션 완전 정복 — MULTI/EXEC 내부 구조, WATCH CAS 원리, Lua 비교까지"
 categories:
 - REDIS
 toc: true
@@ -7,840 +7,1463 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-> **한 줄 요약**: Redis 트랜잭션(MULTI/EXEC)은 RDBMS처럼 롤백이 없고, 중간 명령 실패를 무시하고 계속 실행되므로, 원자성이 필요한 실무에서는 WATCH를 이용한 낙관적 락 또는 Lua 스크립트가 훨씬 안전하다.
+> **한 줄 요약**: Redis 트랜잭션(MULTI/EXEC)은 클라이언트 출력 버퍼에 명령을 큐잉하고 EXEC 시 원자적으로 실행하지만 롤백이 없다. 진짜 안전한 동시성 제어는 WATCH(CAS)와 Lua Script를 목적에 맞게 조합하는 것이다.
 
-## 실제 문제: Redis 트랜잭션을 RDBMS처럼 쓰다가 생긴 사고
+## 실제 장애: Redis 트랜잭션을 RDBMS처럼 믿었던 날
 
-2022년 국내 E 이커머스에서 선착순 쿠폰 발급 시스템을 Redis MULTI/EXEC로 구현했습니다. 쿠폰 수량을 DECR하고 사용자에게 쿠폰을 SADD하는 두 작업을 MULTI/EXEC로 묶었습니다. 팀은 "같은 트랜잭션이니까 하나가 실패하면 롤백될 것"이라고 믿었습니다.
+2022년 국내 E 이커머스에서 선착순 쿠폰 발급 시스템을 Redis MULTI/EXEC로 구현했습니다. 쿠폰 수량을 DECR하고 사용자에게 쿠폰을 SADD하는 두 작업을 한 트랜잭션으로 묶었습니다. 팀은 "같은 트랜잭션이니 하나가 실패하면 전체 롤백"이라고 믿었습니다.
 
-현실은 달랐습니다. DECR은 성공했고 SADD는 타입 오류로 실패했습니다. Redis는 실패한 SADD를 무시하고 EXEC를 완료했습니다. 결과: 쿠폰 수량은 100개 줄었지만 사용자에게는 발급되지 않았습니다. 100명이 쿠폰 화면에서 "발급 완료" 메시지를 보았지만 실제 쿠폰은 없었습니다. CS 폭발, 수동 복구에 3일이 걸렸습니다.
+현실은 달랐습니다. DECR은 성공했고 SADD는 타입 오류로 실패했습니다. Redis는 SADD 실패를 무시하고 EXEC를 완료했습니다. 결과: 쿠폰 수량은 100개 줄었지만 사용자에게는 발급되지 않았습니다. CS 폭발, 수동 복구에 3일.
 
-**Redis 트랜잭션은 RDBMS 트랜잭션이 아닙니다.** 이 차이를 이해하는 것이 이 포스트의 핵심입니다.
-
-Redis 트랜잭션이 해결해야 할 핵심 문제:
-- **부분 실패 처리**: MULTI/EXEC 중 일부 명령 실패 시 어떻게 되는가
-- **동시성 제어**: 여러 클라이언트가 같은 키를 동시에 수정하면 어떻게 되는가
-- **원자성 보장 수준**: 진짜 원자적 연산이 필요하면 어떻게 하는가
-- **클러스터 제약**: 트랜잭션이 여러 노드에 걸친 키에는 어떻게 동작하는가
+이 포스트는 그 "왜"를 Redis 내부 메커니즘 수준에서 완전히 설명합니다.
 
 ---
 
-## 설계 의사결정 로드맵
+## 1. MULTI/EXEC 내부 구조 — 명령 큐잉의 실제 메커니즘
 
-Redis에서 "여러 명령을 안전하게 묶어 실행"하는 방법 선택 시 순서대로 답해야 할 핵심 결정 4가지입니다.
+### 클라이언트 출력 버퍼와 트랜잭션 큐
 
-### 결정 1: 배치 전송 vs 원자적 실행 — Pipeline vs MULTI/EXEC
-
-**문제**: 10개의 Redis 명령을 실행할 때, 10번의 네트워크 왕복을 줄이고 싶은가? 아니면 10개가 중간에 끊기지 않고 실행되길 보장하고 싶은가?
-
-| 후보 | 목적 | 원자성 | 롤백 | 언제 적합 |
-|------|------|------|------|----------|
-| Pipeline | 네트워크 왕복 최소화 (성능) | **없음** | 없음 | 독립 명령들을 묶어 빠르게 전송 |
-| MULTI/EXEC | 명령 큐잉 후 일괄 실행 | **부분적** (명령 간 끼어들기 방지) | **없음** | 중간에 다른 클라이언트가 끼어드는 것 방지 |
-| Lua Script | 서버 측 원자적 실행 | **완전** (실행 중 다른 명령 차단) | **없음** | 읽기-수정-쓰기 패턴, 조건부 원자 실행 |
-
-**우리의 선택: 목적에 따라 분리**
-- 성능만 필요하면 Pipeline
-- 다른 클라이언트 끼어들기 방지가 필요하면 MULTI/EXEC + WATCH
-- 진짜 원자적 실행이 필요하면 Lua Script
-- 안 하면: Pipeline을 원자성 있다고 착각하거나, MULTI/EXEC가 롤백된다고 착각합니다.
-
-### 결정 2: 동시성 제어 — 낙관적 락 vs 비관적 락
-
-**문제**: 재고 10개를 동시에 100명이 감소 요청할 때, 어떻게 -10 이하로 내려가는 것을 막는가?
-
-| 후보 | 동작 방식 | 충돌 시 | 언제 적합 |
-|------|---------|--------|----------|
-| WATCH (낙관적 락) | 감시 후 변경 감지 시 EXEC 취소 | 재시도 필요 | 충돌이 드문 경우 |
-| SETNX 분산 락 (비관적 락) | 락 획득 후 독점 실행 | 대기 또는 실패 | 충돌이 잦은 경우 |
-| Lua Script (원자적) | 조건 체크 + 변경을 원자적 실행 | 조건 미충족 시 즉시 실패 | 단순 조건부 연산 |
-
-**우리의 선택: Lua Script (재고 차감처럼 단순한 경우)**
-- 이유: `IF stock > 0 THEN DECR stock END`를 Lua로 원자적으로 실행합니다. WATCH 재시도 복잡도도 없고, 분산 락 관리도 없습니다.
-- 안 하면: WATCH로 낙관적 락을 구현하면 충돌 빈도가 높을 때 무한 재시도가 발생합니다.
-
-### 결정 3: 롤백 필요 여부 — Redis vs RDBMS 선택
-
-**문제**: 쿠폰 발급처럼 "A가 성공하면 B도 반드시 성공해야 하고, B가 실패하면 A도 취소되어야 한다"는 요구사항에 Redis 트랜잭션을 쓸 수 있는가?
-
-| 후보 | 롤백 지원 | 적합 여부 |
-|------|---------|---------|
-| Redis MULTI/EXEC | **없음** | 부적합 |
-| Redis Lua Script | **없음** | 부적합 |
-| RDBMS 트랜잭션 | **있음** | 적합 |
-| Redis + 보상 트랜잭션 | 수동 구현 | 복잡하지만 가능 |
-
-**우리의 선택: 롤백이 필요하면 RDBMS 사용**
-- 이유: Redis는 롤백을 지원하지 않습니다. 철학적으로도 Redis는 "빠른 캐시/세마포어/카운터"를 위한 도구이며, 복잡한 일관성 보장은 RDBMS의 역할입니다.
-- 안 하면: MULTI/EXEC로 롤백을 기대하면 위 사고 사례처럼 데이터 불일치가 발생합니다.
-
-### 결정 4: 클러스터 환경 — 단일 슬롯 제약
-
-**문제**: Redis Cluster에서 MULTI/EXEC로 여러 키를 트랜잭션으로 묶을 수 있는가?
-
-| 상황 | 가능 여부 | 이유 |
-|------|---------|------|
-| 같은 슬롯의 키들 | 가능 | 동일 노드에 있음 |
-| 다른 슬롯의 키들 | **불가 (CROSSSLOT 오류)** | 다른 노드에 분산 |
-| Hash Tag로 강제 동일 슬롯 | 가능 | `{user:123}:stock` 형태 |
-
-**우리의 선택: Hash Tag로 관련 키를 동일 슬롯에 배치**
-- 이유: `{order:456}:stock`, `{order:456}:coupon`처럼 Hash Tag를 사용하면 같은 슬롯에 배치됩니다. 같은 슬롯이면 MULTI/EXEC와 Lua Script 모두 동작합니다.
-- 안 하면: 클러스터에서 `MULTI; SET key1; SET key2; EXEC` 실행 시 key1과 key2가 다른 슬롯이면 CROSSSLOT 오류가 발생합니다.
-
----
-
-## 1. 요구사항 분석 및 규모 추정
-
-### 기능 요구사항
-
-1️⃣ **원자적 카운터**: 재고 차감, 쿠폰 발급 수량 관리 — 동시 요청 시 정확한 차감
-2️⃣ **조건부 업데이트**: 잔액이 충분할 때만 차감, 재고가 있을 때만 예약
-3️⃣ **배치 명령 전송**: 여러 키를 한 번의 네트워크로 설정/조회
-4️⃣ **충돌 감지**: 다른 클라이언트가 같은 키를 수정했는지 감지
-
-### 비기능 요구사항
-
-- **원자성**: 재고 체크 → 차감이 원자적으로 실행되어야 함
-- **성능**: 배치 명령은 Pipeline으로 네트워크 왕복 최소화
-- **클러스터 호환**: Redis Cluster에서도 동작해야 함
-
-### 규모 추정
+MULTI를 선언하면 Redis 서버는 해당 클라이언트 연결에 `CLIENT_MULTI` 플래그를 설정합니다. 이후 들어오는 명령은 **즉시 실행되지 않고 해당 클라이언트의 트랜잭션 큐(multiState.commands[])에 적재**됩니다.
 
 ```
-선착순 이벤트 동시 요청: 10,000 QPS
-재고 차감 원자적 처리: Lua Script 1개로 처리
-충돌 확률 (WATCH 기준): 10,000 QPS × 공유 키 = 매우 높음
-→ WATCH보다 Lua Script가 필수
-
-Pipeline 효과:
-  단건 10개 명령: 10 × 1ms = 10ms
-  Pipeline 10개: 1ms (네트워크 1회)
-  10배 성능 개선
+클라이언트 상태 (redisClient 구조체)
+├── flags: CLIENT_MULTI 설정
+├── mstate.count: 큐에 적재된 명령 수
+└── mstate.commands[]: 명령 배열
+    ├── [0]: {cmd: SET, argv: ["stock:A", "100"]}
+    ├── [1]: {cmd: DECR, argv: ["stock:A"]}
+    └── [2]: {cmd: SADD, argv: ["issued:A", "user1"]}
 ```
 
----
-
-## 2. 고수준 아키텍처
-
-> **비유:** Redis 트랜잭션을 이해하려면 레스토랑 주방을 떠올리세요. Pipeline은 "주문서를 한 번에 몰아서 주방에 전달"하는 것입니다. MULTI/EXEC는 "이 메뉴들은 순서대로 묶어서 요리하되, 중간에 다른 주문이 끼어들지 못하게" 하는 것입니다. Lua Script는 "주방장이 레시피를 보고 혼자 처음부터 끝까지 완성"하는 것입니다.
+EXEC를 받으면 Redis는 이 배열을 순회하며 각 명령을 실행합니다. 핵심은 이 실행이 **Redis 이벤트 루프의 단일 사이클 안에서 완료**된다는 것입니다. 단일 스레드 Redis에서 이벤트 루프가 다음 클라이언트 요청을 처리하기 전에 큐 전체가 실행되므로, 다른 클라이언트 명령이 끼어들 수 없습니다.
 
 ```mermaid
 graph LR
-    A[클라이언트] --> B{실행방식}
-    B --> C[Pipeline]
-    B --> D[MULTI/EXEC]
-    B --> E[Lua Script]
-    C --> F[Redis]
-    D --> F
-    E --> F
+    A[MULTI 수신] --> B[CLIENT_MULTI 플래그]
+    B --> C[명령을 큐에 적재]
+    C --> D[QUEUED 반환]
+    D --> E[EXEC 수신]
+    E --> F[큐 순차 실행]
+    F --> G[결과 배열 반환]
 ```
 
-### 핵심 개념 비교
+### QUEUED 응답의 의미
 
-**Pipeline**: 여러 명령을 버퍼에 모아 한 번에 서버로 전송합니다. 서버는 순서대로 실행하고 결과를 모아 반환합니다. 원자성이 없습니다. 중간에 다른 클라이언트 명령이 끼어들 수 있습니다.
-
-**MULTI/EXEC**: `MULTI` 선언 후 명령들을 큐에 적재하고, `EXEC` 호출 시 한 번에 실행합니다. 실행 중 다른 클라이언트 명령이 끼어들지 않습니다. 단, 개별 명령 실패 시 **롤백 없이 계속 실행**됩니다.
-
-**Lua Script**: 서버에서 Lua 코드를 실행합니다. 실행 중 다른 Redis 명령이 완전히 차단됩니다. 가장 강한 원자성을 제공합니다. 단, 마찬가지로 롤백 없습니다.
-
----
-
-## 3. MULTI/EXEC — 동작원리와 함정
-
-> **비유:** MULTI/EXEC는 "장보기 목록 작성 후 한 번에 구매"와 같습니다. MULTI를 선언하면 장보기 목록(큐)이 열립니다. 이후 명령들은 즉시 실행되지 않고 목록에 추가됩니다. EXEC를 호출하면 목록의 모든 항목을 한 번에 처리합니다. 목록 작성 중에는 다른 손님이 같은 상품을 가져가도 알 수 없습니다.
-
-### 동작 원리
-
-```
-1. MULTI       → 큐 모드 시작
-2. SET k1 v1   → 큐에 적재 (QUEUED 반환, 실행 안 됨)
-3. INCR k2     → 큐에 적재
-4. SET k3 v3   → 큐에 적재
-5. EXEC        → 큐의 명령 순서대로 원자적 실행
-```
-
-```mermaid
-sequenceDiagram
-    participant C as 클라이언트
-    participant R as Redis
-    C->>R: MULTI
-    R-->>C: OK
-    C->>R: SET stock 100
-    R-->>C: QUEUED
-    C->>R: DECR stock
-    R-->>C: QUEUED
-    C->>R: EXEC
-    R-->>C: [OK, 99]
-```
-
-### MULTI/EXEC의 핵심 함정: 롤백이 없다
-
-Redis 트랜잭션에는 두 가지 오류가 있습니다. 처리 방식이 완전히 다릅니다.
-
-**오류 유형 1 — 큐잉 시 문법 오류**: EXEC 실행 전에 이미 감지됩니다. 이 경우 EXEC 시 전체가 실행되지 않습니다.
-
-```
-MULTI
-SET key1 val1    → QUEUED
-NOTACOMMAND      → ERROR (문법 오류 감지)
-SET key2 val2    → QUEUED
-EXEC             → (nil) — 전체 취소
-```
-
-**오류 유형 2 — 실행 시 타입 오류**: EXEC 실행 중 발생합니다. **실패한 명령만 오류, 나머지는 정상 실행됩니다. 롤백 없음.**
-
-```python
-import redis
-r = redis.Redis()
-
-# 의도적 오류 시나리오
-r.set("mystr", "hello")  # 문자열 설정
-
-r.multi_exec = r.pipeline(transaction=True)
-pipe = r.pipeline(transaction=True)
-pipe.set("key1", "value1")      # 정상
-pipe.incr("mystr")               # 오류! 문자열에 INCR 불가
-pipe.set("key2", "value2")      # 정상
-results = pipe.execute(raise_on_error=False)
-
-# results: ['OK', ResponseError('...not an integer'), 'OK']
-# key1, key2는 저장됨. mystr INCR만 실패.
-# RDBMS처럼 롤백되지 않음!
-print(r.get("key1"))  # b'value1' — 저장됨
-print(r.get("key2"))  # b'value2' — 저장됨
-```
-
-이것이 Redis가 "RDBMS 트랜잭션과 다르다"는 핵심입니다. Redis 철학은 "개발자가 타입 오류를 만들지 않는 것이 올바른 프로그래밍이며, 이는 프로덕션에서 발생해선 안 되는 프로그래밍 오류다"입니다. 따라서 타입 오류에 대한 롤백을 지원하지 않습니다.
-
-### DISCARD — 트랜잭션 취소
-
-EXEC 대신 DISCARD를 호출하면 큐를 비우고 트랜잭션을 취소합니다.
-
-```python
-pipe = r.pipeline(transaction=True)
-pipe.set("key1", "value1")
-pipe.set("key2", "value2")
-# 조건 확인 후 취소 결정
-pipe.reset()  # DISCARD와 동일
-```
-
----
-
-## 4. WATCH — 낙관적 락으로 경쟁 조건 방지
-
-> **비유:** 두 사람이 같은 Google 문서를 동시에 편집할 때 "마지막으로 저장한 사람이 이기는" 문제가 있습니다. WATCH는 이를 해결하는 낙관적 락입니다. "내가 읽은 후 변경되면 내 작업을 취소해줘"라고 Redis에게 요청합니다. 충돌이 감지되면 처음부터 다시 시도합니다.
-
-### WATCH 동작 원리
-
-WATCH로 키를 감시하고, MULTI/EXEC 사이에 그 키가 다른 클라이언트에 의해 변경되면 EXEC가 nil을 반환하고 트랜잭션이 취소됩니다.
-
-```mermaid
-sequenceDiagram
-    participant C1 as 클라이언트1
-    participant C2 as 클라이언트2
-    participant R as Redis
-    C1->>R: WATCH stock
-    C1->>R: GET stock (100)
-    C2->>R: DECR stock (→99)
-    C1->>R: MULTI
-    C1->>R: DECR stock
-    C1->>R: EXEC
-    R-->>C1: nil (WATCH 감지 — C2가 변경함)
-    C1->>R: 재시도...
-```
-
-### CAS (Check-And-Set) 패턴 구현
-
-```python
-import redis
-import time
-
-r = redis.Redis()
-
-def decrement_stock_with_watch(product_id: str, quantity: int) -> bool:
-    stock_key = f"stock:{product_id}"
-    max_retries = 5
-
-    for attempt in range(max_retries):
-        try:
-            # 1. WATCH 설정 (이 키가 변경되면 EXEC 취소)
-            with r.pipeline() as pipe:
-                pipe.watch(stock_key)
-
-                # 2. 현재 재고 조회 (WATCH 감시 중)
-                current_stock = int(pipe.get(stock_key) or 0)
-
-                if current_stock < quantity:
-                    pipe.unwatch()
-                    return False  # 재고 부족
-
-                # 3. MULTI 시작 (큐 모드)
-                pipe.multi()
-                pipe.decrby(stock_key, quantity)
-
-                # 4. EXEC (WATCH 이후 변경 없으면 성공, 있으면 None 반환)
-                pipe.execute()
-                return True  # 성공
-
-        except redis.WatchError:
-            # 다른 클라이언트가 stock_key를 변경 → 재시도
-            if attempt == max_retries - 1:
-                raise Exception("재고 차감 재시도 한도 초과")
-            time.sleep(0.01 * (2 ** attempt))  # 지수 백오프
-            continue
-
-    return False
-```
-
-### WATCH의 한계 — 충돌 빈도가 높을 때
-
-WATCH는 낙관적 락입니다. 충돌이 드물 때 효율적입니다. 선착순 이벤트처럼 동시에 수천 명이 같은 키를 수정하면, 대부분의 요청이 WATCH 충돌로 재시도를 반복합니다. 최악의 경우 활성 대기(busy-waiting)로 성능이 오히려 나빠집니다.
-
-충돌 빈도가 높은 경우에는 WATCH 대신 Lua Script를 사용합니다.
-
----
-
-## 5. Pipeline vs MULTI/EXEC — 혼동하기 쉬운 차이
-
-> **비유:** Pipeline은 "편지 10통을 묶어서 한 번에 우체통에 넣는 것"입니다. 빠르게 전달되지만, 각 편지는 도착 후 개별 처리됩니다. 중간에 다른 편지가 끼어들 수 있습니다. MULTI/EXEC는 "10통을 묶어서 우체부가 도착 시 순서대로 10통을 연속으로 처리하고, 그 동안 다른 편지는 잠시 기다리게 하는 것"입니다.
-
-### 핵심 차이
-
-| 항목 | Pipeline | MULTI/EXEC |
-|------|---------|-----------|
-| 목적 | 네트워크 왕복 감소 (성능) | 명령 간 끼어들기 방지 |
-| 원자성 | **없음** (명령 간 다른 클라이언트 끼어들기 가능) | **부분적** (실행 중 끼어들기 방지) |
-| 롤백 | 없음 | 없음 |
-| 에러 처리 | 각 명령 독립적 오류 | 개별 명령 오류 무시, 나머지 실행 |
-| 응답 수신 | 모든 명령 완료 후 한 번에 | EXEC 후 한 번에 |
-
-### Pipeline 코드
-
-```python
-# Pipeline — 성능 최적화용
-pipe = r.pipeline(transaction=False)  # 주의: transaction=False가 순수 Pipeline
-pipe.set("key1", "val1")
-pipe.set("key2", "val2")
-pipe.set("key3", "val3")
-results = pipe.execute()
-# 3개 명령이 1번의 네트워크 왕복으로 전송
-# 실행 중 다른 클라이언트 명령이 끼어들 수 있음
-
-# MULTI/EXEC — 원자적 실행용
-pipe = r.pipeline(transaction=True)  # transaction=True = MULTI/EXEC
-pipe.set("key1", "val1")
-pipe.set("key2", "val2")
-pipe.set("key3", "val3")
-results = pipe.execute()
-# MULTI → QUEUED × 3 → EXEC
-# 실행 중 다른 클라이언트 명령이 끼어들 수 없음
-```
-
-### 언제 Pipeline, 언제 MULTI/EXEC?
-
-**Pipeline만으로 충분한 경우**: 독립적인 키들을 일괄 설정/조회할 때입니다. 예를 들어 사용자 프로필 여러 항목을 한 번에 캐시에 저장합니다. 명령 간에 의존성이 없고, 다른 클라이언트가 끼어들어도 무방합니다.
-
-**MULTI/EXEC가 필요한 경우**: 여러 키의 값을 하나의 논리적 단위로 변경하고, 변경 도중 다른 클라이언트가 그 키들을 보면 안 되는 경우입니다. 예를 들어 사용자 A에서 사용자 B로 포인트를 이전할 때, 중간 상태(A에서만 차감됐고 B에는 아직 추가 안 된 상태)를 다른 클라이언트가 보면 안 됩니다.
-
-실무에서 단순 성능 최적화에는 Pipeline, 중간 상태 방지가 필요하면 MULTI/EXEC + WATCH, 조건부 원자 실행에는 Lua Script를 사용합니다.
-
----
-
-## 6. Lua Script — 진짜 원자성 보장
-
-> **비유:** MULTI/EXEC가 "여러 셰프가 각자 요리하되 다른 주문이 끼어들지 못하게 막는 것"이라면, Lua Script는 "주방장 한 명이 레시피 전체를 혼자 처음부터 끝까지 만드는 것"입니다. 레시피 실행 중에는 다른 요리가 일절 진행되지 않습니다.
-
-### Lua Script가 제공하는 원자성
-
-Lua Script 실행 중에는 Redis가 다른 클라이언트의 명령을 받지 않습니다. Redis는 단일 스레드이기 때문에 Lua 실행이 끝날 때까지 다른 명령은 큐에서 대기합니다. 이것이 MULTI/EXEC보다 강한 원자성입니다.
-
-- **MULTI/EXEC**: 큐잉된 명령들을 연속 실행. 실행 사이에 다른 명령이 끼어들지 못함. 단, 각 명령은 서버에서 개별 실행됨.
-- **Lua Script**: 전체 스크립트가 하나의 Redis 명령처럼 실행됨. 중간에 어떤 명령도 끼어들지 못함.
-
-### 재고 차감 Lua Script
-
-```python
-import redis
-
-r = redis.Redis()
-
-# Lua Script 정의
-DECREMENT_STOCK_SCRIPT = """
-local stock_key = KEYS[1]
-local quantity = tonumber(ARGV[1])
-
--- 현재 재고 조회
-local current = tonumber(redis.call('GET', stock_key))
-
-if current == nil then
-    return {err = 'stock_key_not_found'}
-end
-
-if current < quantity then
-    return {err = 'insufficient_stock'}
-end
-
--- 원자적으로 재고 차감
-local new_stock = redis.call('DECRBY', stock_key, quantity)
-return new_stock
-"""
-
-# 스크립트 사전 등록 (SHA 캐싱)
-script = r.register_script(DECREMENT_STOCK_SCRIPT)
-
-def decrement_stock_lua(product_id: str, quantity: int) -> int:
-    try:
-        result = script(
-            keys=[f"stock:{product_id}"],
-            args=[quantity]
-        )
-        return result  # 남은 재고 반환
-    except redis.ResponseError as e:
-        if "insufficient_stock" in str(e):
-            raise ValueError("재고 부족")
-        if "stock_key_not_found" in str(e):
-            raise ValueError("재고 키 없음")
-        raise
-```
-
-### 쿠폰 발급 Lua Script — 수량 차감 + 사용자 기록 원자적 처리
-
-```lua
--- KEYS[1]: 쿠폰 수량 키
--- KEYS[2]: 발급된 사용자 집합 키
--- ARGV[1]: 사용자 ID
--- ARGV[2]: 발급 가능 최대 수량
-
-local coupon_count_key = KEYS[1]
-local issued_users_key = KEYS[2]
-local user_id = ARGV[1]
-local max_count = tonumber(ARGV[2])
-
--- 1. 이미 발급받았는지 확인
-local already_issued = redis.call('SISMEMBER', issued_users_key, user_id)
-if already_issued == 1 then
-    return {err = 'already_issued'}
-end
-
--- 2. 남은 수량 확인
-local remaining = tonumber(redis.call('GET', coupon_count_key))
-if remaining == nil or remaining <= 0 then
-    return {err = 'coupon_exhausted'}
-end
-
--- 3. 수량 차감 + 사용자 기록 (원자적)
-redis.call('DECR', coupon_count_key)
-redis.call('SADD', issued_users_key, user_id)
-
-return remaining - 1  -- 남은 쿠폰 수
-```
-
-```python
-COUPON_ISSUE_SCRIPT = """...(위 Lua 코드)..."""
-
-coupon_script = r.register_script(COUPON_ISSUE_SCRIPT)
-
-def issue_coupon(coupon_id: str, user_id: str, max_count: int) -> int:
-    try:
-        remaining = coupon_script(
-            keys=[f"coupon:count:{coupon_id}",
-                  f"coupon:issued:{coupon_id}"],
-            args=[user_id, max_count]
-        )
-        return remaining
-    except redis.ResponseError as e:
-        if "already_issued" in str(e):
-            raise ValueError("이미 발급받은 쿠폰입니다")
-        if "coupon_exhausted" in str(e):
-            raise ValueError("쿠폰이 모두 소진됐습니다")
-        raise
-```
-
-### MULTI/EXEC vs Lua Script 비교
-
-| 항목 | MULTI/EXEC | Lua Script |
-|------|-----------|-----------|
-| 원자성 수준 | 중간 (실행 중 끼어들기 방지) | 강함 (전체 서버 블록) |
-| 조건부 로직 | **불가** (큐잉 시점에 결과 모름) | **가능** (if/else 지원) |
-| 롤백 | 없음 | 없음 |
-| 읽기 후 조건 분기 | WATCH 조합 필요 | 스크립트 내 처리 가능 |
-| 성능 | 양호 | 스크립트 길면 서버 블록 주의 |
-| 디버깅 | 쉬움 | 어려움 (서버에서 실행) |
-| 클러스터 | 동일 슬롯 키만 가능 | 동일 슬롯 키만 가능 |
-
-**Lua Script 주의사항**: 실행 시간이 긴 Lua Script는 Redis 전체를 블록합니다. 스크립트 안에서 루프로 대량 데이터를 처리하거나, 외부 호출을 하거나, sleep을 쓰면 안 됩니다. Lua Script는 수 밀리초 이내에 완료되도록 짧게 유지합니다.
-
----
-
-## 7. Redis는 롤백이 없다 — RDBMS와의 근본적 차이
-
-> **비유:** RDBMS 트랜잭션은 "연필로 쓴 장부"입니다. 실수하면 지우개로 지울 수 있습니다. Redis 트랜잭션은 "볼펜으로 쓴 장부"입니다. 잘못 쓰면 줄을 긋고 다시 써야 합니다. 지우는 게 아니라 수정 항목을 추가합니다.
-
-### 롤백이 없는 철학적 이유
-
-Redis 공식 문서에 명시된 이유입니다.
-
-1. **Redis 오류는 프로그래밍 오류다**: 타입 불일치, 잘못된 명령 수 등은 개발자의 실수입니다. 프로덕션에서는 발생해서는 안 됩니다. 따라서 롤백을 지원해야 할 이유가 없다고 봅니다.
-
-2. **단순성과 성능**: 롤백 지원은 복잡도와 비용을 크게 높입니다. Redis는 단순함과 성능을 최우선으로 합니다.
-
-3. **롤백이 버그를 숨긴다**: RDBMS에서 롤백은 프로그래밍 오류를 은폐합니다. Redis는 오류가 명시적으로 드러나도록 합니다.
-
-### RDBMS vs Redis 트랜잭션 비교
-
-| 항목 | RDBMS (PostgreSQL) | Redis MULTI/EXEC |
-|------|------------------|----------------|
-| 원자성 (Atomicity) | 완전 (모두 성공 또는 모두 실패) | **부분적** (오류 명령 건너뜀) |
-| 일관성 (Consistency) | 제약조건 위반 시 전체 롤백 | **없음** |
-| 격리성 (Isolation) | READ COMMITTED 등 레벨 지원 | **직렬화** (실행 중 다른 명령 차단) |
-| 지속성 (Durability) | WAL로 보장 | AOF 설정에 따라 다름 |
-| 롤백 | **지원** | **미지원** |
-| 중첩 트랜잭션 | 지원 (SAVEPOINT) | **미지원** |
-
-### 롤백이 필요한 경우 어떻게 하는가
-
-Redis만으로 롤백이 필요한 작업을 처리해야 한다면, **보상 트랜잭션**을 수동으로 구현합니다.
-
-```python
-def transfer_points(from_user: str, to_user: str, points: int):
-    # Step 1: from_user 차감
-    pipe = r.pipeline(transaction=True)
-    pipe.watch(f"points:{from_user}")
-    current = int(r.get(f"points:{from_user}") or 0)
-
-    if current < points:
-        pipe.unwatch()
-        raise ValueError("포인트 부족")
-
-    pipe.multi()
-    pipe.decrby(f"points:{from_user}", points)
-    try:
-        pipe.execute()
-    except redis.WatchError:
-        raise RetryException("충돌 발생, 재시도 필요")
-
-    # Step 2: to_user 추가
-    try:
-        r.incrby(f"points:{to_user}", points)
-    except Exception as e:
-        # Step 2 실패 → 보상 트랜잭션: from_user 복원
-        r.incrby(f"points:{from_user}", points)
-        raise Exception(f"이전 실패, 복원 완료: {e}")
-```
-
-하지만 이 패턴은 복잡하고 보상 트랜잭션 자체가 실패할 수 있습니다. **포인트 이전처럼 롤백이 필수인 작업은 RDBMS를 사용하는 것이 올바른 선택입니다.**
-
----
-
-## 8. Spring Data Redis에서의 사용법
+MULTI 이후 각 명령에 대해 서버가 `QUEUED`를 반환합니다. 이것은 **명령이 큐에 들어갔다는 수신 확인**이지, 실행 결과가 아닙니다. 클라이언트는 이 시점에 명령의 성공/실패를 알 수 없습니다. EXEC 호출 후에야 각 명령의 실제 결과 배열을 받습니다.
 
 ```java
+// Spring RedisTemplate으로 MULTI/EXEC 동작 확인
 @Service
-public class RedisTransactionService {
+public class TransactionInspectService {
 
-    @Autowired
-    private StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-    // MULTI/EXEC 사용
-    public void executeTransaction() {
-        redisTemplate.execute(new SessionCallback<List<Object>>() {
+    public TransactionInspectService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    public List<Object> basicMultiExec() {
+        return redisTemplate.execute(new SessionCallback<List<Object>>() {
             @Override
+            @SuppressWarnings("unchecked")
             public List<Object> execute(RedisOperations operations)
                     throws DataAccessException {
-                operations.multi();  // MULTI
 
-                operations.opsForValue().set("key1", "val1");
-                operations.opsForValue().increment("counter");
-                operations.opsForSet().add("myset", "member1");
+                operations.multi();  // CLIENT_MULTI 플래그 설정
 
-                return operations.exec();  // EXEC
+                // 아래 세 줄은 즉시 실행되지 않음 — 큐에 적재
+                // 반환값은 모두 null (아직 실행 안 됨)
+                operations.opsForValue().set("stock:A", "100");
+                operations.opsForValue().decrement("stock:A");
+                operations.opsForSet().add("issued:A", "user1");
+
+                // EXEC: 큐 전체를 원자적으로 실행
+                // 반환: ["OK", 99L, 1L] — 각 명령의 실제 결과
+                return operations.exec();
             }
         });
-    }
-
-    // WATCH + MULTI/EXEC (낙관적 락)
-    public boolean decrementWithWatch(String stockKey, int quantity) {
-        return redisTemplate.execute(new SessionCallback<Boolean>() {
-            @Override
-            public Boolean execute(RedisOperations operations)
-                    throws DataAccessException {
-                operations.watch(stockKey);  // WATCH
-
-                Integer current = (Integer) operations.opsForValue().get(stockKey);
-                if (current == null || current < quantity) {
-                    operations.unwatch();
-                    return false;
-                }
-
-                operations.multi();  // MULTI
-                operations.opsForValue().decrement(stockKey, quantity);
-
-                List<Object> results = operations.exec();  // EXEC
-                return results != null && !results.isEmpty();
-                // null이면 WATCH 충돌
-            }
-        });
-    }
-
-    // Lua Script 실행
-    private static final DefaultRedisScript<Long> DECR_SCRIPT;
-
-    static {
-        DECR_SCRIPT = new DefaultRedisScript<>();
-        DECR_SCRIPT.setScriptText(
-            "local cur = tonumber(redis.call('GET', KEYS[1])) " +
-            "if cur >= tonumber(ARGV[1]) then " +
-            "  return redis.call('DECRBY', KEYS[1], ARGV[1]) " +
-            "else return -1 end"
-        );
-        DECR_SCRIPT.setResultType(Long.class);
-    }
-
-    public long decrementStock(String productId, int quantity) {
-        Long result = redisTemplate.execute(
-            DECR_SCRIPT,
-            Collections.singletonList("stock:" + productId),
-            String.valueOf(quantity)
-        );
-        return result != null ? result : -1;
     }
 }
 ```
 
-### @Transactional과 Redis 트랜잭션
+### 왜 SessionCallback이 필요한가
 
-Spring의 `@Transactional`은 RDBMS 트랜잭션용입니다. Redis에서 `@Transactional`을 사용하려면 `redisTemplate.setEnableTransactionSupport(true)`를 설정해야 하는데, 이 경우 `@Transactional` 메서드 내의 Redis 명령이 MULTI/EXEC로 자동 래핑됩니다. 단, 이 모드에서는 읽기 명령의 결과를 즉시 사용할 수 없습니다(큐잉되므로). 실무에서는 자동 래핑보다 명시적 SessionCallback 방식이 더 예측 가능합니다.
+`RedisTemplate.execute(SessionCallback)`은 콜백 전체가 **동일한 Redis 연결(커넥션)을 공유**하도록 보장합니다. MULTI/EXEC는 클라이언트 연결 단위로 상태를 관리하기 때문에, 커넥션 풀에서 서로 다른 커넥션이 사용되면 MULTI와 EXEC가 다른 연결에 가게 됩니다. SessionCallback은 "이 블록 안에서는 하나의 커넥션만 쓴다"를 보장하는 계약입니다.
+
+일반 `redisTemplate.opsForValue().set(...)` 호출은 매번 커넥션 풀에서 커넥션을 빌렸다가 반납합니다. MULTI를 선언한 커넥션과 EXEC를 보내는 커넥션이 달라지면 서로 다른 클라이언트가 됩니다. `EXEC without MULTI` 오류가 발생합니다.
+
+```java
+// 잘못된 방법 — 커넥션이 달라질 수 있음
+redisTemplate.multi();                        // 커넥션 A
+redisTemplate.opsForValue().set("k", "v");   // 커넥션 B (다른 커넥션!)
+redisTemplate.exec();                         // 커넥션 C → ERR EXEC without MULTI
+
+// 올바른 방법 — SessionCallback으로 단일 커넥션 보장
+redisTemplate.execute(new SessionCallback<>() {
+    public Object execute(RedisOperations ops) {
+        ops.multi();
+        ops.opsForValue().set("k", "v");
+        return ops.exec();  // 동일 커넥션 보장
+    }
+});
+```
 
 ---
 
-## 9. 클러스터 환경에서의 트랜잭션 제약
+## 2. 롤백이 없는 이유 — Redis 설계 철학과 부분 실패 시맨틱
 
-> **비유:** Redis Cluster는 데이터를 16,384개의 슬롯으로 나누어 여러 노드에 분산합니다. MULTI/EXEC는 한 노드 안에서만 동작합니다. 다른 노드에 있는 키를 같은 트랜잭션으로 처리하려는 것은 "서울 지점과 부산 지점의 장부를 동시에 한 직원이 수정하는 것"처럼 불가능합니다.
+### 두 가지 오류 유형과 다른 처리 방식
 
-### CROSSSLOT 오류
+Redis MULTI/EXEC에는 성격이 완전히 다른 두 종류의 오류가 있습니다.
 
-```python
-# 클러스터에서 다른 슬롯의 키를 MULTI/EXEC로 묶으면:
-pipe = r.pipeline(transaction=True)
-pipe.set("user:123", "alice")     # 슬롯 5474
-pipe.set("product:456", "shirt")  # 슬롯 11900
-pipe.execute()
-# → ResponseError: CROSSSLOT Keys in request don't hash to the same slot
+**유형 1 — 큐잉 시 감지되는 문법 오류**
+
+명령 자체가 잘못된 경우입니다. EXEC 전에 이미 감지됩니다. 이 경우 EXEC 시 전체 트랜잭션이 실행되지 않습니다.
+
+```java
+// 문법 오류 — 전체 트랜잭션 취소
+redisTemplate.execute(new SessionCallback<List<Object>>() {
+    @Override
+    public List<Object> execute(RedisOperations operations) throws DataAccessException {
+        operations.multi();
+        operations.opsForValue().set("key1", "val1");
+        // UNKNOWNCMD는 큐잉 시점에 오류 감지
+        // → 이후 EXEC 호출 시 전체 트랜잭션 취소 (EXECABORT)
+        return operations.exec();
+    }
+});
+// 결과: key1도 저장되지 않음 — 전체 취소
+```
+
+**유형 2 — 실행 시 발생하는 타입/로직 오류**
+
+명령 문법은 올바르지만, 실행 시 대상 키의 타입이 맞지 않거나 연산이 불가한 경우입니다. **이 오류는 해당 명령만 건너뛰고 나머지는 계속 실행됩니다. 롤백 없음.**
+
+```java
+// 타입 오류 — 부분 실패, 나머지 실행 계속
+@Service
+public class PartialFailureDemo {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public PartialFailureDemo(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+        // 사전 준비: "mystr" 키를 문자열로 설정
+        redisTemplate.opsForValue().set("mystr", "hello");
+    }
+
+    public void demonstratePartialFailure() {
+        List<Object> results = redisTemplate.execute(new SessionCallback<List<Object>>() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public List<Object> execute(RedisOperations operations) throws DataAccessException {
+                operations.multi();
+
+                operations.opsForValue().set("key1", "value1");   // 정상
+                operations.opsForValue().increment("mystr");        // 오류! 문자열에 INCR 불가
+                operations.opsForValue().set("key2", "value2");   // 정상
+
+                return operations.exec();
+            }
+        });
+
+        // results: ["OK", DataAccessException(타입오류), "OK"]
+        // key1="value1" 저장됨, key2="value2" 저장됨
+        // mystr은 변경 없음 (INCR 실패)
+        // RDBMS처럼 key1이 롤백되지 않음!
+
+        System.out.println(redisTemplate.opsForValue().get("key1")); // "value1"
+        System.out.println(redisTemplate.opsForValue().get("key2")); // "value2"
+    }
+}
+```
+
+### Redis가 롤백을 지원하지 않는 철학적 이유
+
+Redis 공식 문서에 명시된 세 가지 이유입니다.
+
+**이유 1: Redis 오류는 프로그래밍 오류다**
+
+문자열 키에 INCR을 호출하는 것은 개발자의 실수입니다. 프로덕션 코드에서는 절대 발생해서는 안 되는 버그입니다. Redis는 "이런 오류에 대한 롤백을 지원하는 것은 프로그래밍 오류를 감추는 것"이라고 봅니다. 오류가 명시적으로 드러나야 개발자가 버그를 수정합니다.
+
+**이유 2: 단순성과 성능**
+
+롤백을 지원하려면 각 명령 실행 전 상태를 스냅샷으로 저장하고, 오류 발생 시 복원해야 합니다. 이 오버헤드는 Redis의 핵심 설계 원칙인 "초고속 단순 연산"과 정면으로 충돌합니다. Redis는 마이크로초 단위 성능을 위해 복잡성을 의도적으로 배제했습니다.
+
+**이유 3: RDBMS와 Redis의 역할 분리**
+
+Redis는 캐시, 세마포어, 카운터, 메시지 브로커를 위한 도구입니다. 복잡한 트랜잭션 일관성 보장은 RDBMS의 역할입니다. "두 작업이 반드시 함께 성공해야 한다"는 요구사항은 Redis가 아닌 RDBMS에서 처리해야 합니다.
+
+### RDBMS ACID vs Redis MULTI/EXEC 완전 비교
+
+| ACID 속성 | RDBMS (PostgreSQL) | Redis MULTI/EXEC | 실무 의미 |
+|----------|-------------------|-----------------|---------|
+| **원자성 (Atomicity)** | 완전 — 모두 성공 또는 모두 실패 | **부분적** — 오류 명령 건너뜀, 나머지 실행 | 쿠폰 발급처럼 원자성이 필수면 RDBMS 사용 |
+| **일관성 (Consistency)** | 제약조건 위반 시 전체 롤백 | **없음** — 제약조건 개념 없음 | 잔액 음수 방지는 Lua Script로 직접 구현 |
+| **격리성 (Isolation)** | READ COMMITTED 등 레벨 선택 가능 | **직렬화만** — 실행 중 다른 명령 완전 차단 | READ COMMITTED 동등 격리 불가 |
+| **지속성 (Durability)** | WAL로 항상 보장 | AOF `always` 설정 시에만 보장 | 기본값(RDB)은 지속성 미보장 |
+| **롤백** | 지원 (ROLLBACK, SAVEPOINT) | **미지원** | Redis에서 롤백 필요 시 보상 트랜잭션 수동 구현 |
+| **중첩 트랜잭션** | SAVEPOINT로 지원 | **미지원** — MULTI 중 MULTI는 오류 | 단일 레벨 트랜잭션만 가능 |
+
+---
+
+## 3. WATCH — CAS 메커니즘과 더티 플래그 원리
+
+### CAS(Check-And-Set)의 내부 동작
+
+WATCH는 낙관적 락(Optimistic Lock)의 Redis 구현입니다. 내부 동작은 CAS(Check-And-Set) 패턴입니다.
+
+WATCH 명령을 받으면 Redis 서버는 해당 클라이언트의 watched_keys 목록에 키를 등록합니다. 동시에 각 감시 키에 대해 **더티 플래그(dirty flag)** 추적을 시작합니다.
+
+```
+서버 내부 상태
+클라이언트 C1:
+  watched_keys: ["stock:A", "stock:B"]
+  dirty: false  ← WATCH 직후 초기값
+
+키 "stock:A" 메타데이터:
+  watchers: [C1, C3, C7]  ← 이 키를 감시하는 클라이언트 목록
+```
+
+다른 클라이언트가 감시 중인 키를 수정하면 Redis는 해당 키의 watchers 목록을 순회하며 모든 감시 클라이언트의 더티 플래그를 `true`로 설정합니다.
+
+```
+클라이언트 C2가 SET stock:A 99 실행
+→ Redis: stock:A의 watchers [C1, C3, C7] 각각의 dirty = true
+```
+
+C1이 EXEC를 호출하면 Redis는 **더티 플래그를 확인**합니다. `dirty == true`면 큐를 실행하지 않고 nil을 반환합니다. `dirty == false`면 정상 실행합니다.
+
+```mermaid
+graph LR
+    A[WATCH key] --> B[더티 플래그 false]
+    B --> C[다른 클라이언트 수정]
+    C --> D[더티 플래그 true]
+    D --> E[EXEC 호출]
+    E --> F{dirty 확인}
+    F -->|true| G[nil 반환]
+    F -->|false| H[정상 실행]
+```
+
+### WATCH가 반드시 MULTI 앞에 있어야 하는 이유
+
+WATCH의 감시 시작 시점이 핵심입니다. **감시는 WATCH 명령 직후부터 시작**됩니다. MULTI 선언 시점이 아닙니다.
+
+```
+올바른 순서:
+  WATCH stock:A    ← 이 시점부터 감시 시작
+  GET stock:A      ← 현재값 읽기 (감시 중)
+  [조건 검사]
+  MULTI            ← 큐 모드 시작
+  DECR stock:A
+  EXEC             ← dirty 확인 후 실행
+
+잘못된 순서:
+  GET stock:A      ← 감시 없이 읽기
+  MULTI
+  WATCH stock:A    ← MULTI 이후 WATCH는 오류 (QUEUED로 처리되어 감시 안 됨)
+  DECR stock:A
+  EXEC             ← stock:A가 변경돼도 감지 불가
+```
+
+GET과 MULTI 사이에 다른 클라이언트가 키를 수정할 수 있습니다. WATCH가 GET 전에 설정되어 있어야 이 시점의 변경도 감지할 수 있습니다.
+
+### Spring SessionCallback으로 WATCH 구현
+
+```java
+@Service
+public class StockService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public StockService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    /**
+     * WATCH + MULTI/EXEC로 재고 차감 (낙관적 락)
+     * 충돌 시 지수 백오프로 재시도
+     */
+    public boolean decrementStock(String productId, int quantity, int maxRetries) {
+        String stockKey = "stock:" + productId;
+
+        for (int attempt = 0; attempt < maxRetries; attempt++) {
+            Boolean success = redisTemplate.execute(new SessionCallback<Boolean>() {
+                @Override
+                @SuppressWarnings("unchecked")
+                public Boolean execute(RedisOperations operations) throws DataAccessException {
+
+                    // 1. WATCH 설정 — 이 시점부터 stockKey 감시 시작
+                    operations.watch(stockKey);
+
+                    // 2. 현재 재고 조회 (감시 중)
+                    String rawStock = (String) operations.opsForValue().get(stockKey);
+                    int currentStock = rawStock == null ? 0 : Integer.parseInt(rawStock);
+
+                    if (currentStock < quantity) {
+                        // 재고 부족 — WATCH 해제 후 실패 반환
+                        operations.unwatch();
+                        return false;
+                    }
+
+                    // 3. MULTI 선언 (큐 모드 시작)
+                    operations.multi();
+
+                    // 4. 재고 차감 큐잉 (즉시 실행 안 됨)
+                    operations.opsForValue().decrement(stockKey, quantity);
+
+                    // 5. EXEC — dirty 플래그 확인 후 실행
+                    // 다른 클라이언트가 stockKey를 수정했으면 null 반환
+                    List<Object> results = operations.exec();
+
+                    // results == null: WATCH 충돌 → 재시도 필요
+                    // results.isEmpty(): 예상치 못한 빈 결과
+                    return results != null && !results.isEmpty();
+                }
+            });
+
+            if (Boolean.TRUE.equals(success)) {
+                return true;  // 성공
+            }
+
+            if (Boolean.FALSE.equals(success)) {
+                return false;  // 재고 부족 (재시도 불필요)
+            }
+
+            // null: WATCH 충돌 → 지수 백오프 후 재시도
+            try {
+                long backoffMs = (long) (Math.pow(2, attempt) * 10);
+                Thread.sleep(Math.min(backoffMs, 200));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+
+        throw new RuntimeException("재고 차감 재시도 한도 초과: " + productId);
+    }
+}
+```
+
+### WATCH 한계 — 충돌 빈도가 높을 때
+
+WATCH는 낙관적 락입니다. 충돌이 드문 환경에서 효율적입니다. 선착순 이벤트처럼 수천 명이 동시에 같은 키를 수정하는 환경에서는 대부분의 요청이 WATCH 충돌로 재시도를 반복합니다.
+
+재시도 자체가 더 많은 충돌을 만드는 **라이브락(livelock)** 상태가 됩니다. 이 경우 WATCH 대신 Lua Script를 사용합니다.
+
+---
+
+## 4. DISCARD — 연결 상태 정리와 사용 시점
+
+### DISCARD의 역할
+
+DISCARD는 MULTI로 시작된 트랜잭션을 취소하고 큐를 비웁니다. 동시에 WATCH로 감시 중이던 모든 키의 감시도 해제합니다. 연결 상태를 MULTI 이전 상태로 완전히 초기화합니다.
+
+```java
+@Service
+public class DiscardExampleService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public DiscardExampleService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    /**
+     * DISCARD 사용 예: 조건 미충족 시 트랜잭션 취소
+     */
+    public void conditionalTransaction(String userId, int amount) {
+        redisTemplate.execute(new SessionCallback<Void>() {
+            @Override
+            public Void execute(RedisOperations operations) throws DataAccessException {
+                String balanceKey = "balance:" + userId;
+                String lockKey = "lock:" + userId;
+
+                operations.watch(balanceKey);
+
+                String rawBalance = (String) operations.opsForValue().get(balanceKey);
+                int balance = rawBalance == null ? 0 : Integer.parseInt(rawBalance);
+
+                if (balance < amount) {
+                    // 조건 미충족 — DISCARD로 깔끔하게 정리
+                    // WATCH 감시도 함께 해제됨
+                    // Spring에서는 unwatch()가 DISCARD를 포함
+                    operations.unwatch();
+                    throw new IllegalStateException("잔액 부족: " + balance);
+                }
+
+                operations.multi();
+                operations.opsForValue().decrement(balanceKey, amount);
+                operations.opsForValue().set(lockKey, "processed");
+
+                operations.exec();
+                return null;
+            }
+        });
+    }
+}
+```
+
+### DISCARD가 필요한 세 가지 상황
+
+**상황 1 — 조건 미충족**: WATCH로 키를 읽고 조건을 검사했을 때 비즈니스 조건이 충족되지 않으면 DISCARD로 취소합니다. unwatch()를 호출하는 것도 내부적으로 동일한 효과입니다.
+
+**상황 2 — 예외 발생**: MULTI 이후 Java 코드에서 예외가 발생하면 DISCARD를 명시적으로 호출해야 합니다. 그렇지 않으면 해당 Redis 연결이 커넥션 풀로 반환될 때 CLIENT_MULTI 플래그가 남아 있어 다음 사용자가 EXEC without MULTI 오류를 받습니다.
+
+**상황 3 — 큐잉 중 오류 감지**: 큐잉 시점에 문법 오류가 감지되면 Redis 자체적으로 트랜잭션을 EXECABORT 상태로 표시합니다. EXEC 호출 시 자동으로 취소되지만, 명시적 DISCARD 호출로 즉시 정리하는 것이 안전합니다.
+
+---
+
+## 5. 오류 처리 — 큐 오류 vs 실행 오류의 완전한 이해
+
+### 두 오류 유형의 처리 흐름 비교
+
+```mermaid
+graph LR
+    A[MULTI 선언] --> B[명령 큐잉]
+    B --> C{큐잉 시 문법 오류?}
+    C -->|Yes| D[EXECABORT 상태]
+    C -->|No| E[QUEUED 응답]
+    D --> F[EXEC → 전체 취소]
+    E --> G[EXEC 실행]
+    G --> H{실행 중 타입 오류?}
+    H -->|Yes| I[해당 명령 오류 반환]
+    H -->|No| J[정상 결과 반환]
+    I --> K[나머지 명령 계속]
+```
+
+### Spring에서 실행 오류 처리
+
+```java
+@Service
+public class ErrorHandlingService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public ErrorHandlingService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    /**
+     * 실행 오류를 감지하고 보상 조치하는 패턴
+     */
+    public void executeWithErrorDetection() {
+        // 사전 준비: 잘못된 타입 키 생성
+        redisTemplate.opsForList().leftPush("mylist", "item1");  // List 타입
+
+        List<Object> results = redisTemplate.execute(new SessionCallback<List<Object>>() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public List<Object> execute(RedisOperations operations) throws DataAccessException {
+                operations.multi();
+
+                operations.opsForValue().set("key1", "value1");    // 정상
+                operations.opsForValue().increment("mylist");        // 오류: List에 INCR 불가
+                operations.opsForValue().set("key2", "value2");    // 정상 (오류와 무관하게 실행)
+
+                return operations.exec();
+            }
+        });
+
+        // 결과 배열 검사로 부분 실패 감지
+        if (results != null) {
+            for (int i = 0; i < results.size(); i++) {
+                Object result = results.get(i);
+                if (result instanceof DataAccessException) {
+                    // 실행 오류 감지 — 보상 조치 필요
+                    handlePartialFailure(i, (DataAccessException) result);
+                }
+            }
+        }
+    }
+
+    private void handlePartialFailure(int commandIndex, DataAccessException e) {
+        // 실제로는 부분 실패 알림, 보상 트랜잭션, 감사 로그 등
+        System.err.println("명령 " + commandIndex + " 실패: " + e.getMessage());
+        // 주의: 이미 성공한 명령들은 되돌릴 수 없음
+        // 보상 트랜잭션으로 수동 복구 필요
+    }
+}
+```
+
+### 왜 실행 오류가 다른 명령을 롤백하지 않는가 — 깊은 이유
+
+Redis 소스코드(multi.c)를 보면 EXEC 실행 루프는 다음과 같습니다.
+
+```c
+// Redis 소스 (의사코드)
+for (j = 0; j < c->mstate.count; j++) {
+    call(c, c->mstate.commands[j]);  // 각 명령 실행
+    // 오류 발생해도 루프 계속
+    // 결과를 응답 버퍼에 추가 (오류도 포함)
+}
+// 루프 완료 후 결과 배열 전송
+```
+
+오류가 발생해도 `return`하지 않고 루프를 계속합니다. Redis 설계자 Salvatore Sanfilippo는 이를 "Redis errors are programming bugs, not runtime conditions"라고 설명했습니다. 타입 오류는 개발자가 잘못된 코드를 작성한 것이고, 이는 테스트에서 잡아야 합니다. 프로덕션에서 롤백으로 숨기는 것은 버그를 은폐합니다.
+
+---
+
+## 6. Pipeline vs Transaction vs Lua — 원자성/격리성/성능 완전 비교
+
+### 세 방식의 핵심 차이 이해
+
+> **비유로 이해하기**
+>
+> **Pipeline**: 편지 10통을 봉투에 묶어 우체통에 한 번에 넣습니다. 배달은 각각 따로 됩니다. 중간에 다른 편지가 끼어들어도 상관없습니다. 빠른 전송이 목적입니다.
+>
+> **MULTI/EXEC**: 10통을 묶어 우체부에게 "이 묶음은 연속으로 배달해달라"고 요청합니다. 배달 중 다른 편지는 잠시 대기합니다. 하지만 배달 중 한 통이 주소 오류면 그 통만 반환하고 나머지는 배달합니다.
+>
+> **Lua Script**: 우체부가 레시피를 보고 "10통을 받아 직접 순서대로 처리"합니다. 처리 중 아무도 개입할 수 없습니다. 읽어서 조건을 판단하고 다음 행동을 결정할 수 있습니다.
+
+### 비교 매트릭스
+
+| 항목 | Pipeline | MULTI/EXEC | Lua Script |
+|------|---------|-----------|-----------|
+| **목적** | 네트워크 RTT 최소화 | 명령 간 끼어들기 방지 | 조건부 원자 실행 |
+| **원자성** | 없음 | 부분적 (실행 중 차단) | 완전 (서버 전체 차단) |
+| **격리성** | 없음 | 직렬화 | 직렬화 |
+| **롤백** | 없음 | 없음 | 없음 |
+| **조건부 분기** | 불가 | 불가 | 가능 (if/else) |
+| **읽기 후 쓰기** | 불가 (결과 나중 수신) | WATCH 조합 필요 | 스크립트 내 처리 |
+| **네트워크 왕복** | 1회 | 여러 회 (MULTI+명령+EXEC) | 1회 (EVALSHA) |
+| **서버 부하** | 낮음 | 낮음 | 실행 중 전체 차단 |
+| **클러스터** | 크로스 슬롯 가능 | 동일 슬롯 필수 | 동일 슬롯 필수 |
+| **디버깅** | 쉬움 | 보통 | 어려움 |
+| **언제 사용** | 독립 키 배치 처리 | 중간 상태 노출 방지 | 재고/쿠폰 단순 조건 |
+
+### Pipeline 코드
+
+```java
+@Service
+public class PipelineService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public PipelineService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    /**
+     * Pipeline: 독립적인 키들을 배치로 빠르게 설정
+     * 원자성 없음 — 다른 클라이언트가 중간에 끼어들 수 있음
+     */
+    public void batchSetUserProfiles(List<UserProfile> profiles) {
+        redisTemplate.executePipelined(new SessionCallback<Object>() {
+            @Override
+            public Object execute(RedisOperations operations) throws DataAccessException {
+                for (UserProfile profile : profiles) {
+                    // 각 명령은 버퍼에 적재됨 — 즉시 전송 안 됨
+                    operations.opsForValue().set(
+                        "user:" + profile.getId(),
+                        profile.toJson(),
+                        Duration.ofHours(1)
+                    );
+                }
+                // 메서드 종료 시 버퍼의 모든 명령을 한 번에 전송
+                return null;
+            }
+        });
+        // 결과: 수백 개 SET 명령이 1번의 네트워크 왕복으로 처리
+    }
+
+    /**
+     * Pipeline vs 단건 성능 비교 (개념)
+     *
+     * 단건 100개: 100회 네트워크 왕복 × 1ms = ~100ms
+     * Pipeline 100개: 1회 네트워크 왕복 = ~1ms (100배 개선)
+     */
+}
+```
+
+### MULTI/EXEC 코드
+
+```java
+/**
+ * MULTI/EXEC: 포인트 이전 — 중간 상태 노출 방지
+ * A 차감 → B 추가가 원자적으로 보임 (다른 클라이언트가 중간 상태 못 봄)
+ */
+public void transferPoints(String fromUser, String toUser, long points) {
+    String fromKey = "points:" + fromUser;
+    String toKey = "points:" + toUser;
+
+    redisTemplate.execute(new SessionCallback<List<Object>>() {
+        @Override
+        @SuppressWarnings("unchecked")
+        public List<Object> execute(RedisOperations operations) throws DataAccessException {
+            operations.watch(fromKey);
+
+            String rawBalance = (String) operations.opsForValue().get(fromKey);
+            long balance = rawBalance == null ? 0L : Long.parseLong(rawBalance);
+
+            if (balance < points) {
+                operations.unwatch();
+                throw new IllegalStateException("포인트 부족");
+            }
+
+            operations.multi();
+            operations.opsForValue().decrement(fromKey, points);  // 차감
+            operations.opsForValue().increment(toKey, points);     // 추가
+
+            // EXEC 동안 다른 클라이언트는
+            // "A만 차감되고 B는 아직 추가 안 된" 중간 상태를 볼 수 없음
+            List<Object> results = operations.exec();
+
+            if (results == null) {
+                throw new RuntimeException("WATCH 충돌 — 재시도 필요");
+            }
+
+            return results;
+        }
+    });
+}
+```
+
+---
+
+## 7. Pipeline과 MULTI/EXEC가 원자성 측면에서 실제로 다른 이유
+
+### Pipeline의 끼어들기 허용
+
+Pipeline은 클라이언트가 여러 명령을 한 번에 전송하는 **전송 최적화**입니다. 서버에 도착 후 각 명령은 독립적으로 처리됩니다. Redis 이벤트 루프는 Pipeline의 명령들 사이에 다른 클라이언트의 명령을 처리할 수 있습니다.
+
+```
+시간선 (Pipeline의 경우):
+  t1: C1 Pipeline SET key1
+  t2: C2 INCR counter        ← 끼어들기 가능
+  t3: C1 Pipeline SET key2
+  t4: C3 GET key1            ← key1은 있고 key2는 아직 없는 상태를 봄
+  t5: C1 Pipeline SET key3
+```
+
+### MULTI/EXEC의 끼어들기 불가
+
+EXEC를 받으면 Redis는 큐의 명령들을 이벤트 루프의 단일 처리 사이클에서 모두 실행합니다. 이 사이클이 완료될 때까지 Redis는 다른 클라이언트의 요청을 처리하지 않습니다.
+
+```
+시간선 (MULTI/EXEC의 경우):
+  t1: C1 MULTI
+  t2: C1 SET key1     → QUEUED
+  t3: C1 SET key2     → QUEUED
+  t4: C1 EXEC
+  ↓ [이벤트 루프가 C1 큐 실행 — 이 사이에 다른 클라이언트 요청 처리 안 됨]
+  t5: C1 결과 반환
+  t6: C2 INCR counter  ← EXEC 완료 후에야 처리됨
+```
+
+이것이 Pipeline은 "배치 전송"이고 MULTI/EXEC는 "원자적 실행"인 이유입니다.
+
+---
+
+## 8. Lua Script — 서버 측 원자 실행의 진짜 힘
+
+### Lua Script의 원자성이 MULTI/EXEC보다 강한 이유
+
+MULTI/EXEC는 큐잉된 명령들을 서버에서 루프로 실행합니다. 이 루프 자체는 이벤트 루프에서 끊기지 않지만, 이론적으로 각 call() 함수 호출 사이에 타이밍 의존성이 있습니다.
+
+Lua Script는 Redis 이벤트 루프에서 **단 하나의 명령**으로 취급됩니다. Lua 인터프리터 전체가 단일 명령의 처리 과정으로 실행됩니다. 실행 중에는 이벤트 루프가 다른 클라이언트 명령을 받지 않습니다. 이것이 완전한 원자성입니다.
+
+또한 Lua Script는 **읽기 결과를 스크립트 안에서 바로 조건 분기에 사용**할 수 있습니다. MULTI/EXEC에서는 불가능한 "재고 확인 후 차감" 같은 패턴을 단일 원자 단위로 구현합니다.
+
+### 재고 차감 Lua Script — Java/Spring 구현
+
+```java
+@Service
+public class StockLuaService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    // Lua Script: 재고 확인 + 차감 원자 실행
+    private static final DefaultRedisScript<Long> DECREMENT_STOCK_SCRIPT;
+
+    static {
+        DECREMENT_STOCK_SCRIPT = new DefaultRedisScript<>();
+        DECREMENT_STOCK_SCRIPT.setScriptText(
+            // KEYS[1]: 재고 키
+            // ARGV[1]: 차감 수량
+            "local stock_key = KEYS[1] " +
+            "local quantity = tonumber(ARGV[1]) " +
+
+            // 현재 재고 조회 (원자적 실행 중)
+            "local current = tonumber(redis.call('GET', stock_key)) " +
+
+            "if current == nil then " +
+            "  return -2 " +  // -2: 키 없음
+            "end " +
+
+            "if current < quantity then " +
+            "  return -1 " +  // -1: 재고 부족
+            "end " +
+
+            // 재고 충분 — 원자적으로 차감
+            "return redis.call('DECRBY', stock_key, quantity)"
+            // 반환: 차감 후 남은 재고 (0 이상)
+        );
+        DECREMENT_STOCK_SCRIPT.setResultType(Long.class);
+    }
+
+    public long decrementStock(String productId, int quantity) {
+        Long result = redisTemplate.execute(
+            DECREMENT_STOCK_SCRIPT,
+            Collections.singletonList("stock:" + productId),
+            String.valueOf(quantity)
+        );
+
+        if (result == null) {
+            throw new RuntimeException("Lua Script 실행 실패");
+        }
+        if (result == -2L) {
+            throw new IllegalStateException("재고 키가 존재하지 않음: " + productId);
+        }
+        if (result == -1L) {
+            throw new IllegalStateException("재고 부족: " + productId);
+        }
+
+        return result;  // 차감 후 남은 재고
+    }
+}
+```
+
+### 쿠폰 발급 Lua Script — 수량 차감 + 사용자 기록 원자 처리
+
+이것이 포스트 서두의 사고를 방지하는 올바른 구현입니다.
+
+```java
+@Service
+public class CouponLuaService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    // KEYS[1]: 쿠폰 잔여 수량 키
+    // KEYS[2]: 발급된 사용자 집합 키
+    // ARGV[1]: 사용자 ID
+    private static final DefaultRedisScript<Long> ISSUE_COUPON_SCRIPT;
+
+    static {
+        ISSUE_COUPON_SCRIPT = new DefaultRedisScript<>();
+        ISSUE_COUPON_SCRIPT.setScriptText(
+            "local count_key = KEYS[1] " +
+            "local users_key = KEYS[2] " +
+            "local user_id = ARGV[1] " +
+
+            // 1. 중복 발급 확인 (원자적 실행 중)
+            "local already = redis.call('SISMEMBER', users_key, user_id) " +
+            "if already == 1 then " +
+            "  return -2 " +  // -2: 이미 발급
+            "end " +
+
+            // 2. 잔여 수량 확인
+            "local remaining = tonumber(redis.call('GET', count_key)) " +
+            "if remaining == nil or remaining <= 0 then " +
+            "  return -1 " +  // -1: 쿠폰 소진
+            "end " +
+
+            // 3. 수량 차감 + 사용자 기록 (원자적)
+            // 이 두 줄 사이에 다른 클라이언트가 끼어들 수 없음
+            "redis.call('DECR', count_key) " +
+            "redis.call('SADD', users_key, user_id) " +
+
+            "return remaining - 1"  // 발급 후 남은 수량
+        );
+        ISSUE_COUPON_SCRIPT.setResultType(Long.class);
+    }
+
+    public long issueCoupon(String couponId, String userId) {
+        List<String> keys = Arrays.asList(
+            "coupon:count:" + couponId,
+            "coupon:issued:" + couponId
+        );
+
+        Long result = redisTemplate.execute(
+            ISSUE_COUPON_SCRIPT,
+            keys,
+            userId
+        );
+
+        if (result == null) {
+            throw new RuntimeException("Lua Script 실행 실패");
+        }
+        if (result == -2L) {
+            throw new IllegalStateException("이미 발급된 쿠폰입니다: " + userId);
+        }
+        if (result == -1L) {
+            throw new IllegalStateException("쿠폰이 모두 소진됐습니다: " + couponId);
+        }
+
+        return result;  // 남은 쿠폰 수량
+    }
+}
+```
+
+이 스크립트는 사고 사례를 완전히 방지합니다. DECR과 SADD가 단일 Lua 실행 안에 있어서 둘 중 하나만 실행되는 상황이 물리적으로 불가능합니다.
+
+### Lua Script 주의사항 — 서버 차단 위험
+
+Lua Script 실행 중 Redis는 완전히 차단됩니다. 스크립트가 길거나 루프가 있으면 수백 ms 동안 Redis 전체가 멈춥니다.
+
+```java
+// 위험한 Lua Script 예시 — 절대 하지 말 것
+private static final DefaultRedisScript<Long> DANGEROUS_SCRIPT = new DefaultRedisScript<>();
+static {
+    DANGEROUS_SCRIPT.setScriptText(
+        // 이 루프가 실행되는 동안 Redis 전체가 차단됨
+        "local total = 0 " +
+        "for i = 1, 1000000 do " +  // 100만 번 루프 — 절대 금지
+        "  total = total + i " +
+        "end " +
+        "return total"
+    );
+}
+
+// 올바른 Lua Script — 짧고 단순하게
+// 조건 체크 1개 + Redis 명령 2~3개가 한계
+```
+
+`lua-time-limit` 기본값은 5초입니다. 이 시간을 초과하면 Redis는 BUSY 상태를 반환하고 `SCRIPT KILL` 명령으로만 중단할 수 있습니다. 단, 이미 쓰기 명령을 실행한 스크립트는 `SCRIPT KILL`로 중단 불가하여 `SHUTDOWN NOSAVE`가 필요합니다.
+
+---
+
+## 9. CAS 패턴 실전 구현 — 재고, 카운터, 계좌 이전
+
+### 패턴 1: 재고 관리 (WATCH + 재시도)
+
+```java
+@Service
+public class InventoryService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public InventoryService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    /**
+     * CAS 패턴: 재고 예약
+     * 조건: 재고 >= 요청 수량
+     * 행동: 재고 차감 + 예약 기록
+     */
+    public boolean reserveStock(String productId, String orderId, int quantity) {
+        String stockKey = "stock:" + productId;
+        String reservedKey = "reserved:" + productId;
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            Boolean result = redisTemplate.execute(new SessionCallback<Boolean>() {
+                @Override
+                @SuppressWarnings("unchecked")
+                public Boolean execute(RedisOperations operations) throws DataAccessException {
+                    // WATCH: 재고 키 감시 시작
+                    operations.watch(stockKey);
+
+                    String rawStock = (String) operations.opsForValue().get(stockKey);
+                    int stock = rawStock == null ? 0 : Integer.parseInt(rawStock);
+
+                    if (stock < quantity) {
+                        operations.unwatch();
+                        return null;  // null: 재고 부족 (재시도 불필요)
+                    }
+
+                    operations.multi();
+                    operations.opsForValue().decrement(stockKey, quantity);
+                    operations.opsForHash().put(reservedKey, orderId, String.valueOf(quantity));
+
+                    List<Object> execResult = operations.exec();
+                    return execResult != null;  // null이면 WATCH 충돌
+                }
+            });
+
+            if (result == null) {
+                return false;  // 재고 부족
+            }
+            if (Boolean.TRUE.equals(result)) {
+                return true;  // 예약 성공
+            }
+            // false: WATCH 충돌 → 재시도
+        }
+
+        throw new RuntimeException("재고 예약 재시도 한도 초과");
+    }
+}
+```
+
+### 패턴 2: 조건부 카운터 (Lua Script)
+
+```java
+@Service
+public class ConditionalCounterService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    // 카운터가 상한선 미만일 때만 증가
+    private static final DefaultRedisScript<Long> INCREMENT_IF_BELOW_SCRIPT;
+
+    static {
+        INCREMENT_IF_BELOW_SCRIPT = new DefaultRedisScript<>();
+        INCREMENT_IF_BELOW_SCRIPT.setScriptText(
+            "local key = KEYS[1] " +
+            "local limit = tonumber(ARGV[1]) " +
+            "local current = tonumber(redis.call('GET', key) or '0') " +
+            "if current >= limit then " +
+            "  return -1 " +  // -1: 한도 초과
+            "end " +
+            "return redis.call('INCR', key)"
+        );
+        INCREMENT_IF_BELOW_SCRIPT.setResultType(Long.class);
+    }
+
+    /**
+     * 일일 API 호출 한도 카운터
+     * 한도 내에서만 카운터 증가, 초과 시 즉시 거부
+     */
+    public long incrementApiCallCount(String userId, int dailyLimit) {
+        String key = "api:count:" + userId + ":" + LocalDate.now();
+
+        Long result = redisTemplate.execute(
+            INCREMENT_IF_BELOW_SCRIPT,
+            Collections.singletonList(key),
+            String.valueOf(dailyLimit)
+        );
+
+        if (result == null || result == -1L) {
+            throw new RateLimitExceededException("일일 API 호출 한도 초과: " + userId);
+        }
+
+        return result;
+    }
+}
+```
+
+### 패턴 3: 계좌 이전 (WATCH 낙관적 락)
+
+```java
+@Service
+public class AccountTransferService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    /**
+     * 계좌 이전: 출금 계좌 잔액 충분 시에만 이전
+     * WATCH로 두 계좌 모두 감시 (둘 중 하나라도 변경되면 재시도)
+     */
+    public void transfer(String fromAccountId, String toAccountId, long amount) {
+        String fromKey = "account:" + fromAccountId;
+        String toKey = "account:" + toAccountId;
+
+        for (int attempt = 0; attempt < 3; attempt++) {
+            Boolean success = redisTemplate.execute(new SessionCallback<Boolean>() {
+                @Override
+                @SuppressWarnings("unchecked")
+                public Boolean execute(RedisOperations operations) throws DataAccessException {
+                    // 두 키 모두 감시 — 어느 쪽이든 변경되면 EXEC 취소
+                    operations.watch(Arrays.asList(fromKey, toKey));
+
+                    String rawFrom = (String) operations.opsForValue().get(fromKey);
+                    String rawTo = (String) operations.opsForValue().get(toKey);
+
+                    long fromBalance = rawFrom == null ? 0L : Long.parseLong(rawFrom);
+                    long toBalance = rawTo == null ? 0L : Long.parseLong(rawTo);
+
+                    if (fromBalance < amount) {
+                        operations.unwatch();
+                        throw new IllegalStateException("잔액 부족: " + fromBalance);
+                    }
+
+                    operations.multi();
+
+                    // 두 계좌 변경이 원자적으로 실행됨
+                    // 다른 클라이언트가 중간 상태(출금만 된 상태)를 볼 수 없음
+                    operations.opsForValue().set(fromKey, String.valueOf(fromBalance - amount));
+                    operations.opsForValue().set(toKey, String.valueOf(toBalance + amount));
+
+                    List<Object> results = operations.exec();
+                    return results != null;
+                }
+            });
+
+            if (Boolean.TRUE.equals(success)) {
+                return;  // 이전 성공
+            }
+            // WATCH 충돌 — 재시도
+        }
+
+        throw new RuntimeException("계좌 이전 재시도 한도 초과");
+    }
+}
+```
+
+---
+
+## 10. 클러스터 트랜잭션 — Hash Tag와 슬롯 제약
+
+### 왜 클러스터에서 트랜잭션이 제한되는가
+
+Redis Cluster는 키를 CRC16 해시로 16,384개 슬롯 중 하나에 배치하고, 슬롯을 여러 노드에 분산합니다. MULTI/EXEC와 Lua Script는 **단일 노드에서만 실행**됩니다. 서로 다른 노드에 있는 키를 같은 트랜잭션으로 처리하는 것은 물리적으로 불가능합니다.
+
+```java
+// 클러스터에서 다른 슬롯 키를 MULTI/EXEC로 묶으면:
+// stock:A → 슬롯 5,474 (노드 1)
+// stock:B → 슬롯 11,900 (노드 2)
+// → CROSSSLOT Keys in request don't hash to the same slot
+
+// 오류 발생 예시
+redisTemplate.execute(new SessionCallback<List<Object>>() {
+    public List<Object> execute(RedisOperations ops) throws DataAccessException {
+        ops.multi();
+        ops.opsForValue().set("stock:A", "100");   // 슬롯 5474
+        ops.opsForValue().set("stock:B", "200");   // 슬롯 11900
+        return ops.exec();  // CROSSSLOT 오류!
+    }
+});
 ```
 
 ### Hash Tag로 같은 슬롯 강제
 
-중괄호 `{}` 안의 문자열이 슬롯을 결정합니다. 같은 `{}` 내용이면 같은 슬롯에 배치됩니다.
+중괄호 `{}` 안의 문자열만으로 슬롯을 결정합니다. 같은 Hash Tag 내용이면 항상 같은 슬롯에 배치됩니다.
 
-```python
-# Hash Tag 사용 — {order:456}이 슬롯을 결정
-order_id = "456"
-pipe = r.pipeline(transaction=True)
-pipe.set(f"{{order:{order_id}}}:stock", 10)
-pipe.set(f"{{order:{order_id}}}:status", "pending")
-pipe.set(f"{{order:{order_id}}}:coupon", "COUP001")
-pipe.execute()
-# 세 키 모두 같은 슬롯 → MULTI/EXEC 성공
+```java
+@Service
+public class ClusterTransactionService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public ClusterTransactionService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    /**
+     * Hash Tag로 같은 슬롯 보장
+     * {order:456}이 슬롯을 결정 — 이 태그를 공유하는 키는 모두 같은 슬롯
+     */
+    public void createOrder(String orderId, String productId, int quantity) {
+        // Hash Tag: {order:{orderId}}
+        // 이 세 키는 모두 동일한 슬롯에 배치됨
+        String stockKey = "{order:" + orderId + "}:stock:" + productId;
+        String statusKey = "{order:" + orderId + "}:status";
+        String quantityKey = "{order:" + orderId + "}:quantity";
+
+        redisTemplate.execute(new SessionCallback<List<Object>>() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public List<Object> execute(RedisOperations operations) throws DataAccessException {
+                operations.multi();
+
+                // 세 키 모두 {order:{orderId}} Hash Tag로 같은 슬롯
+                // MULTI/EXEC가 정상 동작
+                operations.opsForValue().set(stockKey, String.valueOf(quantity));
+                operations.opsForValue().set(statusKey, "PENDING");
+                operations.opsForValue().set(quantityKey, String.valueOf(quantity));
+
+                return operations.exec();
+            }
+        });
+    }
+
+    /**
+     * Lua Script도 동일한 슬롯 제약
+     * KEYS 배열의 모든 키가 같은 슬롯에 있어야 함
+     */
+    private static final DefaultRedisScript<Long> CLUSTER_SAFE_SCRIPT;
+
+    static {
+        CLUSTER_SAFE_SCRIPT = new DefaultRedisScript<>();
+        CLUSTER_SAFE_SCRIPT.setScriptText(
+            // KEYS[1]과 KEYS[2]가 반드시 같은 슬롯 — Hash Tag로 보장
+            "local stock_key = KEYS[1] " +   // {coupon:abc}:count
+            "local users_key = KEYS[2] " +   // {coupon:abc}:users
+            "local user_id = ARGV[1] " +
+            "local remaining = tonumber(redis.call('GET', stock_key)) " +
+            "if remaining == nil or remaining <= 0 then return -1 end " +
+            "redis.call('DECR', stock_key) " +
+            "redis.call('SADD', users_key, user_id) " +
+            "return remaining - 1"
+        );
+        CLUSTER_SAFE_SCRIPT.setResultType(Long.class);
+    }
+
+    public long issueCouponInCluster(String couponId, String userId) {
+        // Hash Tag {coupon:{couponId}} 로 두 키를 같은 슬롯에 배치
+        List<String> keys = Arrays.asList(
+            "{coupon:" + couponId + "}:count",
+            "{coupon:" + couponId + "}:users"
+        );
+
+        Long result = redisTemplate.execute(CLUSTER_SAFE_SCRIPT, keys, userId);
+        if (result == null || result == -1L) {
+            throw new IllegalStateException("쿠폰 발급 실패");
+        }
+        return result;
+    }
+}
 ```
 
-### 클러스터에서의 Lua Script
+### Hash Tag 과용의 부작용
 
-Lua Script도 동일한 제약이 있습니다. KEYS 배열의 모든 키가 같은 슬롯에 있어야 합니다.
+Hash Tag는 관련 키들을 같은 슬롯에 강제로 몰아넣습니다. 너무 광범위한 Hash Tag를 사용하면 특정 슬롯에 데이터가 집중되어 클러스터의 부하 분산 이점이 사라집니다.
 
-```lua
--- 클러스터에서 안전한 Lua Script
--- KEYS[1]과 KEYS[2]가 반드시 같은 슬롯에 있어야 함
-local count_key = KEYS[1]   -- {coupon:abc}:count
-local users_key = KEYS[2]   -- {coupon:abc}:users
--- Hash Tag {coupon:abc}으로 같은 슬롯 보장
 ```
+나쁜 예: {app}:user:1, {app}:product:1, {app}:order:1
+→ 모든 키가 {app} 슬롯에 집중 — 한 노드가 모든 부하
 
-```python
-# 클러스터 Lua Script 호출 시 키 명명 규칙
-coupon_id = "summer2024"
-script(
-    keys=[f"{{coupon:{coupon_id}}}:count",
-          f"{{coupon:{coupon_id}}}:users"],
-    args=[user_id]
-)
+좋은 예: {order:456}:stock, {order:456}:status
+→ 같은 주문의 관련 키만 같은 슬롯 — 주문마다 다른 슬롯 가능
 ```
 
 ---
 
-## 10. 극한 시나리오 3가지
+## 11. 극한 시나리오
 
-### 시나리오 1: 선착순 이벤트 — 동시 10,000 요청에 재고 100개
+### 시나리오 1: 선착순 이벤트 — 동시 50,000 요청에 재고 100개
 
-**문제점**: 재고 100개 쿠폰을 선착순으로 발급합니다. 동시에 10,000명이 요청하면 WATCH를 쓸 경우 9,900명이 WATCH 충돌로 재시도합니다. 재시도가 반복되면서 Redis가 과부하됩니다. MULTI/EXEC만 쓰면 재고 체크와 차감이 원자적이지 않아 마이너스 재고가 발생합니다.
+**극한 상황**: 50,000명이 동시에 쿠폰 발급 버튼을 누릅니다. 재고는 100개. WATCH를 쓰면 49,900개 요청이 WATCH 충돌로 재시도합니다. 재시도가 더 많은 충돌을 만들고 Redis가 폭주합니다. MULTI/EXEC만 쓰면 재고 체크와 차감 사이에 끼어들기가 발생해 재고 마이너스가 됩니다.
 
-**대응 5단계**:
-1. **Lua Script 사용**: `IF remaining > 0 THEN DECR, SADD END`를 원자적으로 실행해 동시성 문제를 완전 해결합니다
-2. **이중 체크**: Redis Lua로 1차 차감, DB에 2차 검증 레코드를 비동기로 저장합니다
-3. **요청 큐잉**: 피크 트래픽은 Redis List로 큐에 적재하고 워커가 순서대로 처리합니다
-4. **레이트 리미팅**: 사용자당 요청 횟수를 제한해 투기적 재시도를 막습니다
-5. **조기 차단**: 재고 소진 후에는 Lua Script 호출 전 `GET`으로 먼저 확인해 서버 부하를 줄입니다
+**대응 전략**:
+
+```java
+@Service
+public class FlashSaleService {
+
+    private final StringRedisTemplate redisTemplate;
+    private final DefaultRedisScript<Long> issueCouponScript;
+
+    // 1단계: Lua Script로 원자적 처리 (WATCH 재시도 없음)
+    public String issueCoupon(String eventId, String userId) {
+        // 2단계: 소진 조기 감지 (Lua 호출 전 빠른 사전 체크)
+        String remainingRaw = redisTemplate.opsForValue().get("coupon:count:" + eventId);
+        if (remainingRaw == null || Long.parseLong(remainingRaw) <= 0) {
+            throw new IllegalStateException("쿠폰 소진");
+        }
+
+        // 3단계: Lua Script로 원자적 처리
+        List<String> keys = Arrays.asList(
+            "{event:" + eventId + "}:count",
+            "{event:" + eventId + "}:issued"
+        );
+
+        Long result = redisTemplate.execute(issueCouponScript, keys, userId);
+
+        if (result == null || result < 0) {
+            throw new IllegalStateException("쿠폰 발급 실패");
+        }
+
+        // 4단계: 비동기로 DB 영구 저장 (메시지 큐)
+        publishCouponIssuedEvent(eventId, userId, result);
+
+        return "발급 성공, 남은 수량: " + result;
+    }
+
+    // 5단계: Rate Limiting으로 투기적 재시도 방지
+    public boolean checkRateLimit(String userId) {
+        String key = "rate:" + userId;
+        Long count = redisTemplate.opsForValue().increment(key);
+        if (count == 1L) {
+            redisTemplate.expire(key, Duration.ofSeconds(1));
+        }
+        return count <= 5;  // 초당 5회 제한
+    }
+
+    private void publishCouponIssuedEvent(String eventId, String userId, long remaining) {
+        // Kafka/RabbitMQ로 비동기 DB 저장
+    }
+}
+```
+
+**핵심**: Lua Script 한 번의 호출로 50,000 요청 중 100개만 성공합니다. 나머지 49,900개는 재시도 없이 즉시 실패를 반환받습니다. Redis 부하는 50,000번의 Lua Script 호출(각 수 마이크로초)로 처리됩니다.
 
 ### 시나리오 2: MULTI/EXEC 중 Redis Master 장애
 
-**문제점**: MULTI를 선언하고 명령을 큐잉하는 도중 Redis Master가 다운됩니다. Sentinel이 Replica를 Master로 승격시키지만, 새 Master에는 아직 큐잉된 명령이 없습니다. EXEC를 호출하면 오류가 발생합니다.
+**극한 상황**: MULTI를 선언하고 명령을 큐잉하는 도중 Redis Master 서버가 다운됩니다. Sentinel이 Replica를 Master로 승격시킵니다. 새 Master에는 큐잉된 명령이 없습니다. 클라이언트가 EXEC를 호출합니다.
 
-**대응 5단계**:
-1. **EXEC 응답 확인**: `execute()` 반환값이 nil이거나 예외 발생 시 전체 작업을 재시도합니다
-2. **멱등 설계**: 트랜잭션 내 작업을 멱등하게 설계해 재시도 시 중복 처리가 없도록 합니다
-3. **Sentinel 페일오버 시간 최소화**: `min-slaves-to-write 1`, `min-slaves-max-lag 10`으로 설정합니다
-4. **클라이언트 재연결 처리**: Redis 클라이언트 라이브러리의 자동 재연결 + 재시도 설정을 확인합니다
-5. **애플리케이션 레벨 멱등성 키**: 트랜잭션에 고유 ID를 부여하고 재시도 시 중복 실행을 방지합니다
+**동작 분석**:
 
-### 시나리오 3: Lua Script가 무한 루프로 Redis 블록
+```
+MULTI → [명령 큐잉 중] → Master 다운
+Sentinel 페일오버 (10~30초)
+클라이언트 재연결 → 새 Master
+EXEC 호출 → ERR EXEC without MULTI (새 Master는 MULTI 상태 없음)
+```
 
-**문제점**: 개발자가 실수로 Lua Script 안에 `while true do ... end` 루프를 작성했습니다. Redis가 단일 스레드이므로 Lua 실행 중 모든 다른 요청이 블록됩니다. 서비스 전체가 응답 불가가 됩니다.
+**대응 전략**:
 
-**대응 5단계**:
-1. **즉시 대응**: `redis-cli SCRIPT KILL` 명령으로 실행 중인 Lua Script를 강제 종료합니다 (단, 이미 쓰기를 수행했으면 SCRIPT KILL 불가 → SHUTDOWN NOSAVE 필요)
-2. **Lua Script 실행 시간 제한**: `lua-time-limit 5000` (기본 5초)으로 Lua Script 최대 실행 시간을 설정합니다
-3. **코드 리뷰 강화**: Lua Script는 반드시 루프 횟수를 상한으로 제한하고 PR 리뷰에서 확인합니다
-4. **스테이징 환경 부하 테스트**: 프로덕션 배포 전 동시 요청으로 Lua Script 실행 시간을 측정합니다
-5. **SCRIPT LOAD 사전 검증**: `SCRIPT LOAD` 후 `EVALSHA`로 실행해 문법 오류를 사전에 감지합니다
+```java
+@Service
+public class FailoverSafeService {
 
----
+    private final StringRedisTemplate redisTemplate;
 
-## 11. 면접 포인트 5가지
+    /**
+     * 페일오버 안전 트랜잭션: 멱등 설계 + 재시도
+     */
+    public void idempotentUpdate(String idempotencyKey, String dataKey, String value) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                Boolean executed = redisTemplate.execute(new SessionCallback<Boolean>() {
+                    @Override
+                    @SuppressWarnings("unchecked")
+                    public Boolean execute(RedisOperations operations) throws DataAccessException {
+                        operations.watch(idempotencyKey);
 
-### 면접 포인트 1️⃣ Redis MULTI/EXEC는 RDBMS 트랜잭션과 어떻게 다른가?
+                        // 멱등성 키 확인 (이미 처리됐으면 건너뜀)
+                        String processed = (String) operations.opsForValue().get(idempotencyKey);
+                        if ("done".equals(processed)) {
+                            operations.unwatch();
+                            return true;
+                        }
 
-세 가지 핵심 차이가 있습니다.
+                        operations.multi();
+                        operations.opsForValue().set(dataKey, value);
+                        // 멱등성 키: 처리 완료 표시 (TTL 24시간)
+                        operations.opsForValue().set(idempotencyKey, "done",
+                            Duration.ofHours(24));
 
-**롤백 없음**: RDBMS는 트랜잭션 중 오류 발생 시 모든 변경이 롤백됩니다. Redis는 타입 오류 등 실행 시 오류가 발생해도 해당 명령만 건너뛰고 나머지는 실행됩니다. "다 되거나 다 안 되는" 원자성이 없습니다.
+                        List<Object> results = operations.exec();
+                        return results != null;
+                    }
+                });
 
-**조건부 분기 불가**: RDBMS에서는 트랜잭션 안에서 SELECT 결과를 보고 UPDATE 여부를 결정할 수 있습니다. MULTI/EXEC에서는 EXEC 전에는 결과를 알 수 없어서 조건 분기가 불가능합니다. WATCH로 우회하거나 Lua Script를 사용합니다.
+                if (Boolean.TRUE.equals(executed)) {
+                    return;
+                }
+            } catch (RedisConnectionFailureException e) {
+                // 페일오버 중 — 잠시 대기 후 재시도
+                try {
+                    Thread.sleep(1000L * (attempt + 1));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("중단됨");
+                }
+            }
+        }
 
-**격리 수준**: RDBMS는 READ COMMITTED, REPEATABLE READ 등 격리 수준을 선택합니다. Redis MULTI/EXEC는 실행 중 다른 클라이언트를 완전 차단하는 직렬화만 있습니다.
+        throw new RuntimeException("Redis 장애로 업데이트 실패");
+    }
+}
+```
 
-### 면접 포인트 2️⃣ Pipeline과 MULTI/EXEC의 차이는?
+### 시나리오 3: Lua Script 무한 루프로 Redis 전체 차단
 
-Pipeline은 **성능 최적화**가 목적입니다. 여러 명령을 네트워크 버퍼에 모아 한 번에 전송합니다. 서버에서는 명령을 순서대로 실행하지만, 실행 중 다른 클라이언트 명령이 끼어들 수 있습니다. 원자성이 없습니다.
+**극한 상황**: 개발자가 Lua Script 안에서 대용량 키셋을 순회하는 루프를 작성했습니다. 프로덕션 데이터가 예상보다 100배 많아 루프가 수 분간 실행됩니다. Redis가 단일 스레드이므로 모든 클라이언트가 차단됩니다. 서비스 전체 응답 불가.
 
-MULTI/EXEC는 **원자적 실행**이 목적입니다. MULTI 이후 명령들은 큐에 적재됩니다. EXEC 시 큐의 명령들을 연속으로 실행하고, 이 동안 다른 클라이언트 명령이 끼어들지 않습니다. 단, 롤백은 없습니다.
+**즉시 대응 절차**:
 
-"독립적인 키 100개를 빠르게 설정"하면 Pipeline, "두 키를 동시에 업데이트하고 중간 상태를 노출하지 않으려면" MULTI/EXEC입니다.
+```bash
+# 1단계: 실행 중인 Lua Script 강제 종료 (쓰기 없었으면)
+redis-cli SCRIPT KILL
 
-### 면접 포인트 3️⃣ WATCH는 어떻게 동작하고 한계는?
+# 2단계: 이미 쓰기 실행 중이면 SCRIPT KILL 불가 → 데이터 손실 감수하고 재시작
+redis-cli SHUTDOWN NOSAVE
 
-WATCH는 낙관적 락입니다. `WATCH key1 key2`를 선언하면 Redis가 해당 키들을 감시합니다. MULTI~EXEC 사이에 감시 중인 키가 다른 클라이언트에 의해 변경되면 EXEC가 nil을 반환하고 트랜잭션이 취소됩니다. 클라이언트는 재시도합니다.
+# 3단계: lua-time-limit 확인 (기본 5000ms)
+redis-cli CONFIG GET lua-time-limit
 
-한계는 충돌이 잦을 때입니다. 선착순 이벤트처럼 수천 명이 같은 키를 동시에 수정하면 대부분이 WATCH 충돌로 재시도합니다. 재시도가 더 많은 충돌을 만들고 성능이 급락합니다. 이 경우 Lua Script가 훨씬 효율적입니다.
+# 4단계: 제한 시간 조정 (1초로 단축)
+redis-cli CONFIG SET lua-time-limit 1000
+```
 
-### 면접 포인트 4️⃣ Lua Script의 원자성은 MULTI/EXEC보다 강한가?
+**예방 코드 패턴**:
 
-강합니다. 이유는 Redis의 단일 스레드 특성 때문입니다.
+```java
+// 위험: 루프 상한 없음
+"for i = 1, #keys do ... end"
 
-MULTI/EXEC는 큐잉된 명령들을 서버에서 순차적으로 실행합니다. 각 명령 사이에 다른 클라이언트 명령이 끼어들 수 있을까요? 실제로는 Redis가 EXEC를 받으면 큐 전체를 연속으로 처리해 끼어들지 못합니다. 하지만 EXEC 처리 자체가 단일 명령이 아닌 루프이기 때문에 이론적 경계가 있습니다.
-
-Lua Script는 Redis 서버에서 Lua 인터프리터가 통째로 실행됩니다. Redis 이벤트 루프에서 단 하나의 명령으로 처리됩니다. 실행 중에는 이벤트 루프가 다른 클라이언트 요청을 처리하지 않습니다. 이것이 완전한 원자성입니다.
-
-단, 두 방식 모두 롤백은 지원하지 않습니다.
-
-### 면접 포인트 5️⃣ Redis Cluster에서 MULTI/EXEC 사용 시 주의사항은?
-
-Redis Cluster는 키를 CRC16 해시로 16,384개 슬롯 중 하나에 배치하고, 슬롯을 여러 노드에 분산합니다. MULTI/EXEC는 단일 노드에서만 동작합니다.
-
-따라서 MULTI/EXEC로 묶는 키들이 모두 같은 슬롯에 있어야 합니다. 다른 슬롯에 있으면 `CROSSSLOT` 오류가 발생합니다.
-
-해결책은 Hash Tag입니다. `{order:456}:stock`처럼 중괄호 안의 문자열이 슬롯을 결정합니다. 관련 키들을 같은 Hash Tag로 묶으면 같은 슬롯에 배치됩니다.
-
-단, Hash Tag를 남용하면 특정 슬롯에 데이터가 집중되어 클러스터의 부하 분산 이점이 사라집니다. 관련성이 높은 키끼리만 Hash Tag로 묶어야 합니다.
-
----
-
-## 12. 실무 실수 Top 5
-
-### 실수 1: MULTI/EXEC가 롤백된다는 착각
-
-가장 위험한 착각입니다. MULTI/EXEC 중 한 명령이 실패해도 나머지는 실행됩니다. 결제나 쿠폰 발급처럼 "A와 B가 반드시 함께 성공해야 하는" 작업에 MULTI/EXEC를 쓰면 반드시 불일치가 발생합니다. 롤백이 필요하면 RDBMS를 사용합니다.
-
-### 실수 2: WATCH를 고빈도 공유 키에 사용
-
-WATCH는 낙관적 락입니다. 선착순 이벤트처럼 수천 명이 같은 키를 동시에 수정하면, 대부분이 WATCH 충돌로 재시도합니다. 재시도가 재시도를 만들고 Redis는 폭주합니다. 고빈도 공유 키에는 Lua Script가 올바른 선택입니다.
-
-### 실수 3: Pipeline을 원자적이라고 착각
-
-Pipeline은 네트워크 성능 최적화 도구입니다. `transaction=False`로 생성한 Pipeline은 원자성이 없습니다. 실행 중 다른 클라이언트 명령이 사이에 끼어들 수 있습니다. 원자성이 필요하면 `transaction=True`(MULTI/EXEC)를 사용합니다.
-
-### 실수 4: 긴 Lua Script로 Redis 블록
-
-Lua Script 실행 중 Redis는 다른 요청을 처리하지 않습니다. 데이터 전처리, 집계, 루프를 Lua Script에 넣으면 수십~수백ms 동안 Redis 전체가 멈춥니다. Lua Script는 단순한 조건 체크와 1~3개의 Redis 명령만 실행하도록 최소화합니다.
-
-### 실수 5: 클러스터에서 CROSSSLOT 오류 대응 미흡
-
-개발 환경에서는 Standalone Redis라 잘 되다가, 프로덕션 Redis Cluster에 배포하면 CROSSSLOT 오류가 터집니다. 개발 시작부터 Hash Tag 명명 규칙을 정하고, 트랜잭션에 묶이는 키들은 같은 Hash Tag를 사용하도록 규약을 만들어야 합니다.
-
----
-
-## 13. Phase별 진화
-
-### Phase 1 — MVP (월 ~5만원)
-
-Standalone Redis, MULTI/EXEC와 Lua Script 기초 사용.
-- Redis Standalone (cache.t3.micro): 월 $15
-- 기본 MULTI/EXEC로 관련 키 묶음 처리
-- 선착순 발급에 Lua Script 적용
-
-### Phase 2 — 성장기 (월 ~20만원)
-
-Redis Sentinel, WATCH + Lua 혼합 전략, Pipeline 최적화.
-- Redis Sentinel 3-node: 월 $60
-- WATCH 재시도 로직에 지수 백오프 적용
-- Pipeline으로 배치 조회 최적화 (RTT 10배 감소)
-
-### Phase 3 — 스케일업 (월 ~100만원)
-
-Redis Cluster, Hash Tag 설계, Lua Script 라이브러리화.
-- Redis Cluster 6-node (cache.r6g.large): 월 $300
-- Hash Tag 기반 키 네임스페이스 표준 수립
-- Lua Script 버전 관리 (`SCRIPT LOAD` + SHA 캐싱)
-- EVALSHA로 스크립트 재전송 오버헤드 제거
-
-### Phase 4 — 엔터프라이즈 (월 ~300만원 이상)
-
-멀티 리전, Redis Function (Redis 7+), 트랜잭션 감사 로그.
-- Redis Global Datastore: 월 $800
-- Redis Functions로 서버 측 비즈니스 로직 관리
-- 트랜잭션 실행 감사 로그 (AOP 기반)
-- 분산 트랜잭션 모니터링 대시보드
+// 안전: 루프 상한 설정
+private static final DefaultRedisScript<Long> SAFE_BATCH_SCRIPT;
+static {
+    SAFE_BATCH_SCRIPT = new DefaultRedisScript<>();
+    SAFE_BATCH_SCRIPT.setScriptText(
+        "local MAX_ITER = 100 " +  // 최대 100번만 순회
+        "local keys = KEYS " +
+        "local count = 0 " +
+        "for i = 1, math.min(#keys, MAX_ITER) do " +
+        "  redis.call('DEL', keys[i]) " +
+        "  count = count + 1 " +
+        "end " +
+        "return count"
+    );
+    SAFE_BATCH_SCRIPT.setResultType(Long.class);
+}
+```
 
 ---
 
-## 14. 핵심 메트릭 테이블
+## 12. 면접 포인트 5가지 — 깊은 WHY 답변
 
-| 메트릭 | 목표 | 경보 임계값 | 측정 방법 |
-|--------|------|------------|---------|
-| WATCH 충돌률 | <1% | >10% | WatchError 예외 카운터 |
-| Lua Script 실행 시간 (P99) | <5ms | >50ms | `SLOWLOG GET` |
-| EXEC 실패율 (nil 반환) | <0.1% | >1% | nil EXEC 응답 카운터 |
-| Pipeline RTT 절감 | >80% | <50% | 단건 vs Pipeline 지연 비교 |
-| CROSSSLOT 오류 수 | 0 목표 | >1건/일 | ResponseError 로그 |
-| 트랜잭션 평균 명령 수 | <10개 | >20개 | MULTI 큐 크기 |
-| Redis 명령 처리 지연 (P99) | <2ms | >10ms | `LATENCY HISTORY command` |
+### 면접 포인트 1: Redis MULTI/EXEC 내부 동작을 설명하라
+
+**답변**:
+
+MULTI 명령을 받으면 Redis 서버는 해당 클라이언트 구조체에 `CLIENT_MULTI` 플래그를 설정합니다. 이후 들어오는 명령은 서버의 `mstate.commands[]` 배열에 적재되고 `QUEUED`를 반환합니다. 즉시 실행되지 않습니다.
+
+EXEC를 받으면 Redis는 이 배열을 순회하며 각 명령을 실행합니다. 핵심은 이 실행이 **Redis 이벤트 루프의 단일 처리 사이클 안에서 완료**된다는 것입니다. Redis가 단일 스레드이므로 이 사이클이 완료되기 전까지 다른 클라이언트 명령은 처리되지 않습니다. 이것이 MULTI/EXEC가 제공하는 격리성입니다.
+
+Spring에서 SessionCallback이 필요한 이유는 MULTI/EXEC가 클라이언트 연결 단위로 상태를 관리하기 때문입니다. SessionCallback은 블록 내에서 단일 Redis 커넥션 사용을 보장합니다.
+
+**WHY**: Redis 이벤트 루프가 단일 스레드이기 때문에 EXEC 실행 사이클이 원자적으로 동작합니다. 멀티스레드 RDBMS처럼 락을 걸 필요 없이, 단순히 "한 번에 하나씩만 처리"하는 구조로 격리성을 달성합니다.
 
 ---
 
-## 15. 실제 장애 사례
+### 면접 포인트 2: Redis는 왜 롤백을 지원하지 않는가
 
-### 사례 1: 쿠폰 발급 시스템 — MULTI/EXEC 롤백 착각
+**답변**:
 
-앞서 소개한 국내 E 이커머스 사례입니다. DECR(수량 차감)은 성공하고 SADD(사용자 기록)는 타입 오류로 실패했는데 전체가 롤백될 것으로 기대했습니다. Redis는 SADD 오류를 무시하고 DECR 결과만 적용했습니다. 100개 쿠폰 수량이 감소했지만 사용자에게 발급되지 않는 유령 차감이 발생했습니다.
+Redis 공식 문서에서 설계 결정으로 명시한 세 가지 이유가 있습니다.
 
-**교훈**: MULTI/EXEC 전에 KEYS 타입을 사전 검증합니다. 쿠폰 발급처럼 두 작업이 반드시 함께 성공해야 하는 경우 Lua Script를 사용합니다.
+첫째, Redis에서 발생하는 오류(타입 불일치, 잘못된 인자 수)는 **프로그래밍 오류**입니다. 올바르게 작성된 프로덕션 코드에서는 발생해선 안 됩니다. 롤백으로 이를 숨기면 버그가 개발 단계에서 발견되지 않습니다.
 
-### 사례 2: 포인트 이전 — WATCH 재시도 폭주
+둘째, 롤백 지원은 각 명령 실행 전 상태를 스냅샷으로 저장해야 하므로 **상당한 성능 오버헤드**가 발생합니다. Redis의 핵심 가치인 "마이크로초 단위 성능"과 충돌합니다.
 
-대형 할인 이벤트에서 사용자들이 포인트로 결제를 시도했습니다. WATCH로 구현된 포인트 차감 로직이 충돌로 인해 평균 7번의 재시도 후 성공했습니다. Redis 명령 처리량이 7배로 폭증하고 지연이 급등했습니다. 결제 성공률이 60%로 떨어졌습니다.
+셋째, Redis와 RDBMS는 **역할이 다릅니다**. "두 작업이 반드시 함께 성공해야 한다"는 요구사항은 RDBMS의 역할입니다. Redis를 RDBMS처럼 사용하는 것은 도구를 잘못 선택한 것입니다.
 
-**교훈**: 충돌이 잦은 공유 키에 WATCH를 쓰면 성능이 급락합니다. Lua Script로 교체 후 재시도 없이 1회 실행으로 해결됐습니다.
+**WHY**: Redis는 캐시, 세마포어, 카운터처럼 "빠른 단순 연산"에 최적화된 도구입니다. 복잡한 일관성 보장 메커니즘을 추가하면 Redis의 존재 이유인 성능과 단순성이 훼손됩니다. 설계자들이 의도적으로 선택한 트레이드오프입니다.
 
-### 사례 3: 게임 서버 — Lua Script 무한 루프 장애
+---
 
-게임 랭킹 집계 Lua Script에 버그로 인해 상위 100명을 구하는 ZRANGE 루프가 종료 조건 없이 실행됐습니다. Redis가 Lua Script 실행에 묶여 5초 이상 다른 명령을 처리하지 않았습니다. 전체 게임 서버가 5초간 응답 불가가 됐습니다. `lua-time-limit` 기본값 5초가 지나자 Redis가 스크립트를 강제 종료했습니다.
+### 면접 포인트 3: WATCH의 CAS 메커니즘과 한계
 
-**교훈**: Lua Script 안에서 루프는 반드시 상한을 설정합니다. 스테이징에서 최악의 데이터 크기로 실행 시간을 사전 측정합니다. `lua-time-limit`을 환경에 맞게 조정하고 SLOWLOG를 주기적으로 확인합니다.
+**답변**:
+
+WATCH는 CAS(Check-And-Set) 패턴의 Redis 구현입니다. 내부적으로 더티 플래그(dirty flag) 메커니즘으로 동작합니다.
+
+WATCH 명령을 받으면 서버는 해당 클라이언트에 감시 키 목록을 등록합니다. 다른 클라이언트가 감시 키를 수정하면 Redis는 해당 키의 감시자 목록을 순회하며 **각 감시 클라이언트의 더티 플래그를 true로 설정**합니다. EXEC 호출 시 더티 플래그가 true면 큐를 실행하지 않고 nil을 반환합니다.
+
+**WATCH가 반드시 MULTI 앞에 있어야 하는 이유**: 감시는 WATCH 명령 즉시 시작됩니다. GET으로 현재 값을 읽기 전에 WATCH를 설정해야 읽기~MULTI 사이의 변경도 감지합니다. MULTI 이후 WATCH는 큐에 적재되어 감시가 시작되지 않습니다.
+
+**한계**: 충돌 빈도가 높으면 라이브락이 발생합니다. 선착순 이벤트처럼 수천 명이 같은 키를 동시에 수정하면 대부분의 EXEC가 nil을 반환합니다. 재시도가 더 많은 충돌을 만들어 성능이 급락합니다. 이 경우 Lua Script가 올바른 선택입니다.
+
+---
+
+### 면접 포인트 4: Pipeline vs MULTI/EXEC 원자성 차이의 근본 이유
+
+**답변**:
+
+Pipeline은 **클라이언트 측 전송 최적화**입니다. 여러 명령을 버퍼에 모아 한 번의 TCP 패킷으로 전송합니다. 서버는 이 명령들을 받아 하나씩 처리하는데, 이 처리 사이에 다른 클라이언트 명령이 이벤트 루프에 의해 처리될 수 있습니다. Redis 서버 입장에서 Pipeline은 그냥 빠르게 온 개별 명령들입니다.
+
+MULTI/EXEC는 **서버 측 원자 실행**입니다. EXEC를 받으면 Redis는 큐의 명령 전체를 이벤트 루프의 단일 처리 사이클에서 실행합니다. 단일 처리 사이클이 끝나기 전까지 이벤트 루프는 다른 클라이언트를 처리하지 않습니다.
+
+**WHY**: Redis가 단일 스레드 이벤트 루프 구조이기 때문입니다. "원자성"이 복잡한 락 메커니즘 없이, 단순히 "이벤트 루프 한 사이클 안에서 처리"라는 구조적 특성으로 달성됩니다. 멀티스레드 서버에서는 이런 단순한 원자성 보장이 불가능합니다.
+
+---
+
+### 면접 포인트 5: Lua Script 원자성이 MULTI/EXEC보다 강한 이유와 위험성
+
+**답변**:
+
+Lua Script는 Redis 이벤트 루프에서 **단 하나의 명령**으로 처리됩니다. Lua 인터프리터 전체 실행이 하나의 이벤트 루프 처리 단위입니다. 실행 중 이벤트 루프는 완전히 차단됩니다.
+
+MULTI/EXEC가 명령을 루프로 순차 실행하는 것도 원자적이지만, Lua Script는 **읽기 결과를 바로 조건 분기에 활용할 수 있다**는 추가 능력이 있습니다. `재고 확인 후 차감`처럼 읽기-조건-쓰기를 단일 원자 단위로 처리하는 것은 MULTI/EXEC로는 WATCH 없이는 불가능합니다.
+
+**위험성**: 단일 스레드 차단이 곧 서비스 전체 차단입니다. Lua Script가 100ms 실행되면 그 100ms 동안 다른 클라이언트는 완전히 차단됩니다. `lua-time-limit`(기본 5초) 초과 시 `SCRIPT KILL`로만 중단 가능한데, 이미 쓰기를 실행한 스크립트는 `SCRIPT KILL`도 거부합니다. `SHUTDOWN NOSAVE`만 남습니다.
+
+**WHY**: 원자성과 성능은 트레이드오프입니다. Lua Script는 원자성이 강하지만, 그 대가로 실행 중 전체 Redis가 멈춥니다. MULTI/EXEC는 원자성이 약하지만(읽기-쓰기 패턴 불가), 긴 트랜잭션도 다른 클라이언트에 미치는 영향이 적습니다.
+
+---
+
+## 13. 실무 함정 Top 5
+
+### 함정 1: MULTI/EXEC가 롤백된다는 착각
+
+가장 치명적인 착각입니다. MULTI/EXEC 중 한 명령이 실행 오류를 내도 나머지는 실행됩니다. 쿠폰 발급처럼 "A와 B가 반드시 함께 성공해야 한다"는 작업에 MULTI/EXEC를 쓰면 반드시 불일치가 발생합니다.
+
+**해결**: 진짜 원자성이 필요하면 Lua Script(두 작업이 단순한 경우) 또는 RDBMS 트랜잭션(복잡한 롤백이 필요한 경우)을 사용합니다.
+
+### 함정 2: SessionCallback 없이 MULTI/EXEC 사용
+
+RedisTemplate에서 MULTI/EXEC를 사용할 때 SessionCallback 없이 직접 `redisTemplate.multi()`를 호출하면 커넥션 풀에서 서로 다른 커넥션이 사용될 수 있습니다. `EXEC without MULTI` 오류가 간헐적으로 발생합니다. 부하 테스트에서만 나타나는 헤이즌버그가 됩니다.
+
+**해결**: MULTI/EXEC는 항상 `redisTemplate.execute(new SessionCallback<>() {...})`로 감쌉니다.
+
+### 함정 3: WATCH를 고충돌 키에 사용
+
+WATCH는 낙관적 락입니다. 선착순 이벤트처럼 수천 명이 같은 키를 동시에 수정하면 대부분이 WATCH 충돌로 재시도합니다. 재시도가 재시도를 만드는 라이브락이 됩니다.
+
+**해결**: 충돌 빈도가 높은 공유 키에는 Lua Script를 사용합니다. WATCH는 충돌이 드문 사용자 개인 데이터(각자의 잔액, 포인트) 수정에 적합합니다.
+
+### 함정 4: 긴 Lua Script로 Redis 차단
+
+Lua Script 실행 중 Redis 전체가 차단됩니다. 대량 데이터 순회, 복잡한 집계, 외부 호출을 Lua Script에 넣으면 수백 ms 동안 Redis가 멈춥니다.
+
+**해결**: Lua Script는 조건 체크 + Redis 명령 2~3개로 최소화합니다. 루프가 필요하면 반드시 상한을 설정합니다. 스테이징에서 최악 데이터로 실행 시간을 측정합니다.
+
+### 함정 5: 클러스터에서 CROSSSLOT 오류
+
+개발 환경(Standalone Redis)에서는 잘 동작하다가 프로덕션 클러스터 배포 시 CROSSSLOT 오류가 터집니다. 이 오류는 서비스 시작 후에야 발견되며 즉각적인 장애를 유발합니다.
+
+**해결**: 개발 시작부터 Hash Tag 키 네이밍 규약을 정합니다. 트랜잭션으로 묶이는 키는 `{같은태그}:키명` 형식을 사용합니다. 클러스터 호환 통합 테스트를 CI에 포함합니다.
+
+---
+
+## 14. @Transactional과 Redis 트랜잭션의 관계
+
+Spring `@Transactional`은 RDBMS 트랜잭션을 위한 어노테이션입니다. Redis에 `@Transactional`을 적용하려면 `redisTemplate.setEnableTransactionSupport(true)`를 설정해야 합니다. 이 설정 시 `@Transactional` 메서드 내 Redis 명령이 자동으로 MULTI/EXEC로 래핑됩니다.
+
+```java
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory factory) {
+        StringRedisTemplate template = new StringRedisTemplate(factory);
+        // 주의: 이 설정은 @Transactional 메서드 내 모든 Redis 명령을 큐잉함
+        // 읽기 명령 결과를 즉시 사용할 수 없게 됨
+        template.setEnableTransactionSupport(true);
+        return template;
+    }
+}
+
+@Service
+public class TransactionalService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    @Transactional
+    public void transactionalMethod() {
+        // 이 메서드 내 모든 Redis 명령이 MULTI/EXEC로 래핑됨
+        redisTemplate.opsForValue().set("key1", "value1");
+
+        // 경고: 아래 get()은 null 반환 — 아직 EXEC 안 됨 (큐잉 중)
+        String value = redisTemplate.opsForValue().get("key1");
+        // value == null! EXEC 전이므로 실제값을 읽을 수 없음
+
+        redisTemplate.opsForValue().set("key2", "value2");
+        // 메서드 종료 시 자동으로 EXEC 호출
+    }
+}
+```
+
+이 동작이 직관적이지 않아서 **실무에서는 `setEnableTransactionSupport(false)`(기본값)를 유지하고 명시적 SessionCallback 방식을 사용하는 것을 권장**합니다. 자동 래핑보다 훨씬 예측 가능하고 디버깅이 쉽습니다.
+
+---
+
+## 15. 핵심 메트릭
+
+| 메트릭 | 목표값 | 경보 임계값 | 측정 방법 |
+|--------|--------|------------|---------|
+| WATCH 충돌률 | < 1% | > 10% | WatchError 예외 카운터 |
+| Lua Script 실행 시간 P99 | < 5ms | > 50ms | `SLOWLOG GET` |
+| EXEC nil 반환률 (WATCH 충돌) | < 0.1% | > 1% | nil EXEC 응답 카운터 |
+| Pipeline RTT 절감 효과 | > 80% | < 50% | 단건 vs Pipeline 지연 비교 |
+| CROSSSLOT 오류 수 | 0 목표 | > 1건/일 | ResponseError 로그 |
+| 트랜잭션 평균 명령 수 | < 10개 | > 20개 | MULTI 큐 크기 |
+| Lua Script P99 서버 차단 시간 | < 5ms | > 20ms | `LATENCY HISTORY command` |
+
+---
+
+## 16. 요약 — 상황별 선택 가이드
+
+```mermaid
+graph LR
+    A[여러 명령 묶기] --> B{목적}
+    B -->|성능| C[Pipeline]
+    B -->|중간상태 방지| D[MULTI/EXEC]
+    B -->|조건부 원자| E[Lua Script]
+    D --> F{충돌 빈도}
+    F -->|낮음| G[WATCH 추가]
+    F -->|높음| E
+```
+
+| 상황 | 선택 | 이유 |
+|------|------|------|
+| 독립 키 100개 일괄 설정 | Pipeline | 성능만 필요, 원자성 불필요 |
+| 포인트 이전 (중간 상태 방지) | MULTI/EXEC + WATCH | 중간 상태 노출 방지, 충돌 낮음 |
+| 선착순 쿠폰 발급 | Lua Script | 조건부 원자, 고충돌 |
+| 재고 차감 (단순 조건) | Lua Script | 읽기-조건-쓰기 단일 원자 단위 |
+| 계좌 이전 (롤백 필요) | RDBMS 트랜잭션 | Redis는 롤백 미지원 |
+| 클러스터 트랜잭션 | Hash Tag + MULTI/EXEC 또는 Lua | 같은 슬롯 강제 |
