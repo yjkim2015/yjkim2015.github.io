@@ -1,151 +1,234 @@
 ---
-title: "멀티 레이어 캐싱 아키텍처"
+title: "멀티 레이어 캐싱 아키텍처 — Caffeine + Redis 완전 해부"
 categories:
 - CACHING
-tags: [멀티레이어캐시, Caffeine, Redis, CDN, L1Cache, L2Cache, SpringCache, 캐시동기화]
+tags: [멀티레이어캐시, Caffeine, Redis, L1Cache, L2Cache, SpringCache, 캐시동기화, PubSub, CacheWarmup, StampedeProtection]
 toc: true
 toc_sticky: true
 toc_label: 목차
 date: 2026-05-03
 ---
 
-멀티 레이어 캐싱은 속도가 다른 여러 계층의 캐시를 겹겹이 쌓아서, 가장 빠른 계층에서 최대한 많은 요청을 처리하고 느린 계층으로는 최소한의 요청만 내려보내는 아키텍처다.
+멀티 레이어 캐싱은 응답 속도가 다른 여러 계층의 캐시를 겹겹이 쌓아, 가장 빠른 계층에서 최대한 많은 요청을 소화하고 느린 계층으로는 최소한의 요청만 내려보내는 아키텍처다. 잘 설계된 멀티 레이어 캐시는 100K TPS 중 DB에 실제로 도달하는 요청을 0.5% 이하로 줄인다.
 
-> **비유:** 주방에서 요리할 때를 생각해보자. 소금은 손 닿는 곳의 양념통(L1)에, 간장은 냉장고(L2)에, 된장은 창고(DB)에 보관한다. 소금이 떨어지면 냉장고에서 꺼내 양념통을 채우고, 냉장고도 비면 창고까지 가야 한다. 자주 쓰는 재료일수록 가까운 곳에 두는 것이 핵심이다. 멀티 레이어 캐싱은 이 원리를 소프트웨어에 적용한 것이다.
+> **비유:** 도서관 사서가 책을 찾아주는 방식을 생각해보자. 사서의 책상 위에 오늘 가장 많이 찾은 10권(L1)이 있다. 그 뒤 열람실 서가에 이번 달 인기 도서 1,000권(L2)이 있다. 지하 서고에는 전체 장서 100만 권(DB)이 있다. 사서는 책상 위를 먼저 뒤지고, 없으면 서가로, 그래도 없으면 지하 서고까지 내려간다. 멀티 레이어 캐싱은 이 원리를 소프트웨어에 구현한 것이다.
 
 ---
 
-## 왜 캐시를 여러 계층으로 나누는가?
+## 왜 캐시를 여러 계층으로 나누는가 — 단일 Redis의 한계
 
-단일 캐시(Redis만 사용)로도 충분한 서비스가 많다. 하지만 트래픽이 일정 수준을 넘으면 Redis 한 대로는 감당이 안 되고, 네트워크 왕복 시간도 무시할 수 없게 된다.
+단일 Redis(L2)만 사용해도 DB 대비 10~100배 빠르다. 하지만 트래픽이 임계점을 넘으면 세 가지 벽에 부딪힌다.
 
-> **비유:** 동네 편의점(Redis) 하나면 주민 100명은 충분하다. 그런데 주민이 10만 명이면? 각 아파트 단지마다 자판기(L1 Local Cache)를 놓고, 자판기에 없는 것만 편의점(L2 Redis)에 가게 하면 편의점이 터지지 않는다. 편의점도 품절이면 마트(DB)까지 가야 한다.
+### 벽 1: 네트워크 RTT의 누적
 
-단일 Redis만 사용할 때의 문제점 세 가지를 살펴보자.
+Redis 응답이 아무리 빨라도 네트워크 왕복(RTT)은 0.5~2ms 걸린다. 한 API 요청이 캐시를 20번 조회하면 네트워크에서만 10~40ms가 소모된다. L1(JVM 힙)은 네트워크가 없으므로 100ns. 20번 조회해도 2μs에 불과하다. 차이가 10,000배다.
 
-1. **네트워크 지연:** 아무리 빠른 Redis라도 네트워크 왕복(RTT)이 0.5~2ms 걸린다. 한 페이지에 캐시 조회가 20번이면 10~40ms가 네트워크에서만 소모된다.
-2. **Redis 부하 집중:** 모든 서버의 모든 요청이 Redis로 몰린다. 10K TPS에서 서버 20대면 Redis는 200K ops/sec를 감당해야 한다.
-3. **단일 장애점:** Redis가 죽으면 모든 서버가 동시에 DB로 직행한다.
+### 벽 2: Redis 집중 부하
 
-이 세 가지 문제를 멀티 레이어 캐싱이 해결한다.
+서버 20대, 각 서버가 초당 5,000 요청을 처리한다고 가정하면 Redis는 100K ops/sec를 감당해야 한다. Redis 단일 인스턴스 한계는 약 100K~200K ops/sec다. L1으로 80%를 흡수하면 Redis에는 20K ops/sec만 도달한다. 같은 Redis가 5배 여유가 생긴다.
+
+### 벽 3: 단일 장애점
+
+Redis가 다운되면 모든 서버가 동시에 DB로 직행한다. L1이 버퍼로 존재하면 Redis 장애 동안에도 L1 TTL 시간(30초)만큼 서비스가 유지된다.
 
 ```mermaid
 graph LR
-    S["서버"] -->|"Miss"| L1["L1 로컬"]
+    REQ["요청"] -->|"L1 Hit: 100ns"| L1["L1 Caffeine"]
+    L1 -->|"L1 Miss"| L2["L2 Redis"]
+    L2 -->|"L2 Hit: 1ms"| L1
+    L2 -->|"L2 Miss"| DB["DB: 50ms"]
+```
+
+---
+
+## 캐시 계층 전체 구조와 각 계층의 역할
+
+실제 프로덕션에서는 최대 5단계 계층이 존재한다. 각 계층은 처리 속도, 용량, 일관성 보장 수준이 모두 다르다.
+
+```mermaid
+graph LR
+    C["클라이언트"] --> CDN["CDN 엣지"]
+    CDN -->|"Miss"| GW["API Gateway"]
+    GW -->|"Miss"| L1["L1 Caffeine"]
     L1 -->|"Miss"| L2["L2 Redis"]
     L2 -->|"Miss"| DB["DB"]
 ```
 
----
-
-## 캐시 계층 전체 그림
-
-실제 프로덕션 환경에서의 캐시 계층은 최대 5단계까지 존재할 수 있다. 각 계층마다 응답 속도, 용량, 비용이 다르다.
-
-```mermaid
-graph LR
-    Client["클라이언트"] -->|"1️⃣ CDN Hit: 5~50m"| CDN["CDN"]
-    CDN -->|"Miss"| GW["2️⃣ API Gateway"]
-    GW -->|"Miss"| L1["3️⃣ L1 Local Cache"]
-    L1 -->|"Miss"| L2["4️⃣ L2 Remote Cach"]
-    L2 -->|"Miss"| DB["5️⃣ Database"]
-```
-
 ### 계층별 특성 비교
 
-| 계층 | 위치 | 응답 시간 | 용량 | 일관성 | 적합한 데이터 |
-|------|------|----------|------|--------|-------------|
-| CDN | 엣지 서버 | 5~50ms | 무제한 | 낮음 | 정적 자원, 공개 API |
-| API Gateway | 게이트웨이 | 1~5ms | 중간 | 낮음 | 인증 토큰, Rate Limit |
-| L1 Local | JVM Heap | ~100ns | 작음 (수MB) | 서버별 상이 | Hot 데이터 |
-| L2 Remote | Redis | 0.5~2ms | 큼 (수GB) | 높음 | 세션, 상품 정보 |
-| DB | 디스크 | 5~200ms | 매우 큼 | 완벽 | 원본 데이터 |
+| 계층 | 응답 시간 | 용량 | 일관성 | 주요 데이터 |
+|------|----------|------|--------|------------|
+| CDN | 5~50ms | 사실상 무제한 | 낮음 | 정적 파일, 공개 API |
+| API Gateway | 1~5ms | 수백 MB | 낮음 | 인증 토큰, Rate Limit |
+| L1 Caffeine | ~100ns | 수백 MB (힙) | 서버별 상이 | Hot 데이터 |
+| L2 Redis | 0.5~2ms | 수십 GB | 높음 | 세션, 상품, 공유 데이터 |
+| DB | 5~200ms | 무제한 | 완벽 | 원본 데이터 |
 
-> **비유:** 인체의 기억 시스템과 비슷하다. 반사 신경(L1, 나노초)은 뜨거운 냄비에서 즉시 손을 뗀다. 단기 기억(L2, 밀리초)은 방금 본 전화번호를 기억한다. 장기 기억(DB, 수십ms)은 오래 전 일을 떠올리려면 시간이 걸린다. 각 계층이 각자의 역할을 하면서 전체 시스템의 응답 속도를 극대화한다.
+> **비유:** 인체의 반응 계층과 같다. 뜨거운 것에 손이 닿으면 반사 신경(L1, 나노초)이 먼저 손을 뗀다. 뇌에서 "왜 뜨겁지?"를 생각하기(DB) 전에 이미 손이 피했다. 각 계층이 자신이 처리할 수 있는 수준의 자극을 맡아서, 전체 응답이 빨라진다.
 
 ---
 
-## L1 Local Cache — Caffeine
+## L1 Local Cache — Caffeine 내부 동작 완전 해부
 
-L1 캐시는 애플리케이션 서버의 JVM 힙 메모리 안에 존재하는 캐시다. 네트워크 통신이 전혀 없으므로 나노초 단위로 응답한다. Java 생태계에서 가장 성능이 좋은 로컬 캐시 라이브러리가 Caffeine이다.
+### Caffeine을 선택하는 이유: W-TinyLFU 알고리즘
 
-Caffeine은 Google Guava Cache의 후속작으로, W-TinyLFU 알고리즘을 사용해 Hit Rate가 가장 높다. 같은 메모리를 사용해도 LRU 기반 캐시보다 15~20% 더 높은 Hit Rate를 달성한다.
+Java 로컬 캐시 라이브러리는 Guava Cache, EhCache, Caffeine이 있다. Caffeine이 표준이 된 이유는 **W-TinyLFU(Window TinyLeast Frequently Used)** 알고리즘 때문이다.
 
-> **비유:** 책상 위 공간은 한정되어 있다. LRU는 "가장 오래 안 본 책"을 치우는데, 가끔 한 번 본 두꺼운 백과사전이 자주 보는 얇은 공식집을 밀어낼 수 있다. W-TinyLFU는 "최근에 봤냐"와 "얼마나 자주 봤냐"를 모두 고려해서, 자주 보는 공식집은 절대 치우지 않는다.
+LRU의 치명적 약점은 **Cache Pollution**이다. 한 번만 접근되는 대용량 스캔(예: 새벽 배치 작업)이 자주 쓰이는 핫 데이터를 캐시에서 밀어낸다. LRU는 "최근에 접근했냐"만 보기 때문이다.
 
-### W-TinyLFU 동작 원리
+W-TinyLFU는 두 가지 질문을 동시에 묻는다.
+- "최근에 접근했냐?" (Recency)
+- "얼마나 자주 접근됐냐?" (Frequency)
 
 ```mermaid
 graph LR
-    New["새 항목"] -->|"1️⃣ Window Cache\n"| WC["Window"]
-    WC -->|"2️⃣ 빈도 비교"| Filter{"TinyLFU"}
-    Filter -->|"신규가 더 자주 사용"| Main["Main Cache"]
-    Filter -->|"기존이 더 자주 사용"| Evict["신규 항목 폐기"]
-    Main -->|"Probation → Protec"| Main
+    NEW["신규 항목"] -->|"Window 1%"| WIN["Window Cache"]
+    WIN -->|"Candidate"| TLF["TinyLFU 비교"]
+    TLF -->|"신규 빈도 높음"| MAIN["Main Cache 99%"]
+    TLF -->|"기존 빈도 높음"| DROP["폐기"]
+    MAIN -->|"Probation→Protected"| MAIN
 ```
 
-새로 들어온 항목은 먼저 Window 영역(1%)에 들어간다. Window에서 밀려날 때 TinyLFU 필터가 "이 신규 항목의 접근 빈도"와 "Main 영역에서 쫓겨날 후보의 접근 빈도"를 비교한다. 신규가 더 자주 사용될 것으로 예측되면 Main에 입성하고, 아니면 바로 폐기된다. 이 메커니즘 덕분에 한 번만 접근되는 데이터가 자주 접근되는 데이터를 밀어내는 "cache pollution"을 방지한다.
+**Frequency Count는 Count-Min Sketch로 구현된다.** 일반 HashMap으로 빈도를 세면 메모리가 폭발한다. Count-Min Sketch는 여러 개의 해시 함수와 2D 배열로 오차 허용 범위 내에서 빈도를 추정한다. 메모리는 O(1)이다.
 
-아래 코드는 Caffeine 캐시를 Spring에 통합하는 설정이다. `maximumSize`와 `expireAfterWrite`가 핵심 설정인데, 각각 메모리 사용량과 데이터 신선도를 제어한다.
+```
+Count-Min Sketch 예시 (4 hash functions × 8 buckets):
+항목 A: hash1=2, hash2=5, hash3=1, hash4=6 → 각 위치에 +1
+빈도 추정 = min(버킷[h1][2], 버킷[h2][5], 버킷[h3][1], 버킷[h4][6])
+```
+
+이 덕분에 Caffeine은 같은 메모리에서 LRU 대비 **15~20% 높은 Hit Rate**를 달성한다. 실측 데이터: Wikipedia 트래픽 기준 LRU 78% Hit Rate vs W-TinyLFU 93%.
+
+### Caffeine Spring 통합 설정
 
 ```java
 @Configuration
-public class CaffeineConfig {
+public class CaffeineL1Config {
 
+    /**
+     * 캐시별 세밀한 설정 — 데이터 성격에 따라 maximumSize와 TTL이 다르다.
+     *
+     * WHY maximumSize 분리:
+     *   상품(hotProducts): 자주 바뀌므로 TTL 짧게, 수가 많으므로 용량 작게
+     *   사용자(userProfile): 덜 바뀌므로 TTL 길게, 수가 더 많으므로 용량 크게
+     */
     @Bean
     public CaffeineCacheManager caffeineCacheManager() {
         CaffeineCacheManager manager = new CaffeineCacheManager();
-        manager.setCaffeine(Caffeine.newBuilder()
-            .maximumSize(10_000)                    // 최대 10,000개 항목
-            .expireAfterWrite(Duration.ofSeconds(30)) // 30초 후 만료
-            .recordStats());                         // Hit/Miss 통계 수집
-        return manager;
-    }
 
-    // 캐시별 세밀한 설정이 필요할 때
-    @Bean
-    public CaffeineCacheManager detailedCacheManager() {
-        CaffeineCacheManager manager = new CaffeineCacheManager();
+        // 기본 설정 (특별 설정이 없는 캐시에 적용)
+        manager.setCaffeine(Caffeine.newBuilder()
+            .maximumSize(5_000)
+            .expireAfterWrite(Duration.ofSeconds(30))
+            .recordStats());  // 반드시 켜야 Prometheus 메트릭 수집 가능
+
+        // 캐시별 개별 설정
         manager.registerCustomCache("hotProducts",
             Caffeine.newBuilder()
                 .maximumSize(1_000)
                 .expireAfterWrite(Duration.ofSeconds(10))
+                // WHY expireAfterWrite vs expireAfterAccess:
+                //   - expireAfterWrite: 쓰기 후 고정 TTL. 데이터 신선도 보장
+                //   - expireAfterAccess: 마지막 접근 후 TTL. 아무도 안 쓰면 자동 제거
+                //   재고처럼 자주 바뀌는 데이터는 expireAfterWrite가 안전
+                .recordStats()
                 .build());
-        manager.registerCustomCache("userProfiles",
+
+        manager.registerCustomCache("userProfile",
             Caffeine.newBuilder()
                 .maximumSize(50_000)
                 .expireAfterWrite(Duration.ofMinutes(5))
+                .expireAfterAccess(Duration.ofMinutes(10))
+                // WHY 두 가지 TTL 동시 적용:
+                //   5분 write TTL: 최대 5분까지만 캐시 유지 (신선도)
+                //   10분 access TTL: 5분이 지났어도 최근 10분 내 접근이 있으면 유지
+                //   실제 만료 = min(write TTL 남은 시간, access TTL 남은 시간)
+                .recordStats()
                 .build());
+
+        manager.registerCustomCache("categoryTree",
+            Caffeine.newBuilder()
+                .maximumSize(100)      // 카테고리 트리는 수가 적음
+                .expireAfterWrite(Duration.ofMinutes(30))
+                .refreshAfterWrite(Duration.ofMinutes(25))
+                // WHY refreshAfterWrite:
+                //   만료 전 25분에 백그라운드에서 미리 갱신
+                //   사용자는 항상 캐시된 데이터를 받음 (만료 공백 없음)
+                //   단, Executor를 별도 설정해야 함
+                .executor(Executors.newSingleThreadExecutor())
+                .recordStats()
+                .build());
+
         return manager;
     }
 }
 ```
 
-**이 코드의 핵심:** `maximumSize(10_000)`은 캐시에 최대 10,000개 항목만 유지하겠다는 뜻이다. 10,001번째 항목이 들어오면 W-TinyLFU 알고리즘이 가장 "덜 중요한" 항목을 자동 제거한다. `recordStats()`를 켜면 Hit Rate를 모니터링할 수 있다.
+### Caffeine의 비동기 Eviction 메커니즘
+
+Caffeine은 Eviction을 **호출 스레드에서 동기 실행하지 않는다.** 내부적으로 링버퍼에 작업을 쌓고, 별도의 유지보수 스레드가 비동기로 처리한다. 이 덕분에 캐시 조회 성능이 일관되게 100ns 수준을 유지한다.
+
+그런데 이 비동기 특성 때문에 `maximumSize(1000)` 설정이 있어도 순간적으로 1,005개가 들어갈 수 있다. 이는 버그가 아니라 의도된 설계다. 성능을 위해 엄격한 경계 대신 약간의 초과를 허용한다.
 
 ---
 
-## L2 Remote Cache — Redis
+## L2 Remote Cache — Redis 직렬화 비용과 커넥션 풀 설계
 
-L2 캐시는 별도의 서버(Redis)에 존재하는 캐시다. 모든 애플리케이션 서버가 공유하므로, 서버 A에서 캐시한 데이터를 서버 B에서도 사용할 수 있다. 네트워크 통신이 필요하지만, DB보다 10~100배 빠르다.
+### 직렬화 방식 선택이 L2 성능을 결정한다
 
-> **비유:** L1이 각 직원의 책상 서랍이라면, L2는 사무실 공용 캐비닛이다. 서랍에 없으면 캐비닛까지 걸어가야 하지만(네트워크 지연), 창고(DB)까지 가는 것보다는 훨씬 빠르다. 그리고 캐비닛은 모든 직원이 공유하므로, 누군가 넣어둔 서류를 다른 직원도 사용할 수 있다.
+Redis는 바이트 배열을 저장한다. Java 객체를 Redis에 저장하려면 직렬화가 필요하다. 직렬화 방식 선택이 잘못되면 캐시를 쓰는 의미가 없어진다.
 
-### Redis를 L2로 설정하는 핵심 포인트
+**JDK 직렬화 (사용 금지):**
+- 크기: Product 객체 → 수백 바이트 (클래스 메타정보 포함)
+- 속도: 느림
+- 치명적 단점: 클래스에 필드 하나 추가하면 기존 캐시 전체 역직렬화 실패. `InvalidClassException` 발생으로 전체 캐시 무효화
 
-Redis를 L2 캐시로 사용할 때 고려해야 할 핵심은 직렬화 방식이다. 기본 JDK 직렬화는 크기가 크고 느리며, 클래스 변경 시 역직렬화에 실패한다. JSON 직렬화를 사용하면 사람이 읽을 수 있고, 클래스 변경에 유연하며, 크기도 작다.
+**GenericJackson2JsonRedisSerializer (권장):**
+- 크기: JDK의 30~50% 수준
+- 속도: 적당히 빠름
+- 장점: 클래스 변경에 유연, 사람이 읽을 수 있어 디버깅 쉬움
+- 단점: 타입 정보를 JSON에 포함(`@class` 필드)하므로 보안 주의
 
-또한 커넥션 풀 설정이 중요하다. 서버당 Redis 커넥션이 부족하면 커넥션을 얻기 위해 대기하는 시간이 캐시 조회 시간보다 더 걸릴 수 있다.
+**Kryo 또는 MessagePack (극한 성능 요구 시):**
+- 크기: JSON의 20~40% 수준
+- 속도: JSON보다 5~10배 빠름
+- 단점: 스키마 관리 필요, 디버깅 어려움
+
+> **비유:** JDK 직렬화는 책 전체를 팩스로 보내는 것(느리고 형식 변경에 취약). JSON은 책을 타이핑해서 이메일로 보내는 것(읽기 쉽고 유연). Kryo는 책을 압축 파일로 보내는 것(빠르고 작지만 압축 해제 도구가 필요).
 
 ```java
 @Configuration
 public class RedisL2Config {
 
+    /**
+     * Lettuce 커넥션 풀 설정
+     *
+     * WHY Lettuce vs Jedis:
+     *   Lettuce: Netty 기반 비동기 논블로킹, 커넥션 하나를 여러 스레드가 공유(멀티플렉싱)
+     *   Jedis: 동기 블로킹, 스레드당 커넥션 필요 → 스레드 수만큼 커넥션 필요
+     *
+     *   서버가 200 스레드를 쓴다면:
+     *   Jedis: 커넥션 200개 필요
+     *   Lettuce: 커넥션 8~16개로 충분 (멀티플렉싱)
+     */
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
-        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
-            .commandTimeout(Duration.ofMillis(100))   // 100ms 초과 시 타임아웃
-            .build();
+        // 커넥션 풀 설정 (Lettuce도 풀링 가능)
+        GenericObjectPoolConfig<Object> poolConfig = new GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(16);      // 최대 커넥션 수
+        poolConfig.setMaxIdle(8);        // 유휴 커넥션 최대
+        poolConfig.setMinIdle(4);        // 유휴 커넥션 최소 (미리 확보)
+        poolConfig.setMaxWait(Duration.ofMillis(50));  // 커넥션 대기 최대 50ms
+
+        LettucePoolingClientConfiguration clientConfig =
+            LettucePoolingClientConfiguration.builder()
+                .poolConfig(poolConfig)
+                .commandTimeout(Duration.ofMillis(200))
+                // WHY 200ms timeout:
+                //   Redis 정상 응답: 1~5ms
+                //   200ms에서 타임아웃: Redis가 비정상임을 빠르게 감지
+                //   이 타임아웃 없으면 Redis 장애 시 스레드가 수 초간 블로킹
+                .build();
 
         RedisStandaloneConfiguration serverConfig =
             new RedisStandaloneConfiguration("redis-host", 6379);
@@ -155,124 +238,239 @@ public class RedisL2Config {
 
     @Bean
     public RedisCacheManager redisCacheManager(RedisConnectionFactory factory) {
-        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
-            .entryTtl(Duration.ofMinutes(30))
+        // 타입 정보를 JSON에 포함하되, 신뢰할 수 없는 클래스는 차단
+        ObjectMapper objectMapper = new ObjectMapper()
+            .activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY
+            )
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        GenericJackson2JsonRedisSerializer serializer =
+            new GenericJackson2JsonRedisSerializer(objectMapper);
+
+        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration
+            .defaultCacheConfig()
+            .entryTtl(Duration.ofMinutes(10))
             .serializeKeysWith(
                 RedisSerializationContext.SerializationPair
                     .fromSerializer(new StringRedisSerializer()))
             .serializeValuesWith(
                 RedisSerializationContext.SerializationPair
-                    .fromSerializer(new GenericJackson2JsonRedisSerializer()))
+                    .fromSerializer(serializer))
             .disableCachingNullValues();
+            // WHY disableCachingNullValues:
+            //   null을 캐시하면 DB 조회 시 존재하지 않는 키에 대한 반복 조회를 막을 수 있음
+            //   (Cache Penetration 방어를 위해서는 별도로 null 캐싱을 구현해야 함)
+            //   여기서는 null 캐싱 로직을 TwoLevelCache에서 별도 제어하므로 기본 비활성화
+
+        // 캐시별 TTL 개별 설정
+        Map<String, RedisCacheConfiguration> cacheConfigs = Map.of(
+            "hotProducts",   defaultConfig.entryTtl(Duration.ofMinutes(2)),
+            "userProfile",   defaultConfig.entryTtl(Duration.ofMinutes(30)),
+            "categoryTree",  defaultConfig.entryTtl(Duration.ofHours(2)),
+            "inventory",     defaultConfig.entryTtl(Duration.ofSeconds(10)),
+            "userSession",   defaultConfig.entryTtl(Duration.ofHours(24))
+        );
 
         return RedisCacheManager.builder(factory)
             .cacheDefaults(defaultConfig)
-            .withInitialCacheConfigurations(Map.of(
-                "inventory", defaultConfig.entryTtl(Duration.ofSeconds(30)),
-                "userSession", defaultConfig.entryTtl(Duration.ofHours(2))
-            ))
+            .withInitialCacheConfigurations(cacheConfigs)
             .build();
+    }
+
+    /**
+     * 직접 Redis 조작이 필요한 곳을 위한 템플릿
+     * (Pub/Sub 발행, ZSet 조작 등 CacheManager로 추상화 불가한 기능)
+     */
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory factory) {
+        return new StringRedisTemplate(factory);
+    }
+
+    @Bean
+    public RedisTemplate<String, Object> objectRedisTemplate(
+            RedisConnectionFactory factory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(factory);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+        return template;
     }
 }
 ```
 
-**이 코드의 핵심:** `commandTimeout(100ms)`로 Redis가 느릴 때 빠르게 타임아웃 시켜서 전체 응답 지연을 방지한다. `GenericJackson2JsonRedisSerializer`로 JSON 직렬화를 사용하고, `disableCachingNullValues()`로 null 값 캐싱을 막는다.
+### 직렬화 비용 실측
+
+실측 기준 (Product 객체, 필드 15개, 중첩 List 포함):
+
+| 방식 | 직렬화 시간 | 크기 | 역직렬화 시간 |
+|------|------------|------|-------------|
+| JDK | ~450μs | 2,400 bytes | ~380μs |
+| JSON (Jackson) | ~85μs | 680 bytes | ~95μs |
+| Kryo | ~12μs | 210 bytes | ~8μs |
+
+캐시 저장 시 85μs + Redis RTT 1ms = 총 약 1.1ms. Redis가 없었다면 DB 50ms. 캐시 효과는 여전히 45배다. 단, 직렬화 대상 객체가 매우 복잡하거나(수십 MB) 초당 수십만 번 직렬화한다면 Kryo로 전환을 고려해야 한다.
 
 ---
 
-## L1 + L2 통합 구현 — Spring Cache 추상화
+## L1 + L2 통합 구현 — TwoLevelCache 완전 구현
 
-Spring의 Cache 추상화를 활용하면 L1(Caffeine)과 L2(Redis)를 투명하게 계층화할 수 있다. 핵심은 `CompositeCacheManager` 대신 커스텀 `CacheManager`를 만들어서 "L1 먼저 조회 → L1 Miss이면 L2 조회 → L2 Hit이면 L1에도 저장" 로직을 구현하는 것이다.
+### 설계 원칙: L1은 L2의 프록시
 
-> **비유:** 도서관에서 책을 찾을 때, 사서(CacheManager)가 "1층 열람실(L1) 확인 → 없으면 2층 서고(L2) 확인 → 2층에 있으면 1층에도 한 권 비치"하는 것과 같다. 다음에 같은 책을 찾으면 1층에서 바로 꺼낸다.
+`TwoLevelCache`는 Spring의 `Cache` 인터페이스를 구현해서, `@Cacheable`이 사용하는 캐시 추상화 뒤에서 L1/L2를 투명하게 처리한다. 서비스 코드는 캐시 계층을 전혀 모른다.
 
-### 동작 흐름
+**TTL 규칙:** L1 TTL은 반드시 L2 TTL보다 짧아야 한다.
+- L2(Redis) TTL: 10분
+- L1(Caffeine) TTL: 30초
+
+WHY: L1 TTL이 L2보다 길면, L2에서 데이터가 갱신된 후에도 L1에 구 데이터가 남는다. Pub/Sub 무효화가 실패한 최악의 경우에도 L1 TTL 내에 자동 수렴하도록 보장하는 안전망이다.
 
 ```mermaid
 graph LR
-    App["App"]
-    L1["L1(Caffeine)"]
-    L2["L2(Redis)"]
-    DB["DB"]
-    App -->|"GET key"| L1
-    L1 -->|"Hit→100ns"| App
-    L1 -->|"Miss→GET key"| L2
-    L2 -->|"Miss→조회"| DB
+    APP["@Cacheable"] --> TWO["TwoLevelCache"]
+    TWO -->|"1. L1 조회"| L1["Caffeine"]
+    L1 -->|"Hit"| APP
+    TWO -->|"2. L2 조회"| L2["Redis"]
+    L2 -->|"Hit → L1 저장"| L1
+    TWO -->|"3. DB 조회"| DB["Repository"]
 ```
 
-아래 코드는 L1+L2 계층형 캐시의 전체 구현이다. `TwoLevelCache` 클래스가 Spring의 `Cache` 인터페이스를 구현하며, 내부적으로 Caffeine(L1)과 Redis(L2)를 순차적으로 조회한다.
-
-이 구현에서 가장 신경 써야 할 부분은 L1과 L2의 TTL 관계다. L1 TTL은 반드시 L2 TTL보다 짧아야 한다. L1이 L2보다 오래 살아남으면, L2는 이미 갱신되었는데 L1에 구 데이터가 남아서 일관성이 깨진다.
-
 ```java
+/**
+ * L1(Caffeine) + L2(Redis) 계층 캐시 구현체
+ *
+ * 핵심 설계 결정:
+ * 1. get: L1 → L2 → null 순서. L2 Hit 시 L1에 승격(warming)
+ * 2. put: L1과 L2 모두 동시 저장
+ * 3. evict: L2 먼저 → L1 → Pub/Sub 브로드캐스트 (순서 중요)
+ * 4. null 값 캐싱: Cache Penetration 방어용 별도 마커 사용
+ */
 public class TwoLevelCache implements Cache {
 
-    private final Cache caffeineCache;   // L1
-    private final Cache redisCache;      // L2
+    private static final Object NULL_MARKER = new Object();
+    private static final Logger log = LoggerFactory.getLogger(TwoLevelCache.class);
+
     private final String name;
+    private final Cache l1;           // Caffeine
+    private final Cache l2;           // Redis
+    private final L1InvalidationPublisher publisher;
+    private final MeterRegistry meterRegistry;
 
-    public TwoLevelCache(String name, Cache caffeineCache, Cache redisCache) {
+    public TwoLevelCache(String name, Cache l1, Cache l2,
+                         L1InvalidationPublisher publisher,
+                         MeterRegistry meterRegistry) {
         this.name = name;
-        this.caffeineCache = caffeineCache;
-        this.redisCache = redisCache;
+        this.l1 = l1;
+        this.l2 = l2;
+        this.publisher = publisher;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
-    public String getName() {
-        return this.name;
-    }
+    public String getName() { return name; }
 
     @Override
-    public Object getNativeCache() {
-        return this;
-    }
+    public Object getNativeCache() { return this; }
 
     @Override
     public ValueWrapper get(Object key) {
-        // 1단계: L1 (Caffeine) 조회 — 네트워크 없음, ~100ns
-        ValueWrapper l1Value = caffeineCache.get(key);
-        if (l1Value != null) {
-            return l1Value;
+        // 1단계: L1 조회 (~100ns, 네트워크 없음)
+        ValueWrapper l1Val = l1.get(key);
+        if (l1Val != null) {
+            recordHit("l1");
+            // null 마커 처리: Cache Penetration 방어용 저장값
+            return (l1Val.get() == NULL_MARKER) ? () -> null : l1Val;
         }
 
-        // 2단계: L2 (Redis) 조회 — 네트워크 필요, ~1ms
-        ValueWrapper l2Value = redisCache.get(key);
-        if (l2Value != null) {
-            // L2 Hit → L1에도 저장 (다음부터 L1에서 바로 반환)
-            caffeineCache.put(key, l2Value.get());
-            return l2Value;
+        // 2단계: L2 조회 (~1ms, 네트워크 필요)
+        ValueWrapper l2Val = l2.get(key);
+        if (l2Val != null) {
+            recordHit("l2");
+            // L2 Hit → L1 승격 (다음 요청은 L1에서 처리)
+            Object value = l2Val.get();
+            l1.put(key, value == null ? NULL_MARKER : value);
+            return (value == null) ? () -> null : l2Val;
         }
 
-        return null; // 전체 Miss → 호출자가 DB 조회
+        recordMiss();
+        return null;  // 전체 Miss → 호출자가 DB 조회
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T get(Object key, Class<T> type) {
+        ValueWrapper wrapper = get(key);
+        if (wrapper == null) return null;
+        Object value = wrapper.get();
+        if (value == null) return null;
+        if (type != null && !type.isInstance(value)) {
+            throw new IllegalStateException("Cached value [" + value
+                + "] is not of required type [" + type.getName() + "]");
+        }
+        return (T) value;
     }
 
     @Override
     public void put(Object key, Object value) {
-        // 양쪽 모두에 저장
-        caffeineCache.put(key, value);
-        redisCache.put(key, value);
+        Object storeValue = (value == null) ? NULL_MARKER : value;
+        // L1과 L2 동시 저장
+        l1.put(key, storeValue);
+        l2.put(key, value);  // Redis CacheManager가 null 처리
+    }
+
+    @Override
+    public ValueWrapper putIfAbsent(Object key, Object value) {
+        ValueWrapper existing = get(key);
+        if (existing != null) return existing;
+        put(key, value);
+        return null;
     }
 
     @Override
     public void evict(Object key) {
-        // 양쪽 모두에서 삭제
-        caffeineCache.evict(key);
-        redisCache.evict(key);
+        /**
+         * WHY L2 먼저 삭제하는가:
+         *
+         * 잘못된 순서 (L1 먼저):
+         *   1. L1 삭제 → 다른 스레드가 L2에서 구 데이터를 읽어 L1에 승격
+         *   2. L2 삭제 → 이미 L1에 구 데이터가 다시 들어온 상태
+         *   결과: L1에 구 데이터가 TTL 동안 잔존
+         *
+         * 올바른 순서 (L2 먼저):
+         *   1. L2 삭제 → L2에 더 이상 구 데이터 없음
+         *   2. L1 삭제 → 로컬 캐시 정리
+         *   3. Pub/Sub → 다른 서버 L1 정리
+         *   결과: 이후 어느 계층에서 조회해도 구 데이터 없음
+         */
+        l2.evict(key);      // L2(Redis) 먼저
+        l1.evict(key);      // L1(로컬) 다음
+        publisher.publishEviction(name, key.toString());  // 다른 서버 L1도 삭제
     }
 
     @Override
     public void clear() {
-        caffeineCache.clear();
-        redisCache.clear();
+        l2.clear();
+        l1.clear();
+        publisher.publishClear(name);
+    }
+
+    private void recordHit(String layer) {
+        meterRegistry.counter("cache.hit",
+            "cache", name, "layer", layer).increment();
+    }
+
+    private void recordMiss() {
+        meterRegistry.counter("cache.miss", "cache", name).increment();
     }
 }
 ```
 
-**이 코드의 핵심:** `get`에서 L1 → L2 순서로 조회하고, L2 Hit 시 L1에 자동 승격(put)한다. `put`과 `evict`는 양쪽 모두에 적용해서 일관성을 유지한다.
-
-### CacheManager 등록
-
-위에서 만든 `TwoLevelCache`를 Spring의 `CacheManager`로 등록하면, `@Cacheable` 어노테이션만으로 2단계 캐시가 투명하게 동작한다.
+### CacheManager 등록과 서비스 사용
 
 ```java
 @Configuration
@@ -281,349 +479,1144 @@ public class TwoLevelCacheConfig {
 
     private final CaffeineCacheManager caffeineManager;
     private final RedisCacheManager redisManager;
+    private final L1InvalidationPublisher publisher;
+    private final MeterRegistry meterRegistry;
 
     @Bean
     @Primary
     public CacheManager twoLevelCacheManager() {
-        return new CacheManager() {
-
-            private final ConcurrentMap<String, Cache> cacheMap =
-                new ConcurrentHashMap<>();
-
+        return new AbstractCacheManager() {
             @Override
-            public Cache getCache(String name) {
-                return cacheMap.computeIfAbsent(name, n -> {
-                    Cache l1 = caffeineManager.getCache(n);
-                    Cache l2 = redisManager.getCache(n);
-                    if (l1 == null || l2 == null) return null;
-                    return new TwoLevelCache(n, l1, l2);
-                });
-            }
-
-            @Override
-            public Collection<String> getCacheNames() {
-                return cacheMap.keySet();
+            protected Collection<? extends Cache> loadCaches() {
+                // Spring 초기화 시 등록된 캐시 이름 목록으로 TwoLevelCache 생성
+                return caffeineManager.getCacheNames().stream()
+                    .map(name -> {
+                        Cache l1 = caffeineManager.getCache(name);
+                        Cache l2 = redisManager.getCache(name);
+                        return new TwoLevelCache(name, l1, l2,
+                            publisher, meterRegistry);
+                    })
+                    .collect(Collectors.toList());
             }
         };
     }
 }
 ```
 
-**이 코드의 핵심:** `@Primary`로 이 CacheManager를 기본으로 등록한다. 이제 서비스 코드에서 `@Cacheable("products")`만 붙이면 L1 → L2 → DB 순서로 자동 조회된다.
-
 ```java
-// 서비스 코드는 캐시 계층을 전혀 모른다 — Spring 추상화의 힘
+/**
+ * 서비스 코드는 캐시 계층을 전혀 모른다 — Spring Cache 추상화의 핵심 가치
+ *
+ * @Cacheable: L1 Hit이면 메서드 자체를 실행하지 않음
+ * @CacheEvict: 메서드 성공 후 L1/L2/Pub/Sub 순서로 자동 무효화
+ * @CachePut: 무조건 실행하고 결과를 캐시에 저장 (갱신 시 사용)
+ */
 @Service
+@RequiredArgsConstructor
 public class ProductService {
 
-    @Cacheable(value = "products", key = "#productId")
+    private final ProductRepository productRepository;
+
+    @Cacheable(value = "hotProducts", key = "#productId",
+               unless = "#result == null")
     public Product getProduct(Long productId) {
-        return productRepository.findById(productId).orElseThrow();
+        // L1 Hit이면 이 메서드 자체가 호출되지 않음
+        return productRepository.findById(productId)
+            .orElseThrow(() -> new ProductNotFoundException(productId));
     }
 
-    @CacheEvict(value = "products", key = "#productId")
+    @CacheEvict(value = "hotProducts", key = "#productId")
     @Transactional
-    public void updateProduct(Long productId, ProductUpdateRequest request) {
+    public void updateProduct(Long productId, ProductUpdateRequest req) {
+        // @CacheEvict가 트랜잭션 커밋 후 실행되도록 하려면
+        // @TransactionalEventListener와 조합해야 함 (아래 심화 참고)
         Product product = productRepository.findById(productId).orElseThrow();
-        product.update(request);
+        product.update(req);
+    }
+
+    @CachePut(value = "hotProducts", key = "#result.id")
+    @Transactional
+    public Product createProduct(ProductCreateRequest req) {
+        Product product = productRepository.save(Product.from(req));
+        return product;
+        // @CachePut: 메서드 반환값을 캐시에 저장. DB 저장 후 즉시 캐시도 갱신
+    }
+
+    /**
+     * WHY @CacheEvict를 트랜잭션 커밋 후에 실행해야 하는가:
+     *
+     * 문제 시나리오:
+     *   1. TX 시작 → DB 업데이트
+     *   2. @CacheEvict 실행 → 캐시 삭제
+     *   3. 다른 요청이 캐시 Miss → DB 조회 → 아직 TX 미커밋 구 데이터 읽음 → 캐시 저장
+     *   4. TX 커밋 → DB에는 새 데이터, 캐시에는 구 데이터 잔존
+     *
+     * 해결: 트랜잭션 커밋 이벤트 후 캐시 무효화
+     */
+    @Transactional
+    public void updateProductSafe(Long productId, ProductUpdateRequest req) {
+        Product product = productRepository.findById(productId).orElseThrow();
+        product.update(req);
+        // 이벤트를 발행하면 TransactionSynchronizationManager가
+        // 커밋 후 처리해줌
+        eventPublisher.publishEvent(new ProductUpdatedEvent(productId));
+    }
+}
+
+@Component
+@RequiredArgsConstructor
+class ProductCacheEvictListener {
+
+    private final CacheManager cacheManager;
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onProductUpdated(ProductUpdatedEvent event) {
+        Cache cache = cacheManager.getCache("hotProducts");
+        if (cache != null) {
+            cache.evict(event.getProductId());
+        }
+        // evict 내부에서 Pub/Sub도 자동 발행됨
     }
 }
 ```
 
 ---
 
-## L1 동기화 전략 — 멀티 인스턴스 환경의 핵심 난제
+## L1 일관성 프로토콜 — Pub/Sub 무효화 심층 분석
 
-L2(Redis)는 모든 서버가 공유하므로 일관성 문제가 없다. 진짜 문제는 L1이다. 서버 A에서 데이터를 변경하고 자신의 L1을 지워도, 서버 B~Z의 L1에는 구 데이터가 남아있다.
+### 멀티 인스턴스 환경의 L1 불일치 문제
 
-> **비유:** 본사에서 가격표를 바꿨는데, 직영점 A에만 알려주고 가맹점 B~Z에는 안 알려주면? 가맹점들은 구 가격으로 판매해서 손해가 발생한다. 모든 매장에 "가격 변경 공지"를 동시에 보내야 한다.
+서버 20대가 모두 자체 JVM 힙에 L1 캐시를 가진다. 서버 1번에서 상품 가격을 수정하면:
+- 서버 1번: L1 캐시 삭제 완료
+- 서버 2~20번: L1에 여전히 구 가격이 캐시되어 있음
 
-### Redis Pub/Sub 기반 L1 동기화
+L2(Redis)는 서버 1번이 업데이트했으므로 최신이다. 하지만 서버 2~20번은 L1에서 구 데이터를 반환한다. L1 TTL(30초)이 지나야 자동 수렴한다. 30초 동안 잘못된 가격이 노출될 수 있다.
+
+**Redis Pub/Sub으로 즉시 브로드캐스트:**
 
 ```mermaid
 graph LR
-    SA["서버A"]
-    R["Redis"]
-    SB["서버B/C"]
-    SA -->|"데이터변경→L1삭제"| SA
-    SA -->|"PUBLISH l1:invalidate"| R
-    R -->|"L1 삭제"| SB
+    S1["서버1: evict"] -->|"PUBLISH"| R["Redis Pub/Sub"]
+    R -->|"SUBSCRIBE"| S2["서버2: L1삭제"]
+    R -->|"SUBSCRIBE"| S3["서버3~20: L1삭제"]
 ```
 
-L1 동기화에서 중요한 설계 결정이 있다. "내가 보낸 무효화 메시지를 내가 또 처리할 것인가?" 서버 A가 이미 자신의 L1을 지웠는데, 자신이 보낸 Pub/Sub 메시지를 자기도 수신해서 또 지울 필요는 없다. 하지만 이를 구분하는 로직이 더 복잡하고, 한 번 더 지워도 부작용이 없으므로 보통은 구분 없이 처리한다.
-
-아래 코드는 L1 무효화 메시지를 발행하고 수신하는 전체 구현이다. `TwoLevelCache`의 `evict`에서 Pub/Sub 메시지를 자동 발행하고, `L1InvalidationSubscriber`가 수신해서 로컬 L1 캐시를 삭제한다.
-
 ```java
-// === 무효화 이벤트 발행 ===
+/**
+ * L1 무효화 메시지 발행
+ *
+ * 메시지 형식: "cacheName|key" (파이프 구분)
+ * WHY 파이프 구분자: 캐시 이름과 키 모두 문자열이므로 구분자 필요
+ *     콜론(:)은 Redis 키 네이밍에서 사용하므로 파이프 선택
+ */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class L1InvalidationPublisher {
 
-    private final StringRedisTemplate redis;
-    private static final String CHANNEL = "l1:invalidate";
+    private final StringRedisTemplate redisTemplate;
 
-    public void publishEviction(String cacheName, Object key) {
-        String message = cacheName + "|" + key.toString();
-        redis.convertAndSend(CHANNEL, message);
+    public static final String CHANNEL_INVALIDATE = "l1:invalidate";
+    public static final String CHANNEL_CLEAR = "l1:clear";
+
+    // 서버 식별자 — 자기 자신이 보낸 메시지를 구별하기 위함
+    private final String serverId = UUID.randomUUID().toString();
+
+    public void publishEviction(String cacheName, String key) {
+        String message = serverId + "|" + cacheName + "|" + key;
+        try {
+            redisTemplate.convertAndSend(CHANNEL_INVALIDATE, message);
+        } catch (Exception e) {
+            // WHY 발행 실패를 무시하는가:
+            //   Pub/Sub 발행 실패는 단지 다른 서버의 L1 삭제가 안 될 뿐
+            //   L2(Redis)는 이미 삭제됨. 다른 서버는 L1 TTL 후 자연 수렴
+            //   발행 실패를 던지면 원래 evict 연산 전체가 실패함 — 과도한 처리
+            log.warn("L1 무효화 브로드캐스트 실패: cacheName={}, key={}", cacheName, key, e);
+        }
     }
+
+    public void publishClear(String cacheName) {
+        String message = serverId + "|" + cacheName;
+        try {
+            redisTemplate.convertAndSend(CHANNEL_CLEAR, message);
+        } catch (Exception e) {
+            log.warn("L1 전체 무효화 브로드캐스트 실패: cacheName={}", cacheName, e);
+        }
+    }
+
+    public String getServerId() { return serverId; }
 }
 
-// === 무효화 이벤트 수신 (모든 서버) ===
+/**
+ * 다른 서버에서 보낸 L1 무효화 메시지 수신
+ *
+ * 모든 서버(자신 포함)가 이 Subscriber를 등록한다.
+ * 자기 자신이 보낸 메시지도 수신하지만, 이미 evict했으므로 중복 삭제는 무해하다.
+ */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class L1InvalidationSubscriber implements MessageListener {
 
     private final CaffeineCacheManager caffeineManager;
+    private final L1InvalidationPublisher publisher;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        String payload = new String(message.getBody());
-        String[] parts = payload.split("\\|", 2);
-        String cacheName = parts[0];
-        String key = parts[1];
+        String payload = new String(message.getBody(), StandardCharsets.UTF_8);
+        String[] parts = payload.split("\\|", 3);
+
+        if (parts.length < 3) {
+            log.warn("잘못된 무효화 메시지 형식: {}", payload);
+            return;
+        }
+
+        String senderId = parts[0];
+        String cacheName = parts[1];
+        String key = parts[2];
+
+        // 자신이 보낸 메시지: 이미 evict했으므로 건너뜀 (성능 최적화)
+        // 단, 건너뛰지 않아도 중복 삭제라 부작용은 없음
+        if (publisher.getServerId().equals(senderId)) {
+            return;
+        }
 
         Cache cache = caffeineManager.getCache(cacheName);
         if (cache != null) {
             cache.evict(key);
+            log.debug("원격 L1 무효화 완료: cache={}, key={}", cacheName, key);
         }
     }
 }
 
-// === TwoLevelCache에 Pub/Sub 통합 ===
-public class TwoLevelCache implements Cache {
-
-    private final Cache caffeineCache;
-    private final Cache redisCache;
-    private final String name;
-    private final L1InvalidationPublisher publisher;
-
-    // ... 생성자, get 등 동일 ...
-
-    @Override
-    public void evict(Object key) {
-        caffeineCache.evict(key);
-        redisCache.evict(key);
-        // 다른 서버들의 L1도 무효화
-        publisher.publishEviction(name, key);
-    }
-}
-```
-
-**이 코드의 핵심:** `evict`가 호출되면 자신의 L1/L2를 지우는 것에 더해, Pub/Sub으로 다른 서버들에게도 "이 키 지워라"고 알린다. 모든 서버의 `L1InvalidationSubscriber`가 이를 수신해서 자신의 Caffeine 캐시에서 해당 키를 제거한다.
-
----
-
-## CDN 캐시 계층
-
-CDN(Content Delivery Network)은 사용자에게 물리적으로 가장 가까운 엣지 서버에서 응답하는 최외곽 캐시 계층이다. 정적 파일(이미지, CSS, JS)뿐 아니라 API 응답도 캐시할 수 있다.
-
-> **비유:** 본사 창고(Origin)에서 전국 배송하면 하루 걸리지만, 각 지역 물류센터(CDN 엣지)에 미리 재고를 쌓아두면 당일 배송이 된다. 주문이 들어오면 가장 가까운 물류센터에서 출고한다.
-
-### CDN 캐시 제어 헤더
-
-CDN의 캐시 동작은 HTTP 헤더로 제어한다. Spring에서 API 응답에 캐시 헤더를 추가하는 방법이다.
-
-CDN 캐시에서 가장 중요한 개념은 `s-maxage`와 `max-age`의 차이다. `max-age`는 브라우저 캐시의 TTL이고, `s-maxage`는 CDN(공유 캐시)의 TTL이다. 보통 CDN TTL을 브라우저 TTL보다 길게 설정하고, 데이터가 변경되면 CDN만 즉시 무효화(purge)한다.
-
-`stale-while-revalidate`는 CDN 캐시가 만료된 후에도 지정된 시간 동안 구 데이터를 반환하면서 백그라운드에서 원본을 갱신하는 전략이다. 사용자는 항상 즉시 응답을 받고, 데이터 신선도는 백그라운드에서 유지된다.
-
-```java
-@RestController
-@RequestMapping("/api/products")
-public class ProductController {
-
-    @GetMapping("/{id}")
-    public ResponseEntity<Product> getProduct(@PathVariable Long id) {
-        Product product = productService.getProduct(id);
-
-        return ResponseEntity.ok()
-            .cacheControl(CacheControl
-                .maxAge(Duration.ofMinutes(5))        // 브라우저 캐시 5분
-                .sMaxAge(Duration.ofMinutes(30))       // CDN 캐시 30분
-                .staleWhileRevalidate(Duration.ofMinutes(5))) // 만료 후 5분간 구 데이터 허용
-            .eTag(String.valueOf(product.getVersion())) // 버전 기반 검증
-            .body(product);
-    }
-
-    // 목록 API는 더 짧은 TTL
-    @GetMapping
-    public ResponseEntity<List<Product>> getProducts() {
-        return ResponseEntity.ok()
-            .cacheControl(CacheControl
-                .maxAge(Duration.ofMinutes(1))
-                .sMaxAge(Duration.ofMinutes(5)))
-            .body(productService.getAllProducts());
-    }
-}
-```
-
-**이 코드의 핵심:** `sMaxAge(30분)`으로 CDN에서 30분간 캐시하고, `staleWhileRevalidate(5분)`으로 만료 후에도 5분간 구 데이터를 반환하면서 백그라운드 갱신한다. `eTag`로 데이터가 실제로 변경되었는지 검증해서 불필요한 전송을 방지한다.
-
----
-
-## API Gateway 캐시 계층
-
-API Gateway(Kong, Nginx, Spring Cloud Gateway)에서 응답을 캐시하면 애플리케이션 서버에 요청이 도달하기 전에 응답을 반환할 수 있다. 인증/인가 처리와 함께 캐시를 적용하면 효과가 극대화된다.
-
-> **비유:** 회사 건물 입구의 안내 데스크와 같다. "5층 회의실이 어디냐"는 질문에 매번 5층까지 올라가서 확인할 필요 없이, 안내 데스크에서 바로 답할 수 있다. 자주 묻는 질문은 안내 데스크에 답변을 미리 준비해둔다.
-
-```java
+/**
+ * Redis Pub/Sub 리스너 등록 설정
+ */
 @Configuration
-public class GatewayCacheConfig {
+@RequiredArgsConstructor
+public class RedisPubSubConfig {
+
+    private final L1InvalidationSubscriber invalidationSubscriber;
+    private final RedisConnectionFactory connectionFactory;
 
     @Bean
-    public RouteLocator routes(RouteLocatorBuilder builder) {
-        return builder.routes()
-            .route("cached-products", r -> r
-                .path("/api/products/**")
-                .filters(f -> f
-                    .filter(new ResponseCacheFilter(
-                        Duration.ofMinutes(5),    // 캐시 TTL
-                        Set.of(200),              // 200 응답만 캐시
-                        Set.of("GET")))           // GET 요청만 캐시
-                    .addResponseHeader("X-Cache-Status", "HIT"))
-                .uri("lb://product-service"))
-            .build();
+    public RedisMessageListenerContainer redisMessageListenerContainer() {
+        RedisMessageListenerContainer container =
+            new RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+
+        // L1 개별 키 무효화 구독
+        container.addMessageListener(
+            invalidationSubscriber,
+            new ChannelTopic(L1InvalidationPublisher.CHANNEL_INVALIDATE));
+
+        // L1 전체 캐시 무효화 구독
+        container.addMessageListener(
+            new L1ClearSubscriber(invalidationSubscriber),
+            new ChannelTopic(L1InvalidationPublisher.CHANNEL_CLEAR));
+
+        // WHY 별도 스레드 풀:
+        //   기본 스레드 풀 공유 시, 무효화 메시지 처리 지연이 다른 Redis 작업 영향
+        container.setTaskExecutor(Executors.newFixedThreadPool(4));
+
+        return container;
     }
 }
 ```
 
-**이 코드의 핵심:** GET 요청의 200 응답만 5분간 캐시한다. POST/PUT/DELETE는 캐시하지 않는다. `X-Cache-Status` 헤더로 캐시 Hit 여부를 클라이언트가 확인할 수 있다.
+### Pub/Sub의 한계와 보완 전략
+
+Pub/Sub은 **at-most-once** 전달을 보장한다. 메시지가 유실될 수 있다.
+
+**유실 시나리오:**
+1. 서버 B가 Redis에 연결되지 않은 순간 메시지 발행 → 서버 B 수신 불가
+2. Redis 재시작 → 발행 중이던 메시지 유실
+
+**보완 전략 조합:**
+
+```java
+/**
+ * 보완 전략 1: 짧은 L1 TTL (최후 안전망)
+ * L1 TTL = 30초. Pub/Sub 유실이 있어도 30초 후 자연 수렴.
+ * 30초의 불일치를 수용할 수 없는 데이터라면 L1 캐시 자체를 쓰지 말 것.
+ */
+
+/**
+ * 보완 전략 2: 버전 기반 무효화 (Pub/Sub 대체 또는 보완)
+ * 데이터에 버전 번호를 부여. 캐시 조회 시 버전 비교.
+ * 버전이 다르면 즉시 무효화.
+ */
+@Cacheable(value = "hotProducts", key = "#productId")
+public VersionedProduct getProduct(Long productId) {
+    String cacheVersion = redisTemplate.opsForValue()
+        .get("product:version:" + productId);
+    // 버전 불일치 시 강제 갱신 로직 필요 (복잡도 증가)
+    return productRepository.findById(productId)
+        .map(VersionedProduct::from).orElseThrow();
+}
+
+/**
+ * 보완 전략 3: Redis Keyspace Notification 활용
+ * Redis 자체에서 키 변경/만료 이벤트를 발행하게 해서
+ * 별도 Pub/Sub 발행 없이 L1 동기화
+ *
+ * redis.conf: notify-keyspace-events "Ex"
+ * 채널: __keyevent@0__:expired
+ *
+ * 단점: Redis 서버 부하 증가, 모든 키 이벤트가 발행됨
+ */
+@Component
+public class RedisKeyspaceSubscriber implements MessageListener {
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        String expiredKey = new String(message.getBody());
+        // "cache::hotProducts::12345" 형식으로 파싱
+        if (expiredKey.startsWith("cache::")) {
+            String[] parts = expiredKey.split("::", 3);
+            // L1에서 해당 키 제거
+        }
+    }
+}
+```
 
 ---
 
+## Cache Stampede 방어 — 각 계층별 전략
 
-## 극한 시나리오
+### Stampede란 무엇인가
 
-서버 20대, Redis Cluster 3대, CDN을 운영하는 서비스에 100K TPS가 들어오는 상황을 분석해보자.
+인기 캐시 항목이 만료되는 순간, 동시에 수백~수천 개의 요청이 모두 캐시 Miss를 경험하고 DB로 동시에 몰린다. DB는 순간적으로 폭발적 부하를 받는다. 이를 **Cache Stampede** 또는 **Thundering Herd**라고 한다.
 
-> **비유:** 고속도로 톨게이트에 비유하면, 하이패스(CDN)로 70%가 무정차 통과하고, 카드결제(L1)로 20%가 5초 만에 통과하고, 현금결제(L2)로 8%가 20초 걸리고, 나머지 2%만 관리소(DB)에서 1분 걸리는 셈이다.
+> **비유:** 인기 콘서트 티켓이 오전 10시에 풀린다. 10시 정각에 수십만 명이 동시에 예매 페이지에 접속한다. 서버가 이 순간 폭발한다. 멀티 레이어 캐시에서 한 계층의 인기 항목이 만료될 때 이런 현상이 발생한다.
 
-### 트래픽 분산 시뮬레이션
-
-```mermaid
-graph LR
-    T["100K TPS"] --> CDN["CDN 70%"]
-    T --> GW["Gateway 5%"]
-    T --> L1["L1 80%"]
-    L1 -->|"Miss"| L2["L2 90%"]
-    L2 -->|"Miss"| DB["DB"]
-```
-
-### 계층별 부하 분석
-
-| 계층 | 처리량 | 응답 시간 | 서버 부하 |
-|------|--------|----------|----------|
-| CDN | 70,000 TPS | 10ms | CDN 엣지에 분산, Origin 부하 0 |
-| API Gateway | 5,000 TPS | 3ms | Gateway 메모리 캐시 |
-| L1 Caffeine | 20,000 TPS (서버당 1,000) | 0.1ms | JVM Heap, CPU 무시 가능 |
-| L2 Redis | 4,500 TPS | 1ms | Redis Cluster 분산 |
-| DB | 500 TPS | 50ms | DB 감당 가능 범위 |
-
-**핵심 포인트:** 100K TPS 중 DB에 실제 도달하는 것은 500 TPS, 즉 0.5%에 불과하다. 멀티 레이어 캐싱 없이 100K TPS가 DB로 직행하면 즉시 장애가 발생한다.
-
-### 계층이 빠지면 어떻게 되나?
-
-```mermaid
-graph LR
-    A1["25K TPS"] -->|"L1 없음"| R1["Redis 25K ops"]
-    A2["25K TPS"] -->|"80% L1 Hit"| L1["L1: 20K 처리"]
-    A2 -->|"20% Miss"| R2["Redis 5K ops"]
-```
-
-L1을 빼면 Redis 부하가 5배로 증가한다. Redis Cluster의 단일 샤드 한계는 보통 100K ops/sec이므로, L1 없이 여러 샤드로 분산해야 같은 성능을 내려면 Redis 비용이 5배 증가한다.
-
-### Cold Start 시나리오
-
-서버 20대를 동시에 재시작하면 모든 L1 캐시가 비어있다. 25,000 TPS가 한꺼번에 L2(Redis)로 몰린다.
-
-**방어 전략:**
-
-1. **Rolling Restart:** 서버를 한 대씩 재시작해서, 이미 워밍업된 서버들이 트래픽을 분산 처리
-2. **Cache Warmup:** 시작 시 인기 데이터를 미리 L1에 로드
-3. **Traffic Ramping:** 새로 시작한 서버에 트래픽을 10% → 50% → 100%로 점진적 증가
+### L1 계층 Stampede 방어: Caffeine의 refreshAfterWrite
 
 ```java
+/**
+ * refreshAfterWrite: 만료 전 백그라운드에서 미리 갱신
+ *
+ * expireAfterWrite(30s): 30초 후 완전 만료 → 요청 시 동기 재로딩 (Stampede 발생)
+ * refreshAfterWrite(25s): 25초 후 백그라운드 재로딩 → 30초 전에 갱신 완료
+ *
+ * 주의: refreshAfterWrite는 CacheLoader가 필요.
+ *       Spring Cache 추상화에서는 직접 Caffeine 캐시를 사용해야 함.
+ */
+@Bean
+public com.github.benmanes.caffeine.cache.Cache<Long, Product> productL1Cache(
+        ProductRepository productRepository) {
+    return Caffeine.newBuilder()
+        .maximumSize(1_000)
+        .refreshAfterWrite(Duration.ofSeconds(25))
+        .expireAfterWrite(Duration.ofSeconds(30))
+        .build(key -> productRepository.findById(key).orElse(null));
+        // CacheLoader: 캐시 Miss 또는 refresh 시 자동 호출
+        // 단일 요청만 DB 조회, 나머지는 구 데이터 반환 (스탬피드 방어)
+}
+```
+
+### L2 계층 Stampede 방어: Redis 분산 락
+
+```java
+/**
+ * Redis 분산 락으로 L2 Miss 시 단 하나의 요청만 DB 조회
+ *
+ * 문제: 100개 요청이 동시에 L2 Miss → 100개가 동시에 DB 조회
+ * 해결: 락 획득한 1개만 DB 조회 → L2 저장 → 나머지 99개는 L2에서 반환
+ */
 @Component
 @RequiredArgsConstructor
-public class L1CacheWarmup implements ApplicationRunner {
+@Slf4j
+public class StampedeProtectedCache {
 
-    private final RedisTemplate<String, Object> redis;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final ProductRepository productRepository;
+
+    private static final Duration LOCK_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(3);
+    private static final String LOCK_PREFIX = "lock:cache:";
+
+    public Product getProductWithProtection(Long productId) {
+        String cacheKey = "product:" + productId;
+        String lockKey = LOCK_PREFIX + cacheKey;
+
+        // 1단계: L2 조회
+        Product cached = (Product) redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) return cached;
+
+        // 2단계: L2 Miss → 분산 락 시도
+        String lockValue = UUID.randomUUID().toString();
+        Boolean locked = redisTemplate.opsForValue()
+            .setIfAbsent(lockKey, lockValue, LOCK_TIMEOUT);
+
+        if (Boolean.TRUE.equals(locked)) {
+            // 락 획득 성공 → 이 서버만 DB 조회
+            try {
+                // Double-check: 락 대기 중 다른 서버가 이미 캐시했을 수 있음
+                cached = (Product) redisTemplate.opsForValue().get(cacheKey);
+                if (cached != null) return cached;
+
+                Product product = productRepository.findById(productId).orElseThrow();
+                redisTemplate.opsForValue().set(cacheKey, product,
+                    Duration.ofMinutes(10));
+                return product;
+            } finally {
+                // 자신이 건 락만 해제 (Lua 스크립트로 원자적 실행)
+                releaseLock(lockKey, lockValue);
+            }
+        } else {
+            // 락 획득 실패 → 다른 서버가 DB 조회 중. 완료될 때까지 대기 후 재시도
+            return waitAndRetry(cacheKey, productId);
+        }
+    }
+
+    private Product waitAndRetry(String cacheKey, Long productId) {
+        long deadline = System.currentTimeMillis() + WAIT_TIMEOUT.toMillis();
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(50);  // 50ms 간격 폴링
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            Product product = (Product) redisTemplate.opsForValue().get(cacheKey);
+            if (product != null) return product;
+        }
+        // 타임아웃: 락 보유자가 실패한 경우. DB 직접 조회 (폴백)
+        log.warn("캐시 대기 타임아웃, DB 직접 조회: productId={}", productId);
+        return productRepository.findById(productId).orElseThrow();
+    }
+
+    /**
+     * Lua 스크립트로 원자적 락 해제
+     * WHY Lua: GET → 비교 → DEL을 단일 원자 연산으로 실행
+     *          GET과 DEL 사이에 다른 서버가 락을 재획득했을 경우를 방지
+     */
+    private static final String RELEASE_SCRIPT =
+        "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+        "  return redis.call('del', KEYS[1]) " +
+        "else " +
+        "  return 0 " +
+        "end";
+
+    private void releaseLock(String lockKey, String lockValue) {
+        redisTemplate.execute(
+            new DefaultRedisScript<>(RELEASE_SCRIPT, Long.class),
+            Collections.singletonList(lockKey),
+            lockValue
+        );
+    }
+}
+```
+
+### 확률적 조기 만료 (Probabilistic Early Expiration)
+
+분산 락은 구현 복잡도가 높다. 더 간단한 대안이 **XFetch 알고리즘** 기반의 확률적 조기 만료다.
+
+```java
+/**
+ * XFetch: 만료가 가까울수록 더 높은 확률로 조기 갱신
+ *
+ * 공식: currentTime - delta * beta * ln(random()) > expireTime - ttl
+ * 만료까지 시간이 짧을수록 ln(random())이 음수가 되면서 조기 갱신 확률 증가
+ *
+ * delta: 재계산 소요 시간 (DB 조회 시간, 예: 0.05초)
+ * beta: 조기 갱신 적극성 (기본 1.0, 높을수록 더 일찍 갱신)
+ */
+@Component
+@RequiredArgsConstructor
+public class XFetchCache {
+
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final ProductRepository productRepository;
+
+    private static final double BETA = 1.0;
+
+    public Product getWithXFetch(Long productId) {
+        String key = "product:xfetch:" + productId;
+        String metaKey = key + ":meta";  // TTL 메타 정보 저장
+
+        Product cached = (Product) redisTemplate.opsForValue().get(key);
+
+        if (cached != null) {
+            // 남은 TTL 확인
+            Long remainingTtl = redisTemplate.getExpire(key, TimeUnit.MILLISECONDS);
+            Long originalTtl = (Long) redisTemplate.opsForValue().get(metaKey);
+
+            if (remainingTtl != null && originalTtl != null && remainingTtl > 0) {
+                // 재계산 소요 시간 추정 (여기서는 50ms로 가정)
+                double delta = 0.05;  // 50ms = 0.05초
+
+                // XFetch 공식으로 조기 갱신 여부 결정
+                double randomFactor = -Math.log(Math.random()) * delta * BETA;
+                double threshold = (double) remainingTtl / 1000;  // 초 단위
+
+                if (randomFactor > threshold) {
+                    // 조기 갱신 결정: 백그라운드에서 갱신
+                    CompletableFuture.runAsync(() -> refresh(productId, key, metaKey));
+                }
+            }
+            return cached;
+        }
+
+        return refresh(productId, key, metaKey);
+    }
+
+    private Product refresh(Long productId, String key, String metaKey) {
+        Duration ttl = Duration.ofMinutes(10);
+        Product product = productRepository.findById(productId).orElseThrow();
+        redisTemplate.opsForValue().set(key, product, ttl);
+        redisTemplate.opsForValue().set(metaKey,
+            ttl.toMillis(), ttl.plus(Duration.ofMinutes(1)));
+        return product;
+    }
+}
+```
+
+---
+
+## Cache Warming 전략 — Cold Start를 막아라
+
+### Cold Start가 위험한 이유
+
+서버 20대를 동시 재시작하면 모든 L1이 비어있다. 재시작 직후 25K TPS가 L2(Redis)로 몰리고, Redis Hit이라도 Redis 부하가 5배 증가한다. Redis마저 Miss라면 5K TPS가 DB로 몰린다. DB가 순식간에 폭발한다.
+
+> **비유:** 새벽에 편의점 점장이 교체됐다. 신임 점장은 어떤 상품이 인기인지 모른다. 매장 앞에는 이미 고객 100명이 줄 서 있다. 점장이 "어떤 거 드릴까요?"를 100번 반복하면서 창고를 왔다 갔다 하면 혼란이 온다. 미리 인수인계 리스트를 받아서 진열해두면 고객이 와도 즉시 응대 가능하다.
+
+### 계층 1: ApplicationRunner 기반 동기 워밍
+
+```java
+/**
+ * 서버 시작 시 L2(Redis)에서 인기 데이터를 L1(Caffeine)에 미리 로드
+ *
+ * 워밍 전략:
+ *   1. Redis ZSet "cache:access:rank"에 접근 횟수를 기록해둠
+ *   2. 서버 시작 시 상위 N개 키를 L1에 미리 로드
+ *   3. L1이 채워진 후 트래픽 수신 시작
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class CacheWarmupRunner implements ApplicationRunner {
+
+    private final RedisTemplate<String, Object> redisTemplate;
     private final CaffeineCacheManager caffeineManager;
+    private final ProductRepository productRepository;
+
+    private static final int WARMUP_SIZE = 1_000;
+    private static final String RANK_KEY = "cache:access:rank:hotProducts";
 
     @Override
-    public void run(ApplicationArguments args) {
-        // Redis(L2)에서 인기 데이터를 읽어 L1에 미리 로드
-        Set<String> hotKeys = redis.opsForZSet()
-            .reverseRange("cache:access-count", 0, 999); // 상위 1000개
+    public void run(ApplicationArguments args) throws Exception {
+        log.info("L1 캐시 워밍 시작");
+        Instant start = Instant.now();
 
-        if (hotKeys == null) return;
+        try {
+            warmupHotProducts();
+            warmupCategoryTree();
+        } catch (Exception e) {
+            // WHY 예외를 삼키는가:
+            //   워밍 실패는 치명적 오류가 아님. L1이 비어도 L2/DB 폴백 동작
+            //   워밍 실패로 서버 시작 자체를 막으면 장애 복구가 더 어려워짐
+            log.error("L1 캐시 워밍 실패 — L2/DB 폴백으로 운영 계속", e);
+        }
 
-        Cache l1 = caffeineManager.getCache("products");
+        Duration elapsed = Duration.between(start, Instant.now());
+        log.info("L1 캐시 워밍 완료: {}ms 소요", elapsed.toMillis());
+    }
+
+    private void warmupHotProducts() {
+        Cache l1 = caffeineManager.getCache("hotProducts");
+        if (l1 == null) return;
+
+        // Redis ZSet에서 접근 횟수 상위 N개 키 조회
+        Set<String> hotKeys = redisTemplate.<String, Double>opsForZSet()
+            .reverseRange(RANK_KEY, 0, WARMUP_SIZE - 1);
+
+        if (hotKeys == null || hotKeys.isEmpty()) {
+            // 첫 배포: 접근 기록 없음 → DB에서 최신 인기 상품 쿼리
+            log.info("접근 기록 없음 — DB 기반 초기 워밍 실행");
+            productRepository.findTop1000ByOrderByViewCountDesc()
+                .forEach(p -> l1.put(p.getId(), p));
+            return;
+        }
+
+        // L2(Redis)에서 배치 조회 (파이프라인으로 최적화)
+        List<Object> values = redisTemplate.executePipelined((RedisCallback<Object>) conn -> {
+            for (String key : hotKeys) {
+                conn.stringCommands().get(key.getBytes(StandardCharsets.UTF_8));
+            }
+            return null;
+        });
+
         int loaded = 0;
-        for (String key : hotKeys) {
-            Object value = redis.opsForValue().get(key);
-            if (value != null && l1 != null) {
-                l1.put(key, value);
+        List<String> keyList = new ArrayList<>(hotKeys);
+        for (int i = 0; i < keyList.size(); i++) {
+            Object value = values.get(i);
+            if (value instanceof Product product) {
+                String rawKey = keyList.get(i);
+                // "hotProducts::12345" → "12345"
+                String cacheKey = rawKey.contains("::")
+                    ? rawKey.substring(rawKey.lastIndexOf("::") + 2)
+                    : rawKey;
+                l1.put(cacheKey, product);
                 loaded++;
             }
         }
-        log.info("L1 캐시 웜업 완료: {}개 항목 로드", loaded);
+        log.info("hotProducts L1 워밍: {}/{} 항목 로드", loaded, hotKeys.size());
+    }
+
+    private void warmupCategoryTree() {
+        Cache l1 = caffeineManager.getCache("categoryTree");
+        if (l1 == null) return;
+        // 카테고리는 수가 적으므로 전체 로드
+        Object tree = redisTemplate.opsForValue().get("categoryTree::all");
+        if (tree != null) {
+            l1.put("all", tree);
+        }
     }
 }
 ```
 
-**이 코드의 핵심:** Redis의 Sorted Set에 캐시 접근 횟수를 기록해두고, 서버 시작 시 상위 1,000개를 L1에 미리 로드한다. 이렇게 하면 서버 시작 직후에도 L1 Hit Rate가 높다.
-
----
-## 캐시 모니터링 — Hit Rate가 생명이다
-
-멀티 레이어 캐싱을 구축했으면 각 계층의 Hit Rate를 반드시 모니터링해야 한다. Hit Rate가 떨어지면 하위 계층에 부하가 몰리고, 이는 곧 장애로 이어진다.
-
-> **비유:** 자동차 계기판에 속도계, 연료계, 수온계가 있듯이, 캐시 시스템에도 Hit Rate, 지연 시간, 메모리 사용량을 실시간으로 보여주는 계기판이 필요하다. 수온(Hit Rate)이 경고 수준으로 떨어지면 즉시 조치해야 엔진(DB)이 과열되지 않는다.
+### 계층 2: 접근 횟수 기록 (워밍 데이터 수집)
 
 ```java
+/**
+ * 캐시 접근 시 Redis ZSet에 접근 횟수 기록
+ * 다음 서버 시작 시 워밍에 활용
+ *
+ * WHY ZSet:
+ *   ZINCRBY: 카운터 원자적 증가
+ *   ZREVRANGE: 상위 N개 조회 O(log N)
+ *   ZREMRANGEBYRANK: 오래된 통계 정리 O(log N + M)
+ */
+@Aspect
 @Component
 @RequiredArgsConstructor
-public class CacheMetrics {
+public class CacheAccessRecorder {
 
-    private final CaffeineCacheManager caffeineManager;
-    private final MeterRegistry meterRegistry;
+    private final StringRedisTemplate redisTemplate;
 
-    @Scheduled(fixedDelay = 10000) // 10초마다 수집
-    public void recordCacheStats() {
-        caffeineManager.getCacheNames().forEach(name -> {
-            Cache cache = caffeineManager.getCache(name);
-            if (cache == null) return;
+    @AfterReturning(
+        pointcut = "@annotation(cacheable)",
+        returning = "result")
+    public void recordAccess(JoinPoint jp, Cacheable cacheable, Object result) {
+        if (result == null) return;
 
-            com.github.benmanes.caffeine.cache.Cache<?, ?> nativeCache =
-                (com.github.benmanes.caffeine.cache.Cache<?, ?>) cache.getNativeCache();
+        String cacheName = cacheable.value()[0];
+        Object key = jp.getArgs()[0];  // 단순화: 첫 번째 인자를 키로 사용
+        String rankKey = "cache:access:rank:" + cacheName;
 
-            CacheStats stats = nativeCache.stats();
+        // 비동기 기록 — 기록 실패가 메인 플로우에 영향 없도록
+        CompletableFuture.runAsync(() -> {
+            try {
+                String cacheKey = cacheName + "::" + key;
+                redisTemplate.opsForZSet().incrementScore(rankKey, cacheKey, 1);
 
-            // Prometheus 메트릭으로 노출
-            meterRegistry.gauge("cache.l1.hit.rate",
-                Tags.of("cache", name), stats.hitRate());
-            meterRegistry.gauge("cache.l1.size",
-                Tags.of("cache", name), nativeCache.estimatedSize());
-            meterRegistry.gauge("cache.l1.eviction.count",
-                Tags.of("cache", name), stats.evictionCount());
+                // 상위 10,000개만 유지 (메모리 폭발 방지)
+                Long size = redisTemplate.opsForZSet().size(rankKey);
+                if (size != null && size > 10_000) {
+                    redisTemplate.opsForZSet().removeRange(rankKey, 0, size - 10_001);
+                }
+            } catch (Exception ignored) {
+                // 기록 실패는 무시
+            }
         });
     }
 }
 ```
 
-**이 코드의 핵심:** Caffeine의 `recordStats()`를 활성화해야 통계가 수집된다. `hitRate()`는 0.0~1.0 사이 값으로, 0.95(95%) 이상이면 건강하고, 0.80 이하로 떨어지면 즉시 원인을 분석해야 한다.
+### 계층 3: 점진적 트래픽 증가 (Traffic Ramping)
 
-### 경고 기준
+워밍 완료 후에도 트래픽을 한 번에 100% 보내지 말고 점진적으로 늘린다.
 
-| 메트릭 | 정상 | 주의 | 위험 |
-|--------|------|------|------|
-| L1 Hit Rate | > 90% | 80~90% | < 80% |
-| L2 Hit Rate | > 95% | 90~95% | < 90% |
-| L1 Eviction Rate | 안정적 | 급증 | 지속 급증 |
-| Redis 응답 시간 | < 1ms | 1~5ms | > 5ms |
+```java
+/**
+ * 서버 시작 후 준비 완료 신호를 단계적으로 전달
+ * (쿠버네티스 Readiness Probe 활용)
+ *
+ * 0~10초: 워밍 중, readiness=false (트래픽 0%)
+ * 10초: 워밍 완료, readiness=true (트래픽 100%)
+ *
+ * 더 세밀한 제어는 로드밸런서 가중치(Weight) 조정으로 구현
+ * 예: Nginx upstream weight, AWS ALB target group weight
+ */
+@Component
+@Slf4j
+public class WarmupReadinessIndicator implements HealthIndicator {
+
+    private volatile boolean warmupComplete = false;
+
+    public void markWarmupComplete() {
+        this.warmupComplete = true;
+        log.info("캐시 워밍 완료 — readiness 활성화");
+    }
+
+    @Override
+    public Health health() {
+        return warmupComplete
+            ? Health.up().build()
+            : Health.down().withDetail("reason", "cache warming in progress").build();
+    }
+}
+```
+
+---
+
+## Fallback 전략 — 각 계층 장애 시 동작
+
+### 계층별 장애 시나리오와 대응
+
+```mermaid
+graph LR
+    REQ["요청"] --> L1["L1 Caffeine"]
+    L1 -->|"장애: GC Stop"| L2["L2 Redis"]
+    L2 -->|"장애: 타임아웃"| FB["Fallback"]
+    FB -->|"DB직접"| DB["DB + Rate Limit"]
+```
+
+```java
+/**
+ * 멀티 레이어 Fallback 전략
+ *
+ * L1 장애 (GC Stop, OOM):
+ *   → L2로 바로 진행. L1은 자동 복구. 특별 처리 불필요.
+ *
+ * L2(Redis) 장애:
+ *   → L1으로만 서비스. L1 Miss 시 DB 직접 조회.
+ *   → DB 과부하 방지를 위해 Rate Limiter 적용
+ *   → Circuit Breaker로 Redis 연속 실패 감지 후 Redis 호출 자체를 건너뜀
+ *
+ * L1 + L2 동시 장애:
+ *   → DB 직접 조회 + 강력한 Rate Limiting
+ *   → 일부 요청은 의도적으로 503 반환
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class FallbackAwareProductService {
+
+    private final ProductRepository productRepository;
+    private final TwoLevelCacheManager cacheManager;
+
+    // Resilience4j Circuit Breaker — Redis 연속 실패 감지
+    @CircuitBreaker(name = "redis", fallbackMethod = "getProductWithoutL2")
+    // Resilience4j Rate Limiter — DB 직접 조회 수 제한
+    @RateLimiter(name = "dbFallback")
+    // Resilience4j Bulkhead — 동시 실행 스레드 제한
+    @Bulkhead(name = "dbFallback")
+    public Product getProduct(Long productId) {
+        // 정상 경로: L1 → L2 → DB
+        Cache cache = cacheManager.getCache("hotProducts");
+        if (cache != null) {
+            Product cached = cache.get(productId, Product.class);
+            if (cached != null) return cached;
+        }
+        Product product = productRepository.findById(productId).orElseThrow();
+        if (cache != null) cache.put(productId, product);
+        return product;
+    }
+
+    /**
+     * Circuit Breaker가 OPEN 상태 (Redis 연속 실패)일 때 호출되는 폴백
+     * L2 건너뛰고 L1 → DB 직접 조회
+     */
+    public Product getProductWithoutL2(Long productId, Exception ex) {
+        log.warn("Redis Circuit OPEN — L1+DB 직접 조회: productId={}", productId);
+
+        // L1만 조회
+        com.github.benmanes.caffeine.cache.Cache<Long, Product> caffeineCache =
+            directCaffeineAccess("hotProducts");
+        if (caffeineCache != null) {
+            Product cached = caffeineCache.getIfPresent(productId);
+            if (cached != null) return cached;
+        }
+
+        // DB 직접 조회 (Rate Limiter가 과부하 방지)
+        Product product = productRepository.findById(productId).orElseThrow();
+        if (caffeineCache != null) {
+            caffeineCache.put(productId, product);
+        }
+        return product;
+    }
+}
+```
+
+```yaml
+# application.yml — Resilience4j 설정
+resilience4j:
+  circuitbreaker:
+    instances:
+      redis:
+        slidingWindowSize: 20        # 최근 20회 요청 기준
+        failureRateThreshold: 50     # 50% 실패 시 OPEN
+        waitDurationInOpenState: 30s # 30초 후 HALF_OPEN
+        permittedCallsInHalfOpenState: 5
+
+  ratelimiter:
+    instances:
+      dbFallback:
+        limitForPeriod: 1000          # 1초당 최대 DB 직접 조회 1,000건
+        limitRefreshPeriod: 1s
+        timeoutDuration: 100ms
+
+  bulkhead:
+    instances:
+      dbFallback:
+        maxConcurrentCalls: 50        # 동시 DB 조회 최대 50개
+        maxWaitDuration: 50ms
+```
+
+---
+
+## Cache Penetration — 존재하지 않는 키 방어
+
+### 문제: 악의적 또는 잘못된 요청이 캐시를 우회
+
+존재하지 않는 `productId=99999999`로 반복 요청하면:
+1. L1 Miss (캐시에 없음)
+2. L2 Miss (Redis에도 없음)
+3. DB 조회 → 없음 (null 반환)
+4. null은 캐시 안 함 → 다음 요청도 1~3 반복
+5. 대량 요청 시 DB 폭발
+
+```java
+/**
+ * Cache Penetration 방어 전략 1: Null 캐싱
+ *
+ * 없는 데이터도 "없다"는 사실 자체를 캐시
+ * 단, 짧은 TTL로 실제로 생성될 경우에 대비
+ */
+@Cacheable(value = "hotProducts", key = "#productId",
+           unless = "false")  // null도 캐시 허용
+public Optional<Product> getProductOptional(Long productId) {
+    return productRepository.findById(productId);
+}
+
+// TwoLevelCache에서 null 마커 처리 (앞서 구현한 NULL_MARKER 활용)
+// L1: NULL_MARKER 저장 → get 시 () -> null 반환
+// L2: null 값으로 Redis에 저장 (별도 처리 필요)
+```
+
+```java
+/**
+ * Cache Penetration 방어 전략 2: Bloom Filter
+ *
+ * 존재하는 productId 집합을 Bloom Filter로 관리
+ * 요청이 들어오면 Filter에 없으면 즉시 404 반환 (캐시/DB 조회 없음)
+ *
+ * WHY Bloom Filter:
+ *   False Positive(있다고 했는데 없음): 드물게 발생 → DB 조회 → 404 반환 (허용 가능)
+ *   False Negative(없다고 했는데 있음): 발생하지 않음 (Bloom Filter 보장)
+ *   메모리 효율: 1억 개 ID를 120MB로 관리 (HashMap이면 수 GB 필요)
+ */
+@Component
+@RequiredArgsConstructor
+public class ProductBloomFilter {
+
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    // Guava Bloom Filter (로컬) 또는 Redis Bloom (분산)
+    private final BloomFilter<Long> localFilter = BloomFilter.create(
+        Funnels.longFunnel(),
+        100_000_000L,  // 예상 최대 항목 수
+        0.01           // 허용 오탐율 1%
+    );
+
+    public boolean mightExist(Long productId) {
+        return localFilter.mightContain(productId);
+        // false: 절대 없음 → 즉시 404
+        // true: 있을 수 있음 → 캐시/DB 조회 진행
+    }
+
+    public void markExist(Long productId) {
+        localFilter.put(productId);
+    }
+
+    // 서버 시작 시 기존 ID 모두 로드
+    @PostConstruct
+    public void init() {
+        productRepository.findAllIds()
+            .forEach(localFilter::put);
+    }
+}
+```
+
+---
+
+## 직렬화 심층 분석 — GenericJackson2Json의 내부
+
+### @class 필드가 왜 생기는가
+
+`GenericJackson2JsonRedisSerializer`는 역직렬화 시 어떤 클래스로 복원할지 알아야 한다. 이를 위해 JSON에 `@class` 필드를 자동 삽입한다.
+
+```json
+{
+  "@class": "com.example.domain.Product",
+  "id": 12345,
+  "name": "맥북 프로",
+  "price": 3990000
+}
+```
+
+**문제:** 패키지 이동(`com.example.domain` → `com.example.catalog`)이나 클래스명 변경 시 기존 캐시 전체 역직렬화 실패.
+
+**해결책 1: @JsonTypeName으로 논리적 이름 부여**
+
+```java
+@JsonTypeName("Product")  // 실제 클래스명 대신 논리적 이름 사용
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME)
+public class Product {
+    // ...
+}
+```
+
+**해결책 2: TypeResolverBuilder 커스터마이징**
+
+```java
+ObjectMapper mapper = new ObjectMapper();
+mapper.setDefaultTyping(new ObjectMapper.DefaultTypeResolverBuilder(
+    ObjectMapper.DefaultTyping.NON_FINAL) {
+    @Override
+    public boolean useForType(JavaType t) {
+        // 인터페이스와 추상 클래스만 타입 정보 포함
+        // 구체 클래스는 타입 정보 제외 → @class 필드 없음
+        return t.isAbstract() || t.isInterface();
+    }
+});
+```
+
+**해결책 3: 별도 DTO 사용**
+
+도메인 모델(JPA 엔티티)을 직접 캐시하지 말고 전용 캐시 DTO를 만든다.
+
+```java
+/**
+ * 캐시 전용 DTO
+ *
+ * WHY 도메인 모델을 직접 캐시하면 안 되는가:
+ *   1. JPA Lazy Loading: 직렬화 시 프록시 객체가 N+1 쿼리 유발
+ *   2. 순환 참조: Product → Category → Product → ...
+ *   3. 불필요한 필드: 내부 필드가 캐시를 통해 외부 노출
+ *   4. 클래스 변경 취약성: 도메인 변경이 캐시 직렬화에 영향
+ */
+@Value  // Lombok immutable DTO
+public class ProductCacheDto {
+    Long id;
+    String name;
+    int price;
+    String categoryName;
+    // 필요한 필드만 포함
+
+    public static ProductCacheDto from(Product product) {
+        return new ProductCacheDto(
+            product.getId(),
+            product.getName(),
+            product.getPrice(),
+            product.getCategory().getName()  // Lazy 필드 명시적 접근
+        );
+    }
+}
+```
+
+---
+
+## 면접 포인트 5개 — 깊은 WHY 답변
+
+### Q1: "L1과 L2 캐시를 왜 분리하나요? Redis만 쓰면 안 되나요?"
+
+**표면 답변:** L1은 네트워크가 없어서 빠릅니다.
+
+**깊은 WHY 답변:**
+
+Redis만 쓸 때의 세 가지 물리적 한계를 극복하기 위해서입니다.
+
+**첫 번째는 네트워크 RTT 누적입니다.** Redis 응답은 1~2ms지만, 한 API 요청에 캐시 조회가 20회이면 순수 네트워크 대기만 20~40ms입니다. L1(JVM 힙)은 RTT가 0이므로 20회 조회해도 2μs입니다. 이 차이가 전체 응답 지연의 대부분을 차지합니다.
+
+**두 번째는 Redis 스케일 한계입니다.** 서버 20대, 각 서버 5K TPS면 Redis에 100K ops/sec가 몰립니다. Redis 단일 인스턴스 한계입니다. L1이 80%를 흡수하면 Redis에는 20K ops/sec만 도달합니다. L1 Hit Rate 80%가 Redis 비용을 5배 절감합니다.
+
+**세 번째는 장애 격리입니다.** Redis가 다운되면 L1이 TTL 시간(30초)만큼 서비스를 유지합니다. 단일 Redis라면 즉시 DB로 모든 트래픽이 몰려 연쇄 장애가 발생합니다.
+
+**극한 시나리오:** Redis 장애 + L1 TTL 30초. 30초 동안 L1에서 서비스하고 Redis 복구를 기다립니다. 단일 Redis였다면 30초 동안 DB에 풀 트래픽이 몰려 DB도 다운됩니다.
+
+---
+
+### Q2: "L1 캐시 일관성은 어떻게 보장하나요?"
+
+**표면 답변:** Redis Pub/Sub으로 다른 서버 L1을 삭제합니다.
+
+**깊은 WHY 답변:**
+
+세 가지 메커니즘을 계층적으로 조합합니다.
+
+**첫 번째는 TTL 기반 자연 수렴(최후 안전망)입니다.** L1 TTL을 30초로 설정하면, Pub/Sub이 완전히 실패해도 30초 후에는 모든 서버가 L2에서 최신 데이터를 읽습니다. 30초의 불일치를 수용할 수 없는 데이터(결제 잔액, 쿠폰 사용 여부)는 애초에 L1에 캐시하지 않습니다.
+
+**두 번째는 Redis Pub/Sub 즉시 무효화입니다.** 데이터 변경 시 `publishEviction(cacheName, key)` 호출로 모든 서버의 L1을 즉시 삭제합니다. 단, Pub/Sub은 at-most-once이므로 유실 가능성이 있습니다. 이때 TTL이 안전망으로 동작합니다.
+
+**세 번째는 evict 순서 제어(Race Condition 방지)입니다.** L2를 먼저 삭제하고 L1을 나중에 삭제합니다. 반대로 하면 L1 삭제 후 다른 스레드가 L2에서 구 데이터를 읽어 L1에 승격시키고, 이후 L2를 삭제해도 L1에 구 데이터가 잔존합니다.
+
+**극한 시나리오:** Redis 재시작 중 Pub/Sub 채널 유실. 이 경우 30초 TTL이 단독으로 일관성을 책임집니다. Redis 재시작 완료 후 모든 서버의 L1이 자연 수렴합니다.
+
+---
+
+### Q3: "Cache Stampede를 어떻게 방어하나요?"
+
+**표면 답변:** 분산 락을 사용합니다.
+
+**깊은 WHY 답변:**
+
+Stampede는 인기 캐시 항목의 만료 순간 수백~수천 개 요청이 동시에 DB로 몰리는 현상입니다. 계층별로 다른 전략을 씁니다.
+
+**L1 계층에서는 Caffeine의 refreshAfterWrite를 사용합니다.** TTL 만료 전에 백그라운드에서 미리 갱신합니다. 만료 순간이 없으므로 Stampede 자체가 발생하지 않습니다. 단, CacheLoader가 필요해서 Spring Cache 추상화와는 직접 통합이 어렵습니다.
+
+**L2 계층에서는 Redis 분산 락을 사용합니다.** 100개 요청이 동시에 L2 Miss를 경험하면, 락을 획득한 1개만 DB를 조회하고 L2에 저장합니다. 나머지 99개는 락 해제를 기다렸다가 L2에서 반환받습니다. 락은 Lua 스크립트로 원자적으로 해제해서 자신이 건 락만 해제합니다.
+
+**더 간단한 대안은 XFetch(확률적 조기 만료)입니다.** 만료까지 남은 시간이 짧을수록 조기 갱신 확률이 높아집니다. 분산 락 없이 구현 가능하고, 여러 서버가 독립적으로 판단하므로 락 경합이 없습니다.
+
+**극한 시나리오:** 1,000K MAU 서비스, 인기 상품 캐시 동시 만료, 10K req/s. 분산 락 없이 10K 요청이 DB로 동시 진입 시 DB 커넥션 풀 고갈(보통 50~100개)로 즉시 장애. 분산 락으로 1개만 통과시키면 DB 부하 99.99% 감소.
+
+---
+
+### Q4: "직렬화 방식이 왜 중요한가요?"
+
+**표면 답변:** JDK 직렬화는 느리고, JSON이 더 좋습니다.
+
+**깊은 WHY 답변:**
+
+직렬화는 L2(Redis) 캐시 성능의 숨겨진 병목입니다. 세 가지 차원에서 영향을 미칩니다.
+
+**첫 번째는 속도입니다.** JDK 직렬화는 450μs, JSON(Jackson)은 85μs, Kryo는 12μs입니다. Redis RTT가 1ms인데 직렬화에 450μs를 쓰면 캐시의 절반이 직렬화에 소모됩니다. JSON을 쓰면 직렬화가 전체 시간의 8%로 줄어듭니다.
+
+**두 번째는 크기입니다.** 크기가 크면 Redis 메모리 사용량 증가, 네트워크 전송 시간 증가, 역직렬화 시간 증가의 삼중 손해입니다. JDK 2,400 bytes, JSON 680 bytes, Kryo 210 bytes. Redis 메모리가 부족하면 Eviction이 더 자주 발생해서 Hit Rate가 낮아집니다.
+
+**세 번째는 호환성입니다.** JDK 직렬화는 클래스에 필드 추가만 해도 `serialVersionUID` 불일치로 기존 캐시 전체가 `InvalidClassException`을 던집니다. 배포 순간 캐시가 전체 무효화되면서 DB로 트래픽이 몰립니다. JSON은 필드 추가/삭제에 유연하고, 없는 필드는 null로 처리합니다.
+
+**극한 시나리오:** 배포 중 JDK 직렬화 불호환 → 캐시 전체 Miss → 100K TPS가 DB로 → DB 장애. JSON 또는 Kryo를 쓰면 클래스 변경이 있어도 캐시가 살아남습니다.
+
+---
+
+### Q5: "Cache Warming이 왜 필요하고 어떻게 구현하나요?"
+
+**표면 답변:** 서버 재시작 후 캐시가 비어있어서 미리 채워야 합니다.
+
+**깊은 WHY 답변:**
+
+Cold Start는 단순한 성능 저하가 아니라 **순간 장애의 원인**입니다. 메커니즘을 이해해야 합니다.
+
+서버 20대를 동시 재시작하면 모든 L1이 비어있습니다. 재시작 직후 25K TPS(서버당 1.25K)가 L2(Redis)로 집중됩니다. 평소에는 Redis에 5K TPS만 왔는데 갑자기 25K가 오면 Redis 응답 지연이 증가합니다. Redis에도 없으면(L2도 비어있다면) 25K가 DB로 집중됩니다. DB 커넥션 풀이 고갈되면서 장애 발생입니다.
+
+**워밍 구현은 세 단계로 합니다.**
+
+1단계: 접근 횟수를 Redis ZSet에 기록합니다. 모든 캐시 Hit 시 `ZINCRBY`로 카운터 증가. 배포 주기에 상관없이 항상 최신 인기 순위가 유지됩니다.
+
+2단계: `ApplicationRunner`에서 워밍합니다. 서버 시작 시 ZSet 상위 1,000개 키를 Redis 파이프라인으로 배치 조회해서 L1에 저장합니다. 파이프라인을 쓰면 1,000번 개별 조회 대신 한 번의 왕복으로 처리합니다.
+
+3단계: 워밍 완료 후 트래픽을 받습니다. Kubernetes Readiness Probe를 워밍 완료 후 true로 설정하면, 로드밸런서가 워밍 중인 서버에는 트래픽을 보내지 않습니다.
+
+**극한 시나리오:** 20대 동시 재시작, 워밍 없음 → DB 25K TPS 순간 폭발 → 장애. 워밍 있음 → 재시작 10초 후 L1 Hit Rate 75% 확보 → Redis 6K TPS, DB 1.5K TPS로 정상 운영.
+
+---
+
+## 극한 시나리오 분석 — 100K TPS 서비스의 캐시 계층
+
+서버 20대, Redis Cluster 3샤드, CDN을 운영하는 서비스에 100K TPS가 유입되는 상황을 레이어별로 분해한다.
+
+```mermaid
+graph LR
+    T["100K TPS"] -->|"CDN 60K"| CDN["CDN 60%"]
+    T -->|"L1 32K"| L1["L1 80% of 40K"]
+    L1 -->|"L2 7.2K"| L2["L2 90%"]
+    L2 -->|"DB 800"| DB["DB 0.8%"]
+```
+
+### 트래픽 분산 계산
+
+| 계층 | 처리량 | Hit Rate | 응답 시간 | 비고 |
+|------|--------|----------|----------|------|
+| CDN | 60,000 TPS | 60% | 10~50ms | 정적+공개 API |
+| L1 Caffeine | 32,000 TPS | 80% of 40K | ~100ns | 서버당 1,600 TPS |
+| L2 Redis | 7,200 TPS | 90% of 8K | ~1ms | Redis 샤드당 2,400 ops |
+| DB | 800 TPS | - | 20~50ms | RDS 충분히 처리 가능 |
+
+**핵심 포인트:** 100K TPS 중 DB 실제 도달은 800 TPS (0.8%). 멀티 레이어 없이 100K가 DB로 직행하면 125배 부하 → 즉시 장애.
+
+### L1 제거 시 영향 분석
+
+L1이 없으면 40K TPS가 L2로 집중된다. Redis 샤드당 13K+ ops/sec. 기존 7.2K에서 5.5배 증가. Redis 응답 지연 시작 → 타임아웃 → DB로 폴백 → DB 장애 연쇄.
+
+### 장애 시나리오: Redis 샤드 1개 다운
+
+Redis Cluster에서 샤드 1개가 다운되면:
+- 해당 샤드 키들은 L2 Miss
+- L1이 30초 TTL로 버팀
+- 30초 후 해당 키들은 DB로 폴백 → DB 부하 증가
+- Redis Cluster 자동 페일오버 완료(보통 15~30초)하면 정상화
+
+**대응:** L1 TTL을 Redis 페일오버 시간(30초)보다 길게 설정하면 페일오버 완료까지 L1이 모든 트래픽을 소화 가능.
+
+---
+
+## 모니터링 — Hit Rate가 모든 지표의 시작
+
+```java
+/**
+ * 각 캐시 계층의 Hit Rate를 Prometheus + Grafana로 가시화
+ *
+ * 핵심 메트릭:
+ *   cache.hit{layer="l1"}: L1 히트 수
+ *   cache.hit{layer="l2"}: L2 히트 수
+ *   cache.miss: 전체 미스 수 (DB 조회로 이어짐)
+ *   cache.l1.size: L1 현재 항목 수
+ *   cache.l1.eviction: L1 제거 수 (급증 시 maximumSize 증가 필요)
+ */
+@Component
+@RequiredArgsConstructor
+public class CacheMetricsCollector {
+
+    private final CaffeineCacheManager caffeineManager;
+    private final MeterRegistry meterRegistry;
+
+    @Scheduled(fixedDelay = 10_000)
+    public void collect() {
+        caffeineManager.getCacheNames().forEach(name -> {
+            Cache springCache = caffeineManager.getCache(name);
+            if (!(springCache instanceof CaffeineCache caffeineCache)) return;
+
+            com.github.benmanes.caffeine.cache.Cache<?, ?> native_ =
+                (com.github.benmanes.caffeine.cache.Cache<?, ?>)
+                    caffeineCache.getNativeCache();
+
+            CacheStats stats = native_.stats();
+            Tags tags = Tags.of("cache", name);
+
+            // 핵심 메트릭
+            Gauge.builder("cache.l1.hit.rate", stats::hitRate)
+                .tags(tags).register(meterRegistry);
+
+            Gauge.builder("cache.l1.size", native_::estimatedSize)
+                .tags(tags).register(meterRegistry);
+
+            // 제거율 급증 = maximumSize가 너무 작다는 신호
+            Gauge.builder("cache.l1.eviction.count", stats::evictionCount)
+                .tags(tags).register(meterRegistry);
+
+            // 로드 시간 평균 = DB 조회 시간 프록시
+            Gauge.builder("cache.l1.load.avg.ms",
+                () -> stats.averageLoadPenalty() / 1_000_000.0)
+                .tags(tags).register(meterRegistry);
+        });
+    }
+}
+```
+
+### 알람 기준
+
+| 메트릭 | 정상 | 주의 | 위험 | 대응 |
+|--------|------|------|------|------|
+| L1 Hit Rate | > 90% | 80~90% | < 80% | maximumSize 증가 또는 TTL 조정 |
+| L2 Hit Rate | > 95% | 90~95% | < 90% | Redis 용량 증가 또는 TTL 증가 |
+| L1 Eviction Rate | 안정적 | 10% 급증 | 50% 이상 급증 | maximumSize 즉시 증가 |
+| Redis 응답 시간 | < 2ms | 2~10ms | > 10ms | Redis 부하 확인, 클러스터 확장 |
+| DB TPS | < 1K | 1K~5K | > 5K | 캐시 설정 전면 재검토 |
 
 ---
 
@@ -635,62 +1628,32 @@ public class CacheMetrics {
 잘못된 설정:
   L1 TTL = 10분, L2 TTL = 5분
 
-무슨 일이 발생하나:
-  t=0: L1/L2 모두 캐시 저장
-  t=5: L2 만료 → DB에서 새 데이터로 갱신
-  t=5~10: L1에 구 데이터가 남아있어 구 데이터 서빙
+발생 과정:
+  t=0:   L1(구 데이터), L2(구 데이터) 동시 저장
+  t=5분: L2 만료 → 다른 요청이 DB에서 신 데이터 읽어 L2 갱신
+  t=5~10분: L1에 구 데이터 잔존 → 구 데이터 서빙
+  t=10분: L1 만료 → 비로소 신 데이터 반환
 
 올바른 설정:
   L1 TTL = 30초, L2 TTL = 10분
-  L1은 항상 L2보다 짧게!
+  규칙: L1 TTL < L2 TTL (항상)
 ```
 
-### 실수 2: L1 캐시에 너무 많은 메모리 할당
+### 실수 2: 도메인 엔티티를 직접 캐시
 
-L1 캐시는 JVM Heap을 사용한다. Heap 4GB 중 L1에 2GB를 할당하면 GC 압박이 심해져서 Stop-the-World가 자주 발생한다. L1 캐시는 Heap의 10~20% 이내로 제한하는 것이 안전하다.
+JPA 엔티티는 LazyLoading 프록시, 순환 참조, 불필요한 필드를 포함한다. 직렬화 시 Hibernate 세션이 없으면 `LazyInitializationException`, 순환 참조면 `StackOverflowError`. 항상 전용 DTO로 변환 후 캐시한다.
 
-### 실수 3: 직렬화 비용 무시
+### 실수 3: Pub/Sub 발행 실패를 throw
 
-L2(Redis)에 저장할 때 직렬화가 필요하다. 복잡한 객체를 JSON으로 직렬화하면 수 ms가 걸릴 수 있다. 이러면 캐시를 쓰는 의미가 퇴색된다. 캐시 대상 객체는 가능한 단순하게 유지하고, 필요 없는 필드는 `@JsonIgnore`로 제외한다.
+Pub/Sub 발행이 실패해도 L2(Redis) evict는 이미 완료됐다. 발행 실패로 원래 메서드가 예외를 던지면 호출자는 캐시 삭제가 실패했다고 착각한다. 발행 실패는 경고 로그만 남기고 무시한다.
 
-### 실수 4: 캐시 계층 간 무효화 순서 실수
+### 실수 4: 무효화 없이 TTL에만 의존
 
-```
-잘못된 순서:
-  1. L1 삭제 → 2. L2 삭제
-  문제: L1 삭제 후 다른 요청이 L2에서 구 데이터를 읽어 L1에 다시 저장
+TTL이 10분이면 최대 10분 동안 구 데이터가 서빙된다. 상품 가격이 변경됐는데 10분 후에야 반영되면 사용자 신뢰 손상, 결제 오류 가능성이 있다. 변경 시점에 반드시 명시적 evict를 실행한다.
 
-올바른 순서:
-  1. L2 삭제 → 2. L1 삭제 → 3. Pub/Sub으로 다른 서버 L1 삭제
-```
+### 실수 5: maximumSize를 너무 크게 설정
 
-### 실수 5: CDN 캐시 무효화를 잊음
-
-API 응답에 `Cache-Control: max-age=3600`을 설정해놓고, 긴급 데이터 수정 후 CDN purge를 하지 않으면 최대 1시간 동안 구 데이터가 전 세계에 서빙된다. 긴급 변경 시에는 CDN purge API를 반드시 호출해야 한다.
-
----
-
-## 면접 포인트
-
-### Q1: "L1 캐시와 L2 캐시를 왜 분리하나요? Redis만 쓰면 안 되나요?"
-
-**모범 답변:** Redis만 써도 DB 대비 10~100배 빠르지만, 네트워크 왕복이 0.5~2ms 걸립니다. 한 페이지에 캐시 조회가 20회이면 네트워크에서만 10~40ms가 소모됩니다. L1(JVM 내 Caffeine)은 네트워크 없이 100ns에 응답하므로, L1 Hit Rate가 80%이면 20회 중 16회를 네트워크 없이 처리해서 전체 응답 시간을 크게 줄입니다. 또한 Redis 장애 시 L1이 버퍼 역할을 해서 가용성도 높아집니다.
-
-### Q2: "멀티 레이어 캐시에서 일관성은 어떻게 유지하나요?"
-
-**모범 답변:** 세 가지를 조합합니다. (1) L1 TTL을 L2보다 항상 짧게 설정해서 자연 수렴, (2) 데이터 변경 시 Redis Pub/Sub으로 모든 서버의 L1을 즉시 무효화, (3) 무효화 순서는 L2 먼저 → L1 나중으로 하여 Race Condition을 최소화합니다. 완벽한 Strong Consistency는 보장하지 않지만, 수백 ms 이내의 Eventual Consistency를 달성합니다.
-
-### Q3: "Caffeine을 선택한 이유는?"
-
-**모범 답변:** W-TinyLFU 알고리즘 덕분에 같은 메모리에서 LRU 대비 15~20% 높은 Hit Rate를 달성합니다. 또한 비동기 갱신, 통계 수집, 크기/시간/참조 기반 Eviction을 모두 지원합니다. 벤치마크에서도 EhCache, Guava Cache보다 처리량이 높아서, Java 생태계에서 사실상 표준 로컬 캐시입니다.
-
-### Q4: "100K TPS를 처리하려면 캐시를 어떻게 설계하나요?"
-
-**모범 답변:** 5단계 계층으로 설계합니다. CDN(정적+공개API, 70% 흡수) → API Gateway(인증 캐시, 5%) → L1 Caffeine(Hot 데이터, 20% 흡수) → L2 Redis Cluster(세션/상품, 4.5%) → DB(0.5%). 100K TPS 중 DB에 실제 도달하는 것은 500 TPS로, 일반적인 RDS가 감당 가능한 수준입니다. 핵심은 상위 계층에서 최대한 흡수하고, 각 계층의 TTL과 크기를 적절히 설정하는 것입니다.
-
-### Q5: "CDN에서 API 응답을 캐시해도 되나요?"
-
-**모범 답변:** 공개 데이터(상품 목록, 검색 결과)는 CDN 캐시가 매우 효과적입니다. 단, 사용자별 개인화 데이터(마이페이지, 장바구니)는 CDN 캐시하면 다른 사용자에게 노출될 위험이 있으므로 `Cache-Control: private`로 설정합니다. `Vary` 헤더로 캐시 키를 세분화하거나, 인증이 필요한 API는 CDN 캐시를 아예 비활성화하는 것이 안전합니다.
+L1은 JVM 힙을 사용한다. 힙 4GB 서버에서 L1에 2GB를 할당하면 GC가 2GB를 스캔해야 한다. Major GC 시간이 길어져서 Stop-the-World가 수백 ms 발생한다. 이 시간에 들어온 요청이 모두 L2로 몰린다. L1은 힙의 10~20% 이내로 제한한다.
 
 ---
 
@@ -698,137 +1661,24 @@ API 응답에 `Cache-Control: max-age=3600`을 설정해놓고, 긴급 데이터
 
 ```mermaid
 graph LR
-    CDN["CDN"] --> GW["API Gateway"]
-    GW --> L1["L1 Caffeine"]
-    L1 --> L2["L2 Redis"]
-    L2 --> DB["DB"]
+    SRC["데이터변경"] -->|"evict L2→L1"| L2["L2 Redis"]
+    L2 -->|"Pub/Sub"| L1["L1 Caffeine"]
+    L1 -->|"TTL 안전망"| L1
+    SRC -->|"워밍 데이터"| RANK["ZSet 랭킹"]
+    RANK -->|"서버시작시"| L1
 ```
 
-| 설계 원칙 | 설명 |
-|----------|------|
-| TTL 계층 | L1 < L2 < CDN (안쪽이 항상 짧게) |
-| 크기 제한 | L1은 Heap의 10~20% 이내 |
-| 동기화 | Redis Pub/Sub으로 L1 크로스 서버 무효화 |
-| 모니터링 | Hit Rate, Eviction Rate 실시간 추적 |
-| Cold Start | Cache Warmup + Rolling Restart + Traffic Ramping |
-| Fallback | Redis 장애 시 L1으로, L1+Redis 장애 시 DB + Rate Limit |
+| 설계 원칙 | 핵심 이유 |
+|----------|----------|
+| L1 TTL < L2 TTL | Pub/Sub 실패 시 자연 수렴 보장 |
+| evict: L2 먼저 → L1 | L1 삭제 후 L2에서 구 데이터 재승격 Race 방지 |
+| Pub/Sub 발행 실패 무시 | L2 삭제는 완료됨, TTL이 안전망 |
+| 도메인 DTO 분리 | LazyLoading/순환참조 직렬화 오류 방지 |
+| refreshAfterWrite | 만료 순간 Stampede 원천 차단 |
+| 분산 락 (Lua script) | L2 Miss 순간 DB 동시 폭발 방지 |
+| Bloom Filter | 없는 키 반복 요청으로 인한 DB Penetration 차단 |
+| Cache Warming | Cold Start 순간 DB 폭발 방지 |
+| Circuit Breaker | Redis 장애 시 DB 과부하 방지 |
+| maximumSize 10~20% 힙 | GC Stop-the-World 방지 |
 
-멀티 레이어 캐싱은 "트래픽을 상위 계층에서 최대한 흡수해서 하위 계층을 보호하는" 아키텍처다. 각 계층의 특성을 이해하고, TTL과 크기를 데이터 성격에 맞게 설정하며, 계층 간 동기화를 빠뜨리지 않는 것이 성공의 열쇠다.
-
----
-## 왜 다계층 캐싱인가 — 단일 캐시로는 안 되는 이유
-
-### 단일 Redis만 사용했을 때의 한계
-
-**시나리오: 상품 상세 페이지, 초당 10만 건 조회**
-
-```
-단일 Redis 구성:
-- 서버 10대, 각 서버가 요청마다 Redis 조회
-- Redis 조회 레이턴시: 1~2ms (네트워크 포함)
-- 초당 10만 건 → Redis에 10만 QPS 집중
-- Redis 단일 노드 최대: 약 10만 QPS (한계 도달)
-- 피크 트래픽에서 Redis가 병목으로 등장
-```
-
-**L1(로컬 Caffeine) + L2(Redis) 다계층 구성:**
-```
-- L1 히트: 메모리 접근, < 0.1ms, Redis 요청 없음
-- 서버 10대, L1 히트율 80% 가정
-- Redis 실제 QPS: 10만 × 20% = 2만 QPS (5배 감소)
-- Redis 여유 용량으로 다른 서비스도 수용 가능
-```
-
-```java
-@Service
-public class ProductQueryService {
-
-    // L1: JVM 로컬 캐시 (Caffeine, 최대 1000개, 30초 TTL)
-    private final Cache<Long, Product> localCache = Caffeine.newBuilder()
-        .maximumSize(1000)
-        .expireAfterWrite(Duration.ofSeconds(30))
-        .recordStats()  // 히트율 모니터링
-        .build();
-
-    // L2: Redis 분산 캐시
-    private final RedisTemplate<String, Product> redisTemplate;
-
-    public Product getProduct(Long id) {
-        // 1단계: L1 로컬 캐시 (< 0.1ms)
-        Product product = localCache.getIfPresent(id);
-        if (product != null) {
-            metricsCounter.increment("cache.l1.hit");
-            return product;
-        }
-
-        // 2단계: L2 Redis 캐시 (1~2ms)
-        product = redisTemplate.opsForValue().get("product:" + id);
-        if (product != null) {
-            localCache.put(id, product);  // L1 워밍
-            metricsCounter.increment("cache.l2.hit");
-            return product;
-        }
-
-        // 3단계: DB 조회 (10~50ms)
-        product = productRepository.findById(id).orElseThrow();
-        redisTemplate.opsForValue().set("product:" + id, product, Duration.ofMinutes(10));
-        localCache.put(id, product);
-        metricsCounter.increment("cache.db.hit");
-        return product;
-    }
-}
-```
-
-**실전 수치 비교:**
-
-| 구성 | 평균 응답시간 | Redis QPS | DB QPS |
-|------|------------|-----------|--------|
-| 캐시 없음 | 45ms | 0 | 100K |
-| Redis만 | 2ms | 100K | 2K |
-| L1+L2 다계층 | 0.3ms | 20K | 400 |
-
-### 왜 L1 TTL을 L2보다 짧게 설정하는가
-
-L1은 서버별 로컬 메모리에 있어 업데이트 동기화가 어렵습니다. 상품 가격이 변경되면 Redis(L2)는 즉시 무효화 가능하지만, 10대 서버의 L1을 동시에 무효화하려면 Redis Pub/Sub 브로드캐스트가 필요합니다.
-
-```java
-// 가격 변경 시 L1 일괄 무효화
-@EventListener
-public void onProductPriceChanged(ProductPriceChangedEvent event) {
-    // 자신의 L1 즉시 삭제
-    localCache.invalidate(event.getProductId());
-
-    // 다른 서버의 L1 삭제 요청 브로드캐스트
-    redisTemplate.convertAndSend("cache:invalidate:product",
-        event.getProductId().toString());
-}
-
-@RedisListener(topic = "cache:invalidate:product")
-public void onInvalidateMessage(String productIdStr) {
-    localCache.invalidate(Long.parseLong(productIdStr));
-}
-```
-
-L1 TTL을 짧게(30초) 유지하면 Pub/Sub 실패 시에도 최대 30초 내 자동으로 새 데이터를 로드합니다. L2(Redis)는 10분 TTL로 DB 부하를 장기간 방어합니다.
-
-### 다계층 캐시가 오히려 독이 되는 경우
-
-- **쓰기가 읽기만큼 빈번한 데이터**: 재고 수량, 실시간 좌석 현황. L1과 L2 사이 불일치로 오판 발생
-- **정확성이 최우선인 데이터**: 결제 잔액, 쿠폰 사용 여부. 30초 지연된 L1 캐시로 이미 사용한 쿠폰을 재사용 허용하는 버그 발생
-- **팀의 운영 역량이 부족한 경우**: L1 무효화 동기화 실패 시 디버깅이 매우 어려움
-
-이런 경우는 단일 Redis(L2)만 사용하는 것이 더 안전합니다.
-
----
-
-## 왜 이 전략인가
-
-**멀티 레이어 캐싱을 선택하는 이유는 각 계층의 지연 시간과 용량이 다르기 때문에, 단일 캐시로는 모든 요구사항을 충족할 수 없기 때문이다.**
-
-| 계층 | 지연 | 용량 | 적합 데이터 |
-|------|------|------|------------|
-| L1 (로컬 메모리) | ~1μs | 수백 MB | 초당 수천 번 읽히는 핫 데이터 |
-| L2 (Redis) | ~1ms | 수십 GB | 서버 간 공유, 세션, 분산 캐시 |
-| L3 (CDN) | ~10ms | 무제한 | 정적 파일, API 응답 글로벌 배포 |
-
-L1 로컬 캐시만 쓰면 서버 간 불일치가 발생하고, Redis만 쓰면 네트워크 왕복으로 수 ms의 지연이 생긴다. 레이어를 조합하면 핫 데이터는 로컬에서 μs로 처리하고, 콜드 데이터는 Redis로 ms 내에 처리한다.
+멀티 레이어 캐싱은 단순히 "빠르게 하기" 위한 기술이 아니다. **상위 계층에서 최대한 흡수해서 하위 계층을 보호하는 방어 아키텍처**다. 각 계층의 내부 동작(W-TinyLFU, Count-Min Sketch, 직렬화 비용, Pub/Sub at-most-once)을 이해해야 올바른 설계 결정을 내릴 수 있다. Hit Rate 80% 이상, DB TPS 1% 이하를 항상 목표로 삼고 모니터링으로 지속 검증한다.
