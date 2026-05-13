@@ -1,5 +1,5 @@
 ---
-title: "Spring WebFlux — 리액티브 프로그래밍"
+title: "Spring WebFlux — 리액티브 프로그래밍 완전 정복"
 categories:
 - SPRING
 toc: true
@@ -7,747 +7,678 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-Tomcat 스레드 200개가 모두 외부 API 응답을 기다리며 블로킹되어 있다. 새 요청은 큐에서 대기하다 타임아웃이 난다. 이 상황에서 서버를 늘리는 것보다 더 근본적인 해법이 WebFlux다.
+Tomcat 스레드 200개가 모두 외부 API 응답을 기다리며 블로킹되어 있다. 새 요청은 큐에서 대기하다 타임아웃이 터진다. 서버를 두 배 늘려도 스레드 수가 두 배가 될 뿐, 근본 구조는 바뀌지 않는다. 이 상황의 진짜 원인은 "스레드 하나가 요청 하나를 끝까지 점유하는" 설계다. WebFlux는 이 설계 자체를 바꾼다.
 
-> **비유로 먼저 이해하기**: WebFlux는 1인 카페 바리스타와 같다. 아메리카노를 주문받으면 에스프레소가 내려지는 동안 멍하니 기다리지 않고 다음 손님 주문을 받는다. 커피가 완성되면 그때 가져다준다. 스레드(바리스타) 한 명이 수십 개의 요청을 동시에 처리할 수 있는 이유다.
+> **비유 — 1인 카페 바리스타**: 아메리카노를 주문받으면 에스프레소가 내려지는 동안 멍하니 기다리지 않고, 다음 손님 주문을 받는다. 커피가 완성되면 그때 가져다준다. 바리스타(스레드) 한 명이 수십 개의 요청을 처리하는 원리다. 핵심은 "기다리는 동안 손을 놓지 않는 것"이다.
 
-Spring WebFlux는 Spring 5에서 도입된 리액티브 웹 프레임워크입니다. 기존 Spring MVC의 동기-블로킹 모델과 달리 비동기-논블로킹 방식으로 동작하여 높은 동시성 처리가 필요한 환경에서 강점을 발휘합니다. 이 글에서는 WebFlux의 개념부터 내부 동작, 실무 적용, 극한 시나리오까지 완전히 정리합니다.
-
----
-
-## 1. WebFlux란?
-
-### 왜 필요한가? — C10K 문제와 높은 동시성
-
-C10K 문제(Client 10,000 Problem)는 1999년 Dan Kegel이 제기한 문제로, 단일 서버에서 동시에 10,000개의 클라이언트 연결을 처리하는 것이 당시 기술로는 매우 어렵다는 내용입니다. 현재는 C100K, C1M 수준의 동시성이 요구되는 시대입니다.
-
-전통적인 Spring MVC는 **thread-per-request** 모델을 사용합니다. 요청 하나당 스레드 하나를 할당하고, 그 스레드가 요청 처리 완료까지 블로킹됩니다.
-
-![Spring MVC Thread-per-Request 모델](/assets/images/posts/spring-webflux/mvc-thread-model.svg)
-
-문제는 스레드가 I/O 대기 중에도 메모리(기본 512KB~1MB)를 점유하며, 컨텍스트 스위칭 비용이 발생한다는 점입니다. 동시 요청이 10,000개라면 10,000개의 스레드가 필요하고, 이는 수 GB의 메모리를 소비합니다.
-
-WebFlux는 **이벤트 루프(Event Loop)** 모델로 이 문제를 해결합니다. 소수의 스레드(CPU 코어 수)로 수만 개의 동시 연결을 처리합니다.
-
-```mermaid
-graph LR
-    R1[요청 1] --> EL
-    R2[요청 2] --> EL
-    R3[요청 3] --> EL
-    RN[요청 N] --> EL
-    EL[Event Loop Thread] -->|논블로킹 I/O| IO[결과 콜백]
-    IO --> RES[응답]
-```
-
-### Spring MVC vs WebFlux 아키텍처 비교
-
-```mermaid
-graph LR
-    A[MVC Client] --> B[Servlet Container]
-    B --> C[Thread-1 DB블로킹]
-    B --> D[Thread-2 API블로킹]
-    E[WebFlux Client] --> F[Netty]
-    F --> G[논블로킹 I/O]
-```
-
-### 스레드 모델 차이
-
-| 구분 | Spring MVC | Spring WebFlux |
-|------|-----------|----------------|
-| 기반 스펙 | Servlet API (블로킹) | Reactive Streams (논블로킹) |
-| 기본 서버 | Tomcat (thread pool) | Netty (event loop) |
-| 스레드 수 | 요청 수에 비례 | CPU 코어 수 |
-| I/O 처리 | 블로킹 (스레드 점유) | 논블로킹 (콜백/이벤트) |
-| 메모리 효율 | 낮음 (스레드당 ~512KB) | 높음 |
-| 코드 스타일 | 동기, 명령형 | 비동기, 선언형 |
-| 학습 곡선 | 낮음 | 높음 |
-| 디버깅 | 쉬움 | 어려움 |
+이 글은 WebFlux의 표면(API)이 아니라 내부 메커니즘을 파고든다. Reactive Streams 프로토콜, Netty 이벤트 루프, 스케줄러 선택의 이유, 연산자 내부 구독 흐름, R2DBC가 JDBC를 대체해야 하는 이유, ThreadLocal이 동작하지 않는 이유까지 — WHY를 중심으로 정리한다.
 
 ---
 
-## 2. 리액티브 프로그래밍 기초
+## 1. 왜 WebFlux인가 — 블로킹 모델의 구조적 한계
 
-### Reactive Streams 스펙
+### Thread-per-Request의 물리적 상한
 
-Reactive Streams는 논블로킹 배압(Backpressure)을 지원하는 비동기 스트림 처리를 위한 표준 스펙입니다. Java 9의 `java.util.concurrent.Flow`로 표준화되었습니다.
+전통적인 Tomcat 기반 Spring MVC는 요청 하나마다 스레드 하나를 할당한다. 그 스레드는 응답을 완성할 때까지 돌아오지 않는다. DB 쿼리가 50ms 걸리면, 스레드는 50ms 동안 OS 스케줄러 큐에서 잠든다. CPU를 쓰지 않는데도 메모리(기본 512KB~1MB 스택)는 점유한다.
 
-4개의 핵심 인터페이스로 구성됩니다.
+```
+동시 요청 1,000개 × 스레드 1개 = 스레드 1,000개
+스레드 1,000개 × 512KB = 512MB (스택만)
+```
+
+OS 커널의 컨텍스트 스위칭 비용도 무시할 수 없다. 스레드가 잠들었다 깨어날 때마다 CPU 레지스터 저장/복원, TLB 플러시, 캐시 오염이 발생한다. 스레드가 수천 개로 늘어나면 이 비용이 실제 작업 비용을 초과한다.
+
+```mermaid
+graph LR
+    REQ["요청 1000개"] --> TP["Tomcat Thread Pool"]
+    TP --> T1["Thread: DB 대기중"]
+    TP --> T2["Thread: API 대기중"]
+    TP --> TX["Thread N: 큐 대기"]
+```
+
+### 이벤트 루프 — 스레드 수와 동시성을 분리하다
+
+WebFlux(Netty)는 스레드 수 = CPU 코어 수라는 원칙을 쓴다. 8코어 서버라면 이벤트 루프 스레드가 8개다. 이 8개 스레드가 수만 개의 동시 연결을 처리한다.
+
+가능한 이유는 I/O 완료를 운영체제가 통보하기 때문이다. Linux의 `epoll`, macOS의 `kqueue`, Windows의 `IOCP`는 모두 "어떤 파일 디스크립터에 I/O가 준비됐는지"를 커널이 이벤트로 알려주는 메커니즘이다. 스레드는 I/O를 등록해두고 즉시 다음 작업으로 넘어간다. I/O가 완료되면 커널이 깨워준다.
+
+```mermaid
+graph LR
+    C1["요청 수천개"] --> EL["EventLoop 8개"]
+    EL --> NIO["논블로킹 I/O 등록"]
+    NIO --> OS["OS epoll/kqueue"]
+    OS -->|"I/O 완료 이벤트"| EL
+```
+
+**결론**: Tomcat은 "요청마다 스레드"로 동시성을 표현하고, Netty는 "I/O 이벤트 콜백"으로 동시성을 표현한다. 후자에서 스레드는 절대 잠들지 않는다.
+
+---
+
+## 2. Reactive Streams 스펙 — 배압 프로토콜의 WHY
+
+### 4개 인터페이스의 의미
+
+Reactive Streams는 Java 9의 `java.util.concurrent.Flow`로 표준화된 스펙이다. 핵심은 **Subscriber가 자신이 소화할 수 있는 만큼만 Publisher에게 요청한다**는 배압(Backpressure) 프로토콜이다.
 
 ```java
-// 1. Publisher: 데이터를 생산하는 쪽
+// Publisher: 데이터를 생산하는 쪽 — subscribe()만 노출한다
 public interface Publisher<T> {
     void subscribe(Subscriber<? super T> subscriber);
 }
 
-// 2. Subscriber: 데이터를 소비하는 쪽
+// Subscriber: 데이터를 소비하는 쪽
 public interface Subscriber<T> {
-    void onSubscribe(Subscription s);   // 구독 시작
-    void onNext(T t);                   // 데이터 수신
-    void onError(Throwable t);          // 에러 발생
-    void onComplete();                  // 완료
+    void onSubscribe(Subscription s);  // 구독 성립 시 호출 — 여기서 request(n)을 처음 해야 시작
+    void onNext(T t);                  // 데이터 수신
+    void onError(Throwable t);         // 에러 — 이후 onNext/onComplete 불가
+    void onComplete();                 // 정상 종료
 }
 
-// 3. Subscription: Publisher-Subscriber 간 계약
+// Subscription: Publisher↔Subscriber 간의 단방향 계약
 public interface Subscription {
-    void request(long n);   // n개 데이터 요청 (배압 핵심)
-    void cancel();          // 구독 취소
+    void request(long n);  // "n개 더 줘" — 배압의 핵심
+    void cancel();         // 구독 취소 — Publisher는 즉시 중단해야 함
 }
 
-// 4. Processor: Publisher + Subscriber (중간 처리자)
-public interface Processor<T, R> extends Subscriber<T>, Publisher<R> {
-}
+// Processor: Publisher이자 Subscriber — 중간 변환기 역할
+public interface Processor<T, R> extends Subscriber<T>, Publisher<R> {}
 ```
 
-동작 흐름은 다음과 같습니다.
+### 배압이 없으면 어떻게 되는가
 
-```mermaid
-sequenceDiagram
-    Publisher->>Subscriber: onSubscribe_sub
-    Subscriber->>Publisher: request_N
-    Publisher->>Subscriber: onNext_item1~N
-    Publisher->>Subscriber: onComplete/onError
-```
+카프카에서 초당 100만 건을 읽는 Publisher와, 초당 1천 건을 처리하는 Subscriber가 있다. 배압이 없으면 두 가지 중 하나다.
 
-### 배압(Backpressure) 개념
+1. Publisher가 데이터를 계속 밀어넣는다 → Subscriber 앞에 버퍼가 쌓인다 → 힙 폭발 → OOM
+2. Publisher가 속도를 줄인다 → 다른 Subscriber에게 미치는 영향
 
-배압은 Subscriber가 처리할 수 있는 만큼만 Publisher에게 데이터를 요청하는 메커니즘입니다. 이를 통해 Producer가 Consumer보다 빠를 때 발생하는 OOM(Out of Memory)을 방지합니다.
+배압 프로토콜에서 Subscriber는 `request(1000)`을 호출해 "1,000개까지만 줘"라고 선언한다. Publisher는 1,000개를 다 보낸 뒤 추가 `request()`가 올 때까지 멈춘다.
 
 ```mermaid
 graph LR
-    P1[Producer] -->|"데이터 폭주"| B1["버퍼 폭주"] --> C1["Consumer"]
-    C2["Consumer"] -->|"request(5)"| P2[Producer]
-    P2 -->|"5개만 전송"| C2
+    PUB["Publisher"] -->|"onNext×N"| SUB["Subscriber"]
+    SUB -->|"request(N)"| PUB
+    SUB -->|"cancel()"| PUB
 ```
 
-```java
-// 배압 전략 예시 (Project Reactor)
-Flux.range(1, 1_000_000)
-    .onBackpressureBuffer(1000)     // 버퍼 1000개
-    // .onBackpressureDrop()        // 넘치면 버림
-    // .onBackpressureLatest()      // 최신 값만 유지
-    // .onBackpressureError()       // 넘치면 에러
-    .subscribe(item -> {
-        // 느린 소비자
-        Thread.sleep(10);
-        System.out.println(item);
-    });
+### 구독 수립 프로토콜 순서 (Reactive Streams Rule §1.9)
+
+```
+1. Publisher.subscribe(subscriber) 호출
+2. Publisher → subscriber.onSubscribe(subscription) 호출
+3. Subscriber → subscription.request(n) 호출 (이 시점에 데이터 흐름 시작)
+4. Publisher → subscriber.onNext(item) × n 호출
+5. Publisher → subscriber.onComplete() 또는 subscriber.onError(t)
 ```
 
-### Project Reactor — Mono와 Flux
+`request()`를 호출하기 전까지 Publisher는 데이터를 보내지 않는다. 이것이 **Cold Publisher**가 구독 전까지 실행되지 않는 이유다.
 
-Project Reactor는 Reactive Streams를 구현한 Spring의 공식 리액티브 라이브러리입니다.
+---
 
-**Mono**: 0 또는 1개의 아이템을 방출하는 Publisher
+## 3. Project Reactor — Mono, Flux, Cold/Hot Publisher
+
+### Mono vs Flux — 타입이 다른 이유
+
+`Mono<T>`는 0~1개, `Flux<T>`는 0~N개를 방출한다. 이 구분은 단순한 편의가 아니라 컴파일 타임 의미 표현이다. `Mono<User>`는 "결과가 없거나 하나"라는 계약을 타입으로 강제한다. `findById`가 `Flux<User>`를 반환하면 "여러 개일 수도 있다"는 잘못된 신호를 준다.
 
 ```java
-// Mono 생성
-Mono<String> mono1 = Mono.just("Hello");
-Mono<String> mono2 = Mono.empty();                    // 빈 Mono
-Mono<String> mono3 = Mono.error(new RuntimeException("오류"));
-Mono<String> mono4 = Mono.fromSupplier(() -> "지연 생성");
-Mono<String> mono5 = Mono.fromCallable(() -> "동기 호출");  // boundedElastic 권장
+// Mono 생성 팩토리들
+Mono<String> m1 = Mono.just("hello");                         // 즉시 값
+Mono<String> m2 = Mono.empty();                               // 값 없음(onComplete만)
+Mono<String> m3 = Mono.error(new RuntimeException("실패"));   // 에러
+Mono<String> m4 = Mono.fromSupplier(() -> computeValue());    // 구독 시점에 실행
+Mono<String> m5 = Mono.fromCallable(() -> blockingCall());    // Callable, boundedElastic 권장
+Mono<String> m6 = Mono.defer(() -> Mono.just(dynamicValue())); // 구독마다 새 Publisher 생성
 
-// Mono 구독
-mono1.subscribe(
-    value -> System.out.println("값: " + value),
-    error -> System.err.println("에러: " + error),
-    () -> System.out.println("완료")
-);
+// Flux 생성 팩토리들
+Flux<Integer> f1 = Flux.just(1, 2, 3, 4, 5);
+Flux<Integer> f2 = Flux.range(1, 100);                        // 1~100
+Flux<Long>    f3 = Flux.interval(Duration.ofSeconds(1));      // 1초마다, Hot
+Flux<String>  f4 = Flux.fromIterable(List.of("a", "b", "c"));
+Flux<String>  f5 = Flux.generate(sink -> sink.next(UUID.randomUUID().toString())); // 무한
 ```
 
-**Flux**: 0개 이상의 아이템을 방출하는 Publisher
+### Assembly Time vs Subscription Time — 핵심 개념
+
+Reactor 체인은 **두 단계**로 실행된다.
+
+**Assembly Time**: `.map()`, `.flatMap()`, `.filter()` 등을 호출하는 시점. 아무것도 실행되지 않는다. Operator들이 연결된 파이프라인 구조(Publisher 객체 그래프)만 만들어진다.
+
+**Subscription Time**: `.subscribe()`가 호출되는 시점. 구독 신호가 소스까지 역방향으로 전파되고, 소스가 데이터를 방출하기 시작한다.
 
 ```java
-// Flux 생성
-Flux<Integer> flux1 = Flux.just(1, 2, 3, 4, 5);
-Flux<Integer> flux2 = Flux.range(1, 100);
-Flux<Long>    flux3 = Flux.interval(Duration.ofSeconds(1));  // 1초마다 발행
-Flux<String>  flux4 = Flux.fromIterable(List.of("a", "b", "c"));
-Flux<String>  flux5 = Flux.fromStream(Stream.of("x", "y", "z"));
-
-// 무한 Flux에 구독
-flux3.take(5)  // 5개만
-     .subscribe(tick -> System.out.println("Tick: " + tick));
-```
-
-### 핵심 연산자
-
-**map — 동기 변환**
-
-```java
-Flux.just("hello", "world")
-    .map(String::toUpperCase)
-    .subscribe(System.out::println);
-// HELLO
-// WORLD
-```
-
-**flatMap — 비동기 변환 (내부 Publisher를 펼침)**
-
-```java
-// map과 달리 각 요소를 Publisher로 변환하고 병합
-Flux.just("user1", "user2", "user3")
-    .flatMap(userId -> fetchUserFromDB(userId))  // 비동기 DB 조회
-    .subscribe(user -> System.out.println(user));
-
-// 동시성 제한 (기본값: 256)
-Flux.range(1, 100)
-    .flatMap(i -> asyncOperation(i), 10)  // 동시 최대 10개
-    .subscribe();
-```
-
-**filter — 조건 필터링**
-
-```java
-Flux.range(1, 10)
+// Assembly: 이 코드는 아무것도 실행하지 않는다
+Flux<String> pipeline = Flux.range(1, 1000)
     .filter(n -> n % 2 == 0)
-    .subscribe(System.out::println);
-// 2, 4, 6, 8, 10
+    .map(n -> "item-" + n)
+    .take(10);
+
+// Subscription: 여기서 실제 실행
+pipeline.subscribe(System.out::println);
+// 1,2,3,...을 생성하다가 짝수 10개(2,4,6..20)를 얻으면 cancel() 신호로 중단
 ```
 
-**zip — 여러 Publisher를 묶어 처리**
+이 설계의 이점: 파이프라인을 재사용할 수 있고, 구독 전에 operator를 조립할 수 있다. 하지만 함정도 있다: `subscribe()`를 빠뜨리면 아무것도 실행되지 않고 경고도 없다.
 
-```java
-Mono<String> nameMonο  = fetchName(userId);
-Mono<Integer> ageMonο  = fetchAge(userId);
-Mono<String> emailMonο = fetchEmail(userId);
+### Cold Publisher vs Hot Publisher
 
-Mono.zip(nameMonο, ageMonο, emailMonο)
-    .map(tuple -> new UserDto(tuple.getT1(), tuple.getT2(), tuple.getT3()))
-    .subscribe(user -> System.out.println(user));
-```
-
-**merge — 여러 Flux를 병렬로 합침 (순서 무보장)**
-
-```java
-Flux<String> flux1 = Flux.just("A", "B").delayElements(Duration.ofMillis(100));
-Flux<String> flux2 = Flux.just("1", "2").delayElements(Duration.ofMillis(150));
-
-Flux.merge(flux1, flux2)
-    .subscribe(System.out::println);
-// A, 1, B, 2 (타이밍에 따라 다름)
-```
-
-**concat — 순서를 보장하며 합침**
-
-```java
-Flux<String> flux1 = Flux.just("A", "B");
-Flux<String> flux2 = Flux.just("1", "2");
-
-Flux.concat(flux1, flux2)
-    .subscribe(System.out::println);
-// A, B, 1, 2 (항상 이 순서)
-```
-
-**concatMap — 비동기 변환 (순서 보장, 직렬)**
-
-```java
-Flux.just("user1", "user2", "user3")
-    .concatMap(userId -> fetchUserFromDB(userId))  // 순서 보장
-    .subscribe(user -> System.out.println(user));
-```
-
-**switchMap — 최신 값만 (검색 자동완성에 유용)**
-
-```java
-Flux<SearchResult> searchResults = searchInput
-    .switchMap(query -> searchService.search(query)); // 이전 요청은 취소
-```
-
-**필터링 연산자**
-
-```java
-Flux<Integer> numbers = Flux.range(1, 20);
-
-numbers.filter(n -> n % 2 == 0)    // 짝수만
-       .take(5)                      // 앞에서 5개
-       .skip(2)                      // 앞에서 2개 스킵
-       .takeLast(3)                  // 뒤에서 3개
-       .distinct()                   // 중복 제거
-       .distinctUntilChanged()       // 연속 중복만 제거
-       .elementAt(3)                 // 3번째 원소 (Mono)
-       .next()                       // 첫 번째 원소 (Mono)
-```
-
-**집계 연산자**
-
-```java
-Flux<Integer> flux = Flux.range(1, 5);
-
-Mono<Integer> sum = flux.reduce(0, Integer::sum);  // 15
-Mono<List<Integer>> list = flux.collectList();      // [1,2,3,4,5]
-Mono<Long> count = flux.count();                    // 5
-
-// groupBy
-Flux<GroupedFlux<String, User>> grouped = userFlux
-    .groupBy(user -> user.getCity());
-
-grouped.flatMap(group -> group
-    .count()
-    .map(count -> group.key() + ": " + count)
-).subscribe(System.out::println);
-
-// window — N개씩 묶음
-flux.window(3)
-    .flatMap(window -> window.collectList())
-    .subscribe(System.out::println);
-// [1, 2, 3], [4, 5]
-
-// buffer — N개씩 List로
-flux.buffer(3)
-    .subscribe(System.out::println);
-// [1, 2, 3], [4, 5]
-```
-
-**결합 연산자 추가 — zipWith, combineLatest, scan**
-
-```java
-// zipWith
-Mono<UserProfile> profile = userMono
-    .zipWith(ordersMono)
-    .map(tuple -> UserProfile.of(tuple.getT1(), tuple.getT2()));
-
-// combineLatest — 둘 중 하나라도 값 방출 시 최신값 결합
-Flux.combineLatest(flux1, flux2, (v1, v2) -> v1 + "," + v2);
-
-// scan — 누적 값
-Flux<Integer> runningSum = Flux.range(1, 5)
-    .scan(0, Integer::sum);
-// 0, 1, 3, 6, 10, 15
-```
-
-**switchIfEmpty — 빈 Publisher 대체**
-
-```java
-userRepository.findById(userId)
-    .switchIfEmpty(Mono.error(new UserNotFoundException(userId)))
-    .subscribe(user -> System.out.println(user));
-```
-
-**onErrorResume — 에러 시 대체 Publisher**
-
-```java
-fetchDataFromPrimary()
-    .onErrorResume(ex -> fetchDataFromFallback())
-    .subscribe(data -> System.out.println(data));
-```
-
-### Hot vs Cold Publisher
-
-**Cold Publisher**: 구독할 때마다 처음부터 새로 실행됩니다. 기본적으로 모든 Mono/Flux는 Cold입니다.
+**Cold Publisher**: 각 Subscriber마다 독립적인 실행 흐름을 가진다. 구독할 때마다 처음부터 재실행된다. `Flux.range()`, `Flux.fromIterable()`, HTTP 요청 기반 Publisher가 Cold다.
 
 ```java
 Flux<Integer> cold = Flux.range(1, 3);
 
+// 두 번 구독하면 두 번 실행된다 — DB 쿼리라면 쿼리가 두 번 나간다
 cold.subscribe(i -> System.out.println("Sub1: " + i));
-// Sub1: 1, Sub1: 2, Sub1: 3
-
+// Sub1:1, Sub1:2, Sub1:3
 cold.subscribe(i -> System.out.println("Sub2: " + i));
-// Sub2: 1, Sub2: 2, Sub2: 3  ← 다시 처음부터 실행
+// Sub2:1, Sub2:2, Sub2:3  ← 처음부터 다시 실행
 ```
 
-**Hot Publisher**: 구독 여부와 관계없이 데이터를 발행합니다. 늦게 구독하면 그 이전 데이터는 놓칩니다.
+**왜 Cold가 기본인가**: 함수형 순수성 때문이다. 같은 파이프라인을 여러 구독자가 공유하면 서로 영향을 미친다. Cold는 각 구독자에게 독립적인 실행을 보장한다.
+
+**Hot Publisher**: Subscriber와 무관하게 데이터를 방출한다. 늦게 구독하면 이전 데이터는 놓친다. 실시간 이벤트 스트림, 웹소켓, 타이머가 Hot이다.
 
 ```java
-// ConnectableFlux: Cold → Hot 변환
+// Flux.interval은 Hot — 구독 시점 이전 데이터는 없음
 Flux<Long> hotFlux = Flux.interval(Duration.ofSeconds(1))
-    .publish()    // ConnectableFlux로 변환
-    .autoConnect(); // 첫 구독 시 시작
+    .publish()       // ConnectableFlux로 변환 (Cold → Hot 다리)
+    .autoConnect();  // 첫 Subscriber가 구독하면 업스트림 시작
 
 hotFlux.subscribe(i -> System.out.println("Sub1: " + i));
 
-Thread.sleep(2500);
+Thread.sleep(2500); // 0, 1 방출됨
 
-// Sub2는 0, 1을 놓침
+// Sub2는 0, 1을 놓친다
 hotFlux.subscribe(i -> System.out.println("Sub2: " + i));
-// Sub1: 0, Sub1: 1, Sub1: 2, Sub2: 2, Sub1: 3, Sub2: 3 ...
+// 이후부터: Sub1: 2, Sub2: 2, Sub1: 3, Sub2: 3 ...
 
-// share() = publish().autoConnect()의 단축형
-Flux<String> shared = fetchLiveData().share();
+// cache() — Cold를 Hot으로 바꾸되, 이전 값을 재방출
+Mono<User> cachedUser = userRepository.findById(1L).cache();
+// 첫 구독: DB 쿼리 실행
+// 이후 구독: 캐시된 결과 반환 (DB 쿼리 없음)
 ```
 
 ---
 
-## 3. WebFlux 내부 동작
+## 4. Netty 이벤트 루프 모델 — 왜 CPU 코어 수 스레드가 충분한가
 
-### Netty 이벤트 루프 구조
+### Boss/Worker 구조
 
-WebFlux의 기본 서버인 Netty는 Boss/Worker 그룹 구조를 사용합니다.
+Netty는 두 종류의 `EventLoopGroup`을 사용한다.
 
-```mermaid
-graph LR
-    CL["Client 1~N"] --> BG["Boss Group"]
-    BG -->|할당| W1["Worker-1 EventLoop"]
-    BG -->|할당| W2["Worker-2 EventLoop"]
-    BG -->|할당| WN["Worker-N (CPU코어수)"]
-```
-
-### 논블로킹 I/O 동작 원리
-
-```mermaid
-graph LR
-    T1["Thread(블로킹)"] -->|DB 요청| W1["대기"]
-    W1 --> P1["처리"]
-    T2["Thread(논블로킹)"] -->|DB 요청| IR["즉시 반환"]
-    IR --> OW["다른 작업"]
-    OW -->|I/O 완료| CB["콜백 실행"]
-```
-
-실제 동작 수준에서는 Linux의 `epoll`, macOS의 `kqueue`, Windows의 `IOCP`를 사용하여 커널이 I/O 완료를 통지합니다.
-
-### Schedulers
-
-Reactor의 `Schedulers`는 어떤 스레드에서 실행할지 결정합니다.
+- **Boss Group**: 새 TCP 연결 수락만 담당. 보통 1개 스레드로 충분.
+- **Worker Group**: 수락된 연결의 I/O 처리 담당. CPU 코어 × 2개 스레드.
 
 ```java
-// 1. Schedulers.parallel() — CPU 집약 작업용
-// 코어 수만큼의 스레드, 블로킹 금지
-Flux.range(1, 100)
+// Netty 서버 직접 구성 예시 (WebFlux는 내부에서 이렇게 동작)
+EventLoopGroup bossGroup = new NioEventLoopGroup(1);
+EventLoopGroup workerGroup = new NioEventLoopGroup(); // 기본: CPU 코어 × 2
+
+ServerBootstrap bootstrap = new ServerBootstrap()
+    .group(bossGroup, workerGroup)
+    .channel(NioServerSocketChannel.class)
+    .childHandler(new ChannelInitializer<SocketChannel>() {
+        @Override
+        protected void initChannel(SocketChannel ch) {
+            ch.pipeline().addLast(new HttpServerCodec());
+            ch.pipeline().addLast(new HttpObjectAggregator(65536));
+            ch.pipeline().addLast(new MyHandler());
+        }
+    });
+```
+
+```mermaid
+graph LR
+    CONN["새 TCP 연결"] --> BOSS["BossGroup 1개"]
+    BOSS -->|"채널 등록"| W1["Worker EL-1"]
+    BOSS -->|"채널 등록"| W2["Worker EL-2"]
+    BOSS -->|"채널 등록"| WN["Worker EL-N"]
+    W1 --> IO1["I/O + 콜백"]
+```
+
+### 왜 소수 스레드로 수만 연결을 처리하는가
+
+각 Worker EventLoop는 `Selector`(NIO) 또는 `epoll`(Epoll Transport)을 통해 자신이 담당하는 수천 개 채널의 이벤트를 감시한다. 루프 1회 반복에서 "지금 읽기 가능한 채널"을 모두 처리하고, 다시 이벤트를 기다린다.
+
+```
+EventLoop 의사 코드:
+while (running) {
+    List<SelectionKey> readyKeys = selector.select(); // 블로킹, 이벤트 올 때까지
+    for (SelectionKey key : readyKeys) {
+        if (key.isReadable())  handleRead(key.channel());
+        if (key.isWritable()) handleWrite(key.channel());
+    }
+    runAllPendingTasks(); // 예약된 작업 실행
+}
+```
+
+이 구조에서 스레드는 절대 I/O를 기다리며 잠들지 않는다. "지금 처리할 수 있는 것만" 처리하고 다음으로 넘어간다. 따라서 스레드 수가 작아도 많은 연결을 처리할 수 있다.
+
+**치명적인 규칙**: EventLoop 스레드에서 블로킹 연산을 실행하면 그 EventLoop가 담당하는 모든 연결이 함께 멈춘다. 스레드 1개가 수천 연결을 담당하기 때문에 피해가 MVC보다 훨씬 크다.
+
+```java
+// 절대 금지 — EventLoop 스레드에서 블로킹
+@GetMapping("/user/{id}")
+public Mono<User> getUser(@PathVariable Long id) {
+    // 이 시점 스레드 = EventLoop 스레드
+    User user = jdbcTemplate.queryForObject("SELECT ...", User.class, id); // 블로킹!
+    // 이 스레드가 담당하는 모든 연결이 멈춤
+    return Mono.just(user);
+}
+
+// 올바른 격리
+@GetMapping("/user/{id}")
+public Mono<User> getUser(@PathVariable Long id) {
+    return Mono.fromCallable(() ->
+            jdbcTemplate.queryForObject("SELECT ...", User.class, id)
+        )
+        .subscribeOn(Schedulers.boundedElastic()); // 별도 스레드풀로 오프로드
+}
+```
+
+### Tomcat vs Netty 처리 모델 직접 비교
+
+| 구분 | Tomcat (MVC) | Netty (WebFlux) |
+|------|-------------|-----------------|
+| 스레드 수 | 요청 수만큼 (기본 200) | CPU 코어 × 2 |
+| I/O 대기 | 스레드가 직접 대기 | OS epoll 감시, 완료 시 콜백 |
+| 블로킹 코드 | 스레드 1개만 영향 | EventLoop 담당 전체 연결 영향 |
+| 메모리 (1K 요청) | ~500MB (스택) | ~30MB |
+| 컨텍스트 스위칭 | 빈번 | 거의 없음 |
+| 디버깅 | 스택 트레이스 명확 | 리액티브 체인 추적 어려움 |
+
+---
+
+## 5. Scheduler — 어느 스레드에서 실행할 것인가
+
+### Scheduler 종류와 선택 근거
+
+```java
+// 1. Schedulers.parallel()
+// 내부: ForkJoinPool과 유사한 고정 크기 스레드풀 (CPU 코어 수)
+// 용도: CPU 집약 연산 (암호화, 이미지 처리, 수학 계산)
+// 금지: 블로킹 I/O — 스레드가 고갈되면 전체 리액티브 체인이 멈춤
+Flux.range(1, 1000)
     .parallel()
     .runOn(Schedulers.parallel())
-    .map(n -> n * n)  // CPU 집약 연산
+    .map(n -> heavyComputation(n)) // 순수 CPU 연산
     .sequential()
     .subscribe();
 
-// 2. Schedulers.boundedElastic() — 블로킹 작업 격리용
-// 필요에 따라 스레드 생성 (최대 10 * CPU코어, 큐 100K)
-Mono.fromCallable(() -> {
-        // 레거시 블로킹 코드
-        return jdbcTemplate.queryForObject("SELECT ...", String.class);
-    })
-    .subscribeOn(Schedulers.boundedElastic())
-    .subscribe();
+// 2. Schedulers.boundedElastic()
+// 내부: 동적 스레드풀 (최대 10 × CPU 코어, 큐 100,000, idle 60초 후 종료)
+// 용도: 레거시 블로킹 코드 격리, JDBC, 동기 파일 I/O
+// 이름의 "bounded": 무한 스레드 생성을 막아 OOM 방지
+Mono.fromCallable(() -> legacyJdbcRepository.findById(id))
+    .subscribeOn(Schedulers.boundedElastic());
 
-// 3. Schedulers.single() — 단일 스레드, 순서 보장
+// 3. Schedulers.single()
+// 내부: 단일 백그라운드 스레드 (재사용)
+// 용도: 순서가 보장되어야 하는 단일 스레드 작업
 Flux.range(1, 5)
     .publishOn(Schedulers.single())
-    .subscribe(i -> System.out.println(Thread.currentThread().getName() + ": " + i));
+    .subscribe(i -> System.out.println(
+        Thread.currentThread().getName() + ": " + i
+    ));
+// 모두 같은 스레드명 출력
 
-// 4. Schedulers.immediate() — 현재 스레드에서 실행
-// 5. Schedulers.fromExecutorService(executor) — 커스텀 Executor
+// 4. Schedulers.immediate()
+// 현재 스레드에서 실행 (스케줄러 변경 없음)
+// 테스트에서 스케줄러를 교체할 때 유용
+
+// 5. Schedulers.fromExecutorService(executor)
+// 기존 ExecutorService를 Reactor Scheduler로 래핑
+ExecutorService myPool = Executors.newFixedThreadPool(20);
+Scheduler myScheduler = Schedulers.fromExecutorService(myPool);
 ```
 
-### publishOn vs subscribeOn
+### publishOn vs subscribeOn — 가장 혼동하기 쉬운 개념
 
-이 두 연산자는 WebFlux에서 가장 혼동하기 쉬운 개념입니다.
+```java
+// subscribeOn: 구독 신호(업스트림 방향)가 전달되는 스레드를 바꾼다
+// 소스 Publisher가 어느 스레드에서 실행되는지 결정
+// 체인 어디에 놓아도 소스에 영향 (체인 맨 위로 올라감)
+Mono.fromCallable(() -> blockingDbCall()) // 소스
+    .map(data -> transform(data))
+    .subscribeOn(Schedulers.boundedElastic()) // 소스부터 boundedElastic에서 실행
+    .subscribe();
+
+// publishOn: 이 연산자 이후의 다운스트림을 지정 스케줄러로 이동
+// 여러 번 사용해 중간에 스레드를 전환할 수 있다
+Flux.range(1, 10)                          // EventLoop 스레드
+    .map(n -> n * 2)                        // EventLoop 스레드
+    .publishOn(Schedulers.parallel())       // 여기서 스레드 전환
+    .map(n -> heavyCompute(n))              // parallel 스레드
+    .publishOn(Schedulers.boundedElastic()) // 다시 전환
+    .map(n -> writeToFile(n))              // boundedElastic 스레드
+    .subscribe();
+```
 
 ```mermaid
 graph LR
-    PA["소스"] --> PB["map(A)"]
-    PB --> PC["publishOn"]
-    PC --> PD["map(B)"]
-    SA["소스"] --> SB["map(A)"]
-    SB --> SD["subscribeOn"]
+    SRC["Source"] --> SUB["subscribeOn으로 스레드 결정"]
+    OP1["Operator 1"] --> PUB["publishOn 이후 스레드 전환"]
+    PUB --> OP2["Operator 2 (새 스레드)"]
 ```
 
+**실무 패턴**: `subscribeOn`은 블로킹 소스를 격리할 때, `publishOn`은 무거운 연산 구간을 다른 스레드로 이동할 때 쓴다.
+
+---
+
+## 6. 핵심 연산자 내부 동작
+
+### map vs flatMap — 동시성의 차이
+
 ```java
-// 실제 예시: 블로킹 DB 호출 격리
-public Mono<User> getUserById(Long id) {
-    return Mono.fromCallable(() -> {
-            // 블로킹 JDBC 호출
-            return userRepository.findById(id);
-        })
-        .subscribeOn(Schedulers.boundedElastic());  // 블로킹을 별도 스레드로
-}
+// map: 동기 변환, 1:1, 새 Publisher 없음
+// 내부: onNext(item) → transform(item) → 다운스트림 onNext(result)
+Flux.just("a", "b", "c")
+    .map(s -> s.toUpperCase())    // 동기 변환, 직렬
+    .subscribe(System.out::println);
+
+// flatMap: 각 item을 Publisher로 변환하고 결과를 병합
+// 내부: onNext(item) → innerPublisher = mapper(item) → innerPublisher.subscribe()
+//       내부 Publisher들이 동시에 실행되어 먼저 완성되는 순서로 방출
+// 기본 동시성: 256개의 내부 Publisher 동시 구독
+Flux.just("user1", "user2", "user3")
+    .flatMap(userId -> fetchUserFromDB(userId)) // 3개 동시 DB 쿼리
+    .subscribe(System.out::println); // 완료 순서 불보장
+
+// 동시성 제한
+Flux.range(1, 100)
+    .flatMap(i -> externalApiCall(i), 5) // 동시 최대 5개
+    .subscribe();
+
+// concatMap: flatMap과 같지만 순서 보장 (직렬)
+// 내부: 하나의 내부 Publisher가 완료되어야 다음 시작
+// 순서가 중요할 때 사용 (파일 처리, 의존 순서 있는 API 호출)
+Flux.just("user1", "user2", "user3")
+    .concatMap(userId -> fetchUserFromDB(userId)) // 직렬, user1 완료 후 user2 시작
+    .subscribe(System.out::println); // 입력 순서 보장
+```
+
+**flatMap vs concatMap 선택 기준**:
+- 순서가 상관없고 빠른 응답이 중요하면 `flatMap`
+- 처리 순서가 비즈니스 로직에 영향을 미치면 `concatMap`
+- 외부 API rate limit이 있으면 `flatMap(mapper, concurrency)` 로 동시성 제한
+
+### switchIfEmpty — 구독 흐름 이해
+
+```java
+// switchIfEmpty는 업스트림이 onComplete를 보내기 전까지 대기한다
+// onNext가 하나도 없이 onComplete가 오면 대체 Publisher로 전환
+Mono<User> result = userRepository.findById(id)  // DB 조회
+    .switchIfEmpty(
+        // 이 Mono는 업스트림이 비어있을 때만 구독된다
+        Mono.error(new UserNotFoundException("User not found: " + id))
+    );
+
+// 주의: switchIfEmpty 안의 코드는 항상 평가되지만,
+// subscribe는 필요할 때만 된다
+// defer()로 늦은 평가 적용
+userRepository.findById(id)
+    .switchIfEmpty(Mono.defer(() ->
+        externalService.fetchUser(id) // 실제 필요할 때만 실행
+    ));
+```
+
+### zip, merge, concat 구독 흐름
+
+```java
+// zip: 모든 Publisher가 각각 onNext를 방출해야 결합
+// 가장 느린 Publisher 속도에 맞춰진다
+// 하나라도 onError/onComplete(빈)면 즉시 onError/onComplete
+Mono<String> name  = fetchName(id);    // 100ms
+Mono<Integer> age  = fetchAge(id);     // 200ms
+Mono<String> email = fetchEmail(id);   // 150ms
+
+// 세 개를 동시에 구독, 가장 늦은 200ms 후 결합
+Mono.zip(name, age, email)
+    .map(t -> new UserDto(t.getT1(), t.getT2(), t.getT3()))
+    .subscribe(System.out::println);
+
+// merge: 여러 Publisher를 동시에 구독, 도착 순서대로 방출
+// 순서 보장 없음
+Flux<String> stream1 = fetchStream("A").delayElements(Duration.ofMillis(100));
+Flux<String> stream2 = fetchStream("B").delayElements(Duration.ofMillis(150));
+
+Flux.merge(stream1, stream2)
+    .subscribe(System.out::println); // A1, B1, A2, B2, A3, ... (타이밍 혼합)
+
+// concat: 순차 구독 — 앞 Publisher가 완료되어야 다음 구독
+// 앞이 느리면 뒤는 그냥 기다린다
+Flux.concat(stream1, stream2)
+    .subscribe(System.out::println); // A1, A2, A3, ... (A 모두), B1, B2, ...
 ```
 
 ---
 
-## 4. WebFlux 사용법
+## 7. WebClient — 내부 구조와 올바른 설정
 
-### 의존성 설정
+### ConnectionProvider — 커넥션 풀 이해
 
-```xml
-<!-- Maven -->
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-webflux</artifactId>
-</dependency>
-```
-
-```groovy
-// Gradle
-implementation 'org.springframework.boot:spring-boot-starter-webflux'
-```
-
-### 어노테이션 기반 (@RestController + Mono/Flux)
-
-Spring MVC와 거의 동일한 어노테이션을 사용하지만 반환 타입이 `Mono`/`Flux`입니다.
+WebClient는 내부적으로 Reactor Netty의 `HttpClient`를 사용한다. HTTP/1.1이면 커넥션 풀을 사용하고, HTTP/2이면 다중화(Multiplexing)를 사용한다.
 
 ```java
-@RestController
-@RequestMapping("/api/users")
-public class UserController {
+// 커넥션 풀 직접 설정
+ConnectionProvider provider = ConnectionProvider.builder("my-pool")
+    .maxConnections(100)          // 최대 연결 수
+    .pendingAcquireMaxCount(200)  // 연결 대기 큐 최대 크기
+    .pendingAcquireTimeout(Duration.ofSeconds(5)) // 대기 타임아웃
+    .maxIdleTime(Duration.ofSeconds(60))          // 유휴 연결 유지 시간
+    .maxLifeTime(Duration.ofMinutes(10))          // 연결 최대 수명
+    .evictInBackground(Duration.ofSeconds(30))    // 백그라운드 정리 주기
+    .build();
 
-    private final UserService userService;
+HttpClient httpClient = HttpClient.create(provider)
+    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 3000)  // TCP 연결 타임아웃
+    .responseTimeout(Duration.ofSeconds(10))              // 응답 타임아웃 (헤더 수신까지)
+    .doOnConnected(conn ->
+        conn.addHandlerLast(new ReadTimeoutHandler(10, TimeUnit.SECONDS))
+           .addHandlerLast(new WriteTimeoutHandler(5, TimeUnit.SECONDS))
+    );
 
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
-
-    // 단건 조회 (Mono)
-    @GetMapping("/{id}")
-    public Mono<ResponseEntity<UserDto>> getUser(@PathVariable Long id) {
-        return userService.findById(id)
-            .map(user -> ResponseEntity.ok(user))
-            .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
-    }
-
-    // 목록 조회 (Flux)
-    @GetMapping
-    public Flux<UserDto> getAllUsers() {
-        return userService.findAll();
-    }
-
-    // 생성
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public Mono<UserDto> createUser(@RequestBody @Valid Mono<CreateUserRequest> request) {
-        return request
-            .flatMap(req -> userService.create(req));
-    }
-
-    // 수정
-    @PutMapping("/{id}")
-    public Mono<UserDto> updateUser(
-            @PathVariable Long id,
-            @RequestBody @Valid Mono<UpdateUserRequest> request) {
-        return request.flatMap(req -> userService.update(id, req));
-    }
-
-    // 삭제
-    @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public Mono<Void> deleteUser(@PathVariable Long id) {
-        return userService.delete(id);
-    }
-
-    // 쿼리 파라미터
-    @GetMapping("/search")
-    public Flux<UserDto> searchUsers(
-            @RequestParam String keyword,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return userService.search(keyword, page, size);
-    }
-}
+WebClient webClient = WebClient.builder()
+    .baseUrl("https://api.example.com")
+    .clientConnector(new ReactorClientHttpConnector(httpClient))
+    .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+    .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+    .codecs(configurer -> configurer
+        .defaultCodecs()
+        .maxInMemorySize(2 * 1024 * 1024)) // 응답 버퍼 2MB
+    .build();
 ```
 
-### 함수형 엔드포인트 (RouterFunction, HandlerFunction)
+### connectTimeout vs responseTimeout vs readTimeout — 세 개의 차이
 
-어노테이션 대신 순수 함수로 라우팅을 정의합니다. 더 명시적이고 테스트하기 쉽습니다.
+```
+connectTimeout: TCP 3-way handshake 완료까지 기다리는 시간
+                설정 위치: ChannelOption.CONNECT_TIMEOUT_MILLIS
+                초과 시: ConnectTimeoutException
 
-```java
-// Handler
-@Component
-public class UserHandler {
+responseTimeout: 요청 전송 완료 후 응답 첫 바이트(HTTP 상태코드+헤더)가 올 때까지
+                 설정 위치: HttpClient.responseTimeout()
+                 초과 시: ReadTimeoutException
 
-    private final UserService userService;
-
-    public UserHandler(UserService userService) {
-        this.userService = userService;
-    }
-
-    public Mono<ServerResponse> getUser(ServerRequest request) {
-        Long id = Long.valueOf(request.pathVariable("id"));
-        return userService.findById(id)
-            .flatMap(user -> ServerResponse.ok()
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(user))
-            .switchIfEmpty(ServerResponse.notFound().build());
-    }
-
-    public Mono<ServerResponse> getAllUsers(ServerRequest request) {
-        return ServerResponse.ok()
-            .contentType(MediaType.APPLICATION_JSON)
-            .body(userService.findAll(), UserDto.class);
-    }
-
-    public Mono<ServerResponse> createUser(ServerRequest request) {
-        return request.bodyToMono(CreateUserRequest.class)
-            .flatMap(userService::create)
-            .flatMap(user -> ServerResponse.created(
-                    URI.create("/api/users/" + user.getId()))
-                .bodyValue(user));
-    }
-}
-
-// Router
-@Configuration
-public class UserRouter {
-
-    @Bean
-    public RouterFunction<ServerResponse> userRoutes(UserHandler handler) {
-        return RouterFunctions
-            .route(GET("/api/users/{id}"), handler::getUser)
-            .andRoute(GET("/api/users"), handler::getAllUsers)
-            .andRoute(POST("/api/users"), handler::createUser);
-    }
-}
+readTimeout:    마지막 데이터 수신 후 다음 데이터가 올 때까지 기다리는 시간
+                설정 위치: ReadTimeoutHandler
+                스트리밍 응답의 중간 침묵 감지에 사용
 ```
 
-### WebClient — 리액티브 HTTP 클라이언트
-
-WebFlux 환경에서 외부 API를 호출할 때는 RestTemplate 대신 WebClient를 사용해야 합니다.
+### retry with backoff — 지수 백오프 설계
 
 ```java
 @Service
-public class ExternalApiService {
+public class ResilientApiClient {
 
     private final WebClient webClient;
 
-    public ExternalApiService(WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder
-            .baseUrl("https://api.example.com")
-            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-            .clientConnector(new ReactorClientHttpConnector(
-                HttpClient.create()
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
-                    .responseTimeout(Duration.ofSeconds(10))
-            ))
-            .build();
-    }
-
-    // GET 요청
-    public Mono<UserDto> fetchUser(Long userId) {
+    public Mono<OrderDto> fetchOrder(String orderId) {
         return webClient.get()
-            .uri("/users/{id}", userId)
+            .uri("/orders/{id}", orderId)
             .retrieve()
-            .onStatus(HttpStatusCode::is4xxClientError, response ->
-                response.bodyToMono(String.class)
-                    .flatMap(body -> Mono.error(new UserNotFoundException("User not found: " + body)))
-            )
-            .onStatus(HttpStatusCode::is5xxServerError, response ->
-                Mono.error(new ExternalApiException("External API error"))
-            )
-            .bodyToMono(UserDto.class)
-            .timeout(Duration.ofSeconds(5))
-            .retryWhen(Retry.backoff(3, Duration.ofMillis(500)));
-    }
-
-    // POST 요청
-    public Mono<UserDto> createUser(CreateUserRequest request) {
-        return webClient.post()
-            .uri("/users")
-            .bodyValue(request)
-            .retrieve()
-            .bodyToMono(UserDto.class);
-    }
-
-    // 병렬 요청
-    public Mono<UserProfile> fetchUserProfile(Long userId) {
-        Mono<UserDto> userMono      = fetchUser(userId);
-        Mono<List<OrderDto>> orders = fetchOrders(userId);
-        Mono<AddressDto> address    = fetchAddress(userId);
-
-        return Mono.zip(userMono, orders, address)
-            .map(tuple -> new UserProfile(tuple.getT1(), tuple.getT2(), tuple.getT3()));
-    }
-
-    // 스트림 응답
-    public Flux<EventDto> streamEvents() {
-        return webClient.get()
-            .uri("/events/stream")
-            .accept(MediaType.TEXT_EVENT_STREAM)
-            .retrieve()
-            .bodyToFlux(EventDto.class);
-    }
-}
-```
-
-### SSE (Server-Sent Events)
-
-서버에서 클라이언트로 실시간 데이터를 단방향 스트림으로 전송합니다.
-
-```java
-@RestController
-@RequestMapping("/api/events")
-public class SseController {
-
-    private final EventService eventService;
-
-    // 어노테이션 방식
-    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> streamEvents() {
-        return Flux.interval(Duration.ofSeconds(1))
-            .map(sequence -> ServerSentEvent.<String>builder()
-                .id(String.valueOf(sequence))
-                .event("message")
-                .data("Event #" + sequence + " at " + Instant.now())
-                .comment("tick")
-                .build());
-    }
-
-    // 실제 이벤트 스트림
-    @GetMapping(value = "/notifications", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<NotificationDto>> streamNotifications(
-            @RequestParam Long userId) {
-        return eventService.getNotificationStream(userId)
-            .map(notification -> ServerSentEvent.<NotificationDto>builder()
-                .id(notification.getId())
-                .event(notification.getType())
-                .data(notification)
-                .build())
-            .doOnCancel(() -> log.info("Client disconnected: {}", userId));
-    }
-}
-```
-
-### WebSocket
-
-```java
-@Component
-public class ChatWebSocketHandler implements WebSocketHandler {
-
-    private final Sinks.Many<String> sink = Sinks.many().multicast().onBackpressureBuffer();
-
-    @Override
-    public Mono<Void> handle(WebSocketSession session) {
-        // 수신: 클라이언트 메시지를 sink에 발행
-        Mono<Void> input = session.receive()
-            .map(WebSocketMessage::getPayloadAsText)
-            .doOnNext(message -> {
-                log.info("Received: {}", message);
-                sink.tryEmitNext(message);
+            .onStatus(HttpStatusCode::is4xxClientError, response -> {
+                // 클라이언트 에러는 재시도 의미 없음
+                return response.bodyToMono(ErrorBody.class)
+                    .flatMap(err -> Mono.error(
+                        new ClientException(response.statusCode(), err.message())
+                    ));
             })
-            .then();
-
-        // 송신: sink의 메시지를 클라이언트에게 전송
-        Flux<WebSocketMessage> output = sink.asFlux()
-            .map(session::textMessage);
-
-        return session.send(output).and(input);
+            .onStatus(HttpStatusCode::is5xxServerError, response ->
+                // 서버 에러는 재시도 가능
+                Mono.error(new ServerException("Server error: " + response.statusCode()))
+            )
+            .bodyToMono(OrderDto.class)
+            .timeout(Duration.ofSeconds(5))
+            .retryWhen(
+                Retry.backoff(3, Duration.ofMillis(500)) // 초기 대기 500ms
+                    .maxBackoff(Duration.ofSeconds(10))   // 최대 10초 대기
+                    .jitter(0.5)                          // 재시도 분산 (0~50% 랜덤)
+                    .filter(ex -> ex instanceof ServerException) // 서버 에러만 재시도
+                    .doBeforeRetry(signal ->
+                        log.warn("Retry #{} after: {}",
+                            signal.totalRetries(), signal.failure().getMessage())
+                    )
+                    .onRetryExhaustedThrow((spec, signal) ->
+                        new ServiceUnavailableException("API unavailable after retries")
+                    )
+            )
+            .onErrorResume(ClientException.class, ex ->
+                Mono.error(new BusinessException(ex.getMessage()))
+            )
+            .onErrorResume(ServiceUnavailableException.class, ex ->
+                fetchOrderFromCache(orderId) // 최종 폴백: 캐시
+            );
     }
-}
 
-@Configuration
-public class WebSocketConfig {
+    // 병렬 요청 — zip으로 동시 호출
+    public Mono<UserProfile> fetchUserProfile(Long userId) {
+        Mono<UserDto> user     = fetchUser(userId)
+            .onErrorReturn(UserDto.empty());       // 에러 시 빈 객체
+        Mono<List<OrderDto>> orders = fetchOrders(userId)
+            .onErrorReturn(Collections.emptyList());
+        Mono<AddressDto> address = fetchAddress(userId)
+            .onErrorReturn(AddressDto.empty());
 
-    @Bean
-    public HandlerMapping webSocketHandlerMapping(ChatWebSocketHandler handler) {
-        Map<String, WebSocketHandler> map = new HashMap<>();
-        map.put("/ws/chat", handler);
-
-        SimpleUrlHandlerMapping mapping = new SimpleUrlHandlerMapping();
-        mapping.setUrlMap(map);
-        mapping.setOrder(-1);
-        return mapping;
-    }
-
-    @Bean
-    public WebSocketHandlerAdapter handlerAdapter() {
-        return new WebSocketHandlerAdapter();
+        return Mono.zip(user, orders, address)
+            .map(t -> UserProfile.of(t.getT1(), t.getT2(), t.getT3()));
     }
 }
 ```
 
 ---
 
-## 5. 리액티브 데이터 액세스
+## 8. 에러 처리 — 체크 예외가 동작하지 않는 이유
 
-### R2DBC — 리액티브 RDBMS
+### 리액티브에서 체크 예외가 안 되는 이유
 
-R2DBC(Reactive Relational Database Connectivity)는 관계형 DB를 논블로킹으로 접근하는 스펙입니다.
+Java 체크 예외는 호출 스택(Call Stack)에 존재한다. 리액티브 체인은 콜백 기반이라 논리적 호출 스택이 없다. `onNext(item)`를 호출하는 스레드와 실제 처리 스레드가 다를 수 있고, 체크 예외를 선언할 인터페이스(`Subscriber.onNext`)는 이미 체크 예외를 허용하지 않는다.
+
+```java
+// 컴파일 에러: Subscriber.onNext는 체크 예외를 던질 수 없다
+Flux.just("a", "b")
+    .map(s -> {
+        throw new IOException("체크 예외"); // 컴파일 에러
+        return s;
+    });
+
+// 래핑해서 런타임으로 변환
+Flux.just("a", "b")
+    .map(s -> {
+        try {
+            return riskyOperation(s);
+        } catch (IOException e) {
+            throw new RuntimeException(e); // 또는 Exceptions.propagate(e)
+        }
+    });
+
+// Reactor 유틸리티 사용
+Flux.just("a", "b")
+    .map(Exceptions.wrap(s -> riskyOperation(s))); // CheckedFunction으로 자동 래핑
+```
+
+### onErrorResume vs onErrorReturn vs onErrorMap
+
+```java
+// onErrorReturn: 에러 발생 시 고정값으로 대체 후 onComplete
+// 에러가 발생해도 스트림은 정상 종료
+Mono<User> result = userRepository.findById(id)
+    .onErrorReturn(DatabaseException.class, User.anonymous()); // DB 에러 → 익명 유저
+
+// onErrorResume: 에러 발생 시 다른 Publisher로 전환
+// 가장 유연한 에러 처리
+Mono<User> result2 = userRepository.findById(id)
+    .onErrorResume(NotFoundException.class, ex ->
+        externalUserService.fetchUser(id) // 폴백 Publisher
+    )
+    .onErrorResume(ex -> {
+        log.error("Unexpected error fetching user {}", id, ex);
+        return Mono.error(new ServiceException("User fetch failed", ex));
+    });
+
+// onErrorMap: 에러 타입만 변환 (에러는 유지)
+// 레이어 간 예외 변환에 사용
+Mono<User> result3 = userRepository.findById(id)
+    .onErrorMap(R2dbcException.class, ex ->
+        new DatabaseException("DB error: " + ex.getMessage(), ex)
+    )
+    .onErrorMap(TimeoutException.class, ex ->
+        new ServiceTimeoutException("DB timeout", ex)
+    );
+
+// doOnError: 에러를 처리하지 않고 사이드 이펙트만 (로깅 등)
+Mono<User> result4 = userRepository.findById(id)
+    .doOnError(ex -> log.error("Error fetching user {}: {}", id, ex.getMessage()))
+    .onErrorResume(ex -> Mono.error(new ServiceException("User not found", ex)));
+```
+
+### 에러 연산자 처리 순서
+
+```java
+// 에러는 체인 아래로 전파된다
+// onError 연산자는 위에서 발생한 에러만 처리
+Flux.just(1, 2, 0, 4)
+    .map(n -> 10 / n) // n=0에서 ArithmeticException
+    .onErrorReturn(-1) // ArithmeticException을 -1로 대체
+    // 결과: 10, 5, -1 (스트림 종료 — onErrorReturn은 스트림을 완료시킴)
+    .subscribe(System.out::println);
+
+// 에러 후 계속하려면 flatMap + onErrorResume 조합
+Flux.just(1, 2, 0, 4)
+    .flatMap(n ->
+        Mono.fromCallable(() -> 10 / n)
+            .onErrorReturn(-1) // 개별 에러 처리 후 계속
+    )
+    .subscribe(System.out::println);
+// 결과: 10, 5, -1, 2 (전체 스트림 지속)
+```
+
+---
+
+## 9. R2DBC — JDBC가 블로킹인 근본 이유
+
+### JDBC는 왜 블로킹인가
+
+JDBC 드라이버는 `java.io.InputStream`/`OutputStream`과 TCP 소켓을 직접 사용한다. `ResultSet.next()`를 호출하면 내부적으로 소켓 읽기 시스템 콜이 발생하고, 데이터가 올 때까지 스레드가 블로킹된다. 이 API 설계는 Java 1.1(1997년)부터 변하지 않았다.
+
+```
+JDBC 내부:
+Connection.prepareStatement() → TCP 소켓으로 쿼리 전송
+ResultSet.next()              → TCP 소켓 read() 시스템 콜
+                              → 커널이 데이터 수신까지 스레드 블로킹
+                              → 데이터 수신 → 스레드 복귀
+```
+
+R2DBC는 이 흐름을 완전히 재설계했다. 쿼리 전송과 결과 수신을 비동기 이벤트로 처리한다.
+
+```
+R2DBC 내부:
+Connection.createStatement()  → Netty Channel에 쿼리 등록 (즉시 반환)
+Publisher.subscribe()         → 구독 신호로 쿼리 전송
+                              → EventLoop가 응답 감시
+                              → 응답 도착 → onNext() 콜백 실행
+```
+
+### Spring Data R2DBC 전체 구성
 
 ```xml
 <dependency>
@@ -755,998 +686,897 @@ R2DBC(Reactive Relational Database Connectivity)는 관계형 DB를 논블로킹
     <artifactId>spring-boot-starter-data-r2dbc</artifactId>
 </dependency>
 <dependency>
-    <groupId>io.r2dbc</groupId>
+    <groupId>org.postgresql</groupId>
     <artifactId>r2dbc-postgresql</artifactId>
 </dependency>
 ```
 
 ```yaml
-# application.yml
 spring:
   r2dbc:
     url: r2dbc:postgresql://localhost:5432/mydb
-    username: user
-    password: password
+    username: appuser
+    password: secret
     pool:
       initial-size: 5
       max-size: 20
       max-idle-time: 30m
+      max-acquire-time: 5s       # 커넥션 대기 최대 시간
+      validation-query: SELECT 1
 ```
 
-### Spring Data R2DBC
-
 ```java
-// Entity
-@Table("users")
-public class User {
+// Entity — JPA @Entity 아님, R2DBC @Table 사용
+@Table("orders")
+public class Order {
     @Id
     private Long id;
-    private String name;
-    private String email;
+    private Long userId;
+    private String status;
+    private BigDecimal amount;
     @Column("created_at")
     private LocalDateTime createdAt;
+
+    // R2DBC는 즉시 로딩만 지원 — @OneToMany 없음
+    // 연관 데이터는 별도 쿼리 + zip으로 조합
 }
 
-// Repository
-public interface UserRepository extends ReactiveCrudRepository<User, Long> {
+// Repository — ReactiveCrudRepository 상속
+public interface OrderRepository extends ReactiveCrudRepository<Order, Long> {
 
-    Flux<User> findByName(String name);
+    Flux<Order> findByUserId(Long userId);
 
-    @Query("SELECT * FROM users WHERE email = :email")
-    Mono<User> findByEmail(String email);
+    @Query("SELECT * FROM orders WHERE status = :status AND amount >= :minAmount")
+    Flux<Order> findByStatusAndMinAmount(String status, BigDecimal minAmount);
 
-    @Query("SELECT * FROM users WHERE created_at > :since ORDER BY created_at DESC LIMIT :limit")
-    Flux<User> findRecentUsers(LocalDateTime since, int limit);
+    @Query("SELECT COUNT(*) FROM orders WHERE user_id = :userId")
+    Mono<Long> countByUserId(Long userId);
+
+    // 페이지네이션
+    Flux<Order> findByUserId(Long userId, Pageable pageable);
 }
 
-// Service
+// Service — 트랜잭션 포함
 @Service
-@Transactional
-public class UserService {
+@Transactional // R2DBC 트랜잭션 지원
+public class OrderService {
 
+    private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final R2dbcEntityTemplate template;
 
-    public Mono<User> findById(Long id) {
-        return userRepository.findById(id)
-            .switchIfEmpty(Mono.error(new UserNotFoundException(id)));
+    // 유저와 주문을 zip으로 동시 조회
+    public Mono<OrderWithUser> getOrderWithUser(Long orderId) {
+        Mono<Order> order = orderRepository.findById(orderId)
+            .switchIfEmpty(Mono.error(new OrderNotFoundException(orderId)));
+
+        return order.flatMap(o ->
+            Mono.zip(
+                Mono.just(o),
+                userRepository.findById(o.getUserId())
+                    .switchIfEmpty(Mono.error(new UserNotFoundException(o.getUserId())))
+            ).map(t -> OrderWithUser.of(t.getT1(), t.getT2()))
+        );
     }
 
-    public Flux<User> findAll() {
-        return userRepository.findAll();
-    }
+    // 복잡한 쿼리 — R2dbcEntityTemplate
+    public Flux<Order> searchOrders(OrderSearchRequest req) {
+        Criteria criteria = Criteria.empty();
+        if (req.getStatus() != null) {
+            criteria = criteria.and("status").is(req.getStatus());
+        }
+        if (req.getMinAmount() != null) {
+            criteria = criteria.and("amount").greaterThanOrEquals(req.getMinAmount());
+        }
 
-    public Mono<User> create(CreateUserRequest request) {
-        User user = User.builder()
-            .name(request.getName())
-            .email(request.getEmail())
-            .createdAt(LocalDateTime.now())
-            .build();
-        return userRepository.save(user);
-    }
+        Query query = Query.query(criteria)
+            .sort(Sort.by(Sort.Direction.DESC, "created_at"))
+            .limit(req.getSize())
+            .offset((long) req.getPage() * req.getSize());
 
-    // 복잡한 쿼리 — R2dbcEntityTemplate 사용
-    public Flux<User> searchByNameAndAge(String name, int minAge) {
-        return template.select(User.class)
-            .matching(Query.query(
-                Criteria.where("name").like("%" + name + "%")
-                    .and("age").greaterThanOrEquals(minAge)
-            ))
+        return template.select(Order.class)
+            .matching(query)
             .all();
     }
-}
-```
 
-### Reactive MongoDB
-
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-data-mongodb-reactive</artifactId>
-</dependency>
-```
-
-```java
-// Repository
-public interface ProductRepository extends ReactiveMongoRepository<Product, String> {
-
-    Flux<Product> findByCategory(String category);
-
-    @Query("{ 'price': { $gte: ?0, $lte: ?1 } }")
-    Flux<Product> findByPriceRange(BigDecimal min, BigDecimal max);
-
-    Flux<Product> findByNameContainingIgnoreCase(String keyword);
-}
-
-// ReactiveMongoTemplate 직접 사용
-@Service
-public class ProductService {
-
-    private final ReactiveMongoTemplate mongoTemplate;
-
-    public Flux<Product> findByComplexCriteria(ProductSearchRequest request) {
-        Query query = new Query();
-
-        if (StringUtils.hasText(request.getKeyword())) {
-            query.addCriteria(Criteria.where("name")
-                .regex(request.getKeyword(), "i"));
-        }
-        if (request.getMinPrice() != null) {
-            query.addCriteria(Criteria.where("price")
-                .gte(request.getMinPrice()));
-        }
-        query.with(PageRequest.of(request.getPage(), request.getSize()));
-
-        return mongoTemplate.find(query, Product.class);
-    }
-
-    // 집계 파이프라인
-    public Flux<CategoryStats> getCategoryStats() {
-        Aggregation aggregation = Aggregation.newAggregation(
-            Aggregation.group("category")
-                .count().as("count")
-                .avg("price").as("avgPrice"),
-            Aggregation.sort(Sort.Direction.DESC, "count")
-        );
-
-        return mongoTemplate.aggregate(aggregation, "products", CategoryStats.class);
-    }
-}
-```
-
-### Reactive Redis (Lettuce)
-
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
-</dependency>
-```
-
-```java
-@Service
-public class CacheService {
-
-    private final ReactiveRedisTemplate<String, Object> redisTemplate;
-    private final ReactiveValueOperations<String, Object> valueOps;
-
-    public CacheService(ReactiveRedisTemplate<String, Object> redisTemplate) {
-        this.redisTemplate = redisTemplate;
-        this.valueOps = redisTemplate.opsForValue();
-    }
-
-    // 캐시 조회
-    public Mono<UserDto> getCachedUser(Long userId) {
-        String key = "user:" + userId;
-        return valueOps.get(key)
-            .cast(UserDto.class);
-    }
-
-    // 캐시 저장
-    public Mono<Boolean> cacheUser(UserDto user) {
-        String key = "user:" + user.getId();
-        return valueOps.set(key, user, Duration.ofMinutes(30));
-    }
-
-    // Cache-Aside 패턴
-    public Mono<UserDto> getUserWithCache(Long userId, UserService userService) {
-        String key = "user:" + userId;
-        return valueOps.get(key)
-            .cast(UserDto.class)
-            .switchIfEmpty(
-                userService.findById(userId)
-                    .flatMap(user ->
-                        valueOps.set(key, user, Duration.ofMinutes(30))
-                            .thenReturn(user)
-                    )
-            );
-    }
-
-    // Pub/Sub
-    public Flux<String> subscribeToChannel(String channel) {
-        return redisTemplate.listenToChannel(channel)
-            .map(message -> message.getMessage().toString());
-    }
-
-    public Mono<Long> publishMessage(String channel, String message) {
-        return redisTemplate.convertAndSend(channel, message);
-    }
-}
-```
-
----
-
-## 6. 에러 처리
-
-### onErrorReturn, onErrorResume, onErrorMap
-
-```java
-// onErrorReturn: 에러 시 기본값 반환
-Mono<UserDto> result = userService.findById(userId)
-    .onErrorReturn(UserNotFoundException.class, UserDto.empty());
-
-// onErrorResume: 에러 시 다른 Publisher로 폴백
-Mono<UserDto> result2 = userService.findById(userId)
-    .onErrorResume(UserNotFoundException.class, ex ->
-        guestUserService.createGuestUser()
-    );
-
-// onErrorResume으로 조건부 처리
-Mono<UserDto> result3 = userService.findById(userId)
-    .onErrorResume(ex -> {
-        if (ex instanceof UserNotFoundException) {
-            return Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage()));
-        }
-        log.error("Unexpected error", ex);
-        return Mono.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR));
-    });
-
-// onErrorMap: 에러 타입 변환
-Mono<UserDto> result4 = userService.findById(userId)
-    .onErrorMap(DatabaseException.class, ex ->
-        new ServiceUnavailableException("DB 오류: " + ex.getMessage())
-    );
-```
-
-### @ExceptionHandler in WebFlux
-
-```java
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-
-    @ExceptionHandler(UserNotFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Mono<ErrorResponse> handleUserNotFound(UserNotFoundException ex) {
-        return Mono.just(ErrorResponse.of(
-            HttpStatus.NOT_FOUND.value(),
-            ex.getMessage(),
-            Instant.now()
-        ));
-    }
-
-    @ExceptionHandler(WebExchangeBindException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Mono<ErrorResponse> handleValidation(WebExchangeBindException ex) {
-        List<String> errors = ex.getBindingResult()
-            .getFieldErrors()
-            .stream()
-            .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-            .collect(Collectors.toList());
-
-        return Mono.just(ErrorResponse.builder()
-            .status(HttpStatus.BAD_REQUEST.value())
-            .message("Validation failed")
-            .errors(errors)
-            .timestamp(Instant.now())
-            .build());
-    }
-
-    @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public Mono<ErrorResponse> handleGeneral(Exception ex) {
-        log.error("Unhandled exception", ex);
-        return Mono.just(ErrorResponse.of(500, "Internal Server Error", Instant.now()));
-    }
-}
-```
-
-### 글로벌 에러 핸들링 (WebExceptionHandler)
-
-함수형 방식이나 더 낮은 레벨의 에러 처리가 필요할 때 사용합니다.
-
-```java
-@Component
-@Order(-2)  // DefaultErrorWebExceptionHandler보다 우선순위 높게
-public class GlobalWebExceptionHandler implements WebExceptionHandler {
-
-    private final ObjectMapper objectMapper;
-
-    @Override
-    public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
-        ServerHttpResponse response = exchange.getResponse();
-
-        HttpStatus status;
-        String message;
-
-        if (ex instanceof UserNotFoundException) {
-            status = HttpStatus.NOT_FOUND;
-            message = ex.getMessage();
-        } else if (ex instanceof UnauthorizedException) {
-            status = HttpStatus.UNAUTHORIZED;
-            message = "인증이 필요합니다";
-        } else {
-            status = HttpStatus.INTERNAL_SERVER_ERROR;
-            message = "서버 오류가 발생했습니다";
-            log.error("Unhandled exception", ex);
-        }
-
-        response.setStatusCode(status);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-
-        ErrorResponse errorResponse = new ErrorResponse(status.value(), message);
-        byte[] bytes;
-        try {
-            bytes = objectMapper.writeValueAsBytes(errorResponse);
-        } catch (JsonProcessingException e) {
-            bytes = "{}".getBytes();
-        }
-
-        DataBuffer buffer = response.bufferFactory().wrap(bytes);
-        return response.writeWith(Mono.just(buffer));
-    }
-}
-```
-
----
-
-## 7. 테스트
-
-### WebTestClient
-
-Spring MVC의 MockMvc에 대응하는 리액티브 테스트 클라이언트입니다.
-
-```java
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class UserControllerTest {
-
-    @Autowired
-    private WebTestClient webTestClient;
-
-    @MockBean
-    private UserService userService;
-
-    @Test
-    void getUser_Success() {
-        UserDto user = new UserDto(1L, "김철수", "kim@example.com");
-        when(userService.findById(1L)).thenReturn(Mono.just(user));
-
-        webTestClient.get()
-            .uri("/api/users/1")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(UserDto.class)
-            .value(dto -> {
-                assertThat(dto.getName()).isEqualTo("김철수");
-                assertThat(dto.getEmail()).isEqualTo("kim@example.com");
+    // 트랜잭션: 주문 생성 + 재고 감소 원자적 처리
+    @Transactional
+    public Mono<Order> createOrder(CreateOrderRequest req) {
+        return inventoryRepository.findById(req.getProductId())
+            .switchIfEmpty(Mono.error(new ProductNotFoundException(req.getProductId())))
+            .flatMap(inventory -> {
+                if (inventory.getStock() < req.getQuantity()) {
+                    return Mono.error(new InsufficientStockException());
+                }
+                inventory.setStock(inventory.getStock() - req.getQuantity());
+                return inventoryRepository.save(inventory);
+            })
+            .flatMap(saved -> {
+                Order order = Order.create(req);
+                return orderRepository.save(order);
             });
     }
-
-    @Test
-    void getUser_NotFound() {
-        when(userService.findById(999L))
-            .thenReturn(Mono.error(new UserNotFoundException(999L)));
-
-        webTestClient.get()
-            .uri("/api/users/999")
-            .exchange()
-            .expectStatus().isNotFound();
-    }
-
-    @Test
-    void getAllUsers_ReturnsFlux() {
-        Flux<UserDto> users = Flux.just(
-            new UserDto(1L, "김철수", "kim@example.com"),
-            new UserDto(2L, "이영희", "lee@example.com")
-        );
-        when(userService.findAll()).thenReturn(users);
-
-        webTestClient.get()
-            .uri("/api/users")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBodyList(UserDto.class)
-            .hasSize(2);
-    }
-
-    @Test
-    void createUser_Success() {
-        CreateUserRequest request = new CreateUserRequest("박민수", "park@example.com");
-        UserDto created = new UserDto(3L, "박민수", "park@example.com");
-        when(userService.create(any())).thenReturn(Mono.just(created));
-
-        webTestClient.post()
-            .uri("/api/users")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(request)
-            .exchange()
-            .expectStatus().isCreated()
-            .expectBody()
-            .jsonPath("$.id").isEqualTo(3)
-            .jsonPath("$.name").isEqualTo("박민수");
-    }
-
-    // SSE 테스트
-    @Test
-    void streamEvents() {
-        webTestClient.get()
-            .uri("/api/events/stream")
-            .accept(MediaType.TEXT_EVENT_STREAM)
-            .exchange()
-            .expectStatus().isOk()
-            .returnResult(ServerSentEvent.class)
-            .getResponseBody()
-            .take(3)
-            .as(StepVerifier::create)
-            .expectNextCount(3)
-            .verifyComplete();
-    }
-}
-
-// 슬라이스 테스트 (서버 없이)
-@WebFluxTest(UserController.class)
-class UserControllerSliceTest {
-
-    @Autowired
-    private WebTestClient webTestClient;
-
-    @MockBean
-    private UserService userService;
-
-    // 위와 동일한 테스트...
 }
 ```
 
-### StepVerifier — Mono/Flux 단위 테스트
+### R2DBC 커넥션 풀 주의사항
 
 ```java
-class UserServiceTest {
+// R2DBC 풀 고갈 패턴 — 잘못된 코드
+Flux.fromIterable(orderIds) // 10,000개
+    .flatMap(id -> orderRepository.findById(id)) // 기본 동시성 256
+    // 최대 256개 동시 DB 커넥션 시도, 풀 max-size=20이면 236개가 큐 대기
+    // max-acquire-time 초과 → R2dbcTimeoutException
+    .subscribe();
 
-    private UserService userService;
-    private UserRepository userRepository;
+// 올바른 코드 — 동시성을 풀 크기에 맞춤
+Flux.fromIterable(orderIds)
+    .flatMap(id -> orderRepository.findById(id), 10) // 최대 10개 동시
+    .subscribe();
+```
 
-    @BeforeEach
-    void setUp() {
-        userRepository = mock(UserRepository.class);
-        userService = new UserService(userRepository);
-    }
+---
+
+## 10. 배압 전략 — buffer, drop, latest, error
+
+### 네 가지 전략과 선택 기준
+
+배압 불일치가 발생했을 때(Publisher가 Subscriber보다 빠를 때) 어떻게 처리할지 결정한다.
+
+```java
+// 1. onBackpressureBuffer — 버퍼에 저장
+// 장점: 데이터 손실 없음
+// 단점: 버퍼 초과 시 OOM 또는 에러
+// 적합: 일시적 속도 차이, 데이터 손실이 절대 안 되는 경우 (금융 거래)
+Flux.range(1, 1_000_000)
+    .onBackpressureBuffer(
+        10_000,                          // 버퍼 최대 크기
+        dropped -> log.warn("Dropped: {}", dropped), // 버퍼 초과 시 드롭 핸들러
+        BufferOverflowStrategy.DROP_OLDEST  // DROP_OLDEST / DROP_LATEST / ERROR
+    )
+    .subscribe(item -> slowConsumer(item));
+
+// 2. onBackpressureDrop — 처리 못하면 버림
+// 장점: 메모리 안전
+// 단점: 데이터 손실
+// 적합: 실시간 센서 데이터, 최신성이 정확성보다 중요한 경우
+Flux.interval(Duration.ofMillis(1)) // 초당 1000개
+    .onBackpressureDrop(dropped ->
+        log.debug("Dropped tick: {}", dropped) // 통계용 로깅
+    )
+    .subscribe(tick -> {
+        Thread.sleep(100); // 초당 10개만 처리
+    });
+
+// 3. onBackpressureLatest — 최신 값만 유지
+// 장점: 항상 최신 상태를 반영
+// 단점: 중간 상태 손실
+// 적합: 주가 틱, 위치 정보, UI 상태 업데이트
+Flux.interval(Duration.ofMillis(10)) // 빠른 업데이트
+    .map(i -> fetchLatestPrice())
+    .onBackpressureLatest()           // 처리 안 된 것 중 최신만 보관
+    .subscribe(price -> updateUI(price));
+
+// 4. onBackpressureError — 초과 시 에러
+// 장점: 문제를 즉시 드러냄
+// 적합: 개발/테스트 환경, 배압 초과가 버그임을 명시할 때
+Flux.range(1, 1_000_000)
+    .onBackpressureError()            // 버퍼 초과 시 OverflowException
+    .subscribe(
+        item -> slowConsumer(item),
+        error -> log.error("Backpressure overflow!", error)
+    );
+```
+
+### limitRate — 소비 속도 제어
+
+```java
+// limitRate: 한 번에 요청하는 아이템 수를 제한
+// 내부적으로 request(n)을 관리 — 75% 소진 시 추가 요청
+Flux.range(1, 10_000)
+    .limitRate(100)   // 100개씩 요청, 75개 소진 시 추가 100개 요청
+    .subscribe(item -> processItem(item));
+
+// limitRate(highTide, lowTide)
+Flux.range(1, 10_000)
+    .limitRate(100, 50) // 100개 요청, 50개 소진 시 추가 요청 (더 공격적 리필)
+    .subscribe();
+```
+
+---
+
+## 11. Reactor Context — ThreadLocal이 동작하지 않는 이유
+
+### ThreadLocal의 전제: 스레드 = 요청
+
+Spring MVC에서 `MDC.put("traceId", "abc")`가 동작하는 이유는 요청 시작부터 끝까지 같은 스레드를 사용하기 때문이다. ThreadLocal은 스레드에 바인딩된 맵이다.
+
+```java
+// MVC에서는 이게 동작한다
+MDC.put("traceId", "abc-123");
+log.info("Processing order"); // traceId=abc-123 포함
+// 같은 스레드이므로 MDC가 유지됨
+```
+
+WebFlux에서는 `publishOn(Schedulers.parallel())`처럼 스레드가 바뀌는 순간 ThreadLocal이 사라진다. 더 심각한 것은: 스레드가 언제 바뀔지 코드만 봐서는 알 수 없다.
+
+```java
+// 이 코드에서 각 연산자는 서로 다른 스레드에서 실행될 수 있다
+Mono.just("order-123")
+    .flatMap(id -> orderRepository.findById(id)) // EventLoop 스레드
+    .flatMap(order -> {
+        // 이 시점 스레드가 무엇인지 보장할 수 없다
+        String traceId = MDC.get("traceId"); // null일 가능성 있음
+        return processOrder(order);
+    });
+```
+
+### Reactor Context — 구독 흐름을 따라 전파
+
+`Context`는 체인을 따라 흐르는 불변 맵이다. 스레드와 무관하게 구독 체인 전체에서 접근할 수 있다.
+
+```java
+// Context 쓰기 — contextWrite는 업스트림 방향 전파
+// 주의: contextWrite는 다운스트림에서 업스트림 방향으로 읽힌다
+Mono<Order> result = processOrder(orderId)
+    .contextWrite(Context.of(
+        "traceId", UUID.randomUUID().toString(),
+        "userId", currentUserId
+    ));
+
+// Context 읽기 — deferContextual로 접근
+public Mono<Order> processOrder(String orderId) {
+    return Mono.deferContextual(ctx -> {
+        String traceId = ctx.getOrDefault("traceId", "unknown");
+        log.info("[{}] Processing order: {}", traceId, orderId);
+
+        return orderRepository.findById(orderId)
+            .flatMap(order -> enrichOrder(order, ctx));
+    });
+}
+
+// MDC 전파 — Reactor Context + MDC 연동
+public Mono<Void> processWithMdc(String orderId) {
+    return Mono.deferContextual(ctx -> {
+        String traceId = ctx.getOrDefault("traceId", "unknown");
+
+        // 현재 스레드에 MDC 설정 후 처리
+        MDC.put("traceId", traceId);
+        try {
+            return doProcess(orderId)
+                .doFinally(signal -> MDC.remove("traceId")); // 정리
+        } catch (Exception e) {
+            MDC.remove("traceId");
+            return Mono.error(e);
+        }
+    });
+}
+```
+
+### Spring Security WebFlux — ReactiveSecurityContextHolder
+
+```java
+// MVC: SecurityContextHolder.getContext() → ThreadLocal 기반
+// WebFlux: ReactiveSecurityContextHolder → Reactor Context 기반
+
+public Mono<OrderDto> getMyOrder(String orderId) {
+    return ReactiveSecurityContextHolder.getContext()
+        .map(SecurityContext::getAuthentication)
+        .map(auth -> (UserDetails) auth.getPrincipal())
+        .flatMap(userDetails ->
+            orderRepository.findByIdAndUserId(orderId, userDetails.getUsername())
+                .switchIfEmpty(Mono.error(new AccessDeniedException("Not your order")))
+        )
+        .map(orderMapper::toDto);
+}
+
+// Security Context 자동 전파 (Spring Security WebFlux 내부)
+// HTTP 요청 수신 → SecurityContext를 Reactor Context에 주입
+// → 체인 전체에서 ReactiveSecurityContextHolder로 접근 가능
+```
+
+---
+
+## 12. 테스트 — StepVerifier, PublisherProbe, TestPublisher
+
+### 왜 전통적인 단언이 실패하는가
+
+```java
+// 이 테스트는 항상 통과한다 — 이유: 비동기 실행
+@Test
+void wrongTest() {
+    List<Integer> results = new ArrayList<>();
+
+    Flux.range(1, 5)
+        .subscribe(results::add); // 비동기 구독 — 즉시 반환될 수도 있음
+
+    // 여기서 results가 비어있을 수 있다
+    assertThat(results).hasSize(5); // 운에 따라 통과/실패
+}
+
+// StepVerifier: 구독 흐름을 단계별로 검증
+@Test
+void correctTest() {
+    StepVerifier.create(Flux.range(1, 5))
+        .expectNext(1, 2, 3, 4, 5)
+        .verifyComplete(); // 이 라인에서 블로킹 대기 후 검증
+}
+```
+
+### StepVerifier 상세 사용법
+
+```java
+class ReactorTest {
 
     @Test
-    void findById_ReturnsUser() {
-        User user = new User(1L, "김철수", "kim@example.com");
-        when(userRepository.findById(1L)).thenReturn(Mono.just(user));
+    void testUserService() {
+        Mono<User> userMono = Mono.just(new User(1L, "김철수", "kim@test.com"));
 
-        StepVerifier.create(userService.findById(1L))
-            .expectNextMatches(dto -> dto.getName().equals("김철수"))
+        StepVerifier.create(userMono)
+            .assertNext(user -> {
+                assertThat(user.getId()).isEqualTo(1L);
+                assertThat(user.getName()).isEqualTo("김철수");
+            })
             .verifyComplete();
     }
 
     @Test
-    void findById_ThrowsWhenNotFound() {
-        when(userRepository.findById(999L)).thenReturn(Mono.empty());
+    void testErrorHandling() {
+        Mono<User> errorMono = Mono.error(new UserNotFoundException(999L));
 
-        StepVerifier.create(userService.findById(999L))
+        StepVerifier.create(errorMono)
             .expectError(UserNotFoundException.class)
             .verify();
     }
 
     @Test
-    void findAll_ReturnsAllUsers() {
-        Flux<User> users = Flux.just(
-            new User(1L, "김철수", "kim@example.com"),
-            new User(2L, "이영희", "lee@example.com"),
-            new User(3L, "박민수", "park@example.com")
-        );
-        when(userRepository.findAll()).thenReturn(users);
-
-        StepVerifier.create(userService.findAll())
-            .expectNextCount(3)
-            .verifyComplete();
-    }
-
-    @Test
-    void findAll_WithDelay() {
-        // 가상 시간 사용 (실제 딜레이 없이 테스트)
-        StepVerifier.withVirtualTime(() ->
-                Flux.interval(Duration.ofSeconds(1)).take(3)
-            )
-            .expectSubscription()
-            .thenAwait(Duration.ofSeconds(1))
-            .expectNext(0L)
-            .thenAwait(Duration.ofSeconds(1))
-            .expectNext(1L)
-            .thenAwait(Duration.ofSeconds(1))
-            .expectNext(2L)
-            .verifyComplete();
-    }
-
-    @Test
-    void flux_ErrorHandling() {
+    void testFluxSequence() {
         Flux<Integer> flux = Flux.just(1, 2, 3)
-            .concatWith(Flux.error(new RuntimeException("테스트 에러")))
+            .concatWith(Flux.error(new RuntimeException("중단")))
             .onErrorReturn(-1);
 
         StepVerifier.create(flux)
-            .expectNext(1, 2, 3)
-            .expectNext(-1)
+            .expectNext(1, 2, 3, -1)
             .verifyComplete();
     }
+
+    @Test
+    void testWithVirtualTime() {
+        // 실제 시간을 기다리지 않고 가상 시간으로 테스트
+        StepVerifier.withVirtualTime(() ->
+                Flux.interval(Duration.ofHours(1)).take(3)
+            )
+            .expectSubscription()
+            .thenAwait(Duration.ofHours(1)) // 가상으로 1시간 이동
+            .expectNext(0L)
+            .thenAwait(Duration.ofHours(1))
+            .expectNext(1L)
+            .thenAwait(Duration.ofHours(1))
+            .expectNext(2L)
+            .verifyComplete();
+        // 실제로는 밀리초 내 완료
+    }
+
+    @Test
+    void testBackpressure() {
+        // 배압 동작 검증 — request(n) 흐름 확인
+        StepVerifier.create(Flux.range(1, 10), 3) // 초기 request(3)
+            .expectNext(1, 2, 3)
+            .thenRequest(2)              // 추가 request(2)
+            .expectNext(4, 5)
+            .thenCancel()               // 취소
+            .verify();
+    }
 }
 ```
 
----
-
-## 8. 성능 비교
-
-### MVC vs WebFlux 벤치마크
-
-아래는 개략적인 시나리오별 성능 특성이다. 실제 수치는 환경에 따라 달라진다.
-
-#### 시나리오 1: 외부 API 호출 (응답 지연 100ms)
-
-> **비유:** 식당에서 주문을 받는 웨이터가 200명(MVC 스레드)이면 201번째 손님부터 줄을 서야 한다. WebFlux는 웨이터 4명이 주문만 받고 주방에 넘긴 뒤 바로 다음 손님을 받으므로, 동시에 수천 명을 처리한다.
-
-| 동시 사용자 | Spring MVC (TPS) | Spring WebFlux (TPS) | 차이 |
-|------------|-----------------|---------------------|------|
-| 10명 | 95 | 98 | 동등 |
-| 100명 | 520 | 580 | 동등 |
-| 500명 | 1,200 | 2,800 | **2.3배** |
-| 1,000명 | 700 (스레드 포화) | 3,100 | **4.4배** |
-| 2,000명 | 500 (GC 압박) | 3,200 | **6.4배** |
-| 5,000명 | 300 (타임아웃 증가) | 3,100 | **10배** |
-| 10,000명 | 실패 (OOM 위험) | 2,900 | **MVC 불가** |
-
-**메모리 사용량 (동시 1,000명 기준):** Spring MVC ~2GB vs WebFlux ~300MB (**6.7배 절약**)
-
-```mermaid
-xychart-beta
-    title "외부 API 호출 시 동시 사용자별 TPS 비교"
-    x-axis ["10명", "100명", "500명", "1K명", "2K명", "5K명", "10K명"]
-    y-axis "TPS (처리량)" 0 --> 3500
-    bar [95, 520, 1200, 700, 500, 300, 0]
-    bar [98, 580, 2800, 3100, 3200, 3100, 2900]
-```
-
-핵심은 **동시 500명을 넘어서는 순간** MVC는 스레드 풀이 포화되어 성능이 급락하지만, WebFlux는 이벤트 루프 기반이라 안정적으로 유지된다는 점이다.
-
-#### 시나리오 2: 단순 CPU 연산 (DB 없음)
-
-| 동시 사용자 | Spring MVC (TPS) | Spring WebFlux (TPS) | 차이 |
-|------------|-----------------|---------------------|------|
-| 10명 | 9,800 | 9,200 | MVC 약간 우세 |
-| 100명 | 48,000 | 44,000 | MVC 약간 우세 |
-| 500명 | 52,000 | 50,000 | 동등 |
-
-CPU 집약 작업에서는 MVC가 약간 유리하거나 동등하다. WebFlux의 이점은 **I/O 대기가 많을 때** 극대화된다.
-
-### 언제 WebFlux가 유리한가?
-
-WebFlux가 유리한 경우는 다음과 같습니다.
-
-- **많은 동시 연결 + 높은 I/O 지연**: 마이크로서비스 간 다수 API 호출, 긴 폴링, SSE/WebSocket
-- **스트리밍 데이터**: 실시간 피드, 이벤트 스트림
-- **리소스 제한 환경**: 메모리, 스레드 수가 제한된 컨테이너
-- **리액티브 스택 전체 사용**: R2DBC, Reactive MongoDB, Reactive Redis
-
-WebFlux가 불리한 경우는 다음과 같습니다.
-
-- **팀이 리액티브 경험이 없는 경우**: 학습 곡선, 디버깅 난이도
-- **블로킹 라이브러리 의존**: JDBC, 동기 SDK 등 블로킹 코드가 많을 때
-- **단순 CRUD**: 동시성 요구가 낮은 내부 어드민, 배치 API
-- **CPU 집약 작업**: 이미지 처리, 암호화 등은 MVC가 동등하거나 우세
-
----
-
-
-## 극한 시나리오
-
-### 9-1. 블로킹 코드가 이벤트 루프에 들어갔을 때
-
-이것은 WebFlux의 가장 위험한 함정입니다. 이벤트 루프 스레드에서 블로킹 연산이 실행되면 해당 루프가 담당하는 모든 요청이 멈춥니다.
+### PublisherProbe — 분기 구독 검증
 
 ```java
-// 위험한 코드 - 절대 이렇게 하지 말 것
-@GetMapping("/users/{id}")
-public Mono<User> getUser(@PathVariable Long id) {
-    // Thread.sleep(), JDBC 호출, 동기 파일 읽기 등은 이벤트 루프를 블로킹
-    User user = jdbcTemplate.queryForObject(  // 블로킹!
-        "SELECT * FROM users WHERE id = ?",
-        User.class, id
+@Test
+void testSwitchIfEmpty() {
+    // switchIfEmpty의 대체 Publisher가 실제로 구독됐는지 검증
+    PublisherProbe<String> probe = PublisherProbe.of(
+        Mono.just("fallback-value")
     );
-    return Mono.just(user);
+
+    Mono<String> result = Mono.<String>empty()
+        .switchIfEmpty(probe.mono());
+
+    StepVerifier.create(result)
+        .expectNext("fallback-value")
+        .verifyComplete();
+
+    // 검증: probe가 구독됐는가
+    probe.assertWasSubscribed();
+    probe.assertWasRequested();
+    probe.assertWasNotCancelled();
 }
 
-// 올바른 코드 - boundedElastic으로 격리
-@GetMapping("/users/{id}")
-public Mono<User> getUser(@PathVariable Long id) {
-    return Mono.fromCallable(() ->
-            jdbcTemplate.queryForObject(
-                "SELECT * FROM users WHERE id = ?",
-                User.class, id
-            )
+@Test
+void testNonEmptyDoesNotTriggerFallback() {
+    PublisherProbe<String> fallbackProbe = PublisherProbe.of(
+        Mono.just("should-not-appear")
+    );
+
+    Mono<String> result = Mono.just("primary")
+        .switchIfEmpty(fallbackProbe.mono());
+
+    StepVerifier.create(result)
+        .expectNext("primary")
+        .verifyComplete();
+
+    // 검증: probe가 구독되지 않았는가
+    fallbackProbe.assertWasNotSubscribed();
+}
+```
+
+### TestPublisher — 외부에서 신호를 직접 제어
+
+```java
+@Test
+void testWithTestPublisher() {
+    TestPublisher<String> testPublisher = TestPublisher.create();
+
+    // 외부 Publisher를 소비하는 서비스 테스트
+    List<String> received = new ArrayList<>();
+    testPublisher.flux()
+        .subscribe(received::add);
+
+    // 외부에서 데이터 주입
+    testPublisher.next("event-1");
+    testPublisher.next("event-2");
+    assertThat(received).containsExactly("event-1", "event-2");
+
+    testPublisher.complete();
+
+    // 에러 주입 테스트
+    TestPublisher<String> errorPublisher = TestPublisher.create();
+
+    StepVerifier.create(
+            errorPublisher.flux()
+                .onErrorReturn("recovered")
         )
-        .subscribeOn(Schedulers.boundedElastic());
+        .then(() -> errorPublisher.error(new RuntimeException("test error")))
+        .expectNext("recovered")
+        .verifyComplete();
 }
 ```
 
-블로킹 탐지 방법은 다음과 같습니다.
+---
+
+## 13. WebFlux 어노테이션 + 함수형 라우터
+
+### 어노테이션 기반 컨트롤러
 
 ```java
-// BlockHound 라이브러리로 블로킹 감지
-@SpringBootApplication
-public class Application {
-    public static void main(String[] args) {
-        // 테스트/개발 환경에서만 사용
-        BlockHound.install();
-        SpringApplication.run(Application.class, args);
-    }
-}
-// 이벤트 루프에서 Thread.sleep() 호출 시 BlockingOperationError 발생
-```
+@RestController
+@RequestMapping("/api/orders")
+@RequiredArgsConstructor
+public class OrderController {
 
-### 9-2. 배압 미처리 시 OOM
+    private final OrderService orderService;
 
-```java
-// 위험: 소비자가 처리할 수 없는 속도로 데이터 생산
-Flux.range(1, Integer.MAX_VALUE)
-    .subscribe(item -> {
-        // 느린 처리
-        processSlowly(item);
-    });
-// → 내부 큐가 무한정 증가 → OOM
-
-// 안전: 배압 처리
-Flux.range(1, Integer.MAX_VALUE)
-    .onBackpressureBuffer(10_000,
-        dropped -> log.warn("Dropped: {}", dropped),
-        BufferOverflowStrategy.DROP_OLDEST
-    )
-    .subscribe(item -> processSlowly(item));
-
-// 또는 limitRate로 소비 속도 맞춤
-Flux.range(1, Integer.MAX_VALUE)
-    .limitRate(100)  // 한 번에 100개씩 요청
-    .subscribe(item -> processSlowly(item));
-```
-
-### 9-3. 리액티브 체인에서의 예외 누락 (subscribe 안 함)
-
-```java
-// 문제: subscribe()를 호출하지 않으면 아무것도 실행되지 않음
-public void saveUser(User user) {
-    userRepository.save(user);  // 리턴값(Mono)을 무시
-    // → 실제로 저장되지 않음! 경고 없음!
-}
-
-// 해결: 반드시 구독하거나 리턴
-public Mono<User> saveUser(User user) {
-    return userRepository.save(user);  // 호출자가 구독
-}
-
-// 또는 fire-and-forget 패턴 (에러 로깅 필수)
-public void saveUserFireAndForget(User user) {
-    userRepository.save(user)
-        .subscribe(
-            saved -> log.info("Saved: {}", saved),
-            error -> log.error("Save failed", error)
-        );
-}
-```
-
-### 9-4. 디버깅 지옥 — 스택 트레이스 깨짐
-
-리액티브 체인에서 에러가 발생하면 스택 트레이스가 실제 코드 위치를 나타내지 않습니다.
-
-```java
-// 문제: 스택 트레이스가 Reactor 내부만 보임
-java.lang.NullPointerException
-    at reactor.core.publisher.FluxMap$MapSubscriber.onNext(FluxMap.java:106)
-    at reactor.core.publisher.FluxFlatMap$FlatMapMain.tryEmit(FluxFlatMap.java:...
-    ... (Reactor 내부 코드만 수십 줄)
-```
-
-해결 방법은 다음과 같습니다.
-
-```java
-// 1. Hooks.onOperatorDebug() — 전역 활성화 (성능 비용 큼, 프로덕션 비권장)
-@SpringBootApplication
-public class Application {
-    public static void main(String[] args) {
-        Hooks.onOperatorDebug();  // 모든 연산자에서 스택 캡처
-        SpringApplication.run(Application.class, args);
-    }
-}
-
-// 2. checkpoint() — 특정 위치 표시 (권장)
-userService.findById(userId)
-    .checkpoint("findById")
-    .flatMap(user -> enrichUser(user))
-    .checkpoint("enrichUser")
-    .subscribe();
-
-// 3. ReactorDebugAgent — 성능 비용 없이 디버그 (권장)
-// build.gradle
-// testImplementation 'io.projectreactor:reactor-tools'
-ReactorDebugAgent.init();  // main() 최상단에서
-
-// 4. log() — 각 신호 로깅
-userService.findById(userId)
-    .log("userService.findById", Level.INFO)
-    .flatMap(this::process)
-    .log("process")
-    .subscribe();
-// 출력: onSubscribe, request(unbounded), onNext(User[id=1]), onComplete 등 상세 로그
-```
-
-### 9-5. DB 커넥션 풀 고갈
-
-```java
-// 문제: flatMap의 무제한 동시성
-Flux.fromIterable(userIds)  // 10,000개
-    .flatMap(id -> userRepository.findById(id))  // 10,000개 동시 DB 쿼리
-    // R2DBC 커넥션 풀 기본값: 10개 → 대기 큐 폭주
-    .subscribe();
-
-// 해결: 동시성 제한
-Flux.fromIterable(userIds)
-    .flatMap(id -> userRepository.findById(id), 10)  // 최대 10개 동시
-    .subscribe();
-
-// 또는 concatMap (완전 순차, 느리지만 안전)
-Flux.fromIterable(userIds)
-    .concatMap(id -> userRepository.findById(id))
-    .subscribe();
-
-// 커넥션 풀 설정 최적화
-spring:
-  r2dbc:
-    pool:
-      initial-size: 10
-      max-size: 30           # 피크 동시성에 맞춤
-      max-idle-time: 30m
-      max-acquire-time: 5s   # 5초 대기 후 에러
-      validation-query: SELECT 1
-```
-
-### 9-6. flatMap 동시성 제어 미흡
-
-```java
-// 위험: 기본 동시성 256
-Flux.range(1, 1000)
-    .flatMap(i -> externalApiCall(i))  // 동시 최대 256개 외부 API 호출
-    // 외부 API rate limit 초과 → 429 Too Many Requests
-
-// 해결: 동시성 명시
-Flux.range(1, 1000)
-    .flatMap(i -> externalApiCall(i), 5)  // 동시 최대 5개
-
-// 더 정교한 제어: 세마포어 패턴
-Semaphore semaphore = new Semaphore(5);
-
-Flux.range(1, 1000)
-    .flatMap(i -> Mono.fromCallable(() -> {
-            semaphore.acquire();
-            try {
-                return externalApiCall(i).block();
-            } finally {
-                semaphore.release();
-            }
-        })
-        .subscribeOn(Schedulers.boundedElastic())
-    )
-    .subscribe();
-```
-
-### 9-7. Cold Publisher 다중 구독 시 중복 실행
-
-```java
-// 문제: Cold Publisher를 두 번 구독하면 두 번 실행
-Mono<User> userMono = userRepository.findById(1L);  // DB 쿼리
-
-userMono.subscribe(u -> log.info("Sub1: {}", u));  // 쿼리 1회
-userMono.subscribe(u -> log.info("Sub2: {}", u));  // 쿼리 또 1회 실행!
-
-// 해결 1: cache() — 첫 결과를 캐싱
-Mono<User> cachedMono = userRepository.findById(1L).cache();
-
-cachedMono.subscribe(u -> log.info("Sub1: {}", u));  // DB 쿼리
-cachedMono.subscribe(u -> log.info("Sub2: {}", u));  // 캐시 사용
-
-// 해결 2: 하나의 체인으로 구성
-userRepository.findById(1L)
-    .flatMap(user -> {
-        doWithUser1(user);
-        doWithUser2(user);
-        return Mono.just(user);
-    })
-    .subscribe();
-```
-
-### 9-8. timeout + retry 폭풍
-
-```java
-// 위험: 무한 재시도 + 짧은 타임아웃 = 서버 과부하
-Mono<Response> result = callExternalApi()
-    .timeout(Duration.ofMillis(100))    // 100ms 타임아웃
-    .retry(Long.MAX_VALUE);             // 무한 재시도 → 폭풍
-
-// 안전한 패턴: 지수 백오프 + 최대 재시도 수
-Mono<Response> result2 = callExternalApi()
-    .timeout(Duration.ofSeconds(5))
-    .retryWhen(
-        Retry.backoff(3, Duration.ofMillis(500))  // 최대 3회, 500ms~
-            .maxBackoff(Duration.ofSeconds(10))    // 최대 10초
-            .jitter(0.5)                           // 지터로 재시도 분산
-            .filter(ex -> !(ex instanceof BusinessException))  // 비즈니스 에러는 재시도 안 함
-            .doBeforeRetry(signal -> log.warn("Retry #{}", signal.totalRetries()))
-    )
-    .onErrorResume(ex -> fallbackResponse());    // 최종 폴백
-```
-
-### 9-9. Context 전파 문제 (SecurityContext, MDC)
-
-리액티브 환경에서는 ThreadLocal 기반의 SecurityContext나 MDC가 스레드를 넘나들며 작동하지 않습니다.
-
-```java
-// 문제: 스레드가 바뀌면 MDC 컨텍스트가 사라짐
-Mono.just("data")
-    .publishOn(Schedulers.boundedElastic())  // 스레드 전환
-    .doOnNext(data -> {
-        // MDC.get("traceId") == null  ← 사라짐
-        log.info("Processing: {}", data);
-    });
-
-// 해결: Reactor Context 사용
-Mono.just("data")
-    .contextWrite(Context.of("traceId", "abc-123"))
-    .flatMap(data -> Mono.deferContextual(ctx -> {
-        String traceId = ctx.get("traceId");
-        // MDC에 수동 설정
-        MDC.put("traceId", traceId);
-        try {
-            return Mono.just(process(data));
-        } finally {
-            MDC.remove("traceId");
-        }
-    }));
-
-// Spring Security WebFlux — ReactiveSecurityContextHolder
-Mono<String> result = ReactiveSecurityContextHolder.getContext()
-    .map(SecurityContext::getAuthentication)
-    .map(Authentication::getName)
-    .flatMap(username -> userService.findByUsername(username));
-```
-
-### 9-10. Kafka 실시간 주문 스트림 처리
-
-여러 연산자를 조합한 실전 파이프라인 예시입니다. Kafka에서 주문을 수신하여 회원별 배치 처리 후 알림을 발송합니다.
-
-```java
-@Service
-public class RealtimeOrderProcessor {
-
-    // Kafka → 주문 스트림 → DB 저장 → 알림 발송
-    public Flux<ProcessedOrder> processOrderStream(Flux<KafkaMessage<Order>> kafkaStream) {
-        return kafkaStream
-            .map(KafkaMessage::value)                     // Kafka 메시지에서 주문 추출
-            .filter(order -> order.getStatus() == OrderStatus.NEW)
-            .groupBy(Order::getMemberId)                   // 회원별로 그룹핑
-            .flatMap(memberOrders ->
-                memberOrders
-                    .buffer(Duration.ofSeconds(1))          // 1초 단위로 배치
-                    .filter(batch -> !batch.isEmpty())
-                    .flatMap(batch -> processBatch(batch))
-            )
-            .doOnNext(order -> metricsService.recordProcessed())
-            .doOnError(e -> metricsService.recordError());
+    @GetMapping("/{id}")
+    public Mono<ResponseEntity<OrderDto>> getOrder(@PathVariable String id) {
+        return orderService.findById(id)
+            .map(ResponseEntity::ok)
+            .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
     }
 
-    private Mono<ProcessedOrder> processBatch(List<Order> orders) {
-        return Flux.fromIterable(orders)
-            .flatMap(order ->
-                orderRepository.save(order)
-                    .flatMap(saved ->
-                        notificationService.sendPush(saved.getMemberId(), "주문 처리 완료")
-                            .thenReturn(ProcessedOrder.from(saved))
-                    )
-            )
-            .collectList()
-            .flatMap(processed ->
-                Mono.just(processed.get(0)) // 배치 대표 반환
+    @GetMapping
+    public Flux<OrderDto> getOrders(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return orderService.findAll(status, PageRequest.of(page, size));
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<OrderDto> createOrder(
+            @RequestBody @Valid Mono<CreateOrderRequest> requestMono) {
+        // Mono<Request>를 받으면 역직렬화와 검증이 리액티브하게 처리됨
+        return requestMono.flatMap(orderService::create);
+    }
+
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<OrderDto>> streamOrders(@RequestParam String userId) {
+        return orderService.streamUserOrders(userId)
+            .map(order -> ServerSentEvent.<OrderDto>builder()
+                .id(order.getId())
+                .event("order-update")
+                .data(order)
+                .build())
+            .doOnCancel(() -> log.info("SSE stream cancelled for user: {}", userId));
+    }
+}
+```
+
+### 함수형 라우터 — 테스트 친화적 구조
+
+```java
+// Handler — 비즈니스 로직 처리
+@Component
+@RequiredArgsConstructor
+public class OrderHandler {
+
+    private final OrderService orderService;
+    private final Validator validator;
+
+    public Mono<ServerResponse> getOrder(ServerRequest request) {
+        String id = request.pathVariable("id");
+        return orderService.findById(id)
+            .flatMap(order -> ServerResponse.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(order))
+            .switchIfEmpty(ServerResponse.notFound().build());
+    }
+
+    public Mono<ServerResponse> createOrder(ServerRequest request) {
+        return request.bodyToMono(CreateOrderRequest.class)
+            .doOnNext(this::validate) // 동기 검증
+            .flatMap(orderService::create)
+            .flatMap(order -> ServerResponse
+                .created(URI.create("/api/orders/" + order.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(order))
+            .onErrorResume(ValidationException.class, ex ->
+                ServerResponse.badRequest().bodyValue(ex.getErrors())
             );
     }
+
+    private void validate(CreateOrderRequest req) {
+        Set<ConstraintViolation<CreateOrderRequest>> violations = validator.validate(req);
+        if (!violations.isEmpty()) {
+            throw new ValidationException(violations);
+        }
+    }
+}
+
+// Router — URL 매핑 정의
+@Configuration
+@RequiredArgsConstructor
+public class OrderRouter {
+
+    @Bean
+    public RouterFunction<ServerResponse> orderRoutes(OrderHandler handler) {
+        return RouterFunctions
+            .route()
+            .GET("/api/orders/{id}", handler::getOrder)
+            .GET("/api/orders", handler::getOrders)
+            .POST("/api/orders",
+                RequestPredicates.contentType(MediaType.APPLICATION_JSON),
+                handler::createOrder)
+            .PUT("/api/orders/{id}", handler::updateOrder)
+            .DELETE("/api/orders/{id}", handler::deleteOrder)
+            .filter((request, next) -> {
+                // 요청 로깅 필터
+                log.info("Request: {} {}", request.method(), request.path());
+                return next.handle(request)
+                    .doOnSuccess(response ->
+                        log.info("Response: {}", response.statusCode())
+                    );
+            })
+            .build();
+    }
 }
 ```
 
 ---
-## 10. WebFlux vs Virtual Thread
 
-### Java 21 Virtual Thread 개요
+## 14. 극한 시나리오
 
-Java 21의 Virtual Thread(Project Loom)는 JVM이 관리하는 경량 스레드입니다. 수백만 개를 생성해도 메모리가 충분하며, 블로킹 작업 시 JVM이 자동으로 캐리어 스레드를 해제합니다.
+### 시나리오 1: 이벤트 루프 블로킹 — 가장 치명적인 실수
 
+8코어 서버에서 Worker EventLoop가 8개라고 하자. 한 엔드포인트에서 `Thread.sleep(10000)`을 호출하면 어떻게 되는가?
+
+```java
+// 이 코드는 해당 EventLoop가 담당하는 모든 요청을 10초간 멈춘다
+@GetMapping("/broken")
+public Mono<String> brokenEndpoint() {
+    try {
+        Thread.sleep(10000); // EventLoop 블로킹!
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+    }
+    return Mono.just("done");
+}
 ```
-Virtual Thread 동작:
-VThread-1 ──→ DB 호출 블로킹 ──→ [JVM이 캐리어 스레드 해제]
-                                           ↓
-                                  [다른 VThread가 캐리어 사용]
-VThread-1 ──→ DB 응답 도착 ──→ [JVM이 캐리어 스레드 재할당] ──→ 처리 계속
+
+8개 EventLoop 중 하나가 10초간 점유되면, 그 루프에 배정된 수천 개 연결이 10초간 응답하지 못한다. MVC에서는 스레드 하나만 영향받지만, WebFlux에서는 EventLoop가 담당하는 전체 연결이 영향을 받는다.
+
+**방어: BlockHound 설치 (개발/테스트 환경)**
+
+```java
+// build.gradle
+testImplementation 'io.projectreactor.tools:blockhound-junit-platform:1.0.8.RELEASE'
+
+// 테스트 설정
+@SpringBootTest
+@EnableBlockHound // 또는 main()에서 BlockHound.install()
+class ApplicationTest {
+    @Test
+    void contextLoads() {
+        // 테스트 중 블로킹 감지 → BlockingOperationError 발생
+    }
+}
+
+// main() 적용 (개발 환경)
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        if (isDevelopmentProfile()) {
+            BlockHound.install(); // 블로킹 감지 시 즉시 예외
+        }
+        SpringApplication.run(Application.class, args);
+    }
+}
 ```
 
-### 비교
+### 시나리오 2: 10,000개 주문 일괄 처리 — 커넥션 풀 고갈
 
-| 구분 | Spring WebFlux | Spring MVC + Virtual Thread |
-|------|---------------|----------------------------|
-| 동시성 모델 | 이벤트 루프, 논블로킹 | thread-per-request, JVM이 블로킹 처리 |
-| 코드 스타일 | 리액티브 (Mono/Flux) | 기존 동기 스타일 유지 |
-| 학습 곡선 | 높음 | 낮음 (기존 코드 재사용) |
-| 블로킹 라이브러리 | 격리 필요 (boundedElastic) | 그냥 사용 가능 |
-| 메모리 | 매우 낮음 | 낮음 (VThread당 수KB) |
-| 처리량 (I/O 집약) | 매우 높음 | 높음 |
-| 처리량 (CPU 집약) | 높음 | 높음 |
-| 디버깅 | 어려움 | 쉬움 (일반 스택 트레이스) |
-| 성숙도 | 성숙 | Java 21 이상 필요 |
+```java
+// 잘못된 코드 — 10,000개 동시 DB 쿼리 시도
+public Flux<ProcessedOrder> processOrders(List<String> orderIds) {
+    return Flux.fromIterable(orderIds)          // 10,000개
+        .flatMap(id -> orderRepository.findById(id)); // 기본 동시성 256
+    // max-size=20인 R2DBC 풀에서 256개 동시 요청 → 236개 큐 대기
+    // max-acquire-time 초과 → R2dbcTimeoutException 폭발
+}
 
-### 의사결정 트리
+// 올바른 코드 — 동시성을 풀 크기에 맞춤
+public Flux<ProcessedOrder> processOrders(List<String> orderIds) {
+    int poolSize = 20;      // R2DBC max-size
+    int concurrency = 15;   // 풀 크기의 75% — 여유분 확보
+
+    return Flux.fromIterable(orderIds)
+        .flatMap(id ->
+            orderRepository.findById(id)
+                .flatMap(this::processOrder)
+                .onErrorResume(ex -> {
+                    log.error("Order processing failed: {}", id, ex);
+                    return Mono.just(ProcessedOrder.failed(id, ex.getMessage()));
+                }),
+            concurrency // 동시성 제한
+        )
+        .doOnNext(result -> metricsService.record(result));
+}
+```
+
+### 시나리오 3: 외부 API 재시도 폭풍 — Thundering Herd
+
+서버가 과부하로 5xx를 반환하는 상황. 100개 클라이언트가 모두 동시에 재시도를 시도한다.
+
+```java
+// 위험: 모든 클라이언트가 같은 시간에 재시도 → 서버 추가 부하
+Mono<Response> result = externalApi.call()
+    .retryWhen(Retry.fixedDelay(3, Duration.ofSeconds(1))); // 고정 1초 대기
+// 1초 후 100개 클라이언트가 동시에 재시도 → 서버에 100배 부하
+
+// 안전: 지터로 재시도 분산
+Mono<Response> safe = externalApi.call()
+    .retryWhen(
+        Retry.backoff(3, Duration.ofMillis(500))
+            .maxBackoff(Duration.ofSeconds(30))
+            .jitter(0.75) // 75% 지터 → 재시도가 0~750ms 사이 랜덤하게 분산
+            .filter(ex -> ex instanceof ServerException)
+            .doBeforeRetry(s -> log.warn("Retry #{}", s.totalRetries()))
+    )
+    .timeout(Duration.ofSeconds(10))
+    .onErrorResume(ex -> {
+        // 최종 폴백: 캐시 또는 기본값
+        return cacheService.getLastKnown()
+            .switchIfEmpty(Mono.just(Response.DEFAULT));
+    });
+```
+
+### 시나리오 4: 무한 Flux OOM — 배압 누락
+
+```java
+// 위험: 생산 속도 >> 소비 속도, 배압 없음
+Flux.generate(sink -> sink.next(generateData())) // 무한 생성
+    .publishOn(Schedulers.boundedElastic())       // 내부 큐 생성
+    // publishOn 내부 큐: 기본 256개, 초과 시 DROP 또는 BUFFER
+    .subscribe(data -> {
+        Thread.sleep(100); // 느린 처리
+    });
+// 큐가 빠르게 채워짐 → 메모리 폭발
+
+// 안전: 배압 전략 명시
+Flux.generate(sink -> sink.next(generateData()))
+    .onBackpressureBuffer(
+        1000,
+        dropped -> log.warn("Dropped data: {}", dropped),
+        BufferOverflowStrategy.DROP_OLDEST
+    )
+    .publishOn(Schedulers.boundedElastic())
+    .subscribe(data -> processData(data));
+
+// 또는: limitRate로 생산 속도 자체를 제한
+Flux.generate(sink -> sink.next(generateData()))
+    .limitRate(100) // Subscriber가 100개 요청하면 100개만 생산
+    .subscribe(data -> processData(data));
+```
+
+### 시나리오 5: Context 손실 — Micrometer Tracing MDC
+
+분산 추적(Zipkin, Jaeger)에서 traceId가 로그에 안 나오는 문제.
+
+```java
+// 문제: publishOn 후 MDC 손실
+Flux.just("request-1", "request-2")
+    .flatMap(req -> Mono.just(req)
+        .publishOn(Schedulers.parallel()) // 스레드 전환 → MDC 손실
+        .map(r -> processRequest(r))
+    )
+    .subscribe();
+// 로그: [traceId=] Processing request — traceId 없음
+
+// 해결 방법 1: Micrometer Observation API (Spring Boot 3.x)
+// application.yml
+// management.tracing.enabled: true
+// Micrometer가 Reactor Context와 MDC를 자동 연동
+
+// 해결 방법 2: 수동 Context + MDC 연동
+public Mono<String> processWithTrace(String requestId) {
+    return Mono.deferContextual(ctx -> {
+        TraceContext traceCtx = ctx.getOrDefault(TraceContext.KEY, TraceContext.empty());
+        return Mono.just(requestId)
+            .publishOn(Schedulers.parallel())
+            .map(req -> {
+                // 새 스레드에서 MDC 수동 설정
+                MDC.put("traceId", traceCtx.traceId());
+                MDC.put("spanId", traceCtx.spanId());
+                try {
+                    return doProcess(req);
+                } finally {
+                    MDC.clear(); // 반드시 정리
+                }
+            });
+    });
+}
+```
+
+---
+
+## 15. 면접 포인트 5개 — WHY 중심 답변
+
+### Q1. Reactive Streams의 배압(Backpressure) 프로토콜을 설명하고, 왜 필요한지 말씀해주세요.
+
+> **WHY**: 생산자(Publisher)가 소비자(Subscriber)보다 빠르면 중간 버퍼가 무한정 증가해 OOM이 발생한다. 전통적인 Iterator는 소비자가 `next()`를 호출해 속도를 제어하지만, 비동기 환경에서는 생산자와 소비자가 다른 스레드에 있어 이 메커니즘이 동작하지 않는다.
+>
+> **PROTOCOL**: Reactive Streams의 `Subscription.request(n)`이 해답이다. Subscriber는 자신이 처리할 수 있는 n개만 요청한다. Publisher는 `request(n)`을 받기 전까지 데이터를 보내지 않는다. 이것이 "demand-driven" 흐름 제어다. `onSubscribe()` → `request(n)` → `onNext(×n)` → `request(m)` 순환이 배압 프로토콜의 전부다.
+>
+> **실무**: `onBackpressureBuffer()`는 버퍼링, `onBackpressureDrop()`은 최신성 우선(센서 데이터), `onBackpressureError()`는 빠른 실패(개발 환경)로 구분해 사용한다.
+
+### Q2. EventLoop 스레드에서 블로킹 코드를 실행하면 왜 MVC보다 더 위험한가요?
+
+> **MVC 상황**: Tomcat 스레드 하나가 JDBC를 블로킹하면 그 스레드만 멈춘다. 다른 200개 스레드는 계속 요청을 처리한다.
+>
+> **WebFlux 상황**: Netty EventLoop 스레드 하나가 블로킹되면, 그 EventLoop가 epoll로 감시하던 수천 개 연결 전체가 멈춘다. CPU 8코어 서버에 8개 EventLoop가 있으면 1/8의 전체 연결이 동시에 응답 불가 상태가 된다.
+>
+> **이유**: EventLoop는 단일 스레드로 여러 소켓 이벤트를 처리하는 구조다. 그 스레드가 블로킹되면 이벤트 처리 루프 자체가 멈춘다. 방어는 두 가지다: `subscribeOn(Schedulers.boundedElastic())`으로 블로킹 코드를 별도 스레드풀로 오프로드하거나, BlockHound를 개발 환경에 설치해 컴파일 타임이 아닌 런타임에 즉시 탐지한다.
+
+### Q3. Cold Publisher vs Hot Publisher 차이와, WebFlux에서 실수로 같은 Mono를 두 번 구독하면 어떤 일이 발생하는가요?
+
+> **Cold**: 각 Subscriber마다 독립적인 실행. `Flux.range()`, DB 쿼리 Mono가 Cold다. 구독할 때마다 처음부터 실행된다.
+>
+> **문제 시나리오**:
+> ```java
+> Mono<User> userMono = userRepository.findById(1L); // DB 쿼리 Mono (Cold)
+> userMono.subscribe(u -> log.info("first: {}", u));  // DB 쿼리 1회
+> userMono.subscribe(u -> log.info("second: {}", u)); // DB 쿼리 또 1회!
+> ```
+> 두 번 구독하면 DB 쿼리가 두 번 나간다. 트랜잭션이 포함된 경우 두 트랜잭션이 실행된다.
+>
+> **해결**: `.cache()`로 첫 결과를 캐싱하거나, 하나의 체인에서 `flatMap`으로 조합해 단일 구독을 유지한다.
+>
+> **Hot**: Subscriber와 무관하게 방출. `Flux.interval()`, 웹소켓 스트림이 Hot. 늦은 구독자는 이전 데이터를 놓친다. `publish().autoConnect()`로 Cold를 Hot으로 변환한다.
+
+### Q4. Schedulers.parallel()과 boundedElastic()의 차이, 그리고 언제 어떤 걸 써야 하나요?
+
+> **parallel()**: ForkJoinPool과 유사한 고정 크기 스레드풀(CPU 코어 수). 블로킹을 절대 허용하지 않는다. 스레드가 블로킹되면 CPU 코어 수만큼의 스레드가 고갈되어 전체 parallel 연산이 멈춘다. 순수 CPU 연산(암호화, JSON 변환, 수학 계산)에만 적합하다.
+>
+> **boundedElastic()**: 동적 크기 스레드풀(최대 10 × CPU 코어, 큐 100,000). "bounded"는 무한 생성을 방지한다. JDBC, 동기 SDK, 레거시 블로킹 코드를 격리하는 전용 풀이다. I/O 대기 동안 스레드가 잠들어도 다른 parallel/EventLoop 스레드에 영향이 없다.
+>
+> **결정 규칙**: 코드 안에 `Thread.sleep()`, JDBC, `block()`, 파일 동기 I/O가 있으면 반드시 `boundedElastic()`. 순수 변환 연산이면 `parallel()` 또는 EventLoop 스레드 그대로.
+
+### Q5. ThreadLocal이 WebFlux에서 동작하지 않는 이유와, MDC 로깅을 어떻게 해결하나요?
+
+> **이유**: ThreadLocal은 스레드에 바인딩된 맵이다. WebFlux에서 리액티브 체인은 `publishOn()`, `flatMap()` 등에서 스레드가 전환된다. 이전 스레드의 ThreadLocal 값은 새 스레드에 복사되지 않아 `null`이 된다. Spring Security의 `SecurityContextHolder`, Logback의 `MDC`가 모두 ThreadLocal 기반이라 같은 문제가 발생한다.
+>
+> **해결**: Reactor `Context`를 사용한다. Context는 구독 체인에 바인딩된 불변 맵으로, 스레드 전환과 무관하게 체인 전체에서 접근 가능하다. `contextWrite(Context.of("traceId", id))`로 주입하고 `Mono.deferContextual(ctx -> ctx.get("traceId"))`로 읽는다. Spring Security WebFlux는 `ReactiveSecurityContextHolder`가 Reactor Context를 자동으로 사용한다. Micrometer Tracing(Spring Boot 3.x)은 Reactor Context와 MDC를 자동 연동해 traceId가 로그에 포함되도록 한다.
+
+---
+
+## 16. WebFlux vs Virtual Thread (Java 21) — 어떤 걸 선택해야 하는가
+
+### Virtual Thread의 내부 동작
+
+Java 21 Virtual Thread(Project Loom)는 JVM이 관리하는 경량 스레드다. OS 스레드(캐리어 스레드)에 M:N으로 매핑된다. Virtual Thread가 블로킹 I/O를 만나면 JVM이 자동으로 캐리어 스레드를 해제하고 다른 Virtual Thread에 할당한다. I/O 완료 시 다시 캐리어 스레드를 할당해 재개한다.
+
+```java
+// Spring Boot 3.2 이상, Java 21
+spring.threads.virtual.enabled=true
+
+// 코드 변경 없이 MVC + Virtual Thread 동작
+// 기존 JDBC, ThreadLocal, SecurityContextHolder 모두 그대로 동작
+// 개발자가 Reactor를 배울 필요 없음
+```
 
 ```mermaid
 graph LR
-    A{"새 프로젝트?"} -->|YES+Java21| B{"리액티브?"}
-    B -->|YES| E["WebFlux"]
-    B -->|NO| D["MVC+VirtualThread"]
-    A -->|YES+구버전| F{"고동시성?"}
-    F -->|YES| E
-    F -->|NO| G["Spring MVC"]
+    VT["Virtual Thread"] -->|"블로킹 감지"| JVM["JVM Loom"]
+    JVM -->|"캐리어 해제"| CT["Carrier Thread"]
+    CT -->|"다른 VT 실행"| VT2["다른 Virtual Thread"]
+    JVM -->|"I/O 완료 시 재배정"| VT
 ```
 
-### 마이그레이션 전략
+### 비교표 — 선택 기준
 
-**Spring MVC → Spring MVC + Virtual Thread (권장: 기존 코드베이스)**
+| 구분 | WebFlux + Reactor | MVC + Virtual Thread |
+|------|------------------|---------------------|
+| 스레드 모델 | EventLoop + 콜백 | Thread-per-request, JVM 관리 |
+| 코드 스타일 | Mono/Flux, 선언형 | 기존 동기 코드 그대로 |
+| JDBC 사용 | 불가 (블로킹 격리 필요) | 그냥 사용 |
+| ThreadLocal/MDC | 동작 안 함 | 정상 동작 |
+| 학습 비용 | 높음 (Reactor, 배압, Context) | 없음 |
+| 디버깅 | 리액티브 스택 추적 어려움 | 일반 스택 트레이스 |
+| SSE/WebSocket 스트리밍 | 자연스러운 Flux 지원 | 별도 설정 필요 |
+| R2DBC | 자연스러운 통합 | 이점 없음 |
+| 메모리 효율 | 매우 높음 | 높음 (VT당 수KB) |
+| Java 버전 요구 | 5+ | 21+ |
 
-```java
-// application.yml (Spring Boot 3.2+)
-spring:
-  threads:
-    virtual:
-      enabled: true
-// 끝. 코드 변경 없음.
-```
-
-**Spring MVC → WebFlux (점진적)**
-
-```java
-// 1단계: WebClient 도입 (RestTemplate 대체)
-// 기존
-RestTemplate restTemplate = new RestTemplate();
-UserDto user = restTemplate.getForObject("/users/1", UserDto.class);
-
-// 변경
-WebClient webClient = WebClient.create();
-Mono<UserDto> userMono = webClient.get().uri("/users/1")
-    .retrieve().bodyToMono(UserDto.class);
-
-// 2단계: 신규 엔드포인트를 WebFlux로 작성
-// 3단계: 기존 엔드포인트를 블로킹 허용 방식으로 유지하며 점진 전환
-// Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic())
-
-// 4단계: DB를 R2DBC로 전환 (가장 큰 작업)
-```
+**선택 기준**:
+- 기존 JDBC/JPA 코드가 있고 Java 21 가능 → **Virtual Thread**
+- 팀이 Reactor 비숙련 → **Virtual Thread**
+- SSE/WebSocket이 핵심, 전체 스택 논블로킹 → **WebFlux**
+- R2DBC + Reactive MongoDB 스택 → **WebFlux**
+- 카프카 Reactive Consumer → **WebFlux**
 
 ---
 
-## 11. 실무 Best Practice
+## 17. 실무 패턴 — Best Practice
 
-### 블로킹 코드 격리
+### 레거시 블로킹 코드 완전 격리
 
 ```java
-// 레거시 서비스 래퍼
+// 레거시 동기 서비스를 리액티브로 래핑
 @Service
-public class LegacyUserServiceWrapper {
+public class ReactiveOrderAdapter {
 
-    private final LegacyUserService legacyService;  // 블로킹 서비스
+    private final LegacyOrderService legacyService; // 블로킹 서비스
 
-    public Mono<User> findById(Long id) {
-        return Mono.fromCallable(() -> legacyService.findById(id))
+    // 단건 조회 — Callable로 래핑
+    public Mono<Order> findById(String orderId) {
+        return Mono.fromCallable(() -> legacyService.findById(orderId))
             .subscribeOn(Schedulers.boundedElastic())
             .timeout(Duration.ofSeconds(5))
-            .onErrorMap(TimeoutException.class,
-                ex -> new ServiceTimeoutException("Legacy service timeout"));
+            .onErrorMap(TimeoutException.class, ex ->
+                new ServiceTimeoutException("Legacy order service timeout")
+            )
+            .onErrorMap(ex -> !(ex instanceof ServiceTimeoutException),
+                ex -> new ServiceException("Order fetch failed", ex)
+            );
     }
 
-    public Flux<User> findAll() {
+    // 목록 조회 — Iterable을 Flux로
+    public Flux<Order> findAll(String status) {
         return Flux.defer(() ->
-                Flux.fromIterable(legacyService.findAll())
+                Flux.fromIterable(legacyService.findByStatus(status))
             )
-            .subscribeOn(Schedulers.boundedElastic());
+            .subscribeOn(Schedulers.boundedElastic())
+            .onErrorMap(ex -> new ServiceException("Order list fetch failed", ex));
+    }
+
+    // 사이드 이펙트 — fire and forget with error handling
+    public Mono<Void> publishEvent(OrderEvent event) {
+        return Mono.fromRunnable(() -> legacyService.publishEvent(event))
+            .subscribeOn(Schedulers.boundedElastic())
+            .doOnError(ex -> log.error("Event publish failed: {}", event, ex))
+            .onErrorComplete() // 에러를 onComplete로 전환 (fire-and-forget)
+            .then();
     }
 }
 ```
@@ -1754,242 +1584,107 @@ public class LegacyUserServiceWrapper {
 ### 리액티브 체인 설계 원칙
 
 ```java
-// 원칙 1: 체인을 짧고 가독성 있게
-public Mono<OrderSummary> getOrderSummary(Long orderId) {
-    return orderRepository.findById(orderId)
-        .switchIfEmpty(Mono.error(new OrderNotFoundException(orderId)))
-        .flatMap(this::enrichWithUserInfo)
-        .flatMap(this::enrichWithProductDetails)
-        .map(this::toSummaryDto)
-        .timeout(Duration.ofSeconds(10));
+// 원칙 1: 항상 에러 핸들링
+public Mono<OrderDto> getOrder(String id) {
+    return orderRepository.findById(id)
+        .switchIfEmpty(Mono.error(new OrderNotFoundException(id)))
+        .map(orderMapper::toDto)
+        .doOnError(ex -> log.error("Order fetch failed: {}", id, ex))
+        .onErrorMap(OrderNotFoundException.class, ex ->
+            new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage())
+        );
 }
 
-// 원칙 2: 사이드 이펙트는 doOn* 연산자로
-public Mono<User> createUser(CreateUserRequest request) {
-    return userRepository.save(toEntity(request))
-        .doOnSuccess(user -> eventPublisher.publish(new UserCreatedEvent(user)))
-        .doOnSuccess(user -> log.info("User created: {}", user.getId()))
-        .doOnError(ex -> log.error("Failed to create user", ex));
-}
-
-// 원칙 3: 병렬 처리 명시적으로
-public Mono<DashboardData> getDashboard(Long userId) {
+// 원칙 2: 병렬 독립 조회는 zip
+public Mono<DashboardDto> getDashboard(String userId) {
     return Mono.zip(
-        userService.findById(userId),
-        orderService.findRecentOrders(userId),
-        notificationService.findUnread(userId)
-    ).map(tuple -> new DashboardData(
-        tuple.getT1(), tuple.getT2(), tuple.getT3()
-    ));
+        orderService.getRecentOrders(userId),
+        userService.getProfile(userId),
+        notificationService.getUnreadCount(userId)
+    )
+    .map(t -> DashboardDto.of(t.getT1(), t.getT2(), t.getT3()))
+    .timeout(Duration.ofSeconds(5));
 }
 
-// 원칙 4: 중간 결과 재사용은 cache() 또는 zip
-public Mono<ProcessResult> processUser(Long userId) {
-    Mono<User> user = userService.findById(userId).cache();
-    // user를 여러 번 사용해도 DB 쿼리는 1회
-    return user
-        .flatMap(u -> validateUser(u))
-        .then(user)
-        .flatMap(u -> doProcess(u));
+// 원칙 3: doOn* 연산자로 사이드 이펙트 분리
+public Mono<Order> createOrder(CreateOrderRequest req) {
+    return orderRepository.save(Order.from(req))
+        .doOnSuccess(order ->
+            eventPublisher.publishEvent(new OrderCreatedEvent(order.getId()))
+        )
+        .doOnSuccess(order ->
+            metricsService.incrementOrderCount(order.getType())
+        )
+        .doOnError(ex ->
+            alertService.sendAlert("Order creation failed: " + ex.getMessage())
+        );
+}
+
+// 원칙 4: cache()로 중복 구독 방지
+public Mono<ProcessResult> processOrderWithCache(String orderId) {
+    Mono<Order> order = orderRepository.findById(orderId).cache();
+
+    return order
+        .flatMap(o -> validateOrder(o))
+        .then(order) // 캐시된 결과 재사용 — DB 쿼리 없음
+        .flatMap(o -> enrichOrder(o))
+        .then(order)
+        .flatMap(o -> saveProcessedOrder(o));
 }
 ```
 
-### 모니터링 (Micrometer + Reactor)
+### 모니터링 — Micrometer + Reactor
 
 ```java
-// 의존성
-// implementation 'io.micrometer:micrometer-registry-prometheus'
-
 @Service
-public class MonitoredUserService {
+@RequiredArgsConstructor
+public class MonitoredOrderService {
 
-    private final UserRepository userRepository;
-    private final MeterRegistry meterRegistry;
+    private final OrderRepository orderRepository;
+    private final ObservationRegistry observationRegistry;
 
-    public Mono<User> findById(Long id) {
-        return userRepository.findById(id)
-            .name("user.findById")           // 메트릭 이름
-            .tag("service", "user")
-            .metrics()                        // Micrometer에 자동 등록
-            .tap(Micrometer.observation(observationRegistry));  // Observation API
+    public Mono<Order> findById(String id) {
+        return orderRepository.findById(id)
+            .name("order.findById")        // 메트릭 이름
+            .tag("operation", "read")
+            .metrics()                      // Micrometer 자동 등록
+            .tap(Micrometer.observation(observationRegistry)); // Observation API (추적 포함)
     }
 
-    // 수동 타이머
-    public Mono<User> findByIdWithTimer(Long id) {
-        Timer.Sample sample = Timer.start(meterRegistry);
-        return userRepository.findById(id)
-            .doOnSuccess(user -> sample.stop(
-                meterRegistry.timer("user.findById", "result", "success")
-            ))
-            .doOnError(ex -> sample.stop(
-                meterRegistry.timer("user.findById", "result", "error")
-            ));
+    // 배압 큐 모니터링
+    public Flux<Order> streamOrders() {
+        return orderRepository.findAll()
+            .name("order.stream")
+            .metrics()
+            .onBackpressureBuffer(1000); // prometheus에서 reactor_flow_duration_seconds 확인
     }
 }
-
-// application.yml: Reactor 메트릭 활성화
-management:
-  endpoints:
-    web:
-      exposure:
-        include: prometheus, health, metrics
-  metrics:
-    tags:
-      application: my-webflux-app
-```
-
-```java
-// 배압/큐 모니터링
-Flux.range(1, Integer.MAX_VALUE)
-    .name("data.stream")
-    .metrics()
-    .onBackpressureBuffer(1000)
-    .subscribe();
-// prometheus에서 reactor_flow_duration_seconds, reactor_subscribed_value 확인 가능
-```
-
----
-
-## WebFlux면 성능이 좋다는 착각
-
-WebFlux를 도입하면 자동으로 성능이 향상된다고 기대한다. 하지만 잘못 쓰면 MVC보다 훨씬 나쁜 결과가 나온다.
-
-**함정 1: JPA/JDBC를 그대로 쓰면 EventLoop가 멈춘다**
-
-```java
-// 이 코드는 WebFlux를 도입한 의미가 없다. 오히려 더 위험하다.
-@GetMapping("/users/{id}")
-public Mono<User> getUser(@PathVariable Long id) {
-    // JPA는 블로킹 I/O다.
-    // EventLoop 스레드(보통 CPU 코어 수 = 8개)에서 블로킹이 발생하면
-    // 해당 EventLoop가 담당하는 모든 요청이 동시에 멈춘다.
-    User user = userJpaRepository.findById(id).orElseThrow(); // 블로킹!
-    return Mono.just(user);
-}
-// MVC였다면 스레드 하나만 멈춤
-// WebFlux에서는 EventLoop 하나 전체가 멈춤 → 수백 요청 동시 지연
-```
-
-```java
-// 탐지: BlockHound를 개발 환경에서 반드시 활성화한다
-@SpringBootApplication
-public class Application {
-    public static void main(String[] args) {
-        BlockHound.install(); // EventLoop 블로킹 시 즉시 예외 발생
-        SpringApplication.run(Application.class, args);
-    }
-}
-// 블로킹 코드가 있으면 즉시 BlockingOperationError로 알려준다
-```
-
-**함정 2: 디버깅 지옥 — 스택 트레이스가 읽을 수 없다**
-
-```
-// 일반 MVC에서 NPE 발생 시:
-java.lang.NullPointerException
-    at com.example.OrderService.createOrder(OrderService.java:42)
-    at com.example.OrderController.postOrder(OrderController.java:28)
-// 원인 즉시 파악 가능
-
-// WebFlux 리액티브 체인에서 NPE 발생 시:
-java.lang.NullPointerException
-    at reactor.core.publisher.FluxMap$MapSubscriber.onNext(FluxMap.java:106)
-    at reactor.core.publisher.FluxFlatMap$FlatMapMain.tryEmit(FluxFlatMap.java:588)
-    at reactor.core.publisher.FluxFlatMap$FlatMapInner.onNext(FluxFlatMap.java:982)
-    at reactor.core.publisher.FluxMergeSequential$MergeSequentialInner.onNext(...)
-    ... (Reactor 내부 코드 수십 줄)
-// 실제 코드 위치가 보이지 않는다
-// 장애 상황에서 원인 파악에 수십 분~수 시간이 걸릴 수 있다
-```
-
-```java
-// 방어: checkpoint()로 최소한의 위치 정보를 확보한다
-userService.findById(userId)
-    .checkpoint("userService.findById")     // 이 지점 이후 오류 발생 위치 표시
-    .flatMap(user -> orderService.create(user, req))
-    .checkpoint("orderService.create")
-    .subscribe();
-```
-
-**최종 방어선: JPA/JDBC를 쓰면 WebFlux를 쓰지 마라**
-
-```
-판단 기준:
-┌─ 기존 JPA/JDBC 코드가 있는가?
-│   └─ YES → WebFlux 도입 효과 없음. Virtual Thread(Java 21)가 답이다.
-│            spring.threads.virtual.enabled=true 한 줄로 동시성 문제 해결.
-│            코드 변경 없이 MVC 그대로 사용.
-│
-└─ R2DBC + Reactive MongoDB 등 전체 스택이 논블로킹인가?
-    └─ YES + 팀이 Reactor에 익숙한가?
-        └─ YES → WebFlux 도입 타당
-        └─ NO  → 학습 곡선 + 디버깅 난이도 비용이 성능 이득을 초과할 수 있음
-
-"WebFlux는 블로킹 코드가 하나도 없을 때만 효과가 있다.
- 블로킹 코드가 하나라도 섞이면 EventLoop 전체가 멈추고,
- MVC보다 더 나쁜 상황이 된다."
 ```
 
 ---
 
 ## 정리
 
-Spring WebFlux는 강력하지만 올바르게 사용하기 어려운 프레임워크입니다.
+Spring WebFlux는 "I/O 대기 중 스레드를 놀리지 않는다"는 단순한 원칙에서 출발한다. Reactive Streams의 배압 프로토콜이 흐름을 제어하고, Netty EventLoop가 소수 스레드로 수만 연결을 처리하고, Reactor Context가 ThreadLocal을 대체한다.
 
-핵심 원칙을 정리하면 다음과 같습니다.
+올바르게 쓰면 MVC 대비 I/O 집약 환경에서 압도적인 효율을 보인다. 잘못 쓰면(EventLoop 블로킹, 배압 누락, 중복 구독) MVC보다 더 위험하다.
 
-1. **이벤트 루프를 블로킹하지 말 것** — 가장 중요한 규칙입니다. 블로킹 코드는 반드시 `boundedElastic`으로 격리합니다.
-2. **항상 구독(subscribe)하거나 리턴할 것** — 구독하지 않으면 아무것도 실행되지 않습니다.
-3. **배압을 의식할 것** — 빠른 생산자와 느린 소비자 간의 균형을 맞춥니다.
-4. **flatMap 동시성을 명시할 것** — 기본값 256은 대부분의 외부 API 호출에서 과도합니다.
-5. **디버깅을 위해 checkpoint와 log를 활용할 것** — 개발 환경에서는 ReactorDebugAgent를 사용합니다.
-6. **Java 21 이상이라면 Virtual Thread도 고려할 것** — 팀의 리액티브 경험이 없다면 Virtual Thread가 더 현실적인 선택일 수 있습니다.
+**핵심 판단 기준**:
+1. 전체 스택이 논블로킹인가(R2DBC, Reactive MongoDB, WebClient)?
+2. SSE/WebSocket/카프카 리액티브 스트림이 핵심인가?
+3. 팀이 Reactor에 익숙한가?
 
-WebFlux는 도구입니다. 모든 상황에 최적은 아니지만, 높은 동시성과 I/O 집약 환경에서는 기존 MVC 대비 압도적인 효율성을 보여줍니다. 팀의 역량, 레거시 코드베이스, 요구사항을 종합적으로 고려하여 선택하세요.
+3개 모두 Yes면 WebFlux. 그렇지 않으면 Java 21 Virtual Thread + 기존 MVC가 더 현실적이다.
 
 ---
 
-## 왜 이 기술인가?
+## 왜 이 기술인가
 
-| 방식 | 스레드 모델 | 동시 연결 | 학습 곡선 | 적합한 상황 |
-|---|---|---|---|---|
-| Spring MVC (서블릿) | 스레드 당 요청 | ~수천 | 낮음 | 일반 REST API, CRUD |
-| Spring WebFlux (Reactor) | 이벤트 루프 | ~수만 | 높음 | 고동시성, 스트리밍 |
-| Virtual Thread (Java 21+) | 경량 스레드 | ~수만 | 낮음 | 기존 MVC 코드 그대로 |
-| Node.js | 이벤트 루프 | ~수만 | 중간 | JavaScript 생태계 |
-| Go goroutine | M:N 스레드 | ~수백만 | 중간 | 극한 동시성 |
+| 방식 | 스레드 모델 | 동시 연결 | 블로킹 코드 | 학습 난이도 |
+|------|-----------|---------|-----------|-----------|
+| Spring MVC | Thread-per-request | ~수천 | 자유롭게 | 낮음 |
+| Spring WebFlux | EventLoop + 콜백 | ~수만 | 불가 (격리 필요) | 높음 |
+| MVC + Virtual Thread | M:N 경량 스레드 | ~수만 | 자유롭게 | 없음 (기존 코드) |
+| Go goroutine | M:N | ~수백만 | 자유롭게 | 중간 |
 
-**결론:** 동시 연결 수가 수천 이하이고 팀이 Reactor에 익숙하지 않다면 MVC + Virtual Thread(Java 21)가 더 실용적이다. SSE 스트리밍, 웹소켓, 대용량 데이터 파이프라인이 필요하거나 전체 스택이 논블로킹이어야 할 때 WebFlux가 적합하다.
-
----
-
-## 실무에서 자주 하는 실수
-
-1. **이벤트 루프 스레드에서 블로킹 호출** — `Mono`/`Flux` 체인 안에서 `Thread.sleep()`, JDBC, `block()` 호출은 이벤트 루프를 블로킹해 전체 서버가 응답하지 않는다. 블로킹 작업은 반드시 `subscribeOn(Schedulers.boundedElastic())`으로 오프로드해야 한다.
-
-2. **`block()` 남용** — `block()`은 리액티브 체인을 동기로 변환한다. 이벤트 루프에서 호출하면 데드락, 서블릿 스레드에서 호출하면 스레드 낭비가 발생한다. 가능하면 전체 체인을 리액티브로 유지하고, 진입점(`@RestController`)에서 `Mono`를 반환해야 한다.
-
-3. **`subscribe()` 후 결과를 기다리지 않음** — `flux.subscribe()`를 호출하면 비동기로 실행되고 메서드는 즉시 반환된다. HTTP 응답을 보내기 전에 처리가 완료되지 않는다. 컨트롤러에서는 `Mono`/`Flux`를 직접 반환해 Spring이 구독을 관리하게 해야 한다.
-
-4. **에러 처리 없는 리액티브 체인** — 리액티브 체인에서 예외가 발생하면 기본적으로 스택 트레이스만 출력되고 500이 반환된다. `.onErrorReturn()`, `.onErrorResume()`, `.doOnError()`로 명시적 에러 처리를 해야 하며, `@ControllerAdvice`도 WebFlux용으로 따로 설정해야 한다.
-
-5. **R2DBC 없이 WebFlux + JDBC 조합** — WebFlux를 사용하면서 JPA/JDBC로 DB를 조회하면 DB I/O에서 블로킹이 발생해 논블로킹의 이점이 사라진다. WebFlux 환경에서는 R2DBC, MongoDB Reactive, Cassandra Reactive 등 리액티브 드라이버를 사용해야 한다.
-
----
-
-## 면접 포인트
-
-**Q1. `Mono`와 `Flux`의 차이는?**
-> `Mono<T>`: 0 또는 1개의 항목을 비동기로 방출하는 Publisher. HTTP 단건 조회, 단일 객체 반환에 사용. `Flux<T>`: 0~N개의 항목을 비동기로 방출하는 Publisher. 목록 조회, SSE 스트리밍에 사용. 둘 다 구독(subscribe)하기 전까지 실행되지 않는 lazy 평가다.
-
-**Q2. WebFlux의 Scheduler 종류와 용도는?**
-> `Schedulers.parallel()`: CPU 바운드 작업용, 코어 수만큼 스레드. `Schedulers.boundedElastic()`: I/O 바운드 블로킹 작업 오프로드용, 동적 스레드 풀. `Schedulers.single()`: 단일 스레드, 순서 보장 필요 시. `publishOn()`은 이후 연산자의 스케줄러를 변경, `subscribeOn()`은 소스 구독 스케줄러를 변경한다.
-
-**Q3. Spring MVC와 WebFlux를 같이 사용할 수 있는가?**
-> 하나의 애플리케이션에서 동시에 사용할 수 없다. 둘 중 하나가 서버 모델(서블릿 컨테이너 vs Netty)을 결정한다. 단, MVC 환경에서 `WebClient`를 사용하는 것은 가능하다(WebClient는 WebFlux 없이도 동작).
-
-**Q4. BackPressure란 무엇이고 Reactor에서 어떻게 처리하는가?**
-> BackPressure는 소비자가 처리할 수 있는 속도보다 생산자가 빠를 때 생산 속도를 조절하는 메커니즘이다. Reactor에서는 `onBackpressureBuffer()`, `onBackpressureDrop()`, `onBackpressureLatest()`로 처리한다. Kafka 컨슈머나 SSE 스트리밍에서 특히 중요하다.
-
-**Q5. Virtual Thread(Java 21)와 WebFlux 중 무엇을 선택해야 하는가?**
-> 기존 MVC 코드베이스가 있고 팀이 Reactor에 익숙하지 않다면 Virtual Thread를 선택한다. 코드 변경 없이 높은 동시성을 얻을 수 있다. 전체 스택이 논블로킹이어야 하거나(R2DBC, 리액티브 Kafka), SSE/WebSocket 스트리밍이 핵심이면 WebFlux가 더 적합하다.
+WebFlux가 빛나는 순간: 마이크로서비스 게이트웨이(수십 개 upstream 동시 호출), 실시간 대시보드(SSE), 카프카 이벤트 파이프라인, 전체 리액티브 스택. 팀 역량과 요구사항이 맞지 않으면 복잡도만 올라가고 이득은 사라진다.
