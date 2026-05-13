@@ -1,119 +1,843 @@
 ---
-title: "Redis Pub/Sub — 서버 여러 대가 같은 메시지를 받는 법"
+title: "Redis Pub/Sub 내부 동작 완전 분석 — 왜 메시지가 사라지는가"
 categories:
 - REDIS
-tags: [Redis, Pub/Sub, 메시지 브로커, Spring Redis, Kafka 비교]
+tags: [Redis, Pub/Sub, 메시지 브로커, Spring Redis, Redis Streams, Keyspace Notification, Redis Cluster]
 toc: true
 toc_sticky: true
 toc_label: 목차
 ---
 
-채팅 서비스를 서버 3대로 운영한다고 가정하자. 사용자 A는 서버 1에 WebSocket으로 연결되어 있고, 사용자 B는 서버 2에 연결되어 있다. A가 B에게 메시지를 보내면 어떻게 되는가? 서버 1은 서버 2에 연결된 B에게 직접 WebSocket 메시지를 보낼 수 없다. 서버들 사이의 메시지를 중계할 무언가가 필요하다. Redis Pub/Sub이 그 역할이다.
+채팅 서비스를 서버 3대로 운영한다. 사용자 A는 서버 1에 WebSocket으로 연결되어 있고, 사용자 B는 서버 2에 연결되어 있다. A가 B에게 메시지를 보낸다. 서버 1은 서버 2에 연결된 B에게 직접 메시지를 전달할 수 없다. 서버들 사이의 메시지를 중계할 무언가가 필요하다. Redis Pub/Sub이 그 역할을 한다.
 
-## Pub/Sub이란?
+그런데 Redis Pub/Sub은 메시지를 저장하지 않는다. 전달하는 순간 사라진다. 왜 이런 설계를 했는가? 내부적으로 어떻게 동작하는가? 언제 쓰면 안 되는가? 이 글은 그 질문들에 답한다.
 
-> **비유**: FM 라디오와 같다. DJ(Publisher)가 특정 주파수(채널)로 방송을 보내면, 그 주파수에 주파수를 맞춘 청취자(Subscriber)들이 동시에 듣는다. DJ는 청취자가 몇 명인지 알 필요가 없다. 청취자가 라디오를 끄고 있을 때 방송된 내용은 다시 들을 수 없다. 방송은 나가는 순간 사라진다.
+---
 
-Redis Pub/Sub은 **메시지를 채널에 발행(Publish)하면 그 채널을 구독(Subscribe)한 모든 클라이언트에게 실시간으로 전달**하는 메시징 패턴이다.
+## 1. Pub/Sub 내부 구조 — pubsub_channels와 pubsub_patterns
+
+Redis 서버는 모든 채널 구독 정보를 `server.pubsub_channels`라는 딕셔너리 하나에 관리한다. C 소스(`pubsub.c`)에 그대로 드러난다.
+
+### pubsub_channels 딕셔너리
+
+```
+server.pubsub_channels = {
+  "chat:room1" -> [client_A, client_B, client_C],
+  "chat:room2" -> [client_D],
+  "notification:global" -> [client_A, client_E]
+}
+```
+
+- **키**: 채널 이름 (문자열)
+- **값**: 해당 채널을 구독하는 클라이언트 포인터의 연결 리스트
+
+`SUBSCRIBE chat:room1`을 실행하면 Redis는 단순히 이 딕셔너리에서 `"chat:room1"` 키를 찾아 현재 클라이언트를 리스트에 추가한다. `PUBLISH chat:room1 msg`를 실행하면 해당 리스트를 순회하며 각 클라이언트의 소켓 버퍼에 메시지를 쓴다. 복잡한 큐가 없다. 메모리 내 딕셔너리 조회와 소켓 쓰기가 전부다.
+
+### pubsub_patterns 연결 리스트
+
+패턴 구독(`PSUBSCRIBE`)은 별도 자료구조다.
+
+```
+server.pubsub_patterns = [
+  { client: client_A, pattern: "chat:*" },
+  { client: client_B, pattern: "chat:room[0-9]*" },
+  { client: client_C, pattern: "event:*:created" }
+]
+```
+
+딕셔너리가 아닌 **연결 리스트**다. 패턴은 해시로 직접 조회할 수 없기 때문이다. `PUBLISH`가 들어오면 Redis는 이 리스트를 **처음부터 끝까지 순회**하며 각 패턴과 glob 매칭을 수행한다.
 
 ```mermaid
-sequenceDiagram
-    participant P as Publisher
-    participant R as Redis
-    participant S1 as Subscriber1
-    S1->>R: SUBSCRIBE chat:room1
-    P->>R: PUBLISH chat:room1 안녕
-    R-->>S1: 안녕 전달
+graph LR
+  PUB[PUBLISH 요청] --> DC[pubsub_channels\n딕셔너리 O1 조회]
+  PUB --> PL[pubsub_patterns\n리스트 ON 순회]
+  DC --> W1[소켓 버퍼 쓰기]
+  PL --> GM[glob 매칭]
+  GM --> W2[매칭된 클라이언트\n소켓 버퍼 쓰기]
 ```
 
-**핵심 특성**:
-- **Fire and Forget**: 메시지를 저장하지 않는다. 구독자가 없어도, 구독자가 잠깐 다운되어도 메시지는 영원히 사라진다.
-- **1:N 브로드캐스트**: 하나의 메시지가 모든 구독자에게 동시에 전달된다.
-- **실시간**: 발행과 수신 사이의 지연이 수 밀리초 이내다.
+**왜 딕셔너리를 쓰지 않는가?** 패턴은 `chat:*`처럼 와일드카드가 포함된 문자열이다. `PUBLISH chat:room1`이 들어왔을 때 어떤 패턴이 매칭되는지 사전에 알 수 없다. 딕셔너리의 O(1) 조회는 정확한 키를 알 때만 가능하다. 패턴은 모든 채널명과 비교해야 하므로 O(N) 순회가 불가피하다.
+
+**성능 함의**: 패턴 구독이 M개 있고 초당 PUBLISH가 R번 발생하면, 초당 M × R번의 glob 매칭이 Redis의 단일 스레드에서 실행된다. M=50, R=100,000이면 초당 5,000,000번이다. 이것이 PSUBSCRIBE 남발이 CPU 병목을 만드는 이유다.
 
 ---
 
-## Redis CLI로 동작 확인
+## 2. 왜 Fire-and-Forget인가 — 설계 결정의 근거
 
-```bash
-# 터미널 1: 구독
-redis-cli
-> SUBSCRIBE chat:room1
-Reading messages... (press Ctrl-C to quit)
-1) "subscribe"
-2) "chat:room1"
-3) (integer) 1   # 현재 구독 중인 채널 수
+Redis의 철학은 **메모리 내 초고속 연산**이다. 메시지를 저장하려면 어딘가에 써야 한다. 메모리에 쓰면 크기가 무한히 증가한다. 디스크에 쓰면 I/O 대기가 발생해 Redis의 가장 큰 강점인 지연시간이 깨진다.
 
-# 터미널 2: 발행
-redis-cli
-> PUBLISH chat:room1 "안녕하세요!"
-(integer) 1   # 이 메시지를 받은 구독자 수
+Pub/Sub의 설계 결정을 분해하면:
 
-# 터미널 1에서 자동 수신:
-1) "message"
-2) "chat:room1"    # 채널 이름
-3) "안녕하세요!"    # 메시지 내용
-```
+**1) 구독자가 없으면 메시지를 어디에 보관할 것인가?**
+보관하면 메모리가 필요하다. 얼마나 쌓일지 모른다. 언제까지 보관할지 기준도 없다. 보관하지 않는 것이 단순하고 예측 가능하다.
+
+**2) 구독자가 있다가 없어지면?**
+구독자가 연결을 끊은 순간부터 그 구독자를 위한 메시지는 버린다. 재연결 후 어디서부터 받아야 하는지 Redis가 추적하지 않는다.
+
+**3) 전달 확인(ACK)을 어떻게 처리할 것인가?**
+ACK를 구현하면 미전달 메시지를 추적하는 상태 머신이 필요하다. 재전송 로직, 타임아웃, 중복 제거가 필요하다. 이것은 Kafka나 RabbitMQ가 하는 일이다. Redis는 그 복잡도를 의도적으로 포기했다.
+
+결과적으로 Redis Pub/Sub은 **최대한 빠르게, 지금 연결된 구독자에게만, 한 번에** 전달하는 시스템이다. 영속성과 신뢰성은 외부에서 보완해야 한다.
 
 ---
 
-## 패턴 구독 (PSUBSCRIBE)
+## 3. 메시지 유실의 세 가지 경로
 
-채널 이름에 와일드카드를 사용해 여러 채널을 한 번에 구독한다. "모든 채팅방의 메시지"를 하나의 구독자가 받아야 할 때 유용하다.
+"메시지가 사라진다"는 말이 추상적으로 들린다. 구체적으로 어느 시점에 사라지는지 추적한다.
 
-```bash
-# chat: 으로 시작하는 모든 채널 구독
-redis-cli PSUBSCRIBE "chat:*"
+### 경로 1: 구독자 없음
 
-# 어떤 채팅방에 발행해도 수신됨
-redis-cli PUBLISH chat:room1 "1번 방 메시지"
-redis-cli PUBLISH chat:room99 "99번 방 메시지"
-
-# 수신 메시지 형식 (패턴 구독은 pmessage)
-1) "pmessage"
-2) "chat:*"       # 매칭된 패턴
-3) "chat:room1"   # 실제 채널 이름
-4) "1번 방 메시지" # 내용
 ```
+PUBLISH chat:room1 "안녕"
+→ server.pubsub_channels["chat:room1"] 조회
+→ 리스트가 비어있음
+→ 메시지 즉시 폐기
+→ PUBLISH 반환값: (integer) 0  ← 받은 구독자 수
+```
+
+PUBLISH의 반환값이 0이면 메시지를 받은 구독자가 없다는 의미다. 대부분의 코드는 이 반환값을 확인하지 않는다. 유실을 탐지조차 못한다.
+
+### 경로 2: 구독자 크래시
+
+```
+[정상 상태]
+구독자 A: 연결 중, chat:room1 구독
+발행자: PUBLISH chat:room1 "메시지1" → A에게 전달됨
+
+[구독자 A 크래시 발생]
+발행자: PUBLISH chat:room1 "메시지2" → A 연결 없음 → 폐기
+발행자: PUBLISH chat:room1 "메시지3" → A 연결 없음 → 폐기
+
+[구독자 A 재시작, 재구독]
+발행자: PUBLISH chat:room1 "메시지4" → A에게 전달됨
+→ "메시지2", "메시지3"은 영구 소멸
+```
+
+재구독 후 A는 자신이 받지 못한 메시지가 있었다는 사실조차 알 수 없다.
+
+### 경로 3: 클라이언트 출력 버퍼 초과
+
+이것이 가장 위험한 경로다. 구독자가 살아있는 것처럼 보이지만 실제로는 메시지를 받지 못한다.
+
+Redis는 각 구독자에게 전달할 메시지를 **클라이언트 출력 버퍼(client output buffer)**에 쌓는다. 구독자의 처리 속도가 발행 속도보다 느리면 버퍼가 증가한다. 버퍼가 한계를 초과하면 Redis가 해당 구독자의 연결을 **강제 종료**한다.
+
+```
+# Redis 기본 설정
+client-output-buffer-limit pubsub 32mb 8mb 60
+#                                   ^    ^   ^
+#          hard limit: 32MB 초과 시 즉시 종료
+#                       soft limit: 8MB 초과가 60초 지속 시 종료
+```
+
+연결이 끊기면 그 시점부터 발행된 메시지가 유실된다. 연결이 끊긴 사실을 탐지하고 재구독하는 데 수 초가 걸리고, 그 사이의 메시지는 모두 사라진다.
 
 ---
 
-## Spring Boot에서 Pub/Sub 구현
+## 4. 클라이언트 출력 버퍼 — 느린 구독자가 죽는 메커니즘
 
-### 설정
+```mermaid
+graph LR
+  PUB[Publisher] --> RD[Redis 서버]
+  RD --> BUF[구독자 출력 버퍼]
+  BUF -->|처리 속도 < 발행 속도| OVF[버퍼 증가]
+  OVF -->|32MB 초과| KILL[연결 강제 종료]
+  KILL --> LOSS[메시지 유실]
+```
+
+**왜 버퍼를 무한히 늘리지 않는가?** 구독자가 100개면 버퍼도 100개다. 모두 느리면 Redis 메모리가 급격히 증가한다. Redis는 메모리 서버다. 메모리가 고갈되면 서버 전체가 위험해진다. 버퍼 한계는 단일 구독자의 문제가 Redis 전체 장애로 번지는 것을 막는 안전장치다.
+
+### Java/Spring에서 버퍼 문제 탐지
 
 ```java
 @Configuration
 public class RedisConfig {
 
     @Bean
-    public RedisConnectionFactory redisConnectionFactory() {
-        return new LettuceConnectionFactory(
-            new RedisStandaloneConfiguration("localhost", 6379)
-        );
+    public RedisMessageListenerContainer messageListenerContainer(
+            RedisConnectionFactory connectionFactory,
+            MessageListener chatListener) {
+
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+
+        // 구독자 스레드풀: 처리 속도를 높이는 핵심 설정
+        // 스레드가 부족하면 onMessage()가 블로킹되어 버퍼가 쌓인다
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(1000);
+        executor.setThreadNamePrefix("redis-pubsub-");
+        executor.initialize();
+        container.setTaskExecutor(executor);
+
+        // 에러 핸들러: 연결 끊김을 탐지하고 로깅
+        container.setErrorHandler(e -> {
+            log.error("Redis Pub/Sub 오류 발생. 재구독 시도: {}", e.getMessage(), e);
+            // 이 시점에서 재구독이 필요하다. container가 자동 재연결을 시도한다.
+        });
+
+        container.addMessageListener(chatListener, new PatternTopic("chat:*"));
+        return container;
     }
+}
+```
+
+```java
+// Redis INFO clients 명령으로 버퍼 상태 모니터링
+@Component
+@Slf4j
+public class RedisBufferMonitor {
+
+    private final RedisTemplate<String, String> redisTemplate;
+
+    @Scheduled(fixedDelay = 30_000)
+    public void checkClientBuffers() {
+        // INFO clients 결과에서 blocked_clients, tracking_clients 확인
+        Properties info = redisTemplate.getClientList();
+        // client-output-buffer 사용량이 높으면 처리 속도를 높여야 한다
+        redisTemplate.execute((RedisCallback<String>) connection -> {
+            String clientInfo = new String(connection.serverCommands().info("clients"));
+            if (clientInfo.contains("blocked_clients")) {
+                log.warn("Redis 블로킹 클라이언트 존재. 구독자 처리 속도 점검 필요\n{}", clientInfo);
+            }
+            return clientInfo;
+        });
+    }
+}
+```
+
+### 버퍼 설정 조정 — 트레이드오프
+
+```bash
+# 옵션 1: 버퍼 무제한 (메모리 위험)
+config set client-output-buffer-limit "pubsub 0 0 0"
+
+# 옵션 2: 버퍼를 키우고 soft limit 시간을 늘림 (안전한 조정)
+config set client-output-buffer-limit "pubsub 256mb 64mb 120"
+
+# 옵션 3: 근본 해결 — 구독자 처리 속도를 높이거나 Redis Streams로 전환
+```
+
+버퍼를 무제한으로 설정하면 느린 구독자 하나가 Redis 메모리를 고갈시킬 수 있다. 버퍼 조정은 임시방편이다. 처리 속도가 발행 속도를 따라갈 수 없는 구조라면 Redis Streams로 전환하는 것이 옳다.
+
+---
+
+## 5. 패턴 매칭 비용 — PSUBSCRIBE의 숨겨진 위험
+
+`PSUBSCRIBE chat:*`는 편리하다. 모든 채팅방 채널을 한 번에 구독할 수 있다. 그러나 이 편의성에는 비용이 있다.
+
+### glob 매칭이 실행되는 시점
+
+`PUBLISH`가 호출될 때마다, Redis는 `pubsub_patterns` 리스트 **전체를 순회**한다.
+
+```
+PUBLISH chat:room1 "메시지"
+→ pubsub_channels["chat:room1"] 조회 (O(1))
+→ pubsub_patterns 순회 시작 (O(N))
+  → "chat:*" vs "chat:room1" → 매칭 → 전달
+  → "event:*" vs "chat:room1" → 불일치 → 건너뜀
+  → "notification:user:*" vs "chat:room1" → 불일치 → 건너뜀
+  ... (모든 패턴 검사 완료)
+```
+
+패턴이 N개면 PUBLISH마다 N번의 glob 매칭이 Redis의 단일 이벤트 루프 안에서 실행된다. 이 시간 동안 다른 명령은 처리되지 않는다.
+
+### glob 매칭의 복잡도
+
+Redis의 glob 매칭 구현(`stringmatchlen` 함수)은 단순 와일드카드를 지원한다:
+
+- `*`: 임의 문자열
+- `?`: 임의 단일 문자
+- `[abc]`: 문자 집합
+
+`chat:*` 같은 단순 패턴은 빠르다. `event:*:user:*:action:[0-9]*` 같은 복잡한 패턴은 백트래킹이 발생해 더 느리다. 패턴이 복잡할수록 단일 매칭 비용도 올라간다.
+
+### Spring에서 SUBSCRIBE vs PSUBSCRIBE
+
+```java
+@Configuration
+public class RedisSubscribeConfig {
 
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
-        RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(factory);
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-        return template;
-    }
-
-    @Bean
-    public RedisMessageListenerContainer redisMessageListenerContainer(
+    public RedisMessageListenerContainer container(
             RedisConnectionFactory factory,
-            ChatMessageListener chatListener) {
+            ChatListener chatListener,
+            NotificationListener notificationListener) {
 
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(factory);
 
-        // 패턴 구독: chat: 로 시작하는 모든 채널
+        // 나쁜 예: 패턴 구독 남발
+        // 각 PUBLISH마다 3번의 glob 매칭이 실행된다
         container.addMessageListener(chatListener, new PatternTopic("chat:*"));
-        // 단일 채널 구독
-        container.addMessageListener(chatListener, new ChannelTopic("notification:global"));
+        container.addMessageListener(chatListener, new PatternTopic("chat:room:*"));
+        container.addMessageListener(chatListener, new PatternTopic("chat:dm:*"));
+
+        // 좋은 예: 채널을 명확히 구분하여 정확한 SUBSCRIBE 사용
+        // O(1) 딕셔너리 조회만 발생
+        container.addMessageListener(chatListener,
+            new ChannelTopic("chat:room:1"));
+        container.addMessageListener(chatListener,
+            new ChannelTopic("chat:room:2"));
+
+        // 불가피하게 패턴이 필요하면 최소화
+        // 패턴 1개: "chat:*" 하나로 모든 채팅 채널을 처리
+        container.addMessageListener(chatListener, new PatternTopic("chat:*"));
+        return container;
+    }
+}
+```
+
+```java
+// 패턴 구독 시 채널 정보를 pattern 파라미터로 받음
+@Component
+@Slf4j
+public class ChatListener implements MessageListener {
+
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        String channel = new String(message.getChannel());
+        String body = new String(message.getBody());
+
+        // pattern이 null이면 채널 구독(SUBSCRIBE)
+        // pattern에 값이 있으면 패턴 구독(PSUBSCRIBE)에서 온 메시지
+        if (pattern != null) {
+            log.debug("패턴 구독 수신 - pattern: {}, channel: {}",
+                new String(pattern), channel);
+        }
+
+        // 채널명에서 roomId 추출
+        // "chat:room:42" → "42"
+        String roomId = channel.replaceFirst("^chat:room:", "");
+        processMessage(roomId, body);
+    }
+
+    private void processMessage(String roomId, String body) {
+        // 처리 로직
+    }
+}
+```
+
+---
+
+## 6. Spring MessageListenerContainer 스레딩 모델
+
+`RedisMessageListenerContainer`가 내부적으로 어떻게 동작하는지 모르면 블로킹 버그를 만들기 쉽다.
+
+### 내부 스레드 구조
+
+```mermaid
+graph LR
+  RC[Redis 서버] --> ST[구독 전용 스레드\n1개 블로킹 read]
+  ST --> Q[내부 태스크 큐]
+  Q --> T1[워커 스레드 1]
+  Q --> T2[워커 스레드 2]
+  Q --> T3[워커 스레드 N]
+  T1 --> L[MessageListener\nonMessage]
+  T2 --> L
+  T3 --> L
+```
+
+- **구독 전용 스레드 1개**: Redis 연결을 유지하며 메시지가 올 때까지 블로킹 read 대기
+- **워커 스레드 풀**: `onMessage()` 콜백을 비동기로 실행
+
+구독 전용 스레드에서 직접 `onMessage()`를 실행하면 처리 중 다음 메시지를 받을 수 없다. 따라서 컨테이너는 메시지를 태스크 큐에 넣고 워커 스레드풀에서 처리한다.
+
+### 구독 생명주기와 재연결
+
+```java
+@Configuration
+public class RobustRedisConfig {
+
+    @Bean
+    public RedisMessageListenerContainer container(
+            RedisConnectionFactory factory) {
+
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(factory);
+
+        // 재연결 간격 설정 (기본값: 5000ms)
+        // 연결이 끊기면 이 간격으로 재연결을 시도한다
+        container.setRecoveryInterval(3000L);
+
+        // 구독 확인 대기 시간 (SUBSCRIBE 명령 후 확인 응답 대기)
+        container.setSubscriptionExecutor(Executors.newSingleThreadExecutor());
+
+        // 에러 핸들러: 재연결 시도 중 예외 처리
+        container.setErrorHandler(throwable -> {
+            if (throwable instanceof RedisConnectionFailureException) {
+                log.error("Redis 연결 실패. {}ms 후 재시도", 3000, throwable);
+            } else {
+                log.error("Pub/Sub 처리 중 예외", throwable);
+            }
+        });
+
+        return container;
+    }
+}
+```
+
+### 재연결 시 메시지 유실 탐지
+
+```java
+@Component
+@Slf4j
+public class ReconnectionAwareListener implements MessageListener,
+        ApplicationListener<RedisConnectionFailureEvent> {
+
+    private final AtomicLong lastReceivedTimestamp = new AtomicLong(System.currentTimeMillis());
+    private volatile boolean reconnected = false;
+
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        long now = System.currentTimeMillis();
+        long gap = now - lastReceivedTimestamp.get();
+
+        if (reconnected && gap > 5000) {
+            // 재연결 후 5초 이상 공백이 있었다면 그 사이 메시지가 유실됐을 가능성 높음
+            log.warn("재연결 후 {}ms 공백 탐지. 이 기간의 메시지가 유실됐을 수 있음", gap);
+            // 필요 시 DB에서 공백 기간 이벤트를 조회해 보완 처리
+            reconnected = false;
+        }
+
+        lastReceivedTimestamp.set(now);
+        processMessage(message);
+    }
+
+    @Override
+    public void onApplicationEvent(RedisConnectionFailureEvent event) {
+        reconnected = true;
+        log.warn("Redis 연결 끊김 탐지. 재구독 후 메시지 공백 가능성 있음");
+    }
+
+    private void processMessage(Message message) {
+        // 처리 로직
+    }
+}
+```
+
+---
+
+## 7. Redis Streams vs Pub/Sub — 언제 무엇을 선택하는가
+
+이 두 가지를 혼동하는 것이 가장 흔한 설계 실수다. 내부 구조부터 비교한다.
+
+### 내부 구조 차이
+
+**Pub/Sub**: 메시지 → 구독자 소켓 버퍼에 쓰고 끝. 메시지 자체는 어디에도 저장되지 않는다.
+
+**Streams**: 메시지 → Radix Tree로 구현된 로그 구조에 저장. 각 메시지는 `1234567890-0` 형태의 단조 증가 ID를 부여받는다. 영구히 조회 가능하다(명시적으로 삭제하거나 MAXLEN으로 자르지 않는 한).
+
+```mermaid
+graph LR
+  PUB[Pub/Sub] --> BUF[소켓 버퍼에 직접 씀]
+  BUF --> GONE[전달 즉시 소멸]
+  STR[Streams] --> LOG[Radix Tree 로그 저장]
+  LOG --> CG[Consumer Group\n오프셋 추적]
+  CG --> ACK[ACK 후 PEL에서 제거]
+```
+
+### 소비자 그룹과 ACK
+
+```java
+@Service
+@Slf4j
+public class OrderEventConsumer {
+
+    private final RedisTemplate<String, Object> redisTemplate;
+    private static final String STREAM_KEY = "orders:events";
+    private static final String GROUP_NAME = "order-processor";
+    private static final String CONSUMER_NAME = "instance-" +
+        InetAddress.getLocalHost().getHostName();
+
+    @PostConstruct
+    public void createGroupIfNotExists() {
+        try {
+            // Consumer Group이 없으면 생성. $ = 지금부터 새 메시지만 받겠다는 의미
+            redisTemplate.opsForStream()
+                .createGroup(STREAM_KEY, ReadOffset.lastConsumed(), GROUP_NAME);
+        } catch (RedisSystemException e) {
+            // BUSYGROUP: 이미 존재하는 그룹 → 무시
+            if (e.getMessage().contains("BUSYGROUP")) {
+                log.debug("Consumer group {} already exists", GROUP_NAME);
+            } else {
+                throw e;
+            }
+        }
+    }
+
+    @Scheduled(fixedDelay = 100)
+    public void consume() {
+        // > 는 "아직 다른 컨슈머에게 전달되지 않은 새 메시지"를 의미
+        List<MapRecord<String, Object, Object>> records =
+            redisTemplate.opsForStream().read(
+                Consumer.from(GROUP_NAME, CONSUMER_NAME),
+                StreamReadOptions.empty().count(50).block(Duration.ofMillis(50)),
+                StreamOffset.create(STREAM_KEY, ReadOffset.lastConsumed())
+            );
+
+        if (records == null || records.isEmpty()) return;
+
+        for (MapRecord<String, Object, Object> record : records) {
+            try {
+                processOrderEvent(record.getValue());
+                // 처리 성공 → ACK. PEL(Pending Entry List)에서 제거
+                redisTemplate.opsForStream()
+                    .acknowledge(STREAM_KEY, GROUP_NAME, record.getId());
+            } catch (Exception e) {
+                // 처리 실패 → ACK 하지 않음. PEL에 남아 재처리 가능
+                log.error("주문 이벤트 처리 실패 — id: {}", record.getId(), e);
+            }
+        }
+    }
+
+    // PEL 재처리: 일정 시간 이상 ACK되지 않은 메시지 재처리
+    @Scheduled(fixedDelay = 60_000)
+    public void recoverPendingMessages() {
+        // XAUTOCLAIM: 60초 이상 ACK되지 않은 메시지를 이 컨슈머가 가져옴
+        PendingMessages pending = redisTemplate.opsForStream()
+            .pending(STREAM_KEY, GROUP_NAME, Range.unbounded(), 100);
+
+        pending.forEach(message -> {
+            if (message.getElapsedTimeSinceLastDelivery().toSeconds() > 60) {
+                log.warn("미처리 메시지 재처리 시도 — id: {}", message.getId());
+                // 재처리 로직
+            }
+        });
+    }
+
+    private void processOrderEvent(Map<Object, Object> data) {
+        log.info("주문 이벤트 처리: {}", data);
+    }
+}
+```
+
+### 상세 비교표
+
+| 항목 | Redis Pub/Sub | Redis Streams |
+|------|--------------|--------------|
+| 메시지 저장 | 없음 (메모리 통과) | 있음 (Radix Tree) |
+| 전달 보장 | At-most-once | At-least-once |
+| 소비자 오프라인 | 메시지 영구 소멸 | PEL에 보관, 나중에 처리 |
+| ACK | 없음 | XACK로 명시적 확인 |
+| 재처리 | 불가 | 가능 (오프셋 기반) |
+| 소비자 그룹 | 없음 (모두 브로드캐스트) | 있음 (그룹 내 단일 처리) |
+| 브로드캐스트 | 기본 동작 | XREAD로 가능 (ACK 없는 팬아웃) |
+| 백프레셔 | 없음 (연결 끊김으로 표현) | MAXLEN으로 스트림 크기 제한 |
+| 메시지 이력 | 없음 | XRANGE로 조회 가능 |
+| 처리 지연 | 수 밀리초 | 수십 밀리초 (스케줄 폴링 방식) |
+| 설정 복잡도 | 낮음 | 중간 |
+
+### 선택 기준
+
+```
+메시지 유실 허용 + 즉각적 브로드캐스트 필요
+→ Redis Pub/Sub
+예: 채팅 실시간 전달, 로컬 캐시 무효화, 실시간 대시보드
+
+메시지 유실 불가 + 순서 보장 + 재처리 필요
+→ Redis Streams
+예: 주문 이벤트, 재고 차감, 결제 완료 통보
+
+대용량(초당 수십만) + 장기 보존 + 복잡한 소비자 토폴로지
+→ Apache Kafka
+예: 이벤트 소싱, 감사 로그, 데이터 파이프라인
+```
+
+---
+
+## 8. Keyspace Notifications — Redis 내부 이벤트 구독
+
+Redis 자체가 Publisher가 되는 기능이다. 키 생성, 삭제, 만료, 명령 실행 등의 내부 이벤트를 특정 채널로 자동 발행한다.
+
+### 활성화 방법
+
+```bash
+# redis.conf 또는 CONFIG SET으로 활성화
+# K: Keyspace 이벤트 (키 기준 채널)
+# E: Keyevent 이벤트 (이벤트 기준 채널)
+# x: 만료 이벤트
+# g: 일반 명령 (DEL, EXPIRE 등)
+# s: SET 명령
+# z: Sorted Set 명령
+# A: 모든 이벤트 (g$lszxedt의 별칭)
+config set notify-keyspace-events "KEx"
+
+# 만료 이벤트만 구독할 경우:
+config set notify-keyspace-events "Ex"
+```
+
+### 채널 이름 규칙
+
+```
+Keyspace 채널: __keyspace@{db}__:{key}
+→ 특정 키에 일어난 모든 이벤트 구독
+
+Keyevent 채널: __keyevent@{db}__:{event}
+→ 특정 이벤트가 일어난 모든 키 구독
+```
+
+예시:
+- `__keyevent@0__:expired` → DB 0에서 만료된 모든 키
+- `__keyspace@0__:session:user:42` → `session:user:42` 키에 일어나는 모든 이벤트
+
+### Spring에서 만료 이벤트 구독
+
+```java
+@Configuration
+public class KeyspaceNotificationConfig {
+
+    @Bean
+    public RedisMessageListenerContainer keyspaceContainer(
+            RedisConnectionFactory factory,
+            SessionExpiredListener sessionListener) {
+
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(factory);
+
+        // DB 0의 모든 만료 이벤트 구독
+        // notify-keyspace-events가 "Ex" 이상으로 설정되어 있어야 함
+        container.addMessageListener(
+            sessionListener,
+            new PatternTopic("__keyevent@0__:expired")
+        );
+
+        return container;
+    }
+}
+
+@Component
+@Slf4j
+@RequiredArgsConstructor
+public class SessionExpiredListener implements MessageListener {
+
+    private final SessionCleanupService cleanupService;
+
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        // message.getBody()에 만료된 키 이름이 들어옴
+        String expiredKey = new String(message.getBody());
+        log.info("키 만료 감지: {}", expiredKey);
+
+        // "session:user:42" 형태에서 userId 추출
+        if (expiredKey.startsWith("session:user:")) {
+            String userId = expiredKey.substring("session:user:".length());
+            // 세션 만료에 따른 후처리
+            cleanupService.handleSessionExpiry(Long.parseLong(userId));
+        }
+    }
+}
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class SessionCleanupService {
+
+    private final UserStatusRepository userStatusRepository;
+    private final NotificationService notificationService;
+
+    public void handleSessionExpiry(Long userId) {
+        // 세션 만료 시 사용자 상태를 오프라인으로 변경
+        userStatusRepository.setOffline(userId);
+        // 친구 목록에 오프라인 알림 전송
+        notificationService.notifyFriendsUserOffline(userId);
+        log.info("사용자 {} 세션 만료 처리 완료", userId);
+    }
+}
+```
+
+### Keyspace Notification의 한계
+
+**1) 성능 비용**: 모든 키 연산에 추가 PUBLISH가 발생한다. `notify-keyspace-events "KA"`(모든 이벤트)를 켜면 Redis 성능이 최대 30% 저하될 수 있다. 필요한 이벤트만 선택적으로 활성화한다.
+
+**2) Fire-and-Forget**: Keyspace Notification도 Pub/Sub 위에 구현되어 있다. 구독자가 없거나 처리 중 오류가 발생하면 이벤트가 유실된다. 만료 이벤트를 절대 놓치면 안 되는 로직에는 적합하지 않다.
+
+**3) 만료 이벤트의 비결정성**: `EXPIRE`로 TTL을 설정하면 Redis의 지연 삭제(lazy expiration) 때문에 실제 만료 이벤트가 설정 시간보다 늦게 발생할 수 있다. 정밀한 타이밍이 필요한 로직에는 사용하지 않는다.
+
+**4) 클러스터에서 노드별 독립**: 클러스터에서 각 노드는 자신의 키에 대한 Keyspace Notification만 발행한다. 모든 노드의 만료 이벤트를 받으려면 모든 노드에 구독해야 한다.
+
+---
+
+## 9. 클러스터 Pub/Sub — 왜 모든 노드에 브로드캐스트하는가
+
+Redis Cluster에서 Pub/Sub은 예상과 다르게 동작한다. 이것이 프로덕션에서 장애를 만드는 주요 원인이다.
+
+### 클러스터 Pub/Sub의 전파 방식
+
+Redis 6 이하에서 `PUBLISH`는 발행한 노드의 구독자에게만 전달된다. 다른 노드에 연결된 구독자는 받지 못한다.
+
+Redis 7.0 미만의 해결책은 모든 노드에 메시지를 브로드캐스트하는 것이다. `PUBLISH` 명령을 받은 노드가 클러스터 버스(gossip protocol)를 통해 다른 모든 노드에 메시지를 전달한다. 이것이 전통적인 클러스터 Pub/Sub의 동작 방식이다.
+
+```mermaid
+graph LR
+  PUB[PUBLISH 요청] --> N1[노드 1\n수신]
+  N1 --> N2[노드 2로\n클러스터 버스 전달]
+  N1 --> N3[노드 3으로\n클러스터 버스 전달]
+  N2 --> S2[노드 2의 구독자]
+  N3 --> S3[노드 3의 구독자]
+  N1 --> S1[노드 1의 구독자]
+```
+
+**문제**: 클러스터 노드가 많을수록 브로드캐스트 트래픽이 증가한다. 노드 30개 클러스터에서 초당 10,000 PUBLISH가 발생하면, 클러스터 버스에서 초당 300,000개의 메시지 전달이 발생한다. 네트워크 대역폭이 급격히 소모된다.
+
+### Sharded Pub/Sub (Redis 7.0+)
+
+Redis 7.0에서 도입된 Sharded Pub/Sub은 채널을 해시 슬롯에 할당해 특정 노드에서만 처리한다.
+
+```bash
+# Sharded Pub/Sub 명령어 (Redis 7.0+)
+SSUBSCRIBE chat:room1    # 샤딩된 구독
+SPUBLISH chat:room1 msg  # 샤딩된 발행
+SUNSUBSCRIBE chat:room1  # 샤딩된 구독 해제
+```
+
+동작 원리: `chat:room1`의 해시 슬롯을 계산해 해당 슬롯을 담당하는 노드에서만 Pub/Sub이 처리된다. 브로드캐스트가 없으므로 네트워크 트래픽이 O(nodes)에서 O(1)로 줄어든다.
+
+### Spring Lettuce로 클러스터 Pub/Sub 설정
+
+```java
+@Configuration
+public class ClusterRedisConfig {
+
+    @Bean
+    public LettuceConnectionFactory redisConnectionFactory() {
+        // 클러스터 설정
+        RedisClusterConfiguration clusterConfig = new RedisClusterConfiguration(
+            List.of("redis-node1:6379", "redis-node2:6380", "redis-node3:6381")
+        );
+
+        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
+            .clientOptions(ClusterClientOptions.builder()
+                // 클러스터에서 Pub/Sub 연결을 위한 설정
+                .topologyRefreshOptions(ClusterTopologyRefreshOptions.builder()
+                    .enablePeriodicRefresh(Duration.ofSeconds(30))
+                    .enableAllAdaptiveRefreshTriggers()
+                    .build())
+                .build())
+            .build();
+
+        return new LettuceConnectionFactory(clusterConfig, clientConfig);
+    }
+
+    @Bean
+    public RedisMessageListenerContainer clusterContainer(
+            RedisConnectionFactory factory,
+            MessageListener listener) {
+
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(factory);
+
+        // 클러스터에서 패턴 구독은 모든 노드에 구독을 등록한다
+        // 따라서 구독 전용 연결이 노드 수만큼 필요하다
+        container.addMessageListener(listener, new PatternTopic("chat:*"));
+
+        return container;
+    }
+}
+```
+
+### 클러스터에서의 실무 권장사항
+
+```
+옵션 1: Pub/Sub 전용 싱글 Redis 인스턴스
+  - Pub/Sub만 담당하는 비클러스터 Redis를 별도로 운영
+  - 데이터 저장은 클러스터, Pub/Sub은 싱글 인스턴스로 분리
+  - 가장 단순하고 예측 가능한 방법
+
+옵션 2: Redis 7.0+ Sharded Pub/Sub
+  - SSUBSCRIBE / SPUBLISH 사용
+  - 네트워크 효율적, 하지만 Spring Data Redis 지원 버전 확인 필요
+
+옵션 3: Redis Streams (클러스터 완전 지원)
+  - 키 기반으로 해시 슬롯에 자동 배치
+  - 클러스터와 완벽히 호환되는 영속성 있는 메시징
+```
+
+---
+
+## 10. 전체 Pub/Sub 동작 흐름 — Java/Spring 구현
+
+지금까지의 내용을 통합한 실제 서비스 구현이다. 채팅 서비스를 예시로 Publisher, Subscriber, 설정을 완성한다.
+
+### 설정
+
+```java
+@Configuration
+@EnableCaching
+public class RedisMessagingConfig {
+
+    @Value("${redis.host:localhost}")
+    private String redisHost;
+
+    @Value("${redis.port:6379}")
+    private int redisPort;
+
+    @Bean
+    public LettuceConnectionFactory redisConnectionFactory() {
+        RedisStandaloneConfiguration config =
+            new RedisStandaloneConfiguration(redisHost, redisPort);
+
+        // Lettuce 클라이언트 설정
+        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
+            .commandTimeout(Duration.ofSeconds(2))
+            .shutdownTimeout(Duration.ofMillis(100))
+            .build();
+
+        return new LettuceConnectionFactory(config, clientConfig);
+    }
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(
+            LettuceConnectionFactory factory) {
+
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(factory);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.afterPropertiesSet();
+        return template;
+    }
+
+    @Bean
+    public RedisTemplate<String, String> stringRedisTemplate(
+            LettuceConnectionFactory factory) {
+
+        StringRedisTemplate template = new StringRedisTemplate();
+        template.setConnectionFactory(factory);
+        return template;
+    }
+
+    @Bean
+    public RedisMessageListenerContainer messageListenerContainer(
+            LettuceConnectionFactory factory,
+            ChatMessageListener chatListener,
+            CacheInvalidationListener cacheListener) {
+
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(factory);
+        container.setRecoveryInterval(3000L);
+
+        // 워커 스레드풀: onMessage() 콜백 비동기 실행
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(8);
+        executor.setMaxPoolSize(32);
+        executor.setQueueCapacity(5000);
+        executor.setThreadNamePrefix("pubsub-worker-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        container.setTaskExecutor(executor);
+
+        container.setErrorHandler(e ->
+            log.error("Redis Pub/Sub 에러. 컨테이너가 재연결 시도: {}", e.getMessage(), e)
+        );
+
+        // 채팅 채널 패턴 구독
+        container.addMessageListener(chatListener, new PatternTopic("chat:*"));
+        // 캐시 무효화 채널 단일 구독
+        container.addMessageListener(cacheListener,
+            new ChannelTopic("cache:invalidate"));
 
         return container;
     }
@@ -125,26 +849,52 @@ public class RedisConfig {
 ```java
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ChatPublisher {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
-    public void publishMessage(String roomId, ChatMessage message) {
+    public void publishChatMessage(String roomId, ChatMessage message) {
         String channel = "chat:" + roomId;
+
         try {
-            // 메시지를 JSON 직렬화 후 발행
-            // convertAndSend는 내부적으로 직렬화를 처리한다
-            String messageJson = objectMapper.writeValueAsString(message);
-            redisTemplate.convertAndSend(channel, messageJson);
+            String payload = objectMapper.writeValueAsString(message);
+
+            // PUBLISH의 반환값: 이 메시지를 받은 구독자 수
+            // 0이면 아무도 수신하지 못한 것 → 로깅 또는 대체 처리
+            Long receiverCount = (Long) redisTemplate.execute(
+                (RedisCallback<Long>) connection ->
+                    connection.pubSubCommands().publish(
+                        channel.getBytes(StandardCharsets.UTF_8),
+                        payload.getBytes(StandardCharsets.UTF_8)
+                    )
+            );
+
+            if (receiverCount != null && receiverCount == 0) {
+                log.warn("메시지를 받은 구독자 없음 — channel: {}, message: {}",
+                    channel, message.getId());
+                // 유실 허용 불가라면 DB에 저장하거나 Stream으로 대체
+            }
+
+            meterRegistry.counter("pubsub.publish.total",
+                "channel_prefix", "chat").increment();
+            meterRegistry.gauge("pubsub.receivers", receiverCount != null ? receiverCount : 0);
+
         } catch (JsonProcessingException e) {
-            throw new MessagePublishException("메시지 직렬화 실패", e);
+            throw new IllegalArgumentException("메시지 직렬화 실패", e);
         }
+    }
+
+    // 캐시 무효화: 채널명으로 단순 문자열 발행
+    public void publishCacheInvalidation(String cacheKey) {
+        redisTemplate.convertAndSend("cache:invalidate", cacheKey);
     }
 }
 ```
 
-### Subscriber
+### Subscriber (채팅)
 
 ```java
 @Component
@@ -154,409 +904,408 @@ public class ChatMessageListener implements MessageListener {
 
     private final ObjectMapper objectMapper;
     private final SimpMessagingTemplate webSocketTemplate;
+    private final MeterRegistry meterRegistry;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        String channel = new String(message.getChannel());
-        String body    = new String(message.getBody());
+        String channel = new String(message.getChannel(), StandardCharsets.UTF_8);
+        String body = new String(message.getBody(), StandardCharsets.UTF_8);
+
+        Timer.Sample sample = Timer.start(meterRegistry);
 
         try {
             ChatMessage chatMessage = objectMapper.readValue(body, ChatMessage.class);
 
-            // 채널명에서 roomId 추출: "chat:room1" → "room1"
-            String roomId = channel.substring("chat:".length());
+            // "chat:room:42" → "room:42"
+            String roomPath = channel.substring("chat:".length());
 
-            // WebSocket으로 해당 방 사용자들에게 전달
-            webSocketTemplate.convertAndSend("/topic/chat/" + roomId, chatMessage);
+            // WebSocket 경로로 전달
+            // 이 서버에 연결된 해당 방 구독자에게만 실제로 전달됨
+            webSocketTemplate.convertAndSend("/topic/chat/" + roomPath, chatMessage);
+
+            sample.stop(meterRegistry.timer("pubsub.process.duration",
+                "channel_prefix", "chat"));
 
         } catch (JsonProcessingException e) {
             log.error("메시지 역직렬화 실패 — channel: {}, body: {}", channel, body, e);
+            meterRegistry.counter("pubsub.error.total", "reason", "deserialize").increment();
+        } catch (Exception e) {
+            log.error("메시지 처리 중 예외 — channel: {}", channel, e);
+            meterRegistry.counter("pubsub.error.total", "reason", "process").increment();
         }
     }
 }
 ```
 
----
-
-## 주요 활용 패턴
-
-### 1. 멀티 서버 채팅 — 가장 대표적인 사용 사례
-
-서버가 여러 대일 때 각 서버의 WebSocket 사용자들에게 메시지를 전달하는 문제를 해결한다:
-
-```mermaid
-sequenceDiagram
-    서버_1->>R: PUBLISH chat:room1
-    R->>서버_1: 브로드캐스트
-    R->>서버_2: 브로드캐스트
-    서버_1->>같은_방_사용자_C: WebSocket
-    서버_2->>사용자_B: WebSocket
-```
-
-사용자 A가 메시지를 보내면:
-1. 서버 1이 Redis에 `PUBLISH chat:room1 메시지`
-2. Redis가 `chat:room1` 구독자인 서버 1, 2, 3 모두에게 전달
-3. 각 서버가 자신에 연결된 WebSocket 사용자들에게 전달
-
-서버 수가 늘어도 코드 변경 없이 Redis Pub/Sub이 중계를 담당한다.
-
-### 2. 캐시 무효화 브로드캐스트
-
-상품 정보가 변경될 때 모든 서버의 로컬 캐시를 동시에 무효화한다:
+### Subscriber (캐시 무효화)
 
 ```java
-@Service
-public class ProductService {
-
-    @Transactional
-    public void updateProduct(Long productId, UpdateProductRequest request) {
-        // DB 업데이트
-        Product product = productRepository.findById(productId).orElseThrow();
-        product.update(request);
-
-        // 모든 서버의 로컬 캐시 무효화 신호 발행
-        // 이 메시지를 받은 모든 서버가 자신의 Caffeine/Guava 캐시를 지운다
-        redisTemplate.convertAndSend("cache:invalidate",
-            Map.of("type", "product", "id", productId));
-    }
-}
-
 @Component
+@RequiredArgsConstructor
+@Slf4j
 public class CacheInvalidationListener implements MessageListener {
-    private final Cache localCache;  // Caffeine, Guava 등
+
+    private final Cache<String, Object> localCache; // Caffeine L1 캐시
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        Map<String, Object> data = parseJson(message.getBody());
-        if ("product".equals(data.get("type"))) {
-            // 이 서버의 로컬 캐시에서 해당 상품 제거
-            localCache.invalidate("product:" + data.get("id"));
+        String cacheKey = new String(message.getBody(), StandardCharsets.UTF_8);
+        localCache.invalidate(cacheKey);
+        log.debug("L1 캐시 무효화: {}", cacheKey);
+    }
+}
+```
+
+---
+
+## 11. 운영 명령어와 모니터링
+
+```bash
+# 현재 구독 중인 채널 목록과 구독자 수 조회
+PUBSUB CHANNELS *
+PUBSUB NUMSUB chat:room1 chat:room2
+# 결과: chat:room1 → 5 (구독자 5개)
+
+# 패턴 구독 수 조회
+PUBSUB NUMPAT
+# 결과: 3 (패턴 구독이 3개 등록됨)
+
+# 특정 패턴과 일치하는 채널 조회
+PUBSUB CHANNELS "chat:*"
+
+# Sharded Pub/Sub (Redis 7.0+)
+PUBSUB SHARDCHANNELS *
+PUBSUB SHARDNUMSUB chat:room1
+
+# 클라이언트 출력 버퍼 상태 확인
+CLIENT LIST TYPE pubsub
+# omem 필드가 클라이언트의 현재 출력 버퍼 크기
+
+# Redis INFO로 전체 Pub/Sub 통계
+INFO stats
+# 결과에서 주목할 필드:
+# total_commands_processed
+# pubsub_channels: 현재 활성 채널 수
+# pubsub_patterns: 현재 패턴 구독 수
+```
+
+```java
+// Spring에서 PUBSUB 명령 실행
+@Component
+@RequiredArgsConstructor
+public class PubSubMonitor {
+
+    private final RedisTemplate<String, String> redisTemplate;
+
+    @Scheduled(fixedDelay = 60_000)
+    public void reportPubSubStatus() {
+        redisTemplate.execute((RedisCallback<Void>) connection -> {
+            // 활성 채널 수
+            Long channelCount = connection.pubSubCommands().pubSubNumPat();
+            log.info("현재 Pub/Sub 패턴 구독 수: {}", channelCount);
+
+            // 특정 채널 구독자 수 확인
+            Map<byte[], Long> subCounts = connection.pubSubCommands()
+                .pubSubNumSub("chat:room1".getBytes(), "chat:room2".getBytes());
+            subCounts.forEach((channel, count) ->
+                log.info("채널 {} 구독자: {}", new String(channel), count)
+            );
+
+            return null;
+        });
+    }
+}
+```
+
+---
+
+## 12. 면접 포인트 5가지
+
+### Q1. Redis Pub/Sub이 Fire-and-Forget인 이유는 무엇인가?
+
+**표면 답변**: 메시지를 저장하지 않아서 구독자가 없으면 유실된다.
+
+**깊은 답변**: Redis의 설계 철학 자체에서 온다. Redis는 메모리 내 연산 속도를 극대화하는 것이 목표다. 메시지를 저장하면 메모리가 필요하고, 얼마나 쌓일지 예측할 수 없다. ACK를 구현하면 미전달 메시지를 추적하는 상태 머신, 재전송 로직, 중복 제거가 필요해 복잡도가 폭발한다. Redis는 그 복잡도를 의도적으로 포기하고 Pub/Sub은 "지금 연결된 구독자에게 최대한 빠르게"라는 단일 책임에 집중했다. 영속성과 신뢰성이 필요하면 Redis Streams나 Kafka를 쓰라는 것이 Redis의 설계 입장이다.
+
+---
+
+### Q2. PSUBSCRIBE가 SUBSCRIBE보다 느린 이유는 무엇인가?
+
+**표면 답변**: 와일드카드 매칭 때문에 느리다.
+
+**깊은 답변**: 두 자료구조의 차이다. SUBSCRIBE는 `server.pubsub_channels` 딕셔너리에 채널명으로 O(1) 조회한다. PSUBSCRIBE는 `server.pubsub_patterns` 연결 리스트에 저장되며, PUBLISH가 발생할 때마다 이 리스트를 처음부터 끝까지 순회해 각 패턴과 glob 매칭을 수행한다. 패턴 N개, 초당 PUBLISH R회이면 초당 N×R번의 glob 매칭이 Redis의 단일 이벤트 루프를 점유한다. Redis는 싱글 스레드 이벤트 루프이므로 이 시간 동안 다른 명령이 지연된다. 패턴이 복잡할수록(백트래킹 발생) 단일 매칭 비용도 증가한다.
+
+---
+
+### Q3. 클라이언트 출력 버퍼 초과 시 어떤 일이 벌어지는가?
+
+**표면 답변**: Redis가 구독자 연결을 끊는다.
+
+**깊은 답변**: Redis는 각 구독자에게 전달할 메시지를 클라이언트 출력 버퍼에 쌓는다. 구독자의 처리 속도가 발행 속도보다 느리면 버퍼가 증가한다. `client-output-buffer-limit pubsub 32mb 8mb 60` 설정에서 버퍼가 32MB를 초과하거나 60초간 8MB 이상이면 Redis가 해당 연결을 강제 종료한다. 연결이 끊기면 재구독 전까지 발행된 메시지가 모두 유실된다. 버퍼 한계는 단일 구독자의 문제가 Redis 전체 메모리를 고갈시키는 것을 막는 안전장치다. 해결책은 구독자 처리 속도를 높이거나 (스레드풀 확장, 처리 로직 최적화) Redis Streams로 전환하는 것이다.
+
+---
+
+### Q4. Redis Cluster에서 Pub/Sub이 문제가 되는 이유는?
+
+**표면 답변**: 클러스터에서 Pub/Sub 메시지가 모든 노드에 전파되어 네트워크 부담이 크다.
+
+**깊은 답변**: 두 가지 문제가 있다. 첫째, Redis 6 이하에서 PUBLISH는 발행 노드의 구독자에게만 전달되므로 다른 노드에 연결된 구독자는 메시지를 받지 못한다. 이를 해결하려면 모든 노드에 브로드캐스트해야 하는데, 노드 수 × 트래픽만큼 클러스터 버스 부하가 증가한다. 30개 노드 클러스터에서 초당 10,000 PUBLISH면 클러스터 버스에서 30만 건의 내부 전달이 발생한다. 둘째, 키를 기반으로 슬롯을 결정하는 클러스터의 철학과 Pub/Sub의 채널 기반 라우팅이 충돌한다. Redis 7.0의 Sharded Pub/Sub(SSUBSCRIBE/SPUBLISH)이 이를 해결한다. 채널의 해시 슬롯에 해당하는 노드에서만 처리해 브로드캐스트를 제거한다.
+
+---
+
+### Q5. Keyspace Notification을 이용한 캐시 무효화의 한계는?
+
+**표면 답변**: Pub/Sub 위에 구현되어 있어서 유실 가능성이 있다.
+
+**깊은 답변**: 세 가지 한계가 있다. 첫째, Keyspace Notification 자체가 Pub/Sub 위에 구현되어 있어 Fire-and-Forget이다. 구독자가 없거나 버퍼 초과로 연결이 끊긴 상태에서 키가 만료되면 이벤트를 놓친다. 둘째, Redis의 지연 삭제(lazy expiration) 때문에 TTL이 정확히 만료되는 시점에 이벤트가 발생하지 않을 수 있다. Redis는 키를 읽으려 할 때 만료 여부를 확인하거나, 주기적인 능동 삭제 루틴에서 삭제한다. 접근되지 않는 키는 실제 만료 시간보다 늦게 삭제될 수 있다. 셋째, 모든 키 이벤트를 활성화하면 Redis CPU 부하가 최대 30% 증가한다. 캐시 무효화에 Keyspace Notification을 쓸 때는 "대부분 동작하지만 가끔 놓칠 수 있다"는 전제로 TTL 기반 보완책을 함께 설계해야 한다.
+
+---
+
+## 13. 극한 시나리오
+
+### 시나리오 1: 구독자 처리 지연 → 버퍼 폭발 → 메시지 대규모 유실
+
+**상황**: 쇼핑몰 블랙프라이데이. 초당 15,000건의 주문 알림이 발행된다. 알림 처리 서버의 처리 속도는 초당 4,000건이다. 처리 스레드는 외부 푸시 알림 API를 호출하는데, API 응답이 평소보다 느려졌다.
+
+**재현 순서**:
+1. 발행 속도(15,000/s) > 처리 속도(4,000/s) → 버퍼 초당 11,000건씩 증가
+2. 약 2분 후 버퍼가 8MB 초과 진입
+3. 60초간 8MB 이상 유지 → Redis가 알림 서버 연결 강제 종료
+4. 연결 종료 후 재구독까지 약 3초 (Spring container 재연결 간격)
+5. 이 3초 동안 발행된 45,000건 알림 영구 유실
+6. 재구독 후에도 처리 속도 문제가 해결되지 않아 반복 발생
+
+**대응 방법**:
+
+```java
+// 방법 1: Redis Streams로 전환 (근본 해결)
+@Service
+@Slf4j
+public class ReliableNotificationPublisher {
+
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    public void publishNotification(Notification notification) {
+        // Pub/Sub 대신 Stream에 쓰기
+        // 처리 속도와 무관하게 메시지는 Stream에 보존됨
+        StringRecord record = StreamRecords.string(
+            Map.of(
+                "userId", String.valueOf(notification.getUserId()),
+                "type", notification.getType(),
+                "payload", notification.getPayload()
+            )
+        ).withStreamKey("notifications:stream");
+
+        // MAXLEN으로 스트림 크기 제한 (메모리 관리)
+        redisTemplate.opsForStream().add(record);
+        redisTemplate.opsForStream().trim("notifications:stream",
+            StreamTrimOptions.maxlen(100_000));
+    }
+}
+
+// 방법 2: 버퍼 설정 조정 + 처리 스레드 확장 (임시 대응)
+// redis.conf
+// client-output-buffer-limit pubsub 256mb 64mb 120
+//
+// ThreadPoolTaskExecutor corePoolSize를 4 → 32로 확장
+// 단, 외부 API 병목이 근본 원인이므로 외부 API 타임아웃을 짧게 설정해야 함
+
+// 방법 3: 발행 속도 제한 (Circuit Breaker)
+@Component
+public class RateLimitedPublisher {
+
+    private final RateLimiter rateLimiter = RateLimiter.create(10_000); // 초당 10,000건
+
+    public void publish(String channel, Object message) {
+        if (!rateLimiter.tryAcquire()) {
+            // 초과분은 DB 큐에 저장해 나중에 처리
+            fallbackQueue.offer(new QueuedMessage(channel, message));
+            return;
+        }
+        redisTemplate.convertAndSend(channel, message);
+    }
+}
+```
+
+---
+
+### 시나리오 2: 클러스터 전환 후 일부 사용자 메시지 미수신
+
+**상황**: 단일 Redis에서 3노드 클러스터로 전환했다. 전환 직후 일부 채팅방에서 메시지를 받지 못하는 사용자가 산발적으로 발생한다. 재현이 불규칙하다.
+
+**원인 추적**:
+```bash
+# 어느 노드에 연결됐는지 확인
+redis-cli -p 6379 CLIENT INFO
+redis-cli -p 6380 CLIENT INFO
+redis-cli -p 6381 CLIENT INFO
+
+# 각 노드에서 구독자 수 확인
+redis-cli -p 6379 PUBSUB NUMSUB chat:room1
+redis-cli -p 6380 PUBSUB NUMSUB chat:room1
+redis-cli -p 6381 PUBSUB NUMSUB chat:room1
+# 결과: 노드 6379는 5명, 노드 6380은 3명, 노드 6381은 2명 구독
+# PUBLISH가 6379로만 가면 6380, 6381의 구독자는 못 받음
+```
+
+**해결**:
+```java
+// 해결책 1: Pub/Sub 전용 싱글 Redis 인스턴스 분리
+@Configuration
+public class SeparatedRedisConfig {
+
+    // 데이터 저장용: 클러스터
+    @Bean("clusterConnectionFactory")
+    public RedisConnectionFactory clusterConnectionFactory() {
+        RedisClusterConfiguration config = new RedisClusterConfiguration(
+            List.of("cluster-node1:6379", "cluster-node2:6380", "cluster-node3:6381")
+        );
+        return new LettuceConnectionFactory(config);
+    }
+
+    // Pub/Sub 전용: 싱글 인스턴스
+    @Bean("pubsubConnectionFactory")
+    public RedisConnectionFactory pubsubConnectionFactory() {
+        return new LettuceConnectionFactory(
+            new RedisStandaloneConfiguration("redis-pubsub.internal", 6379)
+        );
+    }
+
+    @Bean
+    public RedisMessageListenerContainer messageListenerContainer(
+            @Qualifier("pubsubConnectionFactory")
+            RedisConnectionFactory pubsubFactory,
+            MessageListener listener) {
+
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(pubsubFactory); // Pub/Sub은 싱글 인스턴스
+        container.addMessageListener(listener, new PatternTopic("chat:*"));
+        return container;
+    }
+}
+```
+
+---
+
+### 시나리오 3: 패턴 구독 누적으로 Redis CPU 100%
+
+**상황**: 마이크로서비스 각 팀이 독립적으로 `PSUBSCRIBE`를 등록하며 패턴이 200개로 누적됐다. 초당 50,000 PUBLISH가 발생하자 Redis CPU가 100%에 달해 모든 명령에 수십 ms 지연이 발생한다.
+
+**진단**:
+```bash
+PUBSUB NUMPAT
+# 결과: 200
+# 초당 50,000 PUBLISH × 200패턴 = 10,000,000번/초 glob 매칭
+# Redis 싱글 스레드가 전부 glob 매칭에 소비됨
+
+# CPU 프로파일링: redis-cli --latency-history
+redis-cli --latency-history -i 1
+# 지연이 수십 ms → 정상은 < 1ms
+```
+
+**해결**:
+```java
+// 패턴을 채널로 전환하는 마이그레이션
+
+// Before: 서비스마다 패턴 구독
+// PSUBSCRIBE order:*         (주문팀)
+// PSUBSCRIBE payment:*       (결제팀)
+// PSUBSCRIBE inventory:*     (재고팀)
+// ... 200개
+
+// After: 단일 이벤트 채널 + 메시지 내 타입으로 필터링
+@Component
+public class UnifiedEventListener implements MessageListener {
+
+    private final Map<String, EventHandler> handlers = new HashMap<>();
+
+    @PostConstruct
+    public void init() {
+        handlers.put("order.created", this::handleOrderCreated);
+        handlers.put("payment.completed", this::handlePaymentCompleted);
+        handlers.put("inventory.updated", this::handleInventoryUpdated);
+    }
+
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        // 채널: "events" (단일 채널, SUBSCRIBE 사용)
+        String body = new String(message.getBody(), StandardCharsets.UTF_8);
+
+        try {
+            EventEnvelope event = objectMapper.readValue(body, EventEnvelope.class);
+            // 메시지 내 type 필드로 라우팅 (O(1) 맵 조회)
+            EventHandler handler = handlers.get(event.getType());
+            if (handler != null) {
+                handler.handle(event);
+            }
+        } catch (Exception e) {
+            log.error("이벤트 처리 실패", e);
         }
     }
 }
+
+// 발행도 단일 채널로
+redisTemplate.convertAndSend("events",
+    new EventEnvelope("order.created", orderData));
 ```
 
-### 3. 실시간 알림
+결과: 패턴 200개 → 0개. SUBSCRIBE 1개. glob 매칭 0. CPU 100% → 15% 복귀.
+
+---
+
+## 14. 실수 패턴 정리
+
+### 실수 1: 유실되면 안 되는 이벤트에 Pub/Sub 사용
+
+결제 완료, 재고 차감, 포인트 적립을 Pub/Sub으로 발행한다. 구독자가 없거나 연결이 순단되면 이벤트가 영구 소멸한다. 이런 이벤트는 Redis Streams 또는 Kafka를 사용해야 한다.
+
+### 실수 2: SUBSCRIBE 상태에서 일반 명령 실행
 
 ```java
-// 주문 상태 변경 → 해당 사용자에게 실시간 알림
-// 사용자별 채널에 발행 → 해당 사용자가 연결된 서버만 처리
-redisTemplate.convertAndSend(
-    "notification:user:" + userId,
-    new OrderStatusChangedNotification(orderId, newStatus)
+// 잘못된 패턴: 구독에 사용한 연결으로 데이터 조회 시도
+// SUBSCRIBE 상태의 연결은 SUBSCRIBE/UNSUBSCRIBE/PING/QUIT만 허용
+// GET/SET/HGET 등을 실행하면 예외 발생
+
+// 올바른 패턴: Pub/Sub 전용 연결을 별도 관리
+// Spring의 RedisMessageListenerContainer가 내부적으로 분리 처리
+// 직접 연결을 관리한다면 Pub/Sub용 연결과 데이터용 연결을 구분해야 한다
+```
+
+### 실수 3: 클러스터에서 Pub/Sub이 "자동으로" 전파된다고 가정
+
+Redis Cluster에서 버전과 설정에 따라 다르게 동작한다. Redis 6 이하라면 발행 노드의 구독자에게만 전달된다. 반드시 운영 환경의 Redis 버전과 클러스터 Pub/Sub 동작을 검증해야 한다.
+
+### 실수 4: Keyspace Notification을 100% 신뢰
+
+`__keyevent@0__:expired` 이벤트를 구독해 만료된 세션을 처리한다. Redis의 지연 삭제로 이벤트가 늦거나 누락될 수 있다. 이벤트 기반 처리와 함께 주기적인 스캔을 병행해야 한다.
+
+### 실수 5: PUBLISH 반환값 무시
+
+```java
+// 반환값 0 = 아무도 받지 못한 메시지
+Long receiverCount = redisTemplate.execute(
+    (RedisCallback<Long>) conn ->
+        conn.pubSubCommands().publish(channel.getBytes(), payload.getBytes())
 );
+
+if (receiverCount == 0) {
+    // 구독자가 없다. 로깅, 알림, 또는 대체 저장 필요
+    log.warn("수신자 없음 - channel: {}", channel);
+}
 ```
 
 ---
 
-## 한계 — 쓰기 전에 알아야 할 것들
+## 15. 핵심 정리
 
-### 메시지 유실 (가장 중요)
-
-Redis Pub/Sub은 **At-most-once** 전달 보장이다. 메시지가 한 번도 안 가거나 한 번 가거나, "최소 한 번"은 보장하지 않는다.
-
-```mermaid
-sequenceDiagram
-    participant P as Publisher
-    participant R as Redis
-    participant S as Subscriber (잠깐 다운)
-    P->>R: PUBLISH news 중요한 소식
-    Note over S:  잠깐 다운
-    R-->>S: 전달 실패 아무도 없음
-    Note over R: 메시지 영구 소멸
-    Note over S: 재시작 후 구독 재개
-    Note over S: 다운 중 메시지는<br>영원히 받을 수 없음
-```
-
-유실이 발생하는 상황:
-- 구독자가 없을 때 발행된 메시지
-- 구독자가 네트워크 문제로 잠깐 끊겼을 때
-- Redis 서버 재시작
-
-### 그 외 한계
-
-| 한계 | 설명 |
+| 항목 | 내용 |
 |------|------|
-| 메시지 이력 없음 | 구독 전에 발행된 메시지는 조회 불가 |
-| ACK 없음 | 메시지가 실제로 처리됐는지 알 수 없음 |
-| 순서 보장 없음 | 네트워크 문제 시 순서가 뒤바뀔 수 있음 |
-
----
-
-## Redis Stream — Pub/Sub의 한계를 극복하는 대안
-
-Redis 5.0+의 Stream은 Pub/Sub에 영속성과 소비자 그룹을 추가한 Kafka-lite다.
-
-```bash
-# 메시지 발행 (저장됨)
-XADD mystream * event order_created orderId 12345
-
-# 소비자 그룹 생성 (오프셋 기반)
-XGROUP CREATE mystream mygroup $ MKSTREAM
-
-# ACK 기반 소비 (처리 확인)
-XREADGROUP GROUP mygroup consumer1 COUNT 10 STREAMS mystream >
-XACK mystream mygroup <message-id>
-```
-
----
-
-## Kafka/RabbitMQ와 언제 무엇을 쓰는가
-
-| 항목 | Redis Pub/Sub | Redis Stream | Apache Kafka | RabbitMQ |
-|------|-------------|------------|------------|--------|
-| 메시지 영속성 | 없음 | 있음 | 있음 (디스크) | 있음 |
-| 전달 보장 | At-most-once | At-least-once | At-least-once | At-least-once |
-| 메시지 재처리 | 불가 | 가능 (오프셋) | 가능 (오프셋) | 불가 (기본) |
-| 복잡도 | 낮음 | 낮음 | 높음 | 보통 |
-| 구독자 오프라인 | 메시지 유실 | 나중에 수신 | 나중에 수신 | 큐에 보관 |
-| 처리량 | 매우 빠름 | 빠름 | 대용량 최적화 | 보통 |
-
-**선택 기준**:
-- 실시간 브로드캐스트, 약간의 유실 허용 → **Redis Pub/Sub** (채팅, 캐시 무효화)
-- 유실 불가, 나중에 재처리 필요 → **Redis Stream** (소규모), **Kafka** (대규모)
-- 작업 큐, 이메일 발송 → **RabbitMQ**
-
-채팅 시스템이라면: Redis Pub/Sub으로 실시간 전달 + DB에도 저장해 이력 조회를 분리하는 방식이 실용적이다.
-
----
-
-## 정리
-
-| 항목 | 핵심 |
-|------|------|
-| 전달 보장 | At-most-once — 유실 가능 |
-| 주요 용도 | 멀티 서버 채팅, 캐시 무효화, 실시간 알림 |
-| 한계 | 메시지 저장 없음, ACK 없음, 구독 전 메시지 조회 불가 |
-| 유실이 치명적이면 | Redis Stream 또는 Kafka로 전환 |
-
----
-
-## 왜 Redis Pub/Sub인가? (vs Redis Stream vs Kafka)
-
-| 방식 | 메시지 보존 | 소비자 그룹 | 오프셋 재처리 | 적합한 용도 |
-|------|-------------|-------------|---------------|-------------|
-| **Redis Pub/Sub** | 없음(휘발) | 없음(브로드캐스트) | 불가 | 실시간 알림, 캐시 무효화, 채팅 |
-| **Redis Stream** | 있음(설정 가능) | 있음(Consumer Group) | 가능 | 경량 이벤트 큐, at-least-once 처리 |
-| **Kafka** | 있음(장기) | 있음 | 가능(임의 오프셋) | 대용량, 이벤트 소싱, 감사 로그 |
-
-**실무 판단**: 메시지 유실이 허용되고 실시간성이 중요하면 Pub/Sub. 유실 불가 + Redis만 쓰고 싶으면 Stream. 대용량·장기 보존·복잡한 소비자 관리가 필요하면 Kafka.
-
----
-
-## 실무에서 자주 하는 실수
-
-**실수 1: 유실되면 안 되는 이벤트에 Pub/Sub 사용**
-결제 완료 이벤트, 재고 차감 이벤트를 Pub/Sub으로 발행한다. 구독자가 없거나 네트워크 순단이 발생하면 메시지가 영구 유실된다. 유실 불가 이벤트는 Redis Stream 또는 Kafka를 사용해야 한다.
-
-**실수 2: 구독자가 느려서 버퍼 오버플로우**
-Redis 서버는 각 구독자에게 보낼 메시지를 버퍼링한다. 구독자가 처리 속도보다 메시지가 빠르게 들어오면 `client-output-buffer-limit pubsub`을 초과해 Redis가 강제로 구독 연결을 끊는다. 소비자 처리 속도를 높이거나 Stream으로 전환해야 한다.
-
-**실수 3: 패턴 구독(PSUBSCRIBE) 과다 사용**
-`PSUBSCRIBE event.*`처럼 와일드카드 구독을 남발하면 모든 메시지에 대해 패턴 매칭 연산이 발생한다. 구독자 수와 패턴 수에 비례해 CPU를 소비한다. 정확한 채널명을 사용하는 `SUBSCRIBE`가 성능상 유리하다.
-
-**실수 4: Pub/Sub 채널을 상태 저장소로 오해**
-채널에 발행된 메시지는 저장되지 않는다. 구독 시점 이전에 발행된 메시지는 조회 불가다. 이벤트 히스토리가 필요하면 별도 List나 Stream에 저장해야 한다.
-
-**실수 5: 다중 Redis 노드 환경에서 Pub/Sub 동작 오해**
-Redis Cluster에서 Pub/Sub 메시지는 전체 클러스터가 아닌 단일 노드에서만 전파된다. 여러 앱 서버가 서로 다른 클러스터 노드에 연결되어 있으면 일부 구독자가 메시지를 못 받는다. Cluster에서는 모든 노드에 PUBLISH하거나 Keyspace notification + Stream 조합을 사용해야 한다.
-
----
-
-## 핵심 메트릭
-
-| 메트릭 | 정상 기준 | 이상 신호 | 원인 가설 |
-|--------|---------|---------|---------|
-| 구독자 수 (`PUBSUB NUMSUB channel`) | 서버 대수와 일치 | 0 또는 급감 | 구독 연결 끊김, 서버 재시작 후 재구독 미완료 |
-| 메시지 유실율 (발행 수 - 수신 수) | 0 | 증가 | 구독자 다운, output buffer 초과로 연결 끊김 |
-| 채널당 메시지/초 | 처리 용량 이하 | 처리 용량 초과 | 구독자 처리 속도 < 발행 속도 |
-| output buffer 사용량 | 낮음 | `client-output-buffer-limit` 근접 | 구독자 처리 지연, 네트워크 병목 |
-| 패턴 구독 수 (`PUBSUB NUMPAT`) | 최소화 | 수십 개 이상 | PSUBSCRIBE 남발로 매 메시지마다 패턴 매칭 비용 |
-| 구독 전용 연결 수 | 서버 × 채널 수 | 비정상 증가 | 구독 후 UNSUBSCRIBE 미호출, 연결 누수 |
-
-## 실제 장애 사례
-
-### 사례 1: 구독자 처리 지연으로 output buffer 폭발 후 연결 끊김
-
-**상황**: 실시간 주문 알림 시스템에서 주문 폭주 기간 동안 초당 10,000건 메시지가 발행됐다. 구독자(알림 서버)의 처리 속도는 초당 3,000건이었다. 수 분 후 Redis가 구독자 연결을 강제로 끊었고, 그 이후 발행된 메시지가 전부 유실됐다.
-
-**근본 원인**: Redis는 각 구독자에게 전달할 메시지를 output buffer에 쌓는다. `client-output-buffer-limit pubsub 32mb 8mb 60`(기본값) 설정에 따라 buffer가 32MB를 초과하거나 60초간 8MB 이상 유지되면 Redis가 해당 연결을 강제 종료한다. 연결이 끊긴 후 재구독 전까지 발행된 메시지는 영구 유실됐다.
-
-**해결책**:
-- Pub/Sub에서 Redis Stream으로 전환(Consumer Group으로 처리 속도 따라가지 못해도 유실 없음)
-- 구독자 수평 확장으로 처리 용량 증가
-- `client-output-buffer-limit pubsub 0 0 0`으로 buffer 무제한 설정(메모리 주의)
-
-**교훈**: 구독자 처리 속도가 발행 속도를 따라가지 못하면 유실이 아닌 연결 종료로 이어진다. 유실 불가 시나리오는 Pub/Sub을 쓰면 안 된다.
-
----
-
-### 사례 2: 클러스터 환경에서 일부 서버의 메시지 미수신
-
-**상황**: Redis Cluster 3노드로 전환 후 일부 채팅 사용자가 메시지를 받지 못하는 문제가 산발적으로 발생했다. 앱 서버 6대 중 2대가 클러스터의 다른 노드에 연결되어 있었고, 그 노드로는 PUBLISH가 전파되지 않았다.
-
-**근본 원인**: Redis Cluster에서 PUBLISH는 기본적으로 발행한 노드와 그 노드에 연결된 구독자에게만 전달된다. Cluster 전체 브로드캐스트가 되려면 `cluster-announce-pubsub yes`(Redis 7.0+) 설정이 필요하다.
-
-**해결책**:
-- Redis 7.0+ 업그레이드 후 `cluster-announce-pubsub yes` 설정 적용
-- 단기 조치: 모든 앱 서버를 동일한 클러스터 노드에 연결하도록 고정
-- 근본 해결: Pub/Sub 전용 싱글 Redis 인스턴스를 별도로 운영
-
-**교훈**: Redis Cluster에서 Pub/Sub은 단일 노드 범위에서만 동작한다. 클러스터와 Pub/Sub을 함께 쓰려면 Redis 버전과 설정을 반드시 확인해야 한다.
-
----
-
-### 사례 3: 패턴 구독 과다로 CPU 급등
-
-**상황**: 이벤트 타입별로 `PSUBSCRIBE event:order:*`, `PSUBSCRIBE event:payment:*`, `PSUBSCRIBE event:notification:*` 등 50개 패턴 구독이 등록됐다. 초당 100,000건 메시지가 발행될 때 Redis CPU가 90%를 넘어섰다.
-
-**근본 원인**: PSUBSCRIBE는 메시지가 발행될 때마다 등록된 모든 패턴과 glob 매칭을 수행한다. 패턴 50개 × 초당 100,000건 = 초당 5,000,000번의 패턴 매칭 연산이 발생했다.
-
-**해결책**:
-- PSUBSCRIBE를 SUBSCRIBE로 교체하고 채널을 명확히 구분
-- 메시지 내 이벤트 타입 필드로 구독자가 직접 필터링
-- 불가피한 경우 패턴 수를 한 자리 수로 최소화
-
-**교훈**: PSUBSCRIBE는 편리하지만 고트래픽 환경에서 CPU 병목의 숨겨진 원인이 된다.
-
----
-
-## 면접 포인트
-
-**Q1. Redis Pub/Sub과 Redis Stream의 가장 큰 차이는?**
-Pub/Sub은 Fire-and-forget 방식으로 메시지를 저장하지 않는다. 구독자가 없거나 오프라인이면 메시지가 유실된다. Stream은 메시지를 로그로 저장하고 Consumer Group이 ACK 기반으로 처리 확인을 한다. 재처리와 장애 복구가 가능하다.
-
-**Q2. 캐시 무효화에 Pub/Sub을 어떻게 활용하는가?**
-DB 변경 시 `PUBLISH cache:invalidate "user:123"` 발행 → 모든 앱 서버의 로컬 캐시 구독자가 메시지를 받아 해당 키를 로컬 캐시에서 제거한다. 메시지 유실 시 오래된 캐시가 TTL까지 살아있을 수 있지만, 캐시 무효화는 유실 허용이 가능한 유스케이스다.
-
-**Q3. SUBSCRIBE 상태에서 다른 명령을 실행할 수 있는가?**
-`SUBSCRIBE` 상태의 연결은 `SUBSCRIBE`, `UNSUBSCRIBE`, `PSUBSCRIBE`, `PUNSUBSCRIBE`, `PING`, `RESET`, `QUIT` 명령만 허용된다. 일반 GET/SET은 불가하다. 따라서 Pub/Sub 전용 연결을 별도로 관리해야 한다.
-
-**Q4. Keyspace Notification이란?**
-Redis 내부 이벤트(SET, DEL, EXPIRE 등)를 자동으로 특정 채널에 발행하는 기능이다. `notify-keyspace-events`로 활성화한다. TTL 만료 이벤트(`__keyevent@0__:expired`)를 구독해 만료된 키에 후속 처리를 하는 패턴에서 활용한다.
-
-**Q5. 실시간 채팅 구현 시 Redis Pub/Sub의 한계는?**
-① 메시지 저장 없음 — 접속 전 메시지 조회 불가 → 별도 히스토리 DB 필요 ② 대화 상대 오프라인 시 메시지 유실 → 푸시 알림 + 저장 필요 ③ 대규모 채널(수십만 구독자)에서 메모리/CPU 부담. 실무에서는 Pub/Sub을 실시간 전달에만 쓰고, 히스토리는 RDBMS나 MongoDB에 따로 저장한다.
-
----
-## 극한 시나리오
-
-### 시나리오 1: 멀티 인스턴스 캐시 무효화 — 10대 서버 L1 캐시 동기화
-
-상품 가격이 변경됩니다. 10대 서버 각각의 로컬(L1) 캐시를 즉시 무효화해야 합니다.
-
-```java
-// 가격 변경 시 Pub/Sub으로 전체 서버 L1 캐시 무효화
-@Service
-@RequiredArgsConstructor
-public class ProductCacheInvalidationService {
-    private final RedisTemplate<String, String> redisTemplate;
-    private final Cache<Long, Product> localCache;  // Caffeine L1 캐시
-
-    // 발행: 가격 변경 이벤트
-    public void invalidateProduct(Long productId) {
-        // L2(Redis) 무효화
-        redisTemplate.delete("product:" + productId);
-        // 전체 서버 L1 무효화 요청 발행
-        redisTemplate.convertAndSend("cache:invalidate:product", productId.toString());
-        // 발행 레이턴시: < 1ms
-    }
-
-    // 구독: 모든 서버 인스턴스에서 실행
-    @Bean
-    public MessageListenerAdapter cacheInvalidationListener() {
-        return new MessageListenerAdapter(new MessageListener() {
-            @Override
-            public void onMessage(Message message, byte[] pattern) {
-                Long productId = Long.parseLong(new String(message.getBody()));
-                localCache.invalidate(productId);
-                log.debug("L1 캐시 무효화: productId={}", productId);
-            }
-        });
-    }
-}
-// 결과: 가격 변경 후 < 5ms 내 전체 10대 서버의 L1 캐시 무효화
-// DB 불일치 기간 0.1초 미만 (Pub/Sub 전파 시간)
-```
-
-**Pub/Sub 없이 처리할 경우:**
-- L1 TTL(30초) 만료를 기다려야 함 → 최대 30초간 잘못된 가격 표시
-- 가격 인하 지연 표시는 사용자 신뢰 훼손, 가격 인상 지연 표시는 손해
-
-### 시나리오 2: 실시간 채팅 — Redis Pub/Sub으로 WebSocket 서버 간 메시지 라우팅
-
-```
-문제: 사용자 A(서버1 WebSocket 연결), 사용자 B(서버2 WebSocket 연결)
-사용자 A가 B에게 메시지 전송 → 서버1이 서버2에게 전달해야 함
-```
-
-```java
-@Component
-@RequiredArgsConstructor
-public class ChatMessageBroker {
-    private final RedisTemplate<String, ChatMessage> redisTemplate;
-    private final WebSocketSessionRegistry sessionRegistry;
-
-    // 메시지 발송: 어느 서버에 B가 연결됐는지 몰라도 됨
-    public void sendMessage(ChatMessage message) {
-        // 채팅방 채널에 발행
-        redisTemplate.convertAndSend("chat:room:" + message.getRoomId(), message);
-        // 모든 서버가 구독 중이므로 B가 연결된 서버가 수신
-    }
-
-    // 구독: 모든 서버에서 실행, 자신에게 연결된 사용자에게만 전달
-    @RedisListener(topic = "chat:room:*")
-    public void onChatMessage(ChatMessage message, String channel) {
-        String roomId = channel.replace("chat:room:", "");
-        // 이 서버에 연결된 해당 채팅방 사용자에게만 WebSocket 전송
-        sessionRegistry.getSessionsInRoom(roomId)
-            .forEach(session -> session.sendMessage(message));
-    }
-}
-// 수치: 채팅방당 구독자 수에 무관하게 O(1) 발행
-// 단, 수신자가 오프라인이면 메시지 유실 (Pub/Sub 특성)
-```
-
-### 시나리오 3: Redis Pub/Sub 메시지 유실 — 구독자가 없을 때
-
-```
-시나리오: 서버 배포로 구독자가 30초간 없음
-이 동안 발행된 알림 메시지 100건 → 전부 유실
-재연결 후 구독자가 없으므로 수신 불가
-```
-
-**Redis Stream으로 전환 (메시지 영속성 보장):**
-```java
-// Pub/Sub 대신 Stream 사용 (Consumer Group으로 정확히 한 번 처리)
-@Service
-public class ReliableNotificationService {
-
-    // 발행: Stream에 영속
-    public void publish(Notification notification) {
-        redisTemplate.opsForStream().add(
-            StreamRecords.newRecord()
-                .ofObject(notification)
-                .withStreamKey("notifications")
-        );
-        // 메시지가 Redis Stream에 저장됨 → 구독자 없어도 유실 없음
-    }
-
-    // 소비: Consumer Group으로 정확히 한 번 처리
-    @Scheduled(fixedDelay = 100)
-    public void consumeNotifications() {
-        List<MapRecord<String, Object, Object>> messages =
-            redisTemplate.opsForStream().read(
-                Consumer.from("notification-service", "instance-1"),
-                StreamReadOptions.empty().count(100),
-                StreamOffset.create("notifications", ReadOffset.lastConsumed())
-            );
-        messages.forEach(record -> {
-            processNotification(record);
-            redisTemplate.opsForStream().acknowledge("notifications",
-                "notification-service", record.getId());  // 처리 확인
-        });
-    }
-}
-// Pub/Sub: 발행 즉시 구독자에게 전달, 영속 없음
-// Stream: DB처럼 영속, Consumer Group으로 중복 없이 처리, 재처리 가능
-```
+| 내부 자료구조 | pubsub_channels 딕셔너리 (O(1)) + pubsub_patterns 연결 리스트 (O(N)) |
+| 전달 보장 | At-most-once (저장 없음, ACK 없음) |
+| 메시지 유실 경로 | 구독자 없음, 구독자 크래시, 클라이언트 출력 버퍼 초과 |
+| 버퍼 기본 설정 | 32MB hard limit, 8MB/60초 soft limit |
+| PSUBSCRIBE 비용 | O(N) 패턴 순회 × glob 매칭, 남발 시 CPU 병목 |
+| 클러스터 주의 | Redis 6 이하는 단일 노드 범위, 7.0+ Sharded Pub/Sub으로 해결 |
+| Keyspace Notification | Pub/Sub 위에 구현, 지연 삭제로 이벤트 지연 가능 |
+| Streams와 차이 | Pub/Sub = 즉각 브로드캐스트 휘발, Streams = 영속 ACK 재처리 |
+| 선택 기준 | 유실 허용 실시간 브로드캐스트 → Pub/Sub, 유실 불가 → Streams/Kafka |
