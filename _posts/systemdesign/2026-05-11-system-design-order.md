@@ -1,5 +1,5 @@
 ---
-title: "주문 시스템 설계 — 초당 만 건의 주문을 정확하게 처리하는 아키텍처"
+title: "주문 시스템 설계 — WHY로 시작하는 초당 만 건 처리 아키텍처"
 categories:
 - SYSTEMDESIGN
 toc: true
@@ -7,728 +7,1439 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-> **한 줄 요약**: 주문 시스템의 핵심은 상태 머신으로 주문 흐름을 제어하고, Saga 패턴으로 분산 트랜잭션을 보상하며, CQRS로 읽기·쓰기 부하를 분리하는 것이다.
-
-## 실제 문제: 대규모 할인 행사 당일의 주문 시스템 장애
-
-2023년 11월 국내 A 커머스 플랫폼의 자정 직후, 초당 주문이 평소의 30배로 치솟으면서 주문 서비스가 단속적으로 장애를 일으켰습니다. 일부 사용자는 결제가 됐는데 주문이 안 보이고, 일부는 품절 상품 주문에 성공했습니다. **주문 생성, 재고 차감, 결제 요청이 단일 동기 트랜잭션으로 묶여 피크 트래픽에서 DB 락 경합이 폭발했기 때문**입니다.
-
-이 시스템들이 공통으로 풀어야 하는 문제:
-
-- **주문 유실 방지**: 결제는 됐는데 주문이 안 생기는 사태
-- **재고 초과 판매**: 재고 1개에 주문 3건이 들어오는 동시성 문제
-- **주문 상태 불일치**: 사용자가 보는 상태와 실제 처리 상태가 다른 경우
+> **한 줄 요약**: 시니어는 "무엇을 쓰느냐"가 아니라 "왜 쓰느냐"를 설명한다. MySQL을 고른 이유, Saga를 고른 이유, CQRS를 고른 이유 — 모든 결정에 WHY가 있어야 면접을 통과한다.
 
 ---
 
-## 설계 의사결정 로드맵
+## 실제 사고 (Incident): 블프 자정, 30분 만에 503
 
-### 결정 1: 주문 상태 관리 — 상태 컬럼 vs 상태 머신 vs 이벤트 소싱
+2023년 11월 블랙프라이데이 자정. 평소 35 QPS이던 주문이 순식간에 10,000 QPS로 폭증했습니다. 30분 뒤 서비스 전체가 503을 반환했고, "결제됐는데 주문이 없다"는 CS 신고가 폭주했습니다.
 
-**문제**: 주문은 생성부터 배송 완료까지 10개 이상의 상태를 거칩니다. 잘못된 전이(취소된 주문의 배송 처리)를 어떻게 막는가?
+**장애의 진짜 원인 세 가지**
 
-| 후보 | 장점 | 단점 | 언제 적합 |
-|------|------|------|----------|
-| 상태 컬럼 UPDATE | 구현 단순, 현재 상태 O(1) | 잘못된 전이 방어 없음, 이력 추적 불가 | 상태 2~3개 단순 시스템 |
-| 상태 머신 (FSM) | 허용된 전이만 실행, 전이 이벤트 발행 | 설계 비용, 상태 증가 시 복잡도 | 커머스·예약처럼 복잡한 흐름 |
-| 이벤트 소싱 | 전체 이력 추적, 시점 복원 가능 | 구현 복잡도 매우 높음, 조회 시 스냅샷 필요 | 금융·감사 요구 극히 엄격한 경우 |
+첫째, `@Transactional` 안에서 PG사 HTTP API를 동기 호출하고 있었습니다. PG사 응답이 피크 시 200ms에서 8초로 늘어나자 DB 커넥션 풀 200개가 전부 PG 응답 대기에 묶였습니다. 새 요청은 커넥션조차 얻지 못하고 큐에 쌓이다 타임아웃됐습니다.
 
-**우리의 선택: 상태 머신 (FSM)**
+둘째, 주문·결제·재고가 단일 DB 트랜잭션으로 묶여 있어 락 경합이 선형이 아닌 지수 함수로 증가했습니다.
 
-- 취소된 주문에 배송 처리가 들어오는 버그를 코드 레벨에서 원천 차단합니다.
-- 상태 전이 시 이벤트를 발행하므로 다운스트림 서비스(알림·포인트·배송)가 자동 처리됩니다.
-- **안 하면**: 서비스가 성장하면서 `order.setStatus("COMPLETED")`를 여기저기 호출하고, 결국 어디서 상태를 바꾸는지 아무도 모르는 코드가 됩니다.
+셋째, 재고 선점에 TTL이 없어 결제를 이탈한 사용자의 선점이 영구 유지됐습니다. 재고 100개 중 70개가 잠긴 채 품절로 표시됐습니다.
 
-### 결정 2: 분산 트랜잭션 — 동기식 vs Saga vs Outbox
-
-**문제**: 주문 → 결제 → 재고 → 배송이 서로 다른 마이크로서비스에 있을 때, 결제는 성공했는데 재고 차감이 실패하면?
-
-| 후보 | 장점 | 단점 | 언제 적합 |
-|------|------|------|----------|
-| 단일 동기 트랜잭션 | 구현 단순, ACID 보장 | 서비스 간 강결합, 외부 API 포함 불가 | 모놀리스, 서비스 1~2개 |
-| Saga (코레오그래피) | 서비스 독립, 락 없음, 높은 TPS | 보상 트랜잭션 직접 구현, 중간 상태 노출 | 마이크로서비스 3개 이상 |
-| Transactional Outbox | DB 트랜잭션과 이벤트 발행 원자성 보장 | 폴러 추가 운영, 최종 일관성 | 이벤트 유실 절대 안 되는 경우 |
-
-**우리의 선택: Saga + Transactional Outbox 조합**
-
-- 결제 서비스는 외부 PG사 HTTP API를 호출하므로 DB 트랜잭션에 묶을 수 없습니다.
-- Saga는 각 서비스가 로컬 트랜잭션만 처리하고 실패 시 보상 트랜잭션으로 롤백합니다.
-- Outbox 패턴은 "DB 저장 성공 후 Kafka 발행 실패" 문제를 해결합니다.
-- **안 하면**: 블프 피크에 결제 서버 응답 대기로 주문 서버 스레드 풀 전체가 블로킹되고, 신규 주문이 타임아웃됩니다.
-
-### 결정 3: 주문번호 생성 — AUTO_INCREMENT vs UUID vs Snowflake
-
-**문제**: 초당 1만 건의 주문을 여러 서버에서 동시에 생성할 때, 전역 유일한 주문번호를 어떻게 생성하는가?
-
-| 후보 | 장점 | 단점 | 언제 적합 |
-|------|------|------|----------|
-| AUTO_INCREMENT | 단순, 정렬 가능 | 단일 DB 병목, 경쟁사에 건수 노출 | 단일 DB, 소규모 |
-| UUID v4 | 분산 생성 가능, 충돌 없음 | 비정렬로 인덱스 단편화, 고객이 외우기 불가 | 내부 식별자로만 사용 |
-| Snowflake ID | 64비트, 시간순 정렬, 분산 생성 | 서버 간 시계 동기화 필요 | 대규모 분산 시스템 |
-
-**우리의 선택: Snowflake ID (내부) + 가독성 주문번호 (외부) 이중 구조**
-
-- Snowflake ID를 PK로 사용하면 시간순 INSERT로 B-Tree 단편화가 없고 DB 없이 분산 생성됩니다.
-- 고객 노출용은 `20260511-A1B2C3` 형태로 별도 생성합니다.
-- **안 하면**: UUID를 PK로 쓰면 피크 시 INSERT가 랜덤 위치에 들어가 초당 1만 건 피크에서 주문 테이블 INSERT가 2~3배 느려집니다.
-
-### 결정 4: 주문 데이터 저장 — 단일 RDB vs CQRS vs 이벤트 스토어
-
-**문제**: 주문 생성(쓰기)은 트랜잭션 안전성, 목록 조회(읽기)는 필터·정렬·페이지네이션이 필요합니다.
-
-| 후보 | 장점 | 단점 | 언제 적합 |
-|------|------|------|----------|
-| 단일 RDB | 구현 단순, 강한 일관성 | 읽기·쓰기 부하 경합 | 초기 단계, 소규모 |
-| CQRS (읽기/쓰기 분리) | 읽기·쓰기 독립 확장 | 구현 복잡도, 최종 일관성 | 읽기 > 쓰기 비율 높은 경우 |
-| 이벤트 스토어 | 완전한 이력, Replay 가능 | 운영 복잡도 매우 높음 | 감사·복원이 핵심인 금융 |
-
-**우리의 선택: CQRS — MySQL(쓰기) + Elasticsearch(읽기)**
-
-- 주문 생성·상태 업데이트는 MySQL 트랜잭션으로 처리하고, 목록 조회·검색·통계는 Elasticsearch에서 처리합니다.
-- 읽기:쓰기 비율이 100:1이므로 읽기를 독립 확장하면 비용 대비 효율이 큽니다.
-- **안 하면**: 날짜별·상태별 필터 쿼리의 Full Scan이 주문 생성 트랜잭션과 DB 자원을 두고 경합해 블프 피크에 쓰기 TPS가 절반으로 떨어집니다.
+이 글은 이 세 가지 문제를 "왜 그 방법으로 해결해야 하는가"를 중심으로 주문 시스템 전체를 설계합니다.
 
 ---
 
-## 1. 요구사항 분석 및 규모 추정
+## 1. 요구사항 분석 — 면접의 첫 번째 채점 항목
 
-### 기능 요구사항
+"주문 시스템이요? 네, 바로 설계하겠습니다"라고 하면 탈락입니다. 시니어 면접관이 가장 먼저 보는 것은 요구사항을 스스로 도출하는 능력입니다.
 
-1. **주문 생성**: 장바구니 확정, 쿠폰 적용, 배송지 선택 후 주문 접수
-2. **주문 조회**: 주문 상세, 목록 (날짜·상태 필터, 페이지네이션)
-3. **주문 취소**: 결제 전·후 취소, 부분 취소, 환불 연동
-4. **주문 상태 추적**: 접수 → 결제 → 상품 준비 → 배송 중 → 완료
-5. **재고 연동**: 주문 시 재고 선점(reserve), 취소 시 반환
-6. **알림**: 주문 상태 변경 시 푸시·문자 발송
+### 1-1. 기능 요구사항
 
-### 비기능 요구사항
+면접에서 반드시 확인해야 할 질문들과 함께 정리합니다.
 
-- **가용성**: 99.99% — 주문 불가는 매출 직결 손실
-- **지연시간**: 주문 생성 P99 1초 이내, 목록 조회 200ms 이내
-- **일관성**: 재고 초과 판매 절대 불가
-- **확장성**: 블프 피크 평소의 30배 트래픽을 자동 확장으로 처리
+| 기능 | 상세 | 면접에서 반드시 확인할 것 |
+|------|------|--------------------------|
+| **주문 생성** | 장바구니 확정 → 쿠폰 적용 → 배송지 선택 → 주문 접수 | 부분 주문 가능한가? 비회원 주문인가? |
+| **주문 취소** | 결제 전 즉시 취소, 결제 후 환불 요청, 부분 취소 | 취소 가능 시간 제한이 있는가? |
+| **환불 처리** | PG사 환불 요청 → 주문 상태 REFUNDED 전이 | 즉시 환불인가, 영업일 기준인가? |
+| **주문 이력** | 날짜·상태 필터, 페이지네이션, 상세 조회 | 얼마나 오래된 데이터까지 조회하는가? |
+| **상태 추적** | 접수 → 결제 → 상품 준비 → 배송 중 → 완료 | 실시간 배송 위치 추적이 필요한가? |
+| **재고 연동** | 주문 시 선점(reserve), 취소 시 반환, 결제 완료 시 확정 | 재고 0 시 대기열을 받는가? |
+| **장바구니** | 상품 추가·삭제·수량 변경, 세션 유지 | 로그인 전 장바구니가 로그인 후에 합쳐지는가? |
 
-### 규모 추정
+### 1-2. 비기능 요구사항 — 숫자에 이유가 있어야 한다
+
+**가용성 목표: 99.99% — 왜 99.9%가 아닌가**
+
+주문 불가는 매출 직결 손실입니다. 99.9%는 연간 8.7시간 다운을 허용합니다. 블프 당일 8시간 장애는 수백억 원 손실입니다. 99.99%는 연간 52분입니다. "왜 99.99%인가"를 설명 못 하면 숫자를 외운 것으로 보입니다.
+
+**일관성: 재고 초과 판매 절대 불가 — 왜 최종 일관성이 아닌가**
+
+"최종 일관성이면 괜찮지 않나요?"라고 답하면 탈락입니다. 재고 1개에 주문 2건이 들어오면 1건은 반드시 실패해야 합니다. 결제 금액, 재고 수량 같은 금융 데이터는 Strong Consistency가 필수입니다.
+
+**지연시간 목표**
+
+| 작업 | 목표 | 왜 이 수치인가 |
+|------|------|----------------|
+| 주문 생성 P99 | 1초 이내 | 결제 버튼 후 1초 초과 시 이탈률 급증. 심리학적 임계점 |
+| 주문 목록 조회 P99 | 200ms 이내 | 200ms 초과 시 사용자가 느리다고 인지 |
+| 재고 확인 | 50ms 이내 | 상품 상세 페이지 동기 호출. 초과 시 렌더링 지연 |
+| 장바구니 응답 | 30ms 이내 | 클릭 즉시 피드백이어야 UX 충족 |
+
+---
+
+## 2. 규모 추정 — 숫자 없이 설계하면 감각이 없는 것
+
+규모 추정을 생략하면 "그냥 스케일 아웃하면 되지"라는 사고로 보입니다. 구체적인 수치가 DB 샤딩 시점, 캐시 용량, 서버 대수를 결정합니다.
+
+### 2-1. 주문량 추정
 
 ```
-일일 주문: 300만 건/일
-평균 QPS = 300만 / 86,400 ≈ 35 QPS
-피크 QPS = 35 × 30 ≈ 1,050 QPS
+가정: MAU 500만, 구매 전환율 2%/월, 평균 주문 2회/월
+일일 주문 = 500만 × 2% × 2회 / 30일 ≈ 6,700건/일
 
-데이터 용량:
-  - 주문 1건: 헤더(1KB) + 상품 평균 3개(0.5KB) = 2.5KB
-  - 연간: 7.5GB × 365 = 2.7TB
-  - 5년 보관: 40TB (이벤트 로그 포함)
+대형 커머스 가정: 300만 건/일
+평균 QPS = 3,000,000 / 86,400 ≈ 35 QPS
 
-읽기 부하:
-  - 주문 조회 QPS: 쓰기의 100배 → 피크 105,000 QPS
-  - → Elasticsearch 클러스터 + 읽기 캐시 필수
+피크 배율:
+  점심 12~13시, 저녁 20~22시 → 평균의 5배 → 175 QPS
+  블프 자정 → 평균의 300배 → 10,500 QPS
+
+중요한 인사이트:
+  Auto Scaling 반응 속도 = 2~5분
+  트래픽 상승 속도 = 초 단위
+  → 계획된 이벤트는 반드시 사전 증설. Auto Scaling 믿으면 장애
+```
+
+### 2-2. 저장 용량 추정
+
+```
+주문 1건 용량:
+  orders 헤더: user_id, status, total_amount, coupon_id, addr ≈ 500B
+  order_items (평균 3개): product_id, quantity, unit_price ≈ 450B
+  order_outbox: event payload JSON ≈ 500B
+  order_status_history: 평균 5번 전이 × 100B ≈ 500B
+  합계: 약 2KB/건
+
+연간 용량 = 3,000,000건 × 365일 × 2KB ≈ 2.2TB/년
+5년 보관 (법적 요건) = 11TB + 인덱스 오버헤드 30% ≈ 14TB
+
+MySQL 단일 서버 권장 한계: 2~3TB
+→ 5년 내 샤딩 또는 아카이빙 전략 필요
+```
+
+### 2-3. 읽기/쓰기 비율 — CQRS 필요성의 근거
+
+```
+쓰기 QPS (피크): 10,500 (주문 생성 + 상태 업데이트)
+읽기 QPS (피크): 주문 목록 조회 = 주문 생성의 50배 가정
+  → 10,500 × 50 = 525,000 QPS
+
+읽기 : 쓰기 = 50 : 1
+
+이 비율이 CQRS 도입의 근거입니다.
+읽기와 쓰기를 같은 MySQL에서 처리하면
+쓰기 트랜잭션 락과 읽기 풀 테이블 스캔이 Buffer Pool을 두고 경합합니다.
+결과: 피크 시 주문 생성 TPS가 절반으로 떨어집니다.
+```
+
+### 2-4. 캐시 용량 추정
+
+```
+활성 사용자 장바구니 (Redis):
+  동시 활성 사용자 = MAU 500만 × 10% ≈ 50만
+  장바구니 1개 = 평균 5개 상품 × 50B ≈ 250B
+  총 = 50만 × 250B ≈ 125MB → Redis 단일 인스턴스로 충분
+
+재고 선점 (Redis):
+  초당 10,500건 × 선점 유효 시간 15분 = 9,450,000개 키
+  키 1개 ≈ 100B → 약 945MB ≈ 1GB
 ```
 
 ---
 
-## 2. 고수준 아키텍처
+## 3. DB 선택 — WHY가 없으면 암기에 불과하다
 
-> **비유:** 주문 시스템은 음식점 주방과 같습니다. 손님(사용자)이 홀 직원(API Gateway)에게 주문을 넣으면, 계산대(Payment Service)가 결제하고, 창고(Inventory Service)에서 재료를 꺼내며, 배달부(Delivery Service)에게 넘깁니다. 각 파트는 주방표(이벤트)로 소통합니다.
+"주문에는 MySQL, 장바구니는 Redis, 검색은 ES"를 외우면 안 됩니다. 왜 그 선택인지 설명해야 합니다.
+
+### 3-1. WHY MySQL for Orders — ACID = 돈 보호
+
+주문과 결제는 돈이 오가는 트랜잭션입니다. ACID의 각 속성이 왜 필요한지 구체적으로 설명해야 합니다.
+
+**Atomicity (원자성) — 반쪽 주문 방지**
+
+주문 헤더 INSERT + 주문 상품 INSERT + Outbox INSERT가 하나의 단위로 성공하거나 전부 실패해야 합니다. 헤더만 저장되고 상품 목록이 저장 안 된 주문이 존재하면 CS 악몽입니다. MongoDB 단일 문서 트랜잭션은 문서 간 원자성을 보장하지 않습니다.
+
+**Consistency (일관성) — 재고 음수 방지**
+
+재고 차감 후 재고가 음수가 되면 DB 제약 조건이 즉시 거부해야 합니다. NoSQL은 스키마 없이 어떤 값도 저장 가능하므로 이 보호가 없습니다. 애플리케이션에서 검증하면 동시성 버그로 초과 판매가 발생합니다.
+
+**Isolation (격리성) — 동시 주문 충돌 방지**
+
+재고 1개에 두 명이 동시에 주문할 때 낙관적 락(version 컬럼)으로 한 명만 성공해야 합니다. MySQL InnoDB의 MVCC가 이것을 처리합니다. DynamoDB의 Conditional Writes로도 구현 가능하지만 복잡도가 높습니다.
+
+**Durability (내구성) — 결제 후 서버 죽어도 주문 유지**
+
+결제 완료 후 서버가 죽어도 주문이 사라지면 안 됩니다. MySQL InnoDB WAL(Write-Ahead Log)이 이것을 보장합니다. Redis는 기본적으로 메모리 기반이라 AOF를 켜도 최대 1초 데이터 손실 가능성이 있습니다.
+
+**왜 MongoDB, DynamoDB를 안 쓰는가**
+
+- 다중 문서 트랜잭션이 RDB보다 제한적이고 성능 오버헤드가 크다
+- 재고 초과 판매 방지 동시성 제어를 애플리케이션 레이어에서 직접 구현해야 한다
+- 스키마 강제가 없어 데이터 정합성을 코드로 보장해야 한다
+- 결론: 돈 관련 트랜잭션에는 ACID를 DB가 보장해주는 RDB가 맞다
+
+### 3-2. WHY Redis for Cart — 임시·빠름·TTL
+
+장바구니에 MySQL을 쓰면 안 되는 이유가 구체적으로 있습니다.
+
+**임시 데이터 — 버려질 데이터를 영구 저장소에 쓰지 않는다**
+
+장바구니의 70%는 주문으로 전환되지 않고 버려집니다. 525,000 QPS 읽기 부하를 이미 감당해야 하는 MySQL에 버려질 데이터 쓰기까지 추가하는 것은 낭비입니다.
+
+**빈번한 업데이트 — write-heavy에 RDBMS 오버스펙**
+
+상품 추가, 수량 변경, 삭제가 페이지 방문마다 발생합니다. 이런 패턴에 MySQL B-Tree 인덱스 갱신은 불필요한 오버헤드입니다.
+
+**빠른 읽기 — 1ms vs 2ms**
+
+Redis는 메모리 기반이라 1ms 이내 응답이 가능합니다. 장바구니 표시를 위해 매 페이지 로드마다 MySQL 쿼리를 실행하면 30ms 목표 달성이 어렵습니다.
+
+**TTL 자연 지원 — 배치 잡 없이 만료**
+
+30일 미사용 장바구니는 자동 만료됩니다. MySQL에서 구현하려면 배치 잡이 필요하고, 피크 시간에 DELETE 배치가 쓰기 락 경합을 일으킵니다.
+
+```java
+@Service
+@RequiredArgsConstructor
+public class CartService {
+
+    private final RedisTemplate<String, String> redisTemplate;
+    private static final Duration CART_TTL = Duration.ofDays(30);
+
+    /**
+     * WHY Hash: 상품별 독립 업데이트가 가능하다.
+     * String 타입으로 전체 장바구니를 직렬화하면 동시 수정 시 덮어쓰기 발생.
+     * Hash는 필드 단위 원자적 업데이트 (HSET)가 가능하다.
+     */
+    public void addItem(Long userId, Long productId, int quantity) {
+        String key = "cart:" + userId;
+        HashOperations<String, String, String> ops = redisTemplate.opsForHash();
+        ops.put(key, String.valueOf(productId), String.valueOf(quantity));
+        redisTemplate.expire(key, CART_TTL);
+    }
+
+    public Map<Long, Integer> getCart(Long userId) {
+        String key = "cart:" + userId;
+        Map<Object, Object> raw = redisTemplate.opsForHash().entries(key);
+        return raw.entrySet().stream().collect(
+            Collectors.toMap(
+                e -> Long.valueOf((String) e.getKey()),
+                e -> Integer.valueOf((String) e.getValue())
+            )
+        );
+    }
+
+    /**
+     * 주문 완료 시 장바구니를 즉시 삭제.
+     * WHY 즉시 삭제: TTL까지 기다리면 사용자가 결제한 상품이 장바구니에 남아
+     * 중복 주문을 유도하는 UX 버그가 된다.
+     */
+    public void clearCart(Long userId) {
+        redisTemplate.delete("cart:" + userId);
+    }
+
+    /**
+     * 비회원 → 회원 전환 시 장바구니 합산.
+     * WHY 필요: 로그인 전 담은 상품이 사라지면 전환율 하락.
+     */
+    public void mergeCart(String guestSessionId, Long userId) {
+        String guestKey = "cart:guest:" + guestSessionId;
+        String userKey = "cart:" + userId;
+        Map<Object, Object> guestCart = redisTemplate.opsForHash().entries(guestKey);
+        if (!guestCart.isEmpty()) {
+            redisTemplate.opsForHash().putAll(userKey, guestCart);
+            redisTemplate.expire(userKey, CART_TTL);
+            redisTemplate.delete(guestKey);
+        }
+    }
+}
+```
+
+### 3-3. WHY Elasticsearch for Order History — 검색·필터·집계
+
+주문 목록 조회 쿼리가 왜 MySQL에서 문제가 되는지 구체적으로 봅니다.
+
+```sql
+-- 이 쿼리가 피크 시 525,000 QPS로 MySQL에 들어오면?
+SELECT * FROM orders
+WHERE user_id = ?
+  AND status IN ('PAID', 'PREPARING', 'SHIPPED')
+  AND created_at BETWEEN ? AND ?
+  AND total_amount >= ?
+ORDER BY created_at DESC
+LIMIT 20 OFFSET ?;
+```
+
+인덱스를 (user_id, status, created_at, total_amount) 순서로 걸어도 이 쿼리는 주문 INSERT가 폭증하는 피크 시간에 같은 테이블을 공유합니다. MySQL Buffer Pool이 읽기 데이터로 가득 차면 쓰기 쿼리의 인덱스 캐시가 밀려납니다.
+
+**Elasticsearch가 적합한 구체적 이유**
+
+- **역인덱스(Inverted Index)**: 복합 필터가 MySQL Full Scan보다 10~100배 빠름
+- **수평 샤딩 내장**: 읽기 샤드를 독립적으로 증설 가능. MySQL Read Replica는 전체 데이터를 복제하므로 저장 비용이 선형 증가
+- **집계(Aggregation)**: 월별 주문 금액 합계, 카테고리별 주문 수 통계가 MySQL GROUP BY보다 빠름
+- **쓰기 DB 완전 격리**: MySQL 쓰기 부하와 읽기 부하가 물리적으로 분리
+
+**Elasticsearch의 단점과 대응**
+
+| 단점 | 발생 시점 | 대응 |
+|------|-----------|------|
+| 최종 일관성 | 주문 직후 목록에 즉시 반영 안 될 수 있음 | 주문 직후 상세 조회는 MySQL, 목록은 ES (CQRS) |
+| ES 장애 | ES 클러스터 다운 | MySQL Read Replica Fallback 구현 |
+| 데이터 동기화 | Outbox 지연 시 ES 데이터 stale | 보정 배치 주 1회 실행 |
+
+---
+
+## 4. 핵심 설계 결정 — WHY를 설명 못 하면 암기다
+
+### 결정 1: WHY 이벤트 드리븐 — 동기 호출의 지수 함수 장애 전파
+
+동기 호출로 설계했을 때 어떻게 되는지 먼저 봅니다.
+
+```
+[동기 호출 체인]
+주문서비스 → HTTP → 결제서비스 → HTTP → 재고서비스 → HTTP → 배송서비스
+
+문제 1: 결제서비스 응답이 8초로 늘면 주문서비스 스레드가 8초 블로킹
+문제 2: 재고서비스 장애 → 주문 생성 자체가 실패 (직접 결합)
+문제 3: 배송서비스 배포 중 → 주문 생성 불가
+문제 4: 가용성 = 0.99 × 0.99 × 0.99 = 0.97 (각 서비스 99%이면 전체는 97%)
+문제 5: 주문서비스가 결제·재고·배송 API 스펙을 모두 알아야 함 (강결합)
+```
+
+이벤트 드리븐으로 바꾸면 이 문제가 전부 해결됩니다.
+
+```mermaid
+graph LR
+    A[주문서비스] -->|OrderCreated| B[Kafka]
+    B --> C[결제서비스]
+    B --> D[재고서비스]
+    C -->|PaymentDone| B
+    D -->|StockReserved| B
+```
+
+**느슨한 결합**: 주문서비스는 Kafka에 이벤트만 발행합니다. 결제서비스가 몇 대인지, 어떤 API를 가지는지 알 필요가 없습니다. 포인트 적립 서비스를 추가할 때 주문서비스 코드를 수정하지 않습니다.
+
+**장애 격리**: 재고서비스가 다운되어도 주문서비스는 계속 동작합니다. Kafka가 이벤트를 보관하고 재고서비스가 복구되면 자동 처리합니다.
+
+**백프레셔**: 결제서비스가 처리할 수 있는 속도로만 이벤트를 소비합니다. 동기 호출이었다면 결제서비스가 느릴 때 주문서비스 스레드가 전부 대기 상태가 됩니다.
+
+**Outbox Pattern — WHY Kafka 직접 발행이 아닌가**
+
+이벤트 드리븐에서 가장 흔한 실수는 DB 커밋과 Kafka 발행을 별개로 하는 것입니다.
+
+```java
+// 위험한 코드: DB 커밋 후 Kafka 발행 사이에 서버 재시작 시 이벤트 유실
+@Transactional
+public void createOrder(CreateOrderCommand cmd) {
+    orderRepo.save(order);
+    // 여기서 서버가 죽으면? DB에는 주문이 있는데 Kafka에는 이벤트 없음
+    kafka.send("order.created", event); // 이벤트 유실
+}
+```
+
+Outbox Pattern으로 해결합니다.
+
+```java
+// 안전한 코드: DB 트랜잭션 안에 이벤트를 함께 저장
+@Transactional
+public OrderResult createOrder(CreateOrderCommand cmd) {
+    Order order = Order.create(cmd);
+    orderRepo.save(order);
+
+    // WHY: orders와 order_outbox가 같은 트랜잭션.
+    // 주문 저장 성공 = 이벤트 저장 성공. 원자성 보장.
+    OrderOutbox outbox = OrderOutbox.builder()
+        .aggregateId(order.getId())
+        .eventType("ORDER_CREATED")
+        .payload(toJson(OrderCreatedEvent.from(order)))
+        .published(false)
+        .build();
+    outboxRepo.save(outbox);
+
+    return OrderResult.from(order);
+}
+```
+
+별도 Outbox Relay가 미발행 이벤트를 Kafka에 발행합니다.
+
+```java
+@Component
+@RequiredArgsConstructor
+public class OutboxRelay {
+
+    private final OrderOutboxRepository outboxRepo;
+    private final KafkaTemplate<String, String> kafka;
+
+    /**
+     * WHY @Scheduled + 폴링: CDC (Debezium)가 더 나은 대안이지만
+     * 운영 복잡도가 높다. 초기에는 폴링으로 시작하고,
+     * 지연이 문제가 될 때 CDC로 전환하는 것이 현실적이다.
+     */
+    @Scheduled(fixedDelay = 100) // 100ms 폴링
+    @Transactional
+    public void relay() {
+        List<OrderOutbox> pending = outboxRepo
+            .findTop100ByPublishedFalseOrderByCreatedAtAsc();
+
+        for (OrderOutbox outbox : pending) {
+            try {
+                kafka.send(toTopic(outbox.getEventType()),
+                    String.valueOf(outbox.getAggregateId()),
+                    outbox.getPayload()).get(5, TimeUnit.SECONDS);
+                outbox.markPublished();
+                outboxRepo.save(outbox);
+            } catch (Exception e) {
+                log.error("Outbox relay failed for id={}", outbox.getId(), e);
+                // 실패 시 다음 폴링에서 재시도 (published=false 유지)
+            }
+        }
+    }
+
+    private String toTopic(String eventType) {
+        return switch (eventType) {
+            case "ORDER_CREATED" -> "order.created";
+            case "ORDER_CANCELLED" -> "order.cancelled";
+            case "ORDER_STATUS_CHANGED" -> "order.status.changed";
+            default -> throw new IllegalArgumentException("Unknown event type: " + eventType);
+        };
+    }
+}
+```
+
+### 결정 2: WHY Saga not 2PC — 분산 락 없이 분산 트랜잭션
+
+2PC(Two-Phase Commit)가 왜 마이크로서비스에 부적합한지 설명할 수 있어야 합니다.
+
+**2PC의 근본 문제**
+
+2PC Coordinator가 PREPARE를 보낸 후 응답을 기다리는 동안 참여자들은 모두 리소스를 잠금 상태로 유지합니다.
+
+- 결제서비스는 외부 PG사 HTTP API를 호출합니다. PG사는 DB 트랜잭션에 참여할 수 없습니다. 2PC 프로토콜을 지원하는 PG사는 없습니다.
+- Coordinator 장애 시 참여자들이 무한정 락을 유지합니다. 해결 방법이 없습니다.
+- 마이크로서비스 간 네트워크는 신뢰할 수 없습니다. PREPARE 후 응답이 오지 않으면 처리할 방법이 없습니다.
+- 참여자 수가 늘수록 잠금 시간이 길어져 TPS가 선형 감소합니다.
+
+**Saga가 해결하는 방법**
+
+Saga는 각 서비스가 로컬 트랜잭션만 실행하고, 실패 시 보상 트랜잭션(Compensating Transaction)으로 역방향 롤백합니다. 전역 락이 없으므로 블로킹이 없습니다.
+
+```
+[정상 흐름 - Choreography 방식]
+주문서비스   : ORDER(PENDING) 저장 + OrderCreated 발행
+결제서비스   : OrderCreated 수신 → PG사 결제 → PaymentCompleted 발행
+재고서비스   : PaymentCompleted 수신 → 재고 확정 → StockConfirmed 발행
+배송서비스   : StockConfirmed 수신 → 배송 스케줄 등록
+
+[실패 보상 흐름 - 결제 실패 시]
+결제서비스   : PG사 실패 → PaymentFailed 발행
+재고서비스   : PaymentFailed 수신 → 재고 선점 해제 (보상 트랜잭션)
+주문서비스   : PaymentFailed 수신 → ORDER 상태 PAYMENT_FAILED 전이 (보상)
+알림서비스   : PaymentFailed 수신 → 사용자에게 결제 실패 알림
+```
+
+**Choreography vs Orchestration — 왜 Choreography를 선택하는가**
+
+| 구분 | Choreography | Orchestration |
+|------|--------------|---------------|
+| 방식 | 각 서비스가 이벤트 보고 스스로 판단 | 중앙 조율자가 각 서비스에 명령 |
+| 장점 | 서비스 독립성 높음, 조율자 없음 | 전체 흐름 한 곳에서 파악 가능 |
+| 단점 | 전체 흐름 추적 어려움 | 조율자가 단일 장애점, Temporal 같은 엔진 필요 |
+| 선택 기준 | 서비스 3~5개, 선형 흐름 | 서비스 5개 이상, 복잡한 분기 로직 |
+
+주문 플로우(주문→결제→재고→배송)는 선형이고 분기가 단순합니다. Choreography로 충분합니다. Orchestration은 운영 복잡도가 높아 초기에 선택하면 과설계입니다.
+
+```java
+@Service
+@RequiredArgsConstructor
+public class PaymentSagaParticipant {
+
+    private final PgGateway pgGateway;
+    private final KafkaTemplate<String, Object> kafka;
+    private final PaymentRepository paymentRepo;
+
+    @KafkaListener(topics = "order.created", groupId = "payment-service")
+    @Transactional
+    public void handleOrderCreated(OrderCreatedEvent event) {
+        // WHY 멱등성 체크: Kafka at-least-once 보장으로 중복 수신 가능
+        // 이미 처리한 주문이면 PG사 재호출 없이 리턴
+        if (paymentRepo.existsByOrderId(event.getOrderId())) {
+            return;
+        }
+
+        try {
+            PaymentResult result = pgGateway.requestPayment(
+                event.getOrderId(),
+                event.getTotalAmount(),
+                event.getIdempotencyKey()
+            );
+
+            Payment payment = Payment.builder()
+                .orderId(event.getOrderId())
+                .amount(event.getTotalAmount())
+                .pgTxId(result.getTxId())
+                .status(result.isSuccess()
+                    ? PaymentStatus.COMPLETED
+                    : PaymentStatus.FAILED)
+                .build();
+            paymentRepo.save(payment);
+
+            String topic = result.isSuccess()
+                ? "payment.completed"
+                : "payment.failed";
+
+            Object outEvent = result.isSuccess()
+                ? new PaymentCompletedEvent(event.getOrderId(), result.getTxId())
+                : new PaymentFailedEvent(event.getOrderId(), result.getFailReason());
+
+            kafka.send(topic, String.valueOf(event.getOrderId()), outEvent);
+
+        } catch (PgTimeoutException e) {
+            // WHY 타임아웃 별도 처리: 타임아웃은 결제 성공/실패 미확정
+            // 즉시 실패로 처리하면 실제로 성공한 결제가 취소될 수 있음
+            // 멱등키로 PG에 결과 재조회 스케줄
+            scheduleResultInquiry(event.getOrderId(), event.getIdempotencyKey());
+        }
+    }
+
+    // 보상 트랜잭션: 주문 취소 시 결제 환불
+    @KafkaListener(topics = "order.cancelled", groupId = "payment-service")
+    @Transactional
+    public void handleOrderCancelled(OrderCancelledEvent event) {
+        paymentRepo.findByOrderId(event.getOrderId())
+            .filter(p -> p.getStatus() == PaymentStatus.COMPLETED)
+            .ifPresent(payment -> {
+                RefundResult refund = pgGateway.refund(
+                    payment.getPgTxId(),
+                    payment.getAmount(),
+                    event.getCancelReason()
+                );
+                payment.refund(refund.getRefundTxId());
+                paymentRepo.save(payment);
+                kafka.send("payment.refunded",
+                    String.valueOf(event.getOrderId()),
+                    new PaymentRefundedEvent(event.getOrderId(), refund.getRefundTxId()));
+            });
+    }
+}
+```
+
+### 결정 3: WHY 멱등키 — 네트워크는 언제든 죽는다
+
+결제 API에서 중복 호출이 발생하면 어떻게 되는지 구체적으로 봅니다.
+
+**중복 결제 발생 시나리오**
+
+```
+1. 클라이언트가 결제 요청을 보냄
+2. 서버가 PG사에 요청을 보내고 승인을 받음
+3. 서버 → 클라이언트 응답 도중 네트워크 단절
+4. 클라이언트: "실패했나?" → 재시도
+5. 서버가 PG사에 또 요청 → 동일 금액 두 번 결제
+```
+
+클라이언트는 타임아웃 후 재시도하도록 설계됩니다. 재시도를 막으면 안 됩니다. 재시도해도 중복 처리되지 않도록 서버가 보장해야 합니다.
+
+**멱등키 해결책**
+
+```java
+@RestController
+@RequestMapping("/api/v1/payments")
+@RequiredArgsConstructor
+public class PaymentController {
+
+    private final PaymentService paymentService;
+
+    @PostMapping
+    public ResponseEntity<PaymentResponse> requestPayment(
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestBody @Valid PaymentRequest request) {
+
+        return paymentService.processWithIdempotency(idempotencyKey, request);
+    }
+}
+
+@Service
+@RequiredArgsConstructor
+public class PaymentService {
+
+    private final IdempotencyRepository idempotencyRepo;
+    private final PgGateway pgGateway;
+
+    @Transactional
+    public ResponseEntity<PaymentResponse> processWithIdempotency(
+            String key, PaymentRequest request) {
+
+        // 1) 기존 처리 결과 조회
+        Optional<IdempotencyRecord> existing = idempotencyRepo.findByKey(key);
+        if (existing.isPresent()) {
+            // WHY 저장된 결과 그대로 반환:
+            // PG사 재호출 없이 동일 응답 반환 → 중복 결제 방지
+            return ResponseEntity.ok(existing.get().getResponse());
+        }
+
+        // 2) 최초 처리
+        // WHY 동일 키를 PG사에도 전달:
+        // 서버 → PG사 네트워크 단절 시 PG사도 멱등하게 처리
+        PaymentResult result = pgGateway.charge(
+            request.getOrderId(), request.getAmount(), key);
+
+        PaymentResponse response = PaymentResponse.from(result);
+
+        // 3) 결과 저장 (다음 재시도 시 이 결과 반환)
+        idempotencyRepo.save(IdempotencyRecord.builder()
+            .key(key)
+            .response(response)
+            .expiredAt(LocalDateTime.now().plusDays(1))
+            .build());
+
+        return ResponseEntity.ok(response);
+    }
+}
+```
+
+**멱등키 설계 원칙**
+
+- **클라이언트가 생성**: 서버가 생성하면 재시도 시 다른 키가 됩니다. UUID v4를 주문 생성 시 클라이언트가 만들어 저장합니다.
+- **TTL 24시간**: 주문 결제는 24시간 이상 재시도하지 않습니다. 영구 저장하면 스토리지 낭비입니다.
+- **PG사에도 동일 키 전달**: 서버↔PG사 구간의 중복도 방지합니다.
+- **DB UNIQUE 제약**: 동시 요청이 두 개 들어왔을 때 하나만 INSERT되도록 멱등키에 UNIQUE 인덱스를 겁니다.
+
+### 결정 4: WHY CQRS — 읽기와 쓰기의 최적화 방향이 다르다
+
+읽기:쓰기 비율이 50:1이면 두 패턴을 같은 저장소에서 처리하는 것이 이미 비효율입니다.
+
+**CQRS 없이 단일 MySQL에서 발생하는 문제**
+
+```
+피크 시 동시 발생:
+- 주문 INSERT: B-Tree 갱신, innodb_buffer_pool에서 dirty page 생성
+- 주문 목록 SELECT: 같은 Buffer Pool에서 인덱스 페이지 읽기
+
+Buffer Pool 경합:
+- 읽기 쿼리가 대량 페이지를 Buffer Pool에 로드
+- 쓰기 쿼리가 필요한 인덱스 페이지가 밀려남 (cache miss)
+- 쓰기 락으로 읽기 쿼리가 대기
+- 결과: 피크 시 주문 생성 TPS 50% 하락
+```
+
+**CQRS로 분리하면 각자 독립 최적화**
+
+```mermaid
+graph LR
+    A[주문생성] --> B[MySQL-Write]
+    B -->|Outbox| C[Kafka]
+    C --> D[ES Sync]
+    E[목록조회] --> F[Elasticsearch]
+```
+
+MySQL은 쓰기 최적화(InnoDB Buffer Pool 쓰기 집중, 적은 인덱스).
+Elasticsearch는 읽기 최적화(역인덱스, 샤드 분산, 집계 최적화).
+
+```java
+// Command Side: 주문 생성 (MySQL에만 쓴다)
+@Service
+@RequiredArgsConstructor
+public class OrderCommandService {
+
+    private final OrderRepository orderRepo;
+    private final OrderOutboxRepository outboxRepo;
+    private final InventoryClient inventoryClient;
+
+    @Transactional
+    public OrderResult createOrder(CreateOrderCommand cmd) {
+        // 1. 재고 선점 (Redis에서 낙관적 차감)
+        inventoryClient.reserve(cmd.getItems());
+
+        // 2. 주문 생성
+        Order order = Order.create(cmd);
+        orderRepo.save(order);
+
+        // 3. Outbox에 이벤트 기록 → 나중에 ES 동기화
+        outboxRepo.save(OrderOutbox.forCreated(order));
+
+        return OrderResult.from(order);
+    }
+}
+
+// Query Side: 주문 목록 조회 (Elasticsearch에서만 읽는다)
+@Service
+@RequiredArgsConstructor
+public class OrderQueryService {
+
+    private final ElasticsearchOperations esOps;
+    private final OrderRepository orderRepo; // ES 장애 시 Fallback용
+
+    public Page<OrderSummary> searchOrders(OrderSearchQuery query) {
+        try {
+            return searchFromEs(query);
+        } catch (ElasticsearchException e) {
+            // WHY Fallback: ES 장애 시 기본 기능은 유지해야 한다.
+            // 성능은 저하되지만 서비스 불가보다 낫다.
+            log.warn("ES unavailable, falling back to MySQL", e);
+            return searchFromMysql(query);
+        }
+    }
+
+    private Page<OrderSummary> searchFromEs(OrderSearchQuery query) {
+        Criteria criteria = new Criteria("userId").is(query.getUserId());
+
+        if (query.getStatus() != null && !query.getStatus().isEmpty()) {
+            criteria = criteria.and("status").in(query.getStatus());
+        }
+        if (query.getFromDate() != null) {
+            criteria = criteria.and("createdAt")
+                .greaterThanEqual(query.getFromDate())
+                .lessThanEqual(query.getToDate());
+        }
+        if (query.getMinAmount() != null) {
+            criteria = criteria.and("totalAmount")
+                .greaterThanEqual(query.getMinAmount());
+        }
+
+        Query searchQuery = new CriteriaQuery(criteria)
+            .setPageable(PageRequest.of(
+                query.getPage(), query.getSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        SearchHits<OrderDocument> hits = esOps.search(
+            searchQuery, OrderDocument.class);
+
+        return SearchHitSupport.searchPageFor(hits, searchQuery.getPageable())
+            .map(SearchHit::getContent)
+            .map(OrderSummary::from);
+    }
+
+    private Page<OrderSummary> searchFromMysql(OrderSearchQuery query) {
+        // 단순화된 조회 (복합 필터 일부만 지원)
+        Pageable pageable = PageRequest.of(query.getPage(), query.getSize(),
+            Sort.by(Sort.Direction.DESC, "createdAt"));
+        return orderRepo
+            .findByUserIdOrderByCreatedAtDesc(query.getUserId(), pageable)
+            .map(OrderSummary::from);
+    }
+}
+
+// ES 동기화 Consumer
+@Component
+@RequiredArgsConstructor
+public class OrderEsSyncConsumer {
+
+    private final ElasticsearchOperations esOps;
+
+    @KafkaListener(topics = "order.created", groupId = "es-sync")
+    public void onOrderCreated(OrderCreatedEvent event) {
+        OrderDocument doc = OrderDocument.from(event);
+        esOps.save(doc);
+    }
+
+    @KafkaListener(topics = "order.status.changed", groupId = "es-sync")
+    public void onStatusChanged(OrderStatusChangedEvent event) {
+        // WHY Partial Update: 전체 문서 재색인은 불필요한 I/O
+        // status 필드만 업데이트하면 충분
+        UpdateQuery update = UpdateQuery
+            .builder(String.valueOf(event.getOrderId()))
+            .withDocument(Document.create()
+                .append("status", event.getNewStatus())
+                .append("updatedAt", event.getChangedAt()))
+            .build();
+        esOps.update(update, IndexCoordinates.of("orders"));
+    }
+}
+```
+
+### 결정 5: WHY 주문 상태 FSM — 불가능한 전이를 코드로 차단
+
+주문 상태가 자유롭게 변경되면 "결제도 안 됐는데 배송 중"이라는 상태가 DB에 기록됩니다. FSM(Finite State Machine)으로 허용된 전이만 실행합니다.
+
+```
+[주문 상태 전이 다이어그램]
+
+PENDING → PAYMENT_PENDING → PAID → PREPARING → SHIPPED → DELIVERED
+                                                              ↓
+PENDING → CANCELLED                                        REFUND_REQUESTED → REFUNDED
+PAYMENT_PENDING → PAYMENT_FAILED → CANCELLED
+PAID → CANCEL_REQUESTED → CANCELLING → CANCELLED
+```
+
+```java
+public enum OrderStatus {
+    PENDING, PAYMENT_PENDING, PAID, PAYMENT_FAILED,
+    PREPARING, SHIPPED, DELIVERED,
+    CANCEL_REQUESTED, CANCELLING, CANCELLED,
+    REFUND_REQUESTED, REFUNDED;
+
+    private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS =
+        Map.of(
+            PENDING,          Set.of(PAYMENT_PENDING, CANCELLED),
+            PAYMENT_PENDING,  Set.of(PAID, PAYMENT_FAILED),
+            PAYMENT_FAILED,   Set.of(CANCELLED),
+            PAID,             Set.of(PREPARING, CANCEL_REQUESTED),
+            PREPARING,        Set.of(SHIPPED),
+            SHIPPED,          Set.of(DELIVERED),
+            DELIVERED,        Set.of(REFUND_REQUESTED),
+            CANCEL_REQUESTED, Set.of(CANCELLING),
+            CANCELLING,       Set.of(CANCELLED),
+            REFUND_REQUESTED, Set.of(REFUNDED)
+        );
+
+    /**
+     * WHY: 상태 전이 검증을 도메인 모델 안에 두는 이유는
+     * 서비스 레이어, 이벤트 핸들러 어디서 전이하든 동일 규칙이 적용되기 때문이다.
+     * 서비스 레이어에서만 검증하면 이벤트 핸들러에서 직접 저장 시 누락된다.
+     */
+    public OrderStatus transitionTo(OrderStatus next) {
+        Set<OrderStatus> allowed = ALLOWED_TRANSITIONS.getOrDefault(
+            this, Set.of());
+        if (!allowed.contains(next)) {
+            throw new InvalidOrderStatusTransitionException(
+                String.format("Cannot transition from %s to %s", this, next));
+        }
+        return next;
+    }
+}
+
+@Entity
+public class Order {
+
+    @Enumerated(EnumType.STRING)
+    private OrderStatus status;
+
+    @Version
+    private int version; // WHY: 낙관적 락으로 동시 상태 전이 방지
+
+    public void changeStatus(OrderStatus newStatus, String reason, String changedBy) {
+        OrderStatus validated = this.status.transitionTo(newStatus);
+        this.status = validated;
+        // 이력 기록은 도메인 이벤트로 처리
+        registerEvent(new OrderStatusChangedEvent(
+            this.id, this.status, newStatus, reason, changedBy));
+    }
+}
+```
+
+### 결정 6: WHY Redis 재고 선점 + MySQL 확정 — 속도와 안전의 분리
+
+재고 차감을 MySQL에서 바로 하면 어떤 일이 생기는지 봅니다.
+
+```sql
+-- 10,500 QPS로 이 쿼리가 실행되면?
+UPDATE inventory SET quantity = quantity - ? WHERE product_id = ? AND quantity >= ?
+```
+
+피크 시 같은 product_id를 두고 10,500개 요청이 행 레벨 락을 두고 경합합니다. 데드락 가능성과 락 대기 시간이 급증합니다.
+
+**Redis 선점 + MySQL 확정의 이유**
+
+```java
+@Service
+@RequiredArgsConstructor
+public class InventoryService {
+
+    private final RedisTemplate<String, String> redisTemplate;
+    private final InventoryRepository inventoryRepo;
+
+    /**
+     * WHY Redis 선점:
+     * Redis DECRBY는 원자적 연산이다. 동시 요청 10,500개가 와도
+     * Redis 싱글 스레드 모델로 순차 처리. DB 락 경합 없음.
+     * 응답이 1ms로 MySQL 락 대기(수십ms)보다 훨씬 빠름.
+     */
+    public boolean reserve(Long productId, int quantity, Long orderId, Duration ttl) {
+        String key = "inventory:available:" + productId;
+        String reserveKey = "inventory:reserved:" + productId + ":" + orderId;
+
+        // Lua 스크립트로 조회+차감 원자 실행
+        String luaScript =
+            "local available = tonumber(redis.call('GET', KEYS[1])) " +
+            "if available == nil or available < tonumber(ARGV[1]) then " +
+            "  return 0 " +
+            "end " +
+            "redis.call('DECRBY', KEYS[1], ARGV[1]) " +
+            "redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[2]) " +
+            "return 1";
+
+        Long result = redisTemplate.execute(
+            new DefaultRedisScript<>(luaScript, Long.class),
+            List.of(key, reserveKey),
+            String.valueOf(quantity),
+            String.valueOf(ttl.getSeconds())
+        );
+
+        return result != null && result == 1L;
+    }
+
+    /**
+     * WHY MySQL 확정:
+     * Redis는 메모리 기반이라 재시작 시 데이터 손실 가능성이 있다.
+     * 결제 완료 후 실제 재고 차감은 MySQL에 영구 기록한다.
+     * Redis 선점은 임시 예약, MySQL 차감이 진짜 차감이다.
+     */
+    @Transactional
+    public void confirm(Long productId, int quantity, Long orderId) {
+        Inventory inventory = inventoryRepo.findByProductIdWithLock(productId)
+            .orElseThrow(() -> new InventoryNotFoundException(productId));
+
+        inventory.decrease(quantity); // 여기서 quantity < 0이면 예외
+        inventoryRepo.save(inventory);
+
+        // Redis 선점 키 삭제 (TTL 기다리지 않고 즉시 제거)
+        redisTemplate.delete("inventory:reserved:" + productId + ":" + orderId);
+    }
+
+    /**
+     * WHY TTL 15분:
+     * 결제 창을 띄운 사용자가 결제를 완료하는 데 걸리는 최대 시간이 15분.
+     * 너무 짧으면 결제 중 선점 만료 → 재고 있어도 결제 실패.
+     * 너무 길면 이탈 사용자가 재고를 오래 점유 → 실제 구매 가능 재고 감소.
+     */
+    private static final Duration RESERVE_TTL = Duration.ofMinutes(15);
+}
+```
+
+---
+
+## 5. 고수준 아키텍처
+
+> **비유**: 주문 시스템은 공항과 같습니다. 탑승 수속(API Gateway)이 승객(요청)을 받아 보안 검색(인증)을 통과시킵니다. 출발 게이트(주문서비스)에서 탑승권(주문번호)을 발급하고, 기내(Kafka)에서 승무원들(각 서비스)이 각자 역할을 수행합니다. 한 승무원이 아파도(서비스 장애) 비행기는 계속 납니다.
 
 ```mermaid
 graph LR
     A[클라이언트] --> B[API Gateway]
     B --> C[주문서비스]
-    C --> D[Kafka]
-    D --> E[결제서비스]
-    D --> F[재고서비스]
-    D --> G[배송서비스]
+    C --> D[MySQL]
+    C -->|Outbox| E[Kafka]
+    E --> F[결제서비스]
+    E --> G[재고서비스]
 ```
 
-### 핵심 컴포넌트 역할
+### 컴포넌트 역할과 선택 이유
 
-| 컴포넌트 | 핵심 역할 | 내부 동작 흐름 |
-|----------|----------|--------------|
-| **API Gateway** | 인증 + 읽기·쓰기 경로 분리 | JWT 검증 → 쓰기는 Order Service, 읽기는 Query Service(ES)로 라우팅 |
-| **주문 서비스** | FSM 상태 전이 + Outbox 원자 기록 | 허용된 전이만 실행 → orders UPDATE + order_outbox INSERT 단일 트랜잭션 |
-| **Kafka + Outbox Relay** | 이벤트 유실 원천 차단 | `published=false` 레코드 폴링 → Kafka 발행 → `published=true` 마킹 |
-| **결제/재고/배송 서비스** | Kafka 기반 완전 독립 동작 | 이벤트 구독 → 로컬 트랜잭션 처리 → 성공/실패 이벤트 발행 |
-| **Query Service + ES** | 읽기 전용 CQRS 모델 | 주문 직후는 MySQL 레플리카, 반복 조회는 ES 캐시에서 응답 |
-
-**주문 생성 정상 흐름 (Saga)**
-
-```mermaid
-graph LR
-    A[사용자] -->|주문 생성| B[주문서비스]
-    B -->|DB+Outbox 저장| B
-    B -->|주문번호 반환| A
-    B -->|OrderCreated| C[결제서비스]
-    C -->|PG사 결제| C
-    C -->|PaymentCompleted| B
-```
-
-**결제 실패 시 Saga 보상 흐름**
-
-```mermaid
-graph LR
-    A[결제서비스] -->|PaymentFailed| B[주문서비스]
-    B -->|상태 PAYMENT_FAILED| B
-    B -->|재고 해제 요청| C[재고서비스]
-    C -->|InventoryReleased| B
-```
+| 컴포넌트 | 선택 이유 | 핵심 역할 |
+|---------|-----------|-----------|
+| **API Gateway** | 인증·라우팅을 서비스마다 구현하면 중복 발생 | JWT 검증, 쓰기→주문서비스, 읽기→Query서비스 라우팅 |
+| **주문서비스** | 주문 도메인 로직 집중 | ORDER FSM, 상태 전이, Outbox 원자 기록 |
+| **Kafka + Outbox Relay** | DB 커밋과 이벤트 발행 원자성 보장 | unpublished Outbox 폴링 → Kafka 발행 |
+| **결제서비스** | 외부 PG사를 내부 도메인에서 격리 | PG사 HTTP 호출, 멱등키 관리, Saga 참여 |
+| **재고서비스** | 재고 초과 판매 방지 | Redis 선점 + MySQL 확정, 보상 트랜잭션 |
+| **Query서비스** | 읽기 부하를 쓰기 DB에서 완전 격리 | ES 검색, MySQL Fallback |
+| **Redis** | 장바구니·재고 선점의 속도·TTL 요구 | Hash 자료구조로 장바구니, Lua로 원자적 재고 차감 |
+| **Elasticsearch** | 복합 필터·집계 쿼리의 읽기 성능 | 역인덱스 검색, 샤드 분산으로 525,000 QPS 처리 |
 
 ---
 
-## 3. 핵심 컴포넌트 상세 설계
+## 6. DB 스키마 설계
 
-### 3-1. 주문 상태 머신
+```sql
+-- 주문 헤더: Snowflake ID PK (분산 환경에서 유일성 보장)
+-- WHY Snowflake ID: UUID는 무작위라 B-Tree 삽입 시 페이지 분할 잦음
+-- Snowflake는 단조 증가라 순차 삽입 → B-Tree 삽입 성능 최적
+CREATE TABLE orders (
+    id              BIGINT PRIMARY KEY,               -- Snowflake ID
+    order_no        VARCHAR(20)   UNIQUE NOT NULL,    -- 사용자 노출용
+    user_id         BIGINT        NOT NULL,
+    status          VARCHAR(30)   NOT NULL,
+    total_amount    DECIMAL(15,2) NOT NULL,
+    coupon_id       BIGINT,
+    delivery_addr   TEXT          NOT NULL,
+    idempotency_key VARCHAR(36)   UNIQUE,             -- 중복 주문 방지
+    created_at      DATETIME(6)   NOT NULL,
+    updated_at      DATETIME(6)   NOT NULL,
+    version         INT           NOT NULL DEFAULT 0, -- 낙관적 락
+    INDEX idx_user_status (user_id, status),
+    INDEX idx_created_at  (created_at),
+    INDEX idx_idem_key    (idempotency_key)
+) ENGINE=InnoDB;
+
+-- 주문 상품: 주문 시점 가격·이름 스냅샷
+-- WHY 스냅샷: 상품 가격 변경, 상품명 변경이 과거 주문에 영향 없어야 함
+CREATE TABLE order_items (
+    id           BIGINT PRIMARY KEY,
+    order_id     BIGINT        NOT NULL,
+    product_id   BIGINT        NOT NULL,
+    product_name VARCHAR(200)  NOT NULL,    -- 스냅샷: JOIN 불필요
+    quantity     INT           NOT NULL,
+    unit_price   DECIMAL(15,2) NOT NULL,    -- 스냅샷: 현재 가격과 무관
+    total_price  DECIMAL(15,2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id),
+    INDEX idx_order_id (order_id)
+) ENGINE=InnoDB;
+
+-- Outbox: 이벤트 유실 방지 핵심 테이블
+-- WHY orders와 같은 DB: 같은 트랜잭션으로 원자적 저장
+CREATE TABLE order_outbox (
+    id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+    aggregate_id BIGINT        NOT NULL,
+    event_type   VARCHAR(100)  NOT NULL,
+    payload      JSON          NOT NULL,
+    published    BOOLEAN       DEFAULT FALSE,
+    created_at   DATETIME(6)   NOT NULL,
+    published_at DATETIME(6),
+    INDEX idx_unpublished (published, created_at)  -- Relay 폴링 쿼리 최적화
+) ENGINE=InnoDB;
+
+-- 상태 이력: 감사 로그, 운영 이슈 추적
+CREATE TABLE order_status_history (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    order_id    BIGINT       NOT NULL,
+    from_status VARCHAR(30),
+    to_status   VARCHAR(30)  NOT NULL,
+    reason      VARCHAR(500),
+    changed_by  VARCHAR(100),
+    created_at  DATETIME(6)  NOT NULL,
+    INDEX idx_order_id (order_id)
+) ENGINE=InnoDB;
+
+-- 재고 선점: Redis 장애 대비 DB 백업 + 감사
+-- WHY TTL 컬럼: Redis가 죽었을 때 이 테이블로 만료 선점 정리 가능
+CREATE TABLE inventory_reservations (
+    id         BIGINT PRIMARY KEY AUTO_INCREMENT,
+    order_id   BIGINT       NOT NULL UNIQUE,
+    product_id BIGINT       NOT NULL,
+    quantity   INT          NOT NULL,
+    status     VARCHAR(20)  NOT NULL DEFAULT 'RESERVED',
+    expires_at DATETIME(6)  NOT NULL,
+    created_at DATETIME(6)  NOT NULL,
+    INDEX idx_product_status (product_id, status),
+    INDEX idx_expires_at     (expires_at, status)
+) ENGINE=InnoDB;
+
+-- 멱등키: 중복 결제 방지
+CREATE TABLE idempotency_keys (
+    key_value   VARCHAR(36)  PRIMARY KEY,
+    response    JSON         NOT NULL,
+    created_at  DATETIME(6)  NOT NULL,
+    expired_at  DATETIME(6)  NOT NULL,
+    INDEX idx_expired_at (expired_at)
+) ENGINE=InnoDB;
+```
+
+**스키마 핵심 포인트**
+
+- `orders.version`: 낙관적 락으로 동시 상태 전이 방지. `@Version`이 자동 증가시킵니다.
+- `order_items`: 스냅샷이라 상품 서비스 JOIN 없이 독립 조회 가능합니다.
+- `order_outbox.idx_unpublished`: `(published, created_at)` 복합 인덱스로 `WHERE published = FALSE ORDER BY created_at` 쿼리가 인덱스만 스캔합니다.
+- `inventory_reservations.expires_at`: Redis가 죽어도 DB에서 만료 선점 정리가 가능합니다.
+
+---
+
+## 7. 주문 생성 시퀀스 — 각 단계의 WHY
 
 ```mermaid
 graph LR
-    A[PENDING] --> B[PAYMENT_REQUESTED]
-    B --> C[PAID]
-    B --> D[PAYMENT_FAILED]
-    C --> E[PREPARING]
-    E --> F[SHIPPED]
-    F --> G[DELIVERED]
-    C --> H[CANCELLED]
+    A[클라이언트] --> B[주문서비스]
+    B --> C[재고 선점 Redis]
+    B --> D[MySQL 주문 저장]
+    D --> E[Outbox Relay]
+    E --> F[Kafka]
 ```
 
-| 현재 상태 | 허용 전이 | 트리거 이벤트 |
-|-----------|-----------|--------------|
-| PENDING | PAYMENT_REQUESTED | 결제 요청 |
-| PAYMENT_REQUESTED | PAID, PAYMENT_FAILED | PG사 응답 수신 |
-| PAID | PREPARING, CANCELLED | 판매자 확인 / 사용자 취소 |
-| PREPARING | SHIPPED | 출고 처리 |
-| SHIPPED | DELIVERED | 배송 완료 |
+**단계별 설명**
 
-### 3-2. 주문 DB 스키마
+**① 클라이언트 요청**: 멱등키(UUID)를 헤더에 포함합니다. 주문서비스가 동일 키 두 번째 요청을 받으면 저장된 결과를 반환합니다.
 
-```sql
-CREATE TABLE orders (
-    id            BIGINT PRIMARY KEY,          -- Snowflake ID
-    order_no      VARCHAR(20) UNIQUE NOT NULL, -- 고객 노출용 "20260511-A1B2C3"
-    user_id       BIGINT NOT NULL,
-    status        VARCHAR(30) NOT NULL,
-    total_amount  DECIMAL(15,2) NOT NULL,
-    coupon_id     BIGINT,
-    delivery_addr TEXT NOT NULL,
-    created_at    DATETIME(6) NOT NULL,
-    updated_at    DATETIME(6) NOT NULL,
-    version       INT NOT NULL DEFAULT 0,      -- 낙관적 락
-    INDEX idx_user_status (user_id, status),
-    INDEX idx_created_at (created_at)
-);
+**② 재고 선점 (Redis)**: 결제 전에 재고를 임시 예약합니다. Redis Lua 스크립트로 원자적 차감. 선점 실패(재고 부족)이면 즉시 400 반환합니다.
 
-CREATE TABLE order_items (
-    id          BIGINT PRIMARY KEY,
-    order_id    BIGINT NOT NULL,
-    product_id  BIGINT NOT NULL,
-    quantity    INT NOT NULL,
-    unit_price  DECIMAL(15,2) NOT NULL,
-    total_price DECIMAL(15,2) NOT NULL,
-    FOREIGN KEY (order_id) REFERENCES orders(id)
-);
+**③ 주문 + Outbox 원자 저장 (MySQL)**: `@Transactional` 하나로 orders + order_items + order_outbox를 저장합니다. 여기서 실패하면 Redis 선점을 보상 취소합니다.
 
--- Outbox 테이블: 이벤트 유실 방지
-CREATE TABLE order_outbox (
-    id           BIGINT PRIMARY KEY AUTO_INCREMENT,
-    aggregate_id BIGINT NOT NULL,
-    event_type   VARCHAR(100) NOT NULL,
-    payload      JSON NOT NULL,
-    published    BOOLEAN DEFAULT FALSE,
-    created_at   DATETIME(6) NOT NULL,
-    INDEX idx_unpublished (published, created_at)
-);
+**④ Outbox Relay**: 100ms마다 미발행 이벤트를 Kafka에 발행합니다. 서버 재시작 후에도 재발행됩니다.
 
--- 주문 상태 이력: 감사 로그
-CREATE TABLE order_status_history (
-    id         BIGINT PRIMARY KEY AUTO_INCREMENT,
-    order_id   BIGINT NOT NULL,
-    from_status VARCHAR(30),
-    to_status   VARCHAR(30) NOT NULL,
-    reason      VARCHAR(200),
-    created_at  DATETIME(6) NOT NULL,
-    INDEX idx_order_id (order_id)
-);
-```
-
-### 3-3. Snowflake ID 생성
-
-> **왜 Snowflake ID인가?** AUTO_INCREMENT는 단일 DB가 병목이 되고 경쟁사에 주문 건수가 노출됩니다. UUID는 랜덤 삽입으로 B-Tree 단편화가 심합니다. Snowflake는 시간순 정렬 + 분산 생성 + 64비트 정수라는 세 조건을 동시에 만족합니다.
-
-41비트 타임스탬프 + 10비트 워커 ID + 12비트 시퀀스. 밀리초당 4,096개, 초당 410만 개 생성 가능합니다.
-
-```java
-@Component
-public class SnowflakeIdGenerator {
-
-    private static final long EPOCH = 1700000000000L;
-    private static final long WORKER_ID_BITS = 10L;
-    private static final long SEQUENCE_BITS = 12L;
-    private static final long MAX_WORKER_ID = ~(-1L << WORKER_ID_BITS);
-    private static final long SEQUENCE_MASK = ~(-1L << SEQUENCE_BITS);
-
-    private final long workerId;
-    private long lastTimestamp = -1L;
-    private long sequence = 0L;
-
-    public SnowflakeIdGenerator(@Value("${snowflake.worker-id}") long workerId) {
-        if (workerId > MAX_WORKER_ID || workerId < 0)
-            throw new IllegalArgumentException("Worker ID must be between 0 and " + MAX_WORKER_ID);
-        this.workerId = workerId;
-    }
-
-    public synchronized long nextId() {
-        long timestamp = currentMs();
-
-        if (timestamp < lastTimestamp)
-            throw new ClockMovedBackwardsException(lastTimestamp - timestamp + "ms 역행");
-
-        if (timestamp == lastTimestamp) {
-            sequence = (sequence + 1) & SEQUENCE_MASK;
-            if (sequence == 0) timestamp = waitNextMillis(lastTimestamp);
-        } else {
-            sequence = 0L;
-        }
-
-        lastTimestamp = timestamp;
-        return ((timestamp - EPOCH) << (WORKER_ID_BITS + SEQUENCE_BITS))
-             | (workerId << SEQUENCE_BITS)
-             | sequence;
-    }
-
-    private long waitNextMillis(long last) {
-        long ts = currentMs();
-        while (ts <= last) ts = currentMs();
-        return ts;
-    }
-
-    private long currentMs() { return System.currentTimeMillis(); }
-}
-```
-
-### 3-4. 주문 생성 — Transactional Outbox 적용
-
-> **왜 Outbox 패턴인가?** `@Transactional` 안에서 Kafka를 직접 호출하면 DB 커밋 성공 후 Kafka 발행이 실패할 때 이벤트가 영구 유실됩니다. Outbox 테이블에 이벤트를 DB 트랜잭션과 함께 기록하면 Relay가 반드시 한 번 이상 발행을 보장합니다.
+**⑤ 이벤트 처리**: 결제서비스, 재고서비스, 알림서비스가 독립적으로 이벤트를 소비합니다.
 
 ```java
 @Service
 @RequiredArgsConstructor
-public class OrderService {
+public class OrderCommandService {
 
     private final OrderRepository orderRepo;
+    private final OrderItemRepository orderItemRepo;
     private final OrderOutboxRepository outboxRepo;
+    private final InventoryService inventoryService;
     private final SnowflakeIdGenerator idGen;
 
     @Transactional
-    public OrderResult createOrder(CreateOrderRequest req) {
-        validateAndReserveInventory(req.getItems());
+    public OrderResult createOrder(CreateOrderCommand cmd) {
+        // 1. 재고 선점 (Redis — 트랜잭션 밖)
+        // WHY 트랜잭션 밖: Redis 호출이 실패해도 DB 롤백이 필요 없음
+        // 트랜잭션 안에서 Redis 호출 실패 시 DB 커넥션이 점유된 채 대기
+        boolean reserved = inventoryService.reserve(
+            cmd.getProductId(), cmd.getQuantity(),
+            cmd.getTempOrderId(), Duration.ofMinutes(15));
 
-        long orderId = idGen.nextId();
-        String orderNo = generateOrderNo();  // "20260511-A1B2C3"
-
-        Order order = Order.builder()
-            .id(orderId).orderNo(orderNo).userId(req.getUserId())
-            .status(OrderStatus.PENDING).totalAmount(calculateTotal(req))
-            .deliveryAddr(req.getDeliveryAddr()).version(0).build();
-
-        List<OrderItem> items = req.getItems().stream()
-            .map(i -> OrderItem.builder()
-                .id(idGen.nextId()).orderId(orderId)
-                .productId(i.getProductId()).quantity(i.getQuantity())
-                .unitPrice(i.getUnitPrice())
-                .totalPrice(i.getUnitPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
-                .build())
-            .toList();
-
-        orderRepo.save(order);
-        itemRepo.saveAll(items);
-
-        // Outbox에 이벤트 기록 (DB 트랜잭션 내 — 원자성 보장)
-        outboxRepo.save(OrderOutbox.builder()
-            .aggregateId(orderId).eventType("OrderCreated")
-            .payload(toJson(new OrderCreatedEvent(orderId, orderNo, req)))
-            .published(false).build());
-
-        return new OrderResult(orderId, orderNo);
-    }
-
-    @Transactional
-    public void updateStatus(long orderId, OrderStatus newStatus, String reason) {
-        Order order = orderRepo.findByIdWithLock(orderId)
-            .orElseThrow(() -> new OrderNotFoundException(orderId));
-
-        OrderStatus prevStatus = order.getStatus();
-        stateMachine.transition(order, newStatus);  // 불허 시 예외
-        orderRepo.save(order);
-        orderRepo.saveHistory(orderId, prevStatus, newStatus, reason);
-
-        outboxRepo.save(OrderOutbox.builder()
-            .aggregateId(orderId).eventType("OrderStatusChanged")
-            .payload(toJson(new OrderStatusChangedEvent(orderId, prevStatus, newStatus)))
-            .published(false).build());
-    }
-}
-```
-
-### 3-5. Saga — 주문 → 결제 → 재고 → 배송 흐름
-
-> **왜 Saga인가?** 결제 서비스는 외부 PG사 HTTP API를 호출하므로 DB 트랜잭션에 묶을 수 없습니다. 각 서비스가 로컬 트랜잭션만 처리하고 실패 시 보상 이벤트로 역방향 롤백하는 Saga 패턴이 분산 트랜잭션의 현실적 해법입니다.
-
-```
-정상 흐름:
-  OrderCreated → [결제서비스] PaymentCompleted
-               → [재고서비스] InventoryReserved
-               → [배송서비스] DeliveryScheduled
-
-실패 보상 흐름 (결제 실패):
-  PaymentFailed
-    → [재고서비스] InventoryReleased
-    → [주문서비스] OrderCancelled (PAYMENT_FAILED)
-    → [알림서비스] PaymentFailedNotification
-```
-
-```java
-@KafkaListener(topics = "order.created")
-@Transactional
-public void handleOrderCreated(OrderCreatedEvent event) {
-    try {
-        PaymentResult result = pgGateway.requestPayment(
-            event.getOrderId(), event.getTotalAmount(), event.getPaymentMethod());
-
-        if (result.isSuccess()) {
-            publishEvent("payment.completed",
-                new PaymentCompletedEvent(event.getOrderId(), result.getTxId()));
-        } else {
-            publishEvent("payment.failed",
-                new PaymentFailedEvent(event.getOrderId(), result.getFailReason()));
+        if (!reserved) {
+            throw new InsufficientInventoryException(cmd.getProductId());
         }
-    } catch (PgTimeoutException e) {
-        // PG 타임아웃: 멱등키로 결과 조회 후 처리
-        schedulePaymentResultInquiry(event.getOrderId());
+
+        try {
+            // 2. 주문 생성 (MySQL — 트랜잭션 안)
+            Long orderId = idGen.nextId();
+            Order order = Order.builder()
+                .id(orderId)
+                .orderNo(generateOrderNo())
+                .userId(cmd.getUserId())
+                .status(OrderStatus.PENDING)
+                .totalAmount(cmd.getTotalAmount())
+                .couponId(cmd.getCouponId())
+                .deliveryAddr(cmd.getDeliveryAddr())
+                .idempotencyKey(cmd.getIdempotencyKey())
+                .version(0)
+                .build();
+
+            orderRepo.save(order);
+
+            List<OrderItem> items = cmd.getItems().stream()
+                .map(item -> OrderItem.builder()
+                    .orderId(orderId)
+                    .productId(item.getProductId())
+                    .productName(item.getProductName()) // 스냅샷
+                    .quantity(item.getQuantity())
+                    .unitPrice(item.getUnitPrice())     // 스냅샷
+                    .totalPrice(item.getUnitPrice().multiply(
+                        BigDecimal.valueOf(item.getQuantity())))
+                    .build())
+                .collect(Collectors.toList());
+
+            orderItemRepo.saveAll(items);
+
+            // 3. Outbox 기록 (같은 트랜잭션)
+            outboxRepo.save(OrderOutbox.builder()
+                .aggregateId(orderId)
+                .eventType("ORDER_CREATED")
+                .payload(toJson(OrderCreatedEvent.from(order, items,
+                    cmd.getIdempotencyKey())))
+                .published(false)
+                .build());
+
+            return OrderResult.from(order);
+
+        } catch (Exception e) {
+            // 4. DB 실패 시 Redis 선점 보상 취소
+            inventoryService.release(
+                cmd.getProductId(), cmd.getQuantity(), cmd.getTempOrderId());
+            throw e;
+        }
+    }
+}
+```
+
+---
+
+## 8. 재고 초과 판매 방지 — 가장 중요한 보호
+
+재고 초과 판매는 비즈니스 관점에서 가장 심각한 버그입니다. 여러 겹의 방어를 설계합니다.
+
+```
+[방어 레이어]
+1층: Redis Lua 스크립트 원자적 차감 (초당 수만 건 동시 요청 대응)
+2층: MySQL 낙관적 락 (version 컬럼) + 재고 수량 체크 제약
+3층: MySQL DB 제약 조건 CHECK (quantity >= 0)
+4층: 선점 TTL 만료 배치 (이탈 사용자 선점 해제)
+5층: 일 1회 Redis↔MySQL 재고 수량 정합성 검증
+```
+
+```java
+// 2층: 낙관적 락으로 동시 MySQL 확정 충돌 방지
+@Entity
+public class Inventory {
+
+    @Id
+    private Long productId;
+    private int quantity;
+
+    @Version
+    private int version;
+
+    public void decrease(int amount) {
+        if (this.quantity < amount) {
+            throw new InsufficientInventoryException(productId, quantity, amount);
+        }
+        this.quantity -= amount;
     }
 }
 
-// 재고 서비스: 결제 실패 시 선점 해제 (보상 트랜잭션)
-@KafkaListener(topics = "payment.failed")
-@Transactional
-public void handlePaymentFailed(PaymentFailedEvent event) {
-    inventoryRepo.releaseReservation(event.getOrderId());
+// 3층: DB 제약으로 음수 재고 절대 방지
+// ALTER TABLE inventory ADD CONSTRAINT chk_quantity CHECK (quantity >= 0);
+
+// 4층: 만료 선점 해제 배치
+@Component
+@RequiredArgsConstructor
+public class ExpiredReservationCleaner {
+
+    private final InventoryReservationRepository reservationRepo;
+    private final RedisTemplate<String, String> redisTemplate;
+
+    @Scheduled(fixedDelay = 60_000) // 1분마다
+    @Transactional
+    public void cleanExpired() {
+        List<InventoryReservation> expired = reservationRepo
+            .findByStatusAndExpiresAtBefore(
+                "RESERVED", LocalDateTime.now());
+
+        for (InventoryReservation res : expired) {
+            res.release();
+            reservationRepo.save(res);
+            // Redis 선점 키도 삭제
+            redisTemplate.delete(
+                "inventory:reserved:" + res.getProductId() + ":" + res.getOrderId());
+            log.info("Released expired reservation orderId={}", res.getOrderId());
+        }
+    }
 }
 ```
 
-### 3-6. 재고 선점 — 동시성 제어
+---
 
-> **왜 낙관적 락 + Redis 2단계인가?** 비관적 락(SELECT FOR UPDATE)은 피크 시 DB 커넥션 전체를 락 대기 상태로 묶습니다. 낙관적 락으로 충돌 빈도가 낮은 일반 주문을 처리하고, 피크 대응은 Redis `DECRBY` 원자 연산이 DB 앞에서 재고를 먼저 걸러냅니다.
+## 9. 서킷 브레이커 — PG사 장애 격리
+
+블프 장애의 근본 원인이 PG사 응답 지연이었습니다. Resilience4j로 PG사 장애를 격리합니다.
 
 ```java
-@Retryable(value = OptimisticLockException.class, maxAttempts = 3)
-@Transactional
-public void reserveInventory(long productId, int quantity) {
-    Inventory inv = inventoryRepo.findById(productId)
-        .orElseThrow(() -> new ProductNotFoundException(productId));
+@Service
+@RequiredArgsConstructor
+public class PgGatewayWithCircuitBreaker {
 
-    if (inv.getAvailable() < quantity)
-        throw new OutOfStockException(productId);
+    private final PgClient pgClient;
+    private final CircuitBreakerRegistry cbRegistry;
 
-    inv.reserve(quantity);  // available -= quantity, version++ 자동
-    inventoryRepo.save(inv);
+    /**
+     * WHY Circuit Breaker:
+     * PG사 응답이 8초로 늘면 스레드가 8초씩 블로킹된다.
+     * Circuit Breaker가 열리면 PG사 호출을 즉시 차단 → 빠른 실패(Fast Fail).
+     * 스레드가 블로킹되지 않으므로 다른 요청 처리 가능.
+     */
+    public PaymentResult requestPayment(Long orderId, BigDecimal amount, String idempotencyKey) {
+        CircuitBreaker cb = cbRegistry.circuitBreaker("pg-gateway");
+
+        return cb.executeSupplier(() ->
+            pgClient.charge(orderId, amount, idempotencyKey)
+        );
+    }
 }
 ```
 
-피크 대응을 위해 Redis를 완충재로 사용합니다. `available > 0` 체크는 Redis `DECRBY`로 먼저 처리하고, MySQL은 최종 확정만 담당합니다.
+```yaml
+# application.yml
+resilience4j:
+  circuitbreaker:
+    instances:
+      pg-gateway:
+        # WHY 50%: PG사 요청 절반이 실패하면 장애 상황
+        failure-rate-threshold: 50
+        # WHY 30초: 열린 후 PG사 복구 시간을 기다림
+        wait-duration-in-open-state: 30s
+        # WHY 10: 10개 슬라이딩 윈도우로 실패율 측정
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 3
+  timelimiter:
+    instances:
+      pg-gateway:
+        # WHY 3초: PG사 평균 응답이 200ms이므로 3초는 충분한 여유
+        # 8초로 설정하면 스레드 블로킹 시간이 너무 길다
+        timeout-duration: 3s
+```
+
+---
+
+## 10. 모니터링 — 무엇을 봐야 장애를 잡는가
+
+주문 시스템의 핵심 메트릭을 정의합니다. 모든 메트릭을 보면 정작 중요한 것을 놓칩니다.
+
+### 비즈니스 메트릭 (최우선)
 
 ```java
-public boolean tryReserveWithRedis(long productId, int quantity) {
-    String key = "inventory:" + productId;
-    Long remaining = redisTemplate.opsForValue().decrement(key, quantity);
+@Component
+@RequiredArgsConstructor
+public class OrderMetrics {
 
-    if (remaining != null && remaining >= 0) return true;
-    redisTemplate.opsForValue().increment(key, quantity);  // 초과 차감 복구
-    return false;
+    private final MeterRegistry registry;
+
+    // WHY 주문 성공률: 기술 지표가 아닌 비즈니스 지표
+    // CPU 100%여도 주문 성공률 99%면 문제없다
+    // CPU 30%여도 주문 성공률 80%면 즉시 조사해야 한다
+    public void recordOrderResult(boolean success) {
+        registry.counter("order.creation",
+            "result", success ? "success" : "failure").increment();
+    }
+
+    // WHY 재고 선점 실패율: 품절 상태 모니터링
+    // 갑자기 급증하면 재고 수량 오류 가능성
+    public void recordReservationResult(Long productId, boolean success) {
+        registry.counter("inventory.reservation",
+            "product_id", String.valueOf(productId),
+            "result", success ? "success" : "failure").increment();
+    }
+
+    // WHY Outbox 지연: 이벤트 발행 지연이 곧 하위 서비스 처리 지연
+    public void recordOutboxLag(long lagMs) {
+        registry.gauge("outbox.relay.lag.ms", lagMs);
+    }
 }
 ```
 
-> **정합성 복구**: Redis 예약에 TTL(15분)을 설정해 미확정 예약을 자동 만료시키고, 매 시간 배치로 Redis와 MySQL `available` 컬럼을 대조해 차이 발생 시 MySQL 기준으로 리셋합니다.
+### 알람 기준
+
+| 메트릭 | 경고 기준 | 심각 기준 | 이유 |
+|--------|-----------|-----------|------|
+| 주문 성공률 | < 99% | < 95% | 매출 직결 |
+| 주문 생성 P99 | > 500ms | > 1,000ms | 사용자 이탈 임계점 |
+| Outbox 미발행 건수 | > 100건 | > 1,000건 | 이벤트 파이프라인 막힘 |
+| PG Circuit Breaker | HALF_OPEN | OPEN | PG사 장애 신호 |
+| 재고 선점 실패율 | > 5% | > 20% | 재고 부족 또는 오류 |
+| Redis 메모리 사용률 | > 70% | > 85% | 장바구니·선점 데이터 과다 |
 
 ---
 
-## 4. 장애 시나리오와 대응
+## 11. 면접 포인트 5가지
 
-| 시나리오 | 영향 | 대응 |
-|---------|------|------|
-| MySQL 쓰기 노드 장애 | 주문 생성 불가 | 레플리카 자동 Failover (60초), 그 동안 주문 요청 큐잉 |
-| Kafka 클러스터 장애 | 이벤트 전파 중단 | Outbox 테이블에 이벤트 보관, 복구 후 Relay 재발행 |
-| 결제 서비스 장애 | 결제 진행 불가 | 주문은 PAYMENT_REQUESTED로 보존, 복구 후 재처리 |
-| PG사 타임아웃 | 결제 성공 여부 불확실 | 멱등키로 PG사에 결과 재조회 (최대 3회), 불명 시 취소 |
-| Elasticsearch 장애 | 주문 목록 조회 불가 | MySQL 읽기 레플리카로 Fallback |
-| 블프 트래픽 30배 | 전체 부하 | 오토스케일링 사전 예열 (트래픽 예측 시 미리 스케일 아웃) |
-| Outbox Relay 다운 | 이벤트 발행 완전 중단 | Relay 2대 이상 + ShedLock 리더 선출, at-least-once 후 컨슈머 멱등 처리 |
+면접관이 반드시 물어보는 5가지와 모범 답변 구조입니다.
+
+### 포인트 1: "재고 초과 판매를 어떻게 방지하나?"
+
+**나쁜 답**: "MySQL 트랜잭션으로 처리합니다."
+
+**좋은 답**: "다층 방어입니다. 첫 번째 방어선은 Redis Lua 스크립트로 원자적 선점입니다. Lua가 단일 스레드이므로 동시 요청이 와도 순차 처리됩니다. 두 번째는 MySQL 낙관적 락(version 컬럼)입니다. Redis 선점이 통과되어도 MySQL 확정 단계에서 충돌하면 한 건만 성공합니다. 세 번째는 DB CHECK 제약(`quantity >= 0`)입니다. 코드 버그로 음수가 되려 해도 DB가 거부합니다. 네 번째는 TTL 만료 배치입니다. 결제 이탈 사용자의 15분 선점을 자동 해제합니다."
+
+### 포인트 2: "결제 중복을 어떻게 방지하나?"
+
+**나쁜 답**: "DB에 UNIQUE 제약 겁니다."
+
+**좋은 답**: "멱등키 패턴입니다. 클라이언트가 UUID를 요청 헤더에 포함합니다. 서버는 이 키를 DB에 저장합니다. 재시도 요청이 오면 동일 키로 저장된 결과를 반환합니다. PG사에도 동일 키를 전달해 PG사 구간의 중복도 방지합니다. 클라이언트가 키를 생성하는 이유는 서버가 생성하면 재시도 시 다른 키가 되기 때문입니다."
+
+### 포인트 3: "주문 생성 중 재고서비스가 다운되면?"
+
+**나쁜 답**: "재고서비스가 복구되면 다시 시도합니다."
+
+**좋은 답**: "이벤트 드리븐과 Saga로 해결합니다. 주문서비스는 재고서비스에 동기 호출하지 않습니다. Kafka에 OrderCreated 이벤트를 발행하고 즉시 주문번호를 반환합니다. 재고서비스는 복구 후 Kafka에서 이벤트를 소비해 처리합니다. Outbox Pattern으로 이벤트가 유실되지 않습니다. 재고 확정에 실패하면 보상 트랜잭션으로 주문을 취소하고 사용자에게 알림을 보냅니다."
+
+### 포인트 4: "주문 목록 조회가 느리면 어떻게 하나?"
+
+**나쁜 답**: "인덱스를 추가합니다."
+
+**좋은 답**: "CQRS로 읽기를 Elasticsearch로 분리합니다. 읽기:쓰기 비율이 50:1이기 때문에 같은 MySQL에서 처리하면 Buffer Pool 경합이 발생합니다. Elasticsearch는 역인덱스로 복합 필터 쿼리가 빠르고, 샤드를 독립적으로 늘릴 수 있습니다. Outbox → Kafka → ES 동기화로 MySQL과 ES를 분리합니다. ES 장애 시에는 MySQL Read Replica로 Fallback합니다."
+
+### 포인트 5: "서비스 간 트랜잭션을 어떻게 처리하나?"
+
+**나쁜 답**: "2PC로 처리합니다."
+
+**좋은 답**: "Saga Choreography를 사용합니다. 2PC는 외부 PG사가 DB 트랜잭션에 참여할 수 없고, Coordinator 장애 시 무한 블로킹이 발생합니다. Saga는 각 서비스가 로컬 트랜잭션만 실행하고 실패 시 보상 트랜잭션으로 역방향 롤백합니다. Choreography를 선택한 이유는 주문 플로우가 선형이고 단순해 중앙 조율자가 불필요하기 때문입니다. 서비스가 5개 이상이고 복잡한 분기가 필요하면 Orchestration으로 전환합니다."
 
 ---
 
-## 5. 확장 포인트
+## 12. 극한 시나리오 — "그 상황이면 어떻게 됩니까?"
 
-### 5-1. 수평 확장 전략
-
-주문 서비스는 무상태(Stateless)로 수평 확장이 쉽습니다. HPA를 CPU 70% 기준으로 설정하되, 블프 같은 계획된 이벤트는 미리 증설합니다.
-
-> **비유:** Auto Scaling은 불이 난 뒤 소방차를 부르는 것입니다. 계획된 이벤트는 불이 나기 전에 소방차를 배치해 두는 것이 맞습니다.
+### 시나리오 1: Kafka 클러스터 전체 다운
 
 ```
-D-1 오후 11시: 서버 10대 → 30대 예비 증설
-D-day 자정:   HPA 30대 → 최대 100대
-D-day 오전 2시: 트래픽 감소 → 자동 스케일 인
+발생 상황:
+  - Outbox Relay가 Kafka에 발행 시도 → 연결 실패
+  - 결제서비스, 재고서비스가 이벤트를 받지 못함
+  - 주문은 MySQL에 PENDING 상태로 누적
+
+방어 설계:
+  1. Outbox 미발행 건이 100개 초과 시 알람
+  2. Kafka 복구 후 Relay가 자동 재발행 (published=false 건이 남아있음)
+  3. 피크 이벤트는 at-least-once이므로 중복 수신 → 멱등성으로 처리
+  4. Kafka 장애가 길면 주문 접수를 임시 중단하는 Circuit Breaker 추가
+
+답변 포인트:
+  Outbox가 없었다면 Kafka 장애 시 이벤트가 영구 유실됩니다.
+  Outbox가 있기 때문에 Kafka 복구 후 자동 복구가 가능합니다.
 ```
 
-### 5-2. DB 샤딩
-
-> **왜 `user_id` 기준 샤딩인가?** 주문 목록 조회는 항상 특정 사용자의 주문만 조회하므로, `user_id % N`으로 샤딩하면 크로스-샤드 쿼리가 발생하지 않습니다.
-
-| 샤딩 수 | 최대 TPS | 적용 시점 |
-|---------|---------|---------|
-| 단일 MySQL | ~5,000 | Phase 1~2 |
-| 4 샤드 | ~20,000 | Phase 3 |
-| 16 샤드 | ~80,000 | Phase 4 (글로벌) |
-
-### 5-3. 주문 아카이빙
-
-5년 이상 된 주문 데이터는 MySQL에서 S3 콜드 스토리지로 아카이빙합니다. 서비스 DB에는 최근 2년 데이터만 유지해 쿼리 성능을 보존합니다.
+### 시나리오 2: PG사 응답 8초 지연 (실제 장애 시나리오)
 
 ```
-MySQL → Spark 배치 (일 1회) → Parquet → S3
-S3 조회: Athena 쿼리 (CS 팀 전용, 비용 per-query)
+발생 상황:
+  - PG사 응답이 8초로 늘어남
+  - 결제서비스 스레드 풀 200개가 모두 PG 응답 대기
+  - 새 결제 요청은 큐에 쌓이다 타임아웃
+
+방어 설계:
+  1. Circuit Breaker: 실패율 50% 초과 시 30초간 PG사 호출 차단
+  2. Timeout: 3초 초과 응답은 타임아웃 처리 (8초 기다리지 않음)
+  3. Bulkhead: PG사 호출 전용 스레드 풀 분리 (메인 스레드 풀 보호)
+  4. Fallback: Circuit Open 시 "결제 일시 중단" 안내 페이지 표시
+
+핵심 코드:
+  @CircuitBreaker(name = "pg-gateway", fallbackMethod = "paymentFallback")
+  @TimeLimiter(name = "pg-gateway")
+  @Bulkhead(name = "pg-gateway", type = Type.THREADPOOL)
+  public CompletableFuture<PaymentResult> requestPayment(...) { ... }
+
+  public CompletableFuture<PaymentResult> paymentFallback(
+          Long orderId, BigDecimal amount, String key, Exception ex) {
+      return CompletableFuture.completedFuture(
+          PaymentResult.pending("PG 일시 장애, 수동 처리 예정"));
+  }
 ```
 
----
-
-## 면접 포인트
-
-### 면접 포인트 1️⃣ "주문 생성 시 재고 차감을 어느 시점에 해야 하는가? 주문 시점 vs 결제 완료 시점"
-
-- **결제 완료 후 차감**: 실제 판매만 집계하지만 결제 진행 중 재고가 소진되어 다른 사용자가 구매 불가한 문제 발생
-- **주문 시점 선점 + 결제 완료 시 확정**: 커머스 표준. 선점 후 결제 미완 시 선점 해제 타임아웃(10분) 필요
-
-### 면접 포인트 2️⃣ "주문번호 노출로 경쟁사가 건수를 역산할 수 있다. 어떻게 막는가?"
-
-내부 PK는 Snowflake ID(순차)를 사용하고, 고객 노출 주문번호는 날짜 + 랜덤 6자리 영숫자(`20260511-A1B2C3`)로 별도 생성합니다. 경쟁사가 건수를 역산할 수 없고, CS 소통도 쉽습니다.
-
-### 면접 포인트 3️⃣ "Saga의 보상 트랜잭션이 실패하면 어떻게 되는가?"
-
-- 보상 트랜잭션도 실패할 수 있습니다. 재시도 + 알림으로 운영팀이 수동 처리합니다.
-- 보상 트랜잭션은 반드시 **멱등성**을 보장해야 하며(여러 번 실행해도 같은 결과)
-- 보상도 실패하는 극단 케이스는 **DLQ(Dead Letter Queue)** 에 보관 후 운영팀이 처리합니다.
-
-### 면접 포인트 4️⃣ "CQRS에서 주문 직후 조회 시 내 주문이 안 보이면?"
-
-읽기 모델의 최종 일관성 지연은 보통 수백 ms 이내입니다. 주문 직후 "내 주문 확인" 화면은 쓰기 DB(MySQL)에서 직접 조회하고, 주문 목록·검색은 Elasticsearch에서 조회하는 방식으로 분리합니다. UI에서 "주문이 처리 중입니다" 표시로 UX를 보완합니다.
-
-### 면접 포인트 5️⃣ "블프 피크에 초당 1만 건을 처리하려면 서버가 몇 대 필요한가?"
-
-- 주문 서버 1대 TPS를 50으로 가정하면 **200대** 필요
-- 실제 병목은 서버가 아니라 **DB**: MySQL 쓰기 노드 한계(~5,000 TPS) 초과 시 DB 샤딩 필수
-- 16샤드 구성 시 **80,000 TPS**까지 확장 가능
-- 피크 트래픽의 80%가 재고 조회·목록이므로 CQRS로 읽기를 분리하면 쓰기 DB 실질 부하는 훨씬 낮음
-
----
-
-## 극한 시나리오
-
-### 극한 시나리오 1: 자정 블프 — 초당 1만 건 주문 폭주
-
-자정 정각 쿠폰 행사가 시작되면서 평소 35 QPS이던 주문이 10,000 QPS로 순식간에 치솟습니다. 주문 생성, 재고 선점, 결제 요청이 동시에 폭발합니다.
-
-**문제점:**
-- MySQL 쓰기 노드 커넥션 풀 소진으로 주문 INSERT가 대기 큐에 쌓임
-- 재고 선점 Redis DECRBY 경합: 동일 상품에 수천 건이 동시에 요청해 음수 재고 발생 위험
-- 결제 서비스 스레드 풀이 PG사 응답 대기로 전부 블로킹되어 신규 주문 타임아웃
-
-**대응 전략:**
-1️⃣ **사전 스케일 아웃**: 블프 D-1 오후 11시에 서버를 10대 → 30대로 미리 증설합니다. Auto Scaling은 기동에 2~5분이 걸리므로 자정 피크에는 이미 늦습니다.
-
-2️⃣ **Redis 재고 원자 연산**: `DECRBY`로 차감 후 잔여가 0 미만이면 즉시 `INCRBY`로 복구합니다. Redis 단일 스레드 특성 덕분에 두 명령 사이에 다른 요청이 끼어들지 않습니다.
-
-3️⃣ **주문 큐잉 버퍼**: DB 커넥션 풀 90% 소진 시 신규 주문을 SQS에 적재하고 "잠시 후 확인" 응답을 반환합니다. 사용자에게 주문번호를 즉시 발급해 불안감을 줄이고, 큐에서 순차 처리합니다.
-
-4️⃣ **PG 타임아웃 단축**: 평소 10초 → 피크 시 3초. 느린 PG보다 빠른 실패가 폴백 PG로의 전환을 앞당깁니다.
-
-### 극한 시나리오 2: 재고 초과 판매 — 동시 주문 1,000건에 재고 1개
-
-한정판 상품 재고 1개에 1,000명이 동시에 주문을 시도합니다. DB 낙관적 락 충돌이 폭발하고 일부 요청이 재고 0임에도 통과될 위험이 있습니다.
-
-**문제점:**
-- 낙관적 락 충돌로 대부분의 요청이 `OptimisticLockException` → 재시도 → 충돌 반복
-- Redis DECRBY 음수 허용 시 재고가 -50까지 떨어지는 초과 판매
-- 재시도 루프로 DB와 Redis에 대한 부하가 원래 요청의 10배로 증폭
-
-**대응 전략:**
-1️⃣ **Redis 재고 원자 차감 선행**: DB 조회 전에 Redis `DECRBY`로 먼저 재고를 차감합니다. 잔여가 음수이면 즉시 복구하고 품절 응답을 반환합니다. DB까지 도달하는 요청 수를 극적으로 줄입니다.
-
-2️⃣ **재고 선점 TTL**: Redis 예약에 15분 TTL을 설정합니다. 결제를 완료하지 않은 선점은 자동으로 해제되어 다음 대기자에게 기회가 돌아갑니다.
-
-3️⃣ **낙관적 락 재시도 횟수 제한**: `@Retryable(maxAttempts=3)`으로 재시도를 3회로 제한하고 이후에는 품절 응답을 반환합니다. 무한 재시도 루프를 차단합니다.
-
-### 극한 시나리오 3: Saga 보상 실패 — 결제는 됐는데 주문이 없다
-
-결제 서비스가 PG사 승인을 받고 `PaymentCompleted` 이벤트를 발행했지만, 주문 서비스가 Kafka Consumer 재시작 중이었고 이벤트를 처리하기 전에 Consumer 오프셋 커밋에 실패했습니다. 사용자 계좌에서 돈은 빠졌는데 주문이 생성되지 않은 상태가 됩니다.
-
-**문제점:**
-- 사용자: "결제됐는데 주문이 없다" → CS 폭주
-- 환불을 위해선 주문 ID가 필요한데 주문이 없으므로 수동 처리 필요
-- 동일 이벤트를 재처리하면 이미 처리된 경우 중복 주문 생성 위험
-
-**대응 전략:**
-1️⃣ **Consumer 멱등성 보장**: `payment_id`를 주문 테이블에 UNIQUE 제약으로 저장합니다. 이벤트가 중복 처리돼도 두 번째 INSERT는 실패하고 기존 주문을 반환합니다.
-
-2️⃣ **결제-주문 상태 정합성 배치**: 5분마다 `PaymentCompleted` 이벤트가 있지만 대응하는 주문이 없는 건을 감지해 자동으로 주문을 생성하거나 환불 프로세스를 트리거합니다.
-
-3️⃣ **DLQ 모니터링**: 처리 실패 이벤트가 DLQ에 쌓이면 P0 알람을 발생시키고 운영팀이 수동으로 재처리합니다. DLQ 메시지 유실이 결국 "돈 잃어버린 사용자"를 만듭니다.
-
----
-
-## 실무 실수 Top 5
-
-**실수 1: 주문 생성과 결제 요청을 단일 동기 트랜잭션으로 묶는다**
-`@Transactional` 안에서 PG사 HTTP API를 호출하는 코드를 자주 봅니다. PG사 응답이 3초 걸리는 동안 DB 트랜잭션이 열려 있어 커넥션을 점유합니다. 블프 피크에 커넥션 풀 전체가 PG 응답 대기에 묶이면 서비스 전체가 멈춥니다. 주문 생성은 DB 트랜잭션으로 완결하고, PG 요청은 Saga 이벤트로 비동기 처리하세요.
-
-**실수 2: 재고 차감을 결제 완료 후에 한다**
-"결제가 확정된 건에만 재고를 차감하겠다"는 논리는 맞지만, 결제 진행 중 다른 사용자가 같은 상품을 주문해 재고를 모두 소진할 수 있습니다. 결제 완료 후 재고가 없어서 주문 취소가 발생하면 사용자 경험이 최악입니다. 커머스 표준은 주문 시점에 재고를 선점(reserve)하고, 결제 완료 시 확정(confirm), 결제 실패 시 반환(release)하는 3단계입니다.
-
-**실수 3: 보상 트랜잭션을 멱등하게 만들지 않는다**
-`inventoryRepo.releaseReservation(orderId)` 를 두 번 호출하면 재고가 두 배 복구됩니다. Kafka Consumer의 at-least-once 발행 특성상 보상 이벤트가 중복 처리될 수 있습니다. 모든 보상 트랜잭션은 처리 여부를 DB에 기록하고 이미 처리된 경우 무시(idempotent)하도록 설계하세요.
-
-**실수 4: Outbox Relay를 단일 인스턴스로만 운영한다**
-Relay가 다운되면 이벤트 발행이 완전히 중단됩니다. Relay를 2대 이상 운영하되, ShedLock 또는 Redis 분산 락으로 중복 발행을 막아야 합니다. Relay 2대가 동시에 같은 Outbox 레코드를 처리하면 이벤트가 두 번 발행되므로 Consumer 멱등성이 전제되어야 합니다.
-
-**실수 5: 주문 목록 조회에 MySQL OFFSET 페이지네이션을 사용한다**
-`SELECT ... LIMIT 20 OFFSET 10000`은 OFFSET이 클수록 느립니다. 300만 건 주문 테이블에서 `OFFSET 100000`은 풀 스캔에 가깝습니다. Cursor 기반 페이지네이션(`WHERE id < :lastId ORDER BY id DESC LIMIT 20`)으로 전환하거나, 목록 조회를 Elasticsearch로 이관해서 MySQL 부하를 없애세요.
-
----
-
-## Day 1 → Scale 진화
-
-주문 시스템을 처음부터 Saga + CQRS + Snowflake ID로 구성하면 MAU 1만에서도 운영 복잡도가 팀을 압도한다. 실제 트래픽 규모가 병목을 만들 때 전환하는 것이 원칙이다.
-
-### Phase 1 — MAU 1만, 일 주문 1만 건 (스타트업 초기)
-
-**아키텍처**: 모놀리스 + MySQL 단일 인스턴스
-- 주문·결제·재고를 단일 서비스 내 DB 트랜잭션으로 처리 (Saga 불필요)
-- 주문번호: MySQL AUTO_INCREMENT (경쟁사 노출 문제는 MAU 1만에서는 허용)
-- 재고: MySQL row-level 락으로 동시성 제어
-- 상태 관리: Enum 컬럼 + 서비스 레이어 if-else (FSM 불필요)
-
-**월 비용**: ~$130/월
-- EC2 t3.medium × 2: ~$70
-- RDS MySQL db.t3.medium: ~$60
-
-### Phase 2 — MAU 10만, 일 주문 10만 건 (서비스 성장)
-
-**아키텍처**: 주문 서비스 분리 + 상태 머신 도입
-- 주문 서비스를 독립 마이크로서비스로 분리. 결제는 여전히 동기 HTTP 호출
-- 상태 머신(FSM) 도입으로 잘못된 전이 원천 차단
-- 주문번호를 Snowflake ID + 가독성 번호 이중 구조로 전환
-- 재고 선점 Redis 도입 (피크 시 DB 락 경합 방지)
-- MySQL 읽기 레플리카 추가로 조회 부하 분산
-
-**월 비용**: ~$800/월
-- EC2 c5.large × 4: ~$400
-- RDS MySQL Multi-AZ: ~$250
-- ElastiCache Redis r6g.small: ~$80
-- 기타: ~$70
-
-### Phase 3 — MAU 100만, 일 주문 300만 건 (고성장)
-
-**아키텍처**: Saga + CQRS + Transactional Outbox
-- 결제·재고·배송 서비스 완전 분리, Kafka 기반 Saga 이벤트 체인 구축
-- Transactional Outbox 패턴으로 이벤트 유실 원천 차단
-- CQRS: MySQL(쓰기) + Elasticsearch(읽기) 분리. 주문 목록 조회 ES로 이관
-- DB 샤딩 준비: `user_id % 4` 기준 논리 샤딩 먼저 적용
-- DLQ + 운영 대시보드: Saga 보상 실패 모니터링 체계 구축
-
-**월 비용**: ~$6,000/월
-- EC2 c5.2xlarge × 8: ~$2,000
-- RDS Aurora MySQL (Multi-AZ + 읽기 레플리카 2): ~$2,500
-- ElastiCache Redis Cluster: ~$600
-- Kafka MSK: ~$400
-- ES 클러스터 (주문 목록용): ~$500
-
-### Phase 4 — MAU 1억, 일 주문 3,000만 건 (글로벌)
-
-**아키텍처**: DB 샤딩 + 멀티리전 + 실시간 배송 추적
-- `user_id % 16` DB 샤딩으로 80,000 TPS까지 확장
-- 멀티리전 Active-Active: 한국·미국·동남아 리전 독립 주문 처리
-- 실시간 배송 추적: 배송사 웹훅 → Kafka → 주문 상태 자동 갱신
-- 주문 아카이빙: 5년 이상 주문을 S3 Parquet으로 이관, Athena로 조회
-- ML 기반 사기 주문 탐지: 비정상 패턴 실시간 차단
-
-**월 비용**: ~$50,000/월
-- 멀티리전 컴퓨팅: ~$20,000
-- 샤딩 DB 클러스터: ~$15,000
-- Kafka + ES + Redis: ~$8,000
-- ML 서빙 + 모니터링: ~$7,000
-
----
-
-## 핵심 메트릭
-
-| 메트릭 | 정상 기준 | 이상 신호 | 원인 가설 |
-|--------|---------|---------|---------|
-| **주문 생성 P99** | 1초 이내 | 3초 초과 | DB 커넥션 풀 소진, PG 동기 호출 블로킹, Outbox INSERT 지연 |
-| **재고 초과 판매 건수** | 0건/일 | 1건 이상 | Redis 음수 재고 방어 누락, 낙관적 락 재시도 한도 초과 |
-| **Outbox Relay Lag** | 5초 이내 | 30초 초과 | Relay 프로세스 다운, DB 커넥션 부족, Kafka 클러스터 응답 지연 |
-| **Saga 보상 실패 건수** | 0건/일 | 1건 이상 | 보상 트랜잭션 멱등성 부재, 외부 서비스(PG·배송사) 장기 장애 |
-| **DLQ 적재 건수** | 0건/일 | 10건 이상 | Consumer 처리 실패 반복, 스키마 불일치, 비즈니스 예외 미처리 |
-| **주문 상태 불일치 건수** | 0건/일 | 1건 이상 | FSM 우회 코드 존재, Kafka 이벤트 순서 역전, Consumer 중복 처리 |
-
-**핵심 알람 설정 예시**
+### 시나리오 3: Redis 클러스터 전체 다운
 
 ```
-주문 생성 P99 > 3초 → PagerDuty P1 (DB 커넥션 풀 상태 즉시 확인)
-재고 초과 판매 1건 → PagerDuty P0 + 해당 주문 즉시 취소 및 사용자 통지
-Outbox Relay Lag > 30초 → PagerDuty P1 (Relay 인스턴스 상태 확인)
-Saga 보상 실패 1건 → PagerDuty P0 (DLQ 확인, 수동 처리 준비)
-DLQ 10건 이상 → Slack 알림 (Consumer 로그 즉시 확인)
+발생 상황:
+  - 장바구니 조회 실패
+  - 재고 선점 불가
+  - 새 주문이 들어와도 재고 확인 불가
+
+방어 설계:
+  장바구니:
+    Redis 다운 시 → 빈 장바구니 반환 (주문은 직접 상품 페이지에서 가능)
+    복구 후 → 30일 TTL이니 빈 상태에서 재시작 (허용 가능한 데이터 손실)
+
+  재고 선점:
+    Redis 다운 시 → Fallback: MySQL에서 SELECT FOR UPDATE로 직접 선점
+    성능은 저하되나 주문 자체는 가능
+    MySQL 단독 선점은 10,500 QPS를 감당하기 어려우므로 최대 트래픽 제한
+
+  답변 포인트:
+    Redis가 SPoF(단일 장애점)이 되지 않도록 MySQL Fallback을 준비한다.
+    Redis Sentinel이나 Cluster 구성으로 HA 보장.
+```
+
+### 시나리오 4: 대규모 주문 취소 (블프 후 환불 폭증)
+
+```
+발생 상황:
+  - 블프 다음날 00:00부터 "단순 변심" 취소가 폭증
+  - 취소 요청: 평소의 100배
+  - PG사 환불 API가 병목
+
+방어 설계:
+  1. 취소 요청을 즉시 ORDER.status = CANCEL_REQUESTED로 변경
+  2. 환불 처리는 비동기 큐(Kafka)로 순차 처리
+  3. PG사 환불 API Rate Limit에 맞게 소비 속도 조절
+  4. 사용자에게 "취소 접수됨, 환불은 1~3 영업일 내 처리" 안내
+
+핵심 판단:
+  취소 "접수"와 환불 "완료"를 분리하면 사용자 경험을 유지하면서
+  PG사 병목을 우회할 수 있다.
+  즉시 처리처럼 보이지만 실제 환불은 비동기로.
+```
+
+### 시나리오 5: 멱등키 DB 장애로 중복 결제 발생
+
+```
+발생 상황:
+  - idempotency_keys 테이블이 있는 DB 샤드에 장애
+  - 멱등키 조회 실패 → 기존 처리 결과를 확인 못함
+  - 재시도 요청이 PG사를 두 번 호출
+
+방어 설계:
+  1. 멱등키를 Redis에도 함께 저장 (Primary: DB, Cache: Redis)
+  2. DB 조회 실패 시 Redis에서 조회 (Fallback)
+  3. Redis도 없으면 PG사에 트랜잭션 조회 (inquiry) API 호출
+  4. 모든 조회 실패 시 요청 거부 (불확실한 상황에서 결제 진행 금지)
+
+핵심 원칙:
+  돈이 관련된 상황에서는 불확실할 때 거부(Fail-Safe)가
+  불확실할 때 진행(Fail-Open)보다 항상 낫다.
 ```
 
 ---
 
-## 실제 장애 사례
+## 정리 — WHY 체계로 면접을 통과하는 법
 
-### 사례 1: 쿠팡 2020 블프 — 단일 DB 트랜잭션이 PG 호출을 포함
+주문 시스템 설계에서 "무엇을"이 아닌 "왜"를 설명하는 것이 시니어와 주니어를 가릅니다.
 
-**상황**: 블프 자정 직후 주문 트래픽이 30배 폭증했다. 주문 생성 로직이 `@Transactional` 안에서 PG사 HTTP 승인 API를 동기 호출하고 있었다. PG사 응답이 평소 200ms에서 피크 시 3~8초로 늘어났다. DB 커넥션 풀 200개가 모두 PG 응답 대기에 블로킹됐고, 새 주문 요청이 커넥션을 받지 못해 큐에 쌓였다. 큐도 가득 차자 서비스가 503 응답을 반환하기 시작했다. 30분간 주문 불가 상태가 지속됐다.
+| 결정 | WHY 한 줄 요약 |
+|------|----------------|
+| MySQL for Orders | ACID가 돈 보호의 최소 요건이기 때문 |
+| Redis for Cart | 임시 데이터에 영구 저장소를 쓰는 낭비를 피하기 위해 |
+| Elasticsearch for History | 읽기:쓰기 50:1 비율에서 쓰기 DB 보호를 위해 |
+| Kafka 이벤트 드리븐 | 동기 호출의 지수 함수적 장애 전파를 막기 위해 |
+| Saga not 2PC | 외부 PG사는 DB 트랜잭션 참여 불가, 전역 락 블로킹 방지 |
+| 멱등키 | 네트워크는 언제든 죽고, 재시도는 반드시 발생하기 때문 |
+| CQRS | 읽기와 쓰기의 최적화 방향이 다르기 때문 |
+| Outbox Pattern | DB 커밋과 이벤트 발행의 원자성은 코드로 보장 불가이기 때문 |
+| FSM 상태 전이 | 불가능한 상태 전이를 런타임이 아닌 컴파일 타임에 차단하기 위해 |
+| Redis 선점 + MySQL 확정 | 속도(Redis)와 내구성(MySQL)을 역할로 분리하기 위해 |
 
-**근본 원인**: `@Transactional` 범위 안에 외부 API(PG사) 호출을 포함했다. 외부 API는 응답 시간이 예측 불가능하므로 DB 커넥션을 장기 점유하게 된다.
-
-**해결책**:
-- 주문 생성은 DB 트랜잭션만으로 완결 (결제 요청은 Outbox 이벤트로 비동기 처리)
-- 결제 서비스를 독립 프로세스로 분리, Saga 패턴 적용
-- DB 커넥션 풀 크기를 CPU 코어 수 × 2 + 10 공식으로 적정화
-- PG 타임아웃을 피크 시 3초로 단축해 블로킹 최소화
-
-**교훈**: DB 트랜잭션 안에 절대 외부 HTTP 호출을 포함하지 말라. 외부 API는 항상 느려질 수 있고, 그 순간 DB 커넥션을 인질로 잡는다.
-
-### 사례 2: 배달의민족 2022 — FSM 없는 상태 관리로 중복 배달 발생
-
-**상황**: 주문 상태를 단순 Enum 컬럼으로 관리하고 있었다. 배송 서비스가 `SHIPPED` 이벤트를 Kafka에서 두 번 수신했다(Consumer 재시작으로 인한 중복 발행). 두 이벤트 모두 `order.setStatus("SHIPPED")`를 실행했고, 두 번째 호출이 배달 기사에게 두 번 배달 요청을 보냈다. 같은 주문이 두 번 배달되는 사고가 발생했다.
-
-**근본 원인**: 상태 전이에 FSM이 없었고, Consumer 멱등성도 보장되지 않았다. `SHIPPED → SHIPPED` 전이가 가능했고, 두 번째 전이가 또 다른 배달 요청을 트리거했다.
-
-**해결책**:
-- FSM 도입으로 `SHIPPED → SHIPPED` 전이 시 예외 발생 (이미 처리된 것으로 무시)
-- 배달 요청 전 `delivery_id` UNIQUE 체크로 중복 요청 차단
-- Kafka Consumer에 `event_id` 기반 멱등성 처리 테이블 추가
-- 주문 상태 변경 이벤트를 처리하기 전 현재 상태를 다시 조회해 유효성 검증
-
-**교훈**: 이벤트 기반 시스템에서 중복 이벤트는 반드시 발생한다. Consumer 멱등성과 FSM은 옵션이 아닌 필수다.
-
-### 사례 3: 마켓컬리 2023 — 재고 선점 TTL 미설정으로 영구 재고 잠김
-
-**상황**: 주문 시점에 Redis로 재고를 선점하는 로직을 도입했다. 그런데 선점한 재고에 TTL을 설정하지 않았다. 결제 페이지에서 이탈한 사용자의 선점 재고가 영원히 해제되지 않았다. 인기 상품 재고 100개가 며칠 만에 모두 선점돼 구매 불가 상태가 됐지만 실제 판매는 30개에 불과했다. 재고가 있음에도 품절로 표시된 채 수만 명의 잠재 구매자를 잃었다.
-
-**근본 원인**: Redis 재고 선점에 TTL을 설정하지 않았다. 결제를 완료하지 않은 선점이 무기한 유지됐다.
-
-**해결책**:
-- 재고 선점 Redis 키에 TTL 15분 강제 설정 (`EXPIRE inventory:reserve:{orderId} 900`)
-- 결제 완료 이벤트 수신 시 선점 → 확정으로 상태 변경, TTL 제거
-- 주문 생성 후 15분 타이머: 결제 미완료 시 자동으로 재고 선점 해제 + 주문 CANCELLED 처리
-- 매 시간 배치로 Redis 선점 수량과 MySQL 실제 재고의 차이를 검증, 불일치 시 알람
-
-**교훈**: Redis에 저장하는 모든 비즈니스 상태에는 항상 TTL을 설정하라. TTL 없는 Redis 데이터는 시간이 지나면 반드시 문제를 만든다.
+면접에서 이 표의 오른쪽 열을 자신의 말로 설명할 수 있으면, 그것이 시니어 답변입니다.
