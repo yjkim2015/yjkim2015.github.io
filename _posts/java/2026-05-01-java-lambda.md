@@ -1,5 +1,5 @@
 ---
-title: "Java 람다(Lambda) 표현식"
+title: "Java 람다(Lambda) — invokedynamic부터 커링까지 내부 원리 완전 분석"
 categories:
 - JAVA
 toc: true
@@ -7,20 +7,22 @@ toc_sticky: true
 toc_label: 목차
 ---
 
-Java 8에서 도입된 람다(Lambda) 표현식은 Java를 함수형 프로그래밍 언어로 진화시킨 핵심 기능입니다. 단순한 문법 설탕(syntactic sugar)처럼 보이지만, 그 내부 동작 원리부터 실전 활용까지 깊이 있게 이해해야 제대로 쓸 수 있습니다.
+Java 8이 람다를 도입한 것은 단순한 문법 편의가 아닙니다. JVM 명령어 체계 자체를 확장(invokedynamic)하고, 런타임 코드 생성 메커니즘(LambdaMetafactory)을 추가하며, 함수형 인터페이스 타입 시스템을 설계했습니다. 겉으로 보이는 `(a, b) -> a + b` 뒤에는 바이트코드 부트스트랩, CallSite 캐싱, 스택 변수 복사, SAM 변환 등 정교한 엔지니어링이 숨어 있습니다. 이 글은 그 내부 구조를 면접 답변 수준으로 파헤칩니다.
 
-> **비유:** 람다는 "포스트잇에 적은 지시사항"입니다. 예전에는 누군가에게 일을 시키려면 정식 계약서(익명 클래스)를 써야 했지만, 람다는 포스트잇에 핵심 지시만 적어 건네는 것입니다. "이 리스트를 정렬해줘, 기준은 이름 순"이라고 포스트잇 한 장이면 됩니다.
+> **비유:** 람다는 공항 자동 출입국 심사대입니다. 예전(익명 클래스)에는 직원이 여권을 받아 도장을 찍고 대장에 기록했습니다(클래스 파일 생성, 클래스 로딩, 인스턴스화). 람다는 안면 인식(invokedynamic)으로 첫 번째만 등록하고 이후에는 캐시된 게이트(CallSite)를 통과합니다. 결과는 같지만 과정이 근본적으로 다릅니다.
 
-## 1. 람다란? 왜 필요한가?
+---
 
-### 람다 이전의 세계
+## 1. 람다 이전의 세계 — 익명 클래스의 비용
 
-Java 8 이전에는 동작(behavior)을 파라미터로 전달하려면 익명 클래스(anonymous class)를 사용해야 했습니다.
+Java 8 이전에 "동작(behavior)을 값처럼 전달"하려면 익명 클래스(anonymous class)가 유일한 방법이었습니다.
 
 ```java
-// Java 8 이전 — 익명 클래스로 동작 전달
+import java.util.*;
+
 List<String> names = Arrays.asList("Charlie", "Alice", "Bob");
 
+// 익명 클래스로 Comparator 전달
 Collections.sort(names, new Comparator<String>() {
     @Override
     public int compare(String a, String b) {
@@ -29,789 +31,1378 @@ Collections.sort(names, new Comparator<String>() {
 });
 ```
 
-이 코드의 문제점은 명확합니다. 실제로 하고 싶은 일은 `a.compareTo(b)` 한 줄인데, 그것을 감싸는 보일러플레이트(boilerplate) 코드가 6줄이나 됩니다.
+실제로 하고 싶은 일은 `a.compareTo(b)` 한 줄입니다. 그런데 그것을 감싸는 보일러플레이트가 5줄입니다. 더 심각한 문제는 컴파일러 동작입니다.
 
-### 람다로 개선
+**익명 클래스 컴파일 결과:**
 
-```java
-// Java 8 이후 — 람다 표현식
-List<String> names = Arrays.asList("Charlie", "Alice", "Bob");
-Collections.sort(names, (a, b) -> a.compareTo(b));
-
-// 더 나아가 메서드 레퍼런스로
-Collections.sort(names, String::compareTo);
+```
+OuterClass.class
+OuterClass$1.class   ← 익명 클래스마다 별도 .class 파일 생성
+OuterClass$2.class   ← 두 번째 익명 클래스
 ```
 
-### 람다가 필요한 이유
+익명 클래스는 컴파일 시점에 `OuterClass$1.class` 형태의 별도 파일이 생성됩니다. JVM은 이 파일을 클래스 로더가 로딩하고, 검증(verification)하고, 메타데이터를 Metaspace에 올립니다. 익명 클래스 100개면 `.class` 파일 100개, 클래스 로딩 100번입니다.
 
-람다는 **동작 파라미터화(behavior parameterization)** 패턴을 간결하게 표현하기 위해 도입되었습니다. "무엇을 할지(what)"를 "어떻게 할지(how)"와 분리하여, 동작 자체를 값처럼 다루는 것이 핵심 아이디어입니다.
-
-```java
-// 전략 패턴을 람다로 — 검증 로직을 동적으로 교체
-public static List<String> filter(List<String> list, Predicate<String> condition) {
-    List<String> result = new ArrayList<>();
-    for (String s : list) {
-        if (condition.test(s)) {
-            result.add(s);
-        }
-    }
-    return result;
-}
-
-// 호출 시 동작을 주입
-List<String> longNames = filter(names, name -> name.length() > 5);
-List<String> aNames   = filter(names, name -> name.startsWith("A"));
-```
+람다가 이 구조를 어떻게 바꾸는지가 이 글의 핵심입니다.
 
 ---
 
-## 2. 함수형 인터페이스 (@FunctionalInterface)
-
-> **비유:** 함수형 인터페이스는 "단 하나의 빈칸이 있는 양식"입니다. 이력서 양식에 "자기소개" 빈칸이 하나만 있으면 누구든 그 칸만 채우면 됩니다. 빈칸이 2개 이상이면 람다(포스트잇)로는 어느 칸을 채울지 모호해지므로, 반드시 빈칸(추상 메서드)이 하나여야 합니다.
-
-### 정의
-
-람다 표현식은 **함수형 인터페이스(functional interface)** 의 인스턴스입니다. 함수형 인터페이스란 **추상 메서드가 정확히 하나**인 인터페이스입니다. 컴파일러는 람다 표현식이 대입되는 타입(target type)을 보고 어떤 함수형 인터페이스의 구현인지 추론합니다.
+## 2. 람다 표현식 — 문법과 규칙
 
 ```java
-@FunctionalInterface
-public interface Runnable {
-    void run();  // 추상 메서드 1개
-}
+import java.util.*;
+import java.util.function.*;
 
-@FunctionalInterface
-public interface Comparator<T> {
-    int compare(T o1, T o2);  // 추상 메서드 1개
-    // equals()는 Object의 메서드이므로 제외
-    // default 메서드는 제외
-}
-```
-
-### @FunctionalInterface 어노테이션
-
-이 어노테이션은 컴파일러에게 "이 인터페이스는 함수형 인터페이스여야 한다"고 알립니다. 추상 메서드가 2개 이상이면 컴파일 에러가 발생합니다.
-
-```java
-@FunctionalInterface
-public interface StringProcessor {
-    String process(String input);
-
-    // default 메서드는 허용 (추상 메서드 아님)
-    default StringProcessor andThen(StringProcessor after) {
-        return s -> after.process(this.process(s));
-    }
-
-    // static 메서드도 허용
-    static StringProcessor identity() {
-        return s -> s;
-    }
-
-    // Object의 메서드 오버라이드도 허용
-    @Override
-    String toString();  // 이건 추상 메서드로 카운트되지 않음
-}
-```
-
-### 직접 만드는 함수형 인터페이스
-
-```java
-// 예외를 던지는 함수형 인터페이스 — 표준 라이브러리에 없어서 자주 직접 만듦
-@FunctionalInterface
-public interface ThrowingSupplier<T> {
-    T get() throws Exception;
-}
-
-// 사용
-ThrowingSupplier<Connection> connSupplier = () -> DriverManager.getConnection(url);
-```
-
----
-
-## 3. 람다 문법
-
-> **비유:** 람다 문법은 전보(telegram)와 같습니다. 전보는 글자 수를 줄이기 위해 불필요한 단어를 모두 생략합니다. `(a, b) -> a + b`는 "a와 b를 받아서 더한 값을 돌려준다"를 전보 스타일로 줄인 것입니다. 파라미터가 하나면 괄호도, 바디가 한 줄이면 중괄호와 return도 생략합니다.
-
-### 기본 구조
-
-```java
-// (파라미터) -> { 바디 }
+// (파라미터) -> 표현식 또는 { 블록 }
 
 // 1. 파라미터 없음
 Runnable r = () -> System.out.println("Hello");
 
 // 2. 파라미터 1개 — 괄호 생략 가능
 Consumer<String> c = s -> System.out.println(s);
-Consumer<String> c2 = (s) -> System.out.println(s);  // 동일
 
 // 3. 파라미터 2개 이상 — 괄호 필수
 Comparator<String> comp = (a, b) -> a.compareTo(b);
 
-// 4. 타입 명시 (선택)
+// 4. 타입 명시 (생략 가능, 컴파일러가 추론)
 Comparator<String> comp2 = (String a, String b) -> a.compareTo(b);
 
-// 5. 바디가 단일 표현식 — 중괄호, return, 세미콜론 생략
+// 5. 단일 표현식 — return, 세미콜론, 중괄호 모두 생략
 Function<Integer, Integer> square = x -> x * x;
 
-// 6. 바디가 여러 문장 — 중괄호 필수, return 명시
+// 6. 블록 바디 — return 명시, 세미콜론 포함
 Function<Integer, Integer> process = x -> {
     int doubled = x * 2;
-    int shifted = doubled + 1;
-    return shifted;
+    return doubled + 1;
 };
 
-// 7. void 반환 — 단일 표현식이어도 중괄호 없이 가능
-Consumer<String> printer = s -> System.out.println(s);
+// 7. 람다 → 메서드 레퍼런스로 더 간결하게
+Collections.sort(names, String::compareTo);
+```
 
-// 8. 예외 처리 — 체크 예외는 선언 필요
+---
+
+## 3. 함수형 인터페이스 (Functional Interface)와 @FunctionalInterface
+
+### 3.1 정의와 핵심 규칙
+
+람다 표현식은 **함수형 인터페이스(functional interface)** 의 인스턴스입니다. 함수형 인터페이스란 **추상 메서드가 정확히 하나**인 인터페이스입니다.
+
+> **비유:** 함수형 인터페이스는 "단 하나의 빈칸이 있는 계약서"입니다. 빈칸이 하나면 람다(포스트잇)로 채울 수 있습니다. 빈칸이 2개면 어느 칸을 채우는지 모호해집니다. 컴파일러는 빈칸이 하나임을 보장하는 계약서에만 람다를 허용합니다.
+
+```java
 @FunctionalInterface
-interface IOAction {
-    void perform() throws IOException;
+public interface Transformer<T, R> {
+    R transform(T input);           // 추상 메서드: 정확히 1개
+
+    // default 메서드 — 추상 메서드 카운트에서 제외
+    default <V> Transformer<T, V> andThen(Transformer<R, V> after) {
+        return t -> after.transform(this.transform(t));
+    }
+
+    // static 메서드 — 제외
+    static <T> Transformer<T, T> identity() {
+        return t -> t;
+    }
+
+    // Object 메서드 오버라이드 — 제외
+    @Override
+    String toString();
 }
-IOAction readFile = () -> new FileReader("test.txt").read();
+```
+
+`@FunctionalInterface` 어노테이션은 컴파일러에게 "이 인터페이스는 SAM(Single Abstract Method) 규칙을 강제하라"고 지시합니다. 추상 메서드가 2개 이상이면 컴파일 에러가 발생합니다.
+
+### 3.2 @FunctionalInterface가 없어도 동작하는가?
+
+```java
+// @FunctionalInterface 없이도 람다 대입 가능 — 단, 보호 없음
+interface Converter<F, T> {
+    T convert(F from);
+    // 이 인터페이스에 추상 메서드를 하나 더 추가해도 컴파일러가 경고하지 않음
+    // 결과적으로 람다를 대입하던 코드가 런타임이 아닌 컴파일 에러로 터짐 (뒤늦게 발견)
+}
+
+Converter<String, Integer> c = Integer::valueOf;  // 현재는 동작
+```
+
+`@FunctionalInterface`는 실수로 추상 메서드를 추가하는 것을 컴파일 타임에 차단합니다. API를 공개할 때 반드시 붙여야 합니다.
+
+### 3.3 체크 예외를 던지는 커스텀 함수형 인터페이스
+
+표준 `java.util.function` 인터페이스는 체크 예외를 선언하지 않습니다. 파일 I/O, DB 조회 등 체크 예외가 발생하는 코드를 람다로 쓰려면 직접 정의해야 합니다.
+
+```java
+@FunctionalInterface
+public interface ThrowingFunction<T, R> {
+    R apply(T t) throws Exception;
+
+    // unchecked로 래핑하는 정적 헬퍼
+    static <T, R> Function<T, R> wrap(ThrowingFunction<T, R> f) {
+        return t -> {
+            try {
+                return f.apply(t);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+    }
+}
+
+// 사용 — 체크 예외가 있는 Files.readString을 Stream에서 사용
+import java.nio.file.*;
+import java.util.stream.*;
+
+List<Path> paths = List.of(Path.of("a.txt"), Path.of("b.txt"));
+
+List<String> contents = paths.stream()
+    .map(ThrowingFunction.wrap(Files::readString))
+    .collect(Collectors.toList());
 ```
 
 ---
 
-## 4. 타입 추론
+## 4. SAM 변환 — 람다가 타입을 얻는 방법
 
-> **비유:** 타입 추론은 "빈칸 채우기 시험"입니다. `Comparator<String> comp = (a, b) -> ...`라고 쓰면, 컴파일러는 왼쪽의 `Comparator<String>`이라는 문맥을 보고 "아, a와 b는 String이구나"라고 자동으로 빈칸을 채웁니다. 교사(컴파일러)가 문맥(target type)에서 정답을 추론하는 것입니다.
-
-람다의 타입은 **대입되는 컨텍스트(target type)** 에서 추론됩니다. 컴파일러는 람다가 대입되는 함수형 인터페이스의 제네릭 타입 파라미터를 분석해 파라미터 타입과 반환 타입을 결정합니다.
+SAM(Single Abstract Method) 변환은 컴파일러가 람다 표현식을 보고 "이 람다는 어떤 함수형 인터페이스 타입인가?"를 결정하는 과정입니다.
 
 ```java
-// 컴파일러가 Comparator<String>임을 알아서 T=String으로 추론
-Comparator<String> comp = (a, b) -> a.compareTo(b);
-//                         ↑  ↑
-//                    String으로 자동 추론
-
-// 메서드 파라미터에서 추론
-List<String> names = Arrays.asList("B", "A", "C");
-names.sort((a, b) -> a.compareTo(b));
-//  sort(Comparator<? super String>) 시그니처에서 추론
-
-// 제네릭 메서드에서 추론
-<T> T firstOrDefault(List<T> list, Supplier<T> defaultSupplier) {
-    return list.isEmpty() ? defaultSupplier.get() : list.get(0);
-}
-
-String result = firstOrDefault(names, () -> "default");
-//                                         ↑ Supplier<String>으로 추론
+// 타겟 타입(target type)이 변환의 기준
+Runnable r       = () -> {};               // target: Runnable
+Callable<String> c = () -> "hello";        // target: Callable<String>
+Comparator<String> comp = (a, b) -> 0;    // target: Comparator<String>
 ```
 
-### 타입 추론이 실패하는 경우
+컴파일러는 **대입 컨텍스트(assignment context)**, **메서드 인수 컨텍스트(invocation context)**, **캐스팅 컨텍스트(cast context)** 세 가지에서 타겟 타입을 추론합니다.
 
 ```java
-// 모호한 경우 — 명시적 캐스팅 또는 타입 지정 필요
-Object o = (Runnable) () -> System.out.println("hi");  // OK
-Object o2 = () -> System.out.println("hi");  // 컴파일 에러: target type 불명확
+import java.util.concurrent.Callable;
+
+// 대입 컨텍스트
+Callable<String> c1 = () -> "hello";
+
+// 메서드 인수 컨텍스트
+void execute(Callable<String> task) { ... }
+execute(() -> "hello");   // Callable<String>으로 추론
+
+// 캐스팅 컨텍스트
+Object o = (Runnable) () -> {};   // Runnable로 강제
+
+// 추론 실패 — 타겟 타입 불명확
+Object o2 = () -> {};     // 컴파일 에러: target type 없음
+```
+
+### SAM 변환이 실패하는 경우
+
+```java
+// 메서드 오버로딩으로 타겟이 모호한 경우
+void process(Runnable r) { r.run(); }
+void process(Callable<Void> c) throws Exception { c.call(); }
+
+process(() -> System.out.println("hi"));  // 컴파일 에러: ambiguous
+// 해결: 캐스팅으로 명시
+process((Runnable) () -> System.out.println("hi"));
 ```
 
 ---
 
-## 5. 변수 캡처와 effectively final 제약
+## 5. 변수 캡처와 effectively final — 스택 vs 힙의 생명 주기 문제
 
-> **비유:** 변수 캡처는 "사진 찍기"입니다. 람다가 외부 변수를 캡처하면 그 순간의 값을 사진으로 찍어 간직합니다. 사진 속 풍경은 바뀌지 않으므로, 원본 풍경(변수)도 바뀌면 안 됩니다(effectively final). 만약 사진을 찍은 뒤 원본이 바뀌면 "사진과 실물이 다르다"는 혼란이 생기므로, Java는 아예 원본 변경을 금지합니다.
+### 5.1 왜 effectively final 제약이 존재하는가?
 
-람다는 외부 스코프의 변수를 **캡처(capture)** 할 수 있습니다. 단, 중요한 제약이 있습니다.
+> **비유:** 변수 캡처는 "법정 증거 사진"입니다. 사진(캡처된 복사본)은 찍는 순간 고정됩니다. 사건 현장(원본 변수)이 나중에 바뀌면 사진과 실물이 달라져 증거 능력을 잃습니다. 법원(JVM)은 아예 현장 변경을 금지합니다.
 
-### effectively final 규칙
+람다는 외부 지역 변수를 **값으로 복사(copy-by-value)** 합니다. 왜 참조가 아닌 복사인가?
+
+```
+메서드 스택 프레임:
+  int threshold = 10;   ← 스택에 위치
+
+람다 인스턴스 (힙):
+  captured_threshold = 10  ← 힙에 복사본 보관
+```
+
+메서드가 반환되면 스택 프레임이 사라지고 `threshold` 자체는 소멸합니다. 하지만 람다 인스턴스는 힙에서 계속 살아 있습니다. 람다가 소멸된 스택 변수를 직접 참조하면 댕글링 참조(dangling reference)가 됩니다. 해결책은 복사입니다.
+
+복사 이후 원본이 바뀌면 복사본과 불일치가 생깁니다. 특히 람다가 다른 스레드에서 실행될 때 메모리 가시성(visibility) 문제까지 더해집니다. Java는 이 불일치를 **컴파일 타임에 금지**합니다. 변경되지 않는 변수(effectively final)만 캡처를 허용합니다.
 
 ```java
-// OK — final 변수
+import java.util.function.*;
+
+// OK — final 명시
 final int threshold = 10;
-Predicate<Integer> p = x -> x > threshold;
+Predicate<Integer> p1 = x -> x > threshold;
 
-// OK — effectively final (변경되지 않으면 final과 동일 취급)
-int threshold2 = 10;
-Predicate<Integer> p2 = x -> x > threshold2;
-// threshold2를 이후에 변경하면 컴파일 에러 발생
+// OK — effectively final (이후에 재할당되지 않음)
+int limit = 20;
+Predicate<Integer> p2 = x -> x < limit;
+// limit = 30;  // 이 줄을 추가하면 p2 선언도 컴파일 에러
 
-// 컴파일 에러 — 변경된 변수는 캡처 불가
+// 에러 — 변경된 변수는 캡처 불가
 int count = 0;
-Runnable r = () -> System.out.println(count);  // count가 effectively final이면 OK
-count++;  // 이 줄이 있으면 위의 람다도 컴파일 에러
+count++;
+// Runnable r = () -> System.out.println(count);  // 컴파일 에러
 ```
 
-### 왜 effectively final 제약이 있는가?
-
-스택 변수는 메서드가 끝나면 사라지지만, 람다 인스턴스는 힙에서 더 오래 살 수 있습니다. 람다가 스택 변수를 직접 참조하면 메서드 종료 후 댕글링 참조가 발생합니다. 해결책은 **람다 생성 시점의 값을 복사(copy-by-value)** 하는 것입니다. 복사 후 원본이 바뀌면 복사본과 불일치가 생겨 혼란이 발생하므로, Java는 변경 자체를 금지합니다.
-
-```mermaid
-graph LR
-    S["스택(메서드)"] -->|count=0 복사| L["람다(힙)"]
-    S -->|메서드 종료| GONE["count 소멸"]
-    L -->|복사본 유효| LIVE["0 사용 가능"]
-```
-
-### 우회 방법 — 변경 가능한 컨테이너 사용
+### 5.2 인스턴스 변수와 정적 변수는 자유롭게 캡처
 
 ```java
-// 1. 배열로 우회 (권장하지 않음 — 코드 의도 불명확)
-int[] counter = {0};
-Runnable r = () -> counter[0]++;
+public class EventHandler {
+    private int callCount = 0;           // 인스턴스 변수
+    private static int totalCalls = 0;  // 정적 변수
 
-// 2. AtomicInteger 사용 (스레드 안전)
-AtomicInteger atomicCounter = new AtomicInteger(0);
-Runnable r2 = () -> atomicCounter.incrementAndGet();
-
-// 3. 상태를 가진 클래스로 캡슐화
-class Counter {
-    int value = 0;
-}
-Counter c = new Counter();
-Runnable r3 = () -> c.value++;
-// c 자체는 effectively final (재할당 안 함), c.value는 가변
-```
-
-### 인스턴스 변수와 정적 변수는 자유롭게 캡처
-
-```java
-public class LambdaCapture {
-    private int instanceVar = 100;
-    private static int staticVar = 200;
-
-    public Runnable createLambda() {
-        // 인스턴스 변수 — this를 통해 접근, 제약 없음
-        return () -> System.out.println(instanceVar++);  // OK
-
-        // 정적 변수 — 제약 없음
-        // return () -> System.out.println(staticVar++);  // OK
+    public Runnable buildHandler() {
+        // this.callCount — 힙의 객체 필드이므로 스택과 무관, 제약 없음
+        return () -> {
+            callCount++;        // this.callCount++와 동일
+            totalCalls++;       // EventHandler.totalCalls++와 동일
+            System.out.println("call: " + callCount);
+        };
     }
 }
 ```
 
----
+인스턴스 변수는 힙에 존재하며, 람다가 `this` 참조를 통해 접근합니다. 정적 변수도 힙(Metaspace) 영역이므로 스택 생명주기와 무관합니다.
 
-## 6. 메서드 레퍼런스 (Method Reference)
-
-> **비유:** 메서드 레퍼런스는 "전화번호부"입니다. 람다가 "이 사람한테 전화해서 이름을 물어봐"라고 직접 지시하는 것이라면, 메서드 레퍼런스는 전화번호부에서 해당 항목을 가리키며 "여기 봐"라고 하는 것입니다. `String::toUpperCase`는 "String 전화번호부에서 toUpperCase 항목을 찾아라"는 뜻입니다.
-
-메서드 레퍼런스는 이미 이름이 있는 메서드를 람다 대신 참조하는 간결한 문법입니다. 컴파일러는 메서드 레퍼런스를 람다와 동일한 방식으로 처리합니다.
-
-### 6.1 정적 메서드 참조 (Class::staticMethod)
+### 5.3 effectively final 우회 패턴
 
 ```java
-// 람다
-Function<String, Integer> parser = s -> Integer.parseInt(s);
-// 메서드 레퍼런스
-Function<String, Integer> parser2 = Integer::parseInt;
+import java.util.concurrent.atomic.*;
 
-// 활용
-List<String> numberStrings = Arrays.asList("1", "2", "3");
-List<Integer> numbers = numberStrings.stream()
-    .map(Integer::parseInt)
-    .collect(Collectors.toList());
-```
+// 1. AtomicInteger — 스레드 안전, 권장
+AtomicInteger counter = new AtomicInteger(0);
+Runnable r1 = () -> counter.incrementAndGet();  // counter 참조는 불변, 내부 값만 변경
 
-### 6.2 특정 인스턴스의 메서드 참조 (instance::method)
+// 2. int[] 배열 — 비권장 (의도 불명확)
+int[] mutable = {0};
+Runnable r2 = () -> mutable[0]++;  // 배열 참조는 불변, 원소만 변경
 
-```java
-String prefix = "Hello, ";
-// 람다
-Function<String, String> greeter = name -> prefix.concat(name);
-// 메서드 레퍼런스 — 특정 인스턴스(prefix)의 메서드
-Function<String, String> greeter2 = prefix::concat;
-
-// PrintStream 인스턴스의 println 참조
-Consumer<String> consolePrinter = System.out::println;
-//                                 ↑ System.out이 특정 인스턴스
-
-List<String> list = Arrays.asList("A", "B", "C");
-list.forEach(System.out::println);
-```
-
-### 6.3 임의 인스턴스의 메서드 참조 (Class::instanceMethod)
-
-파라미터로 들어오는 인스턴스의 메서드를 참조합니다.
-
-```java
-// 람다
-Function<String, String> toUpper = s -> s.toUpperCase();
-// 메서드 레퍼런스 — String 타입의 어떤 인스턴스든 toUpperCase() 호출
-Function<String, String> toUpper2 = String::toUpperCase;
-
-// BiFunction으로 두 파라미터 중 첫 번째가 수신자
-BiFunction<String, String, Boolean> startsWith = String::startsWith;
-// 동일한 람다: (str, prefix) -> str.startsWith(prefix)
-
-boolean result = startsWith.apply("Hello", "He");  // true
-```
-
-### 6.4 생성자 참조 (Class::new)
-
-```java
-// 람다
-Supplier<ArrayList<String>> listMaker = () -> new ArrayList<>();
-// 생성자 참조
-Supplier<ArrayList<String>> listMaker2 = ArrayList::new;
-
-// 파라미터가 있는 생성자
-Function<String, StringBuilder> sbMaker = StringBuilder::new;
-StringBuilder sb = sbMaker.apply("initial");
-
-// 배열 생성자
-IntFunction<int[]> arrayMaker = int[]::new;
-int[] arr = arrayMaker.apply(10);  // new int[10]
-
-// 실전 — Stream.toArray()에서 사용
-String[] nameArr = names.stream().toArray(String[]::new);
-```
-
-### 메서드 레퍼런스 4종 요약
-
-```mermaid
-graph LR
-    A["메서드 레퍼런스 4종"] --> B["1️⃣ Class::staticM"]
-    A --> C["2️⃣ instance::meth"]
-    A --> D["3️⃣ Class::instanc"]
-    A --> E["4️⃣ Class::new"]
+// 3. 상태를 가진 객체로 캡슐화
+class Box<T> { T value; Box(T v) { this.value = v; } }
+Box<Integer> box = new Box<>(0);
+Runnable r3 = () -> box.value++;  // box 참조는 불변, box.value만 변경
 ```
 
 ---
 
-## 7. java.util.function 패키지 핵심 인터페이스
+## 6. 람다 vs 익명 클래스 — invokedynamic vs inner class file
 
-> **비유:** `java.util.function`은 "표준 규격 부품 카탈로그"입니다. `Function`은 변환기(입력을 출력으로 변환), `Consumer`는 분쇄기(입력을 소비하고 끝), `Supplier`는 자판기(아무것도 넣지 않아도 물건이 나옴), `Predicate`는 검문소(통과/차단을 판별)입니다. 표준 규격이므로 어디에든 끼워 맞출 수 있습니다.
+이 차이를 이해하는 것이 면접에서 가장 중요한 부분입니다.
 
-Java 8은 자주 쓰이는 함수형 인터페이스를 `java.util.function` 패키지로 제공합니다.
-
-### 7.1 Function&lt;T, R&gt;
-
-T를 받아 R을 반환합니다.
+### 6.1 this의 의미
 
 ```java
-Function<String, Integer> length = String::length;
-Function<Integer, String> intToStr = Object::toString;
-
-// andThen — 두 함수를 합성: f.andThen(g) = g(f(x))
-Function<String, String> process = length.andThen(intToStr);
-String result = process.apply("hello");  // "5"
-
-// compose — andThen의 역순: f.compose(g) = f(g(x))
-Function<Integer, Integer> times2 = x -> x * 2;
-Function<Integer, Integer> plus3  = x -> x + 3;
-Function<Integer, Integer> times2ThenPlus3 = plus3.compose(times2);
-// times2ThenPlus3.apply(4) = plus3(times2(4)) = plus3(8) = 11
-
-// identity — 입력을 그대로 반환
-Function<String, String> id = Function.identity();  // s -> s
-```
-
-### 7.2 Consumer&lt;T&gt;
-
-T를 받아 아무것도 반환하지 않습니다 (소비).
-
-```java
-Consumer<String> printer = System.out::println;
-Consumer<List<String>> listClearer = List::clear;
-
-// andThen — 두 Consumer를 순서대로 실행
-Consumer<String> printAndLog = printer.andThen(s -> log(s));
-printAndLog.accept("Hello");  // 출력 후 로깅
-
-// forEach에서 자주 사용
-List<String> names = Arrays.asList("Alice", "Bob");
-names.forEach(System.out::println);
-```
-
-### 7.3 Supplier&lt;T&gt;
-
-아무것도 받지 않고 T를 반환합니다 (생산). 지연 계산(lazy evaluation)에 가장 많이 활용됩니다.
-
-```java
-Supplier<String> greeting = () -> "Hello, World!";
-Supplier<List<String>> listFactory = ArrayList::new;
-Supplier<LocalDate> today = LocalDate::now;
-
-// 지연 계산(lazy evaluation)에 유용
-public <T> T getOrCompute(T cached, Supplier<T> expensive) {
-    return cached != null ? cached : expensive.get();
-}
-
-// Optional과 함께
-String value = Optional.ofNullable(null)
-    .orElseGet(() -> "computed default");  // Supplier 사용
-```
-
-### 7.4 Predicate&lt;T&gt;
-
-T를 받아 boolean을 반환합니다.
-
-```java
-Predicate<String> isEmpty  = String::isEmpty;
-Predicate<String> isNotEmpty = isEmpty.negate();         // 부정
-Predicate<String> startsA  = s -> s.startsWith("A");
-Predicate<String> longName = s -> s.length() > 5;
-
-// and, or 조합
-Predicate<String> startsAAndLong = startsA.and(longName);
-Predicate<String> startsAOrEmpty = startsA.or(isEmpty);
-
-// 필터링에서 자주 사용
-List<String> names = Arrays.asList("Alice", "Bob", "Alexander", "");
-List<String> filtered = names.stream()
-    .filter(startsAAndLong)
-    .collect(Collectors.toList());  // ["Alexander"]
-```
-
-### 7.5 UnaryOperator&lt;T&gt;, BinaryOperator&lt;T&gt;
-
-입출력 타입이 동일한 Function/BiFunction의 특수화입니다.
-
-```java
-// UnaryOperator<T> extends Function<T, T>
-UnaryOperator<String> trim = String::trim;
-UnaryOperator<Integer> negate = x -> -x;
-
-// List.replaceAll에서 사용
-List<String> words = new ArrayList<>(Arrays.asList("  hello  ", "  world  "));
-words.replaceAll(String::trim);  // ["hello", "world"]
-
-// BinaryOperator<T> extends BiFunction<T, T, T>
-BinaryOperator<Integer> add  = Integer::sum;
-BinaryOperator<Integer> max  = Integer::max;
-
-// reduce에서 사용
-int sum = IntStream.rangeClosed(1, 10)
-    .reduce(0, Integer::sum);  // 55
-```
-
-### 기본형 특수화 인터페이스
-
-박싱/언박싱 오버헤드를 줄이기 위한 특수화 버전입니다. `int`, `long`, `double`을 직접 다루므로 `Integer` 객체를 생성하지 않습니다.
-
-```java
-// IntFunction<R>, LongFunction<R>, DoubleFunction<R>
-IntFunction<String> intToStr = i -> String.valueOf(i);
-
-// ToIntFunction<T>, ToLongFunction<T>, ToDoubleFunction<T>
-ToIntFunction<String> strLen = String::length;
-
-// IntUnaryOperator, LongUnaryOperator, DoubleUnaryOperator
-IntUnaryOperator doubler = x -> x * 2;
-
-// IntBinaryOperator, LongBinaryOperator, DoubleBinaryOperator
-IntBinaryOperator add = (a, b) -> a + b;
-
-// IntConsumer, LongConsumer, DoubleConsumer
-IntConsumer printInt = System.out::println;
-
-// IntSupplier, LongSupplier, DoubleSupplier
-IntSupplier random = () -> (int)(Math.random() * 100);
-
-// IntPredicate, LongPredicate, DoublePredicate
-IntPredicate isPositive = x -> x > 0;
-```
-
----
-
-## 8. 람다 합성과 조합
-
-> **비유:** 람다 합성은 공장의 조립 라인입니다. `trim`(세척) → `toLowerCase`(규격화) → `exclaim`(포장)처럼 각 공정을 독립된 모듈로 만들어 `andThen`으로 연결합니다. 공정 하나를 교체하거나 순서를 바꿔도 나머지 라인은 영향 없이 돌아갑니다.
-
-### Function 합성
-
-```java
-Function<String, String> trim    = String::trim;
-Function<String, String> lower   = String::toLowerCase;
-Function<String, String> exclaim = s -> s + "!";
-
-// andThen: 왼쪽 → 오른쪽
-Function<String, String> normalize = trim.andThen(lower).andThen(exclaim);
-normalize.apply("  Hello  ");  // "hello!"
-```
-
-### Predicate 조합
-
-```java
-Predicate<Integer> isPositive = x -> x > 0;
-Predicate<Integer> isEven     = x -> x % 2 == 0;
-Predicate<Integer> isSmall    = x -> x < 100;
-
-// and — 모두 만족
-Predicate<Integer> positiveEven = isPositive.and(isEven);
-
-// or — 하나 이상 만족
-Predicate<Integer> positiveOrSmall = isPositive.or(isSmall);
-
-// negate — 부정
-Predicate<Integer> isNegativeOrZero = isPositive.negate();
-
-// 복잡한 조합
-Predicate<Integer> complex = isPositive.and(isEven).and(isSmall.negate());
-// 양수이고 짝수이고 100 이상인 수
-```
-
-### Consumer 체이닝
-
-```java
-Consumer<String> log    = s -> System.out.println("[LOG] " + s);
-Consumer<String> audit  = s -> auditService.record(s);
-Consumer<String> notify = s -> emailService.send(s);
-
-// andThen으로 체이닝 — 순서대로 실행
-Consumer<String> fullPipeline = log.andThen(audit).andThen(notify);
-fullPipeline.accept("User login event");
-```
-
----
-
-## 9. 람다 vs 익명 클래스 차이
-
-> **비유:** 익명 클래스는 "1인 법인 설립"입니다. 법인(클래스)을 만들고, 사무실(this)을 빌리고, 대표(필드)를 세워야 합니다. 람다는 "프리랜서 계약"입니다. 법인 없이 본인(외부 클래스의 this)이 직접 계약하고, 사무실도 빌리지 않습니다(새 스코프 없음). 그래서 가볍고 빠르지만 자체 상태(필드)를 가질 수 없습니다.
-
-람다와 익명 클래스는 겉으로 비슷해 보이지만 `this`의 의미, 스코프, 바이트코드 구현 방식이 모두 다릅니다.
-
-### this의 의미 차이
-
-```java
-public class ThisExample {
+public class ScopeDemo {
     private String name = "outer";
 
-    public void demonstrate() {
+    public void run() {
         // 익명 클래스 — this는 익명 클래스 인스턴스를 가리킴
         Runnable anon = new Runnable() {
             @Override
             public void run() {
+                // this → ScopeDemo$1 (익명 클래스)
                 System.out.println(this.getClass().getSimpleName());
-                // 출력: ThisExample$1 (익명 클래스)
+                // 외부 필드 접근: ScopeDemo.this.name
+                System.out.println(ScopeDemo.this.name);
             }
         };
 
-        // 람다 — this는 람다를 감싸는 클래스(ThisExample)를 가리킴
+        // 람다 — this는 람다를 감싸는 클래스(ScopeDemo)를 가리킴
         Runnable lambda = () -> {
-            System.out.println(this.name);
-            // 출력: outer (ThisExample의 name 필드)
-            // this는 ThisExample 인스턴스를 참조
+            // this → ScopeDemo 인스턴스
+            System.out.println(this.name);   // "outer" 직접 접근
+            System.out.println(this.getClass().getSimpleName()); // "ScopeDemo"
         };
     }
 }
 ```
 
-### 새 스코프 생성 여부
+### 6.2 스코프와 변수 셰도잉
 
 ```java
-public void scopeExample() {
+public void scopeTest() {
     int x = 10;
 
-    // 익명 클래스 — 새로운 스코프 생성
+    // 익명 클래스 — 새 스코프 생성
     Runnable anon = new Runnable() {
-        int x = 20;  // OK — 외부 x와 다른 스코프
+        int x = 20;     // OK: 별도 스코프이므로 외부 x와 충돌 없음
         @Override
         public void run() {
             System.out.println(x);  // 20 (내부 x)
         }
     };
 
-    // 람다 — 스코프 생성 안 함
+    // 람다 — 스코프 생성 안 함, 외부 스코프 연장
     Runnable lambda = () -> {
-        // int x = 20;  // 컴파일 에러: 이미 x가 정의된 스코프
+        // int x = 20;  // 컴파일 에러: x는 이미 이 스코프에 존재
         System.out.println(x);  // 10 (외부 x)
     };
 }
 ```
 
+### 6.3 바이트코드 수준 차이
+
+익명 클래스가 생성하는 바이트코드(javap -c 결과 간략화):
+
+```
+// 익명 클래스 방식
+new #2  <ScopeDemo$1>           // 새 인스턴스 생성
+dup
+aload_0                         // outer this 로드 (캡처)
+invokespecial #3 <init>         // 생성자 호출
+astore_1
+```
+
+람다 방식:
+
+```
+// 람다 방식 — invokedynamic
+invokedynamic #4 run()          // 부트스트랩 메서드 호출
+  BootstrapMethods:
+    #0 LambdaMetafactory.metafactory(...)
+astore_1
+```
+
+익명 클래스는 `new + invokespecial`로 매번 객체를 만듭니다. 람다는 `invokedynamic` 하나로 처리하고, 최초 실행 시에만 `LambdaMetafactory`를 호출합니다.
+
 ---
 
-## 10. 람다의 내부 구현 — invokedynamic과 LambdaMetafactory
+## 7. invokedynamic + LambdaMetafactory 내부 동작
 
-> **비유:** 람다의 내부 구현은 "주문 제작 공장"입니다. 익명 클래스는 미리 제품(`.class` 파일)을 찍어놓는 대량생산 방식이고, 람다는 첫 주문(최초 실행)이 들어올 때 `LambdaMetafactory`라는 주문 제작 공장이 제품을 만들어 캐싱합니다. 두 번째 주문부터는 캐시된 제품을 재사용하므로 공장을 다시 가동할 필요가 없습니다.
+### 7.1 invokedynamic이 등장한 배경
 
-### invokedynamic 동작 원리
+Java 7 이전 JVM의 메서드 호출 명령어:
 
-람다는 익명 클래스처럼 별도의 `.class` 파일을 생성하지 않습니다. 대신 Java 7에서 도입된 `invokedynamic` JVM 명령어를 사용합니다. 첫 번째 호출 시 `LambdaMetafactory`가 런타임에 함수형 인터페이스 구현 클래스를 동적으로 생성하고 캐싱합니다. 이후 호출에서는 캐시된 구현을 재사용하므로 클래스 로딩 비용이 없습니다.
+| 명령어 | 용도 |
+|---|---|
+| invokevirtual | 인스턴스 메서드 (다형성) |
+| invokestatic | 정적 메서드 |
+| invokespecial | 생성자, private, super |
+| invokeinterface | 인터페이스 메서드 |
+
+이 네 가지는 컴파일 시점에 호출 대상이 고정됩니다. `invokedynamic`(Java 7, JSR 292)은 **최초 호출 시 런타임에 호출 대상을 결정**하고 이후에는 그 결정을 캐싱하는 메커니즘입니다. 동적 언어(JRuby, Groovy) 지원을 위해 만들어졌지만, Java 8 람다 구현에 핵심적으로 활용됩니다.
+
+### 7.2 부트스트랩 메서드와 CallSite
+
+```
+invokedynamic 명령어 실행 흐름:
+
+1. JVM이 invokedynamic 명령어를 처음 만남
+2. 바이트코드에 지정된 부트스트랩 메서드(bootstrap method) 호출
+   → LambdaMetafactory.metafactory()
+3. metafactory()가 함수형 인터페이스 구현체를 런타임에 생성
+4. 생성된 구현체를 ConstantCallSite에 캐싱
+5. 이후 같은 invokedynamic 지점은 캐시된 CallSite 직접 사용
+```
 
 ```mermaid
 graph LR
-    C["컴파일러"] -->|invokedynamic| JVM["JVM"]
-    JVM -->|최초 호출| LMF["LambdaMetafactory"]
-    LMF --> CS["CallSite 캐시"]
-    CS -->|재호출| JVM
+    COMP["컴파일러"] -->|invokedynamic 삽입| BC["바이트코드"]
+    BC -->|최초 실행| BM["BootstrapMethod"]
+    BM -->|생성 요청| LMF["LambdaMetafactory"]
+    LMF -->|구현체 생성| CS["ConstantCallSite"]
+    CS -->|재호출| IMPL["함수형 인터페이스 구현"]
 ```
 
-### 캡처링 람다 vs 비캡처링 람다
+### 7.3 LambdaMetafactory.metafactory() 시그니처
 
 ```java
-// 비캡처링 람다 (non-capturing) — 외부 변수를 캡처하지 않음
-// → 매번 동일한 인스턴스 재사용 가능 (JVM 최적화)
-Runnable r1 = () -> System.out.println("hello");
-Runnable r2 = () -> System.out.println("hello");
-// JVM에 따라 r1 == r2일 수 있음 (동일 인스턴스)
-
-// 캡처링 람다 (capturing) — 외부 변수를 캡처
-String message = "hello";
-Runnable r3 = () -> System.out.println(message);
-// 캡처된 값을 저장하는 새 인스턴스 생성 필요
-// r3마다 다른 인스턴스
+// java.lang.invoke 패키지
+public static CallSite metafactory(
+    MethodHandles.Lookup caller,         // 호출 컨텍스트 (접근 권한 검사용)
+    String interfaceMethodName,          // 구현할 추상 메서드 이름 (예: "run")
+    MethodType factoryType,              // 팩토리 메서드의 타입
+                                         // (캡처된 변수 → 함수형 인터페이스)
+    MethodType interfaceMethodType,      // 함수형 인터페이스 메서드의 타입
+    MethodHandle implementation,         // 람다 바디가 추출된 private static 메서드 핸들
+    MethodType dynamicMethodType         // 실제 구현 메서드의 타입
+) throws LambdaConversionException
 ```
 
-### 실제 성능 영향
+### 7.4 컴파일러가 람다 바디를 처리하는 방법
 
 ```java
-// 주의: 루프 내에서 람다 생성 — 캡처링이면 객체 생성 발생
-for (int i = 0; i < 1000000; i++) {
-    int captured = i;
-    Runnable r = () -> System.out.println(captured);  // 매번 새 객체
-    executor.submit(r);
-}
-
-// 비캡처링으로 개선하면 재사용 가능
-Runnable constant = () -> System.out.println("done");  // 재사용
-for (int i = 0; i < 1000000; i++) {
-    executor.submit(constant);  // 동일 객체 재사용
-}
-```
-
-**실무 실수:** 캡처링 람다를 100만 번 생성하면 100만 개의 객체가 GC 압력을 만듭니다. 루프 내부에 람다가 있고 외부 변수를 캡처하고 있다면 람다를 루프 밖으로 빼거나 캡처를 제거하는 것이 좋습니다.
-
----
-
-
-## 극한 시나리오
-
-### 시나리오 1: 이벤트 필터링 파이프라인 (100 TPS)
-
-> **비유:** 공항 보안 검색대입니다. 1차(금속 탐지) → 2차(X-ray) → 3차(수동 검사)로 이어지는 검문을 `Predicate.and().and()`로 체이닝합니다. 각 검문 단계를 독립 모듈로 교체할 수 있습니다.
-
-- **문제:** 실시간 로그 이벤트를 레벨·모듈·키워드 조합으로 필터링하는데, 조건이 10가지 이상이면 if-else가 수십 줄로 늘어납니다.
-- **해결:** `Predicate<LogEvent>`를 리스트로 관리하고, `reduce(Predicate::and)`로 합성합니다. 런타임에 조건을 추가·제거할 수 있어 재배포 없이 필터를 변경합니다.
-- **근거:** Predicate 합성은 short-circuit 평가를 지원하므로 첫 번째 조건에서 false가 나오면 나머지를 건너뜁니다.
-
-### 시나리오 2: 대규모 Stream 파이프라인 (10K TPS)
-
-> **비유:** 컨베이어 벨트 위의 택배 분류 센터입니다. `filter`(불량 제거) → `map`(라벨 부착) → `collect`(상자 적재)를 한 번의 순회로 처리합니다. 벨트를 여러 줄(parallelStream)로 늘리면 처리량이 배로 늘어나지만, 줄끼리 부딪히지 않도록 주의해야 합니다.
-
-- **문제:** 초당 10,000건의 주문 데이터를 `parallelStream`으로 처리하는데, 공유 상태를 가진 람다(캡처링 람다)가 있어 경쟁 조건이 발생합니다.
-- **해결:** 람다 내부에서 공유 상태를 제거하고, `Collector`의 combiner에서만 합산합니다. 불가피한 경우 `AtomicLong` 또는 `LongAdder`를 사용합니다.
-- **근거:** `parallelStream`의 ForkJoinPool은 기본 스레드 수가 `Runtime.availableProcessors() - 1`이므로 CPU 바운드 작업에서만 효과적이고, I/O 바운드 람다는 오히려 느려집니다.
-
-### 시나리오 3: 캡처링 람다 대량 생성 (100K TPS)
-
-> **비유:** 100만 장의 사진을 찍는 것과 같습니다. 비캡처링 람다는 같은 풍경을 가리키는 포스터 한 장(재사용)이지만, 캡처링 람다는 매번 새 사진을 인화하는 것(객체 생성)입니다.
-
-- **문제:** 루프 내에서 외부 변수를 캡처하는 람다를 100만 번 생성하면 100만 개의 객체가 Young GC를 빈번하게 유발합니다.
-- **해결:** 람다를 루프 밖으로 추출하여 비캡처링으로 전환하거나, 캡처할 값을 메서드 파라미터로 전달합니다. 불가능하면 람다 대신 재사용 가능한 전략 객체를 사용합니다.
-- **근거:** 비캡처링 람다는 JVM이 싱글톤 인스턴스로 최적화하므로 GC 대상이 되지 않습니다.
-
----
-## 12. 실무에서 자주 하는 실수
-
-### 실수 1: 람다 안에서 체크 예외를 던지려고 함
-
-```java
-// 컴파일 에러: Function의 apply()는 체크 예외를 선언하지 않음
-Function<String, String> reader = path -> new String(Files.readAllBytes(Paths.get(path)));
-
-// 해결 1: try-catch 감싸기
-Function<String, String> reader = path -> {
-    try { return new String(Files.readAllBytes(Paths.get(path))); }
-    catch (IOException e) { throw new UncheckedIOException(e); }
-};
-
-// 해결 2: 예외를 던지는 커스텀 함수형 인터페이스 정의
-@FunctionalInterface
-interface ThrowingFunction<T, R> { R apply(T t) throws Exception; }
-```
-
-### 실수 2: parallelStream에서 공유 상태 변경
-
-```java
-// 위험: 여러 스레드가 동시에 results에 추가 → 데이터 유실
-List<String> results = new ArrayList<>();
-stream.parallel().forEach(s -> results.add(s.toUpperCase()));
-
-// 해결: collect 사용 (스레드 안전한 합산)
-List<String> results = stream.parallel()
-    .map(String::toUpperCase)
-    .collect(Collectors.toList());
-```
-
-### 실수 3: 람다에서 this를 잘못 사용
-
-```java
-public class Handler {
-    private String name = "handler";
-
-    public Runnable getTask() {
-        return () -> System.out.println(this.name);
-        // this는 Handler 인스턴스 (익명 클래스와 다름!)
+// 원본 코드
+public class Example {
+    public void process() {
+        int threshold = 5;
+        Predicate<String> p = s -> s.length() > threshold;
     }
 }
 ```
 
-### 실수 4: 지나치게 긴 람다
+컴파일러는 이를 다음과 동등하게 변환합니다:
 
 ```java
-// 안티패턴: 10줄 이상의 람다는 가독성 저하
-list.stream().map(item -> {
-    // 15줄의 복잡한 변환 로직...
-    return result;
-}).collect(toList());
+public class Example {
+    // 1. 람다 바디를 private static 메서드로 추출
+    private static boolean lambda$process$0(int threshold, String s) {
+        return s.length() > threshold;
+    }
 
-// 해결: 메서드 추출 후 메서드 레퍼런스 사용
-list.stream().map(this::transformItem).collect(toList());
+    public void process() {
+        int threshold = 5;
+        // 2. invokedynamic으로 Predicate 구현체 요청
+        //    factoryType: (int) -> Predicate<String>  ← threshold를 캡처
+        //    implementation: lambda$process$0 메서드 핸들
+        Predicate<String> p = [invokedynamic: LambdaMetafactory.metafactory(...)];
+    }
+}
 ```
 
-### 실수 5: 불필요한 람다 (메서드 레퍼런스로 대체 가능)
+실제 javap -p -c 출력에서 `lambda$process$0` 같은 합성 메서드를 확인할 수 있습니다.
+
+### 7.5 캡처링 vs 비캡처링 람다의 CallSite 차이
 
 ```java
-// 불필요한 감싸기
-list.forEach(s -> System.out.println(s));
+// 비캡처링 람다 (non-capturing)
+Runnable r = () -> System.out.println("hello");
+// factoryType: () -> Runnable  (캡처 없음)
+// → ConstantCallSite: 항상 동일한 인스턴스 반환 가능
+// → JVM이 싱글톤 최적화 적용 가능
 
-// 간결하게 메서드 레퍼런스
-list.forEach(System.out::println);
+// 캡처링 람다 (capturing)
+String msg = "hello";
+Runnable r2 = () -> System.out.println(msg);
+// factoryType: (String) -> Runnable  (msg 캡처)
+// → 호출마다 새 인스턴스 생성 (msg 값을 저장해야 하므로)
 ```
 
 ---
 
-## 13. 면접 포인트
+## 8. 람다 성능 — 컴파일 시 클래스 파일 미생성의 의미
 
-### Q1: 람다 표현식이란 무엇이고, 익명 클래스와 어떻게 다른가요?
+### 8.1 익명 클래스 vs 람다 시작 비용 비교
 
-**A:** 람다는 함수형 인터페이스의 인스턴스를 간결하게 표현하는 문법입니다. 익명 클래스와 세 가지 차이가 있습니다. 첫째, `this`가 외부 클래스를 가리킵니다(익명 클래스는 자신). 둘째, 새 스코프를 생성하지 않으므로 외부 변수와 이름이 충돌합니다. 셋째, 내부적으로 `invokedynamic`을 사용하므로 별도 `.class` 파일이 생성되지 않습니다.
+| 항목 | 익명 클래스 | 람다 |
+|---|---|---|
+| 컴파일 결과 | `Outer$1.class` 파일 생성 | 별도 파일 없음 |
+| 클래스 로딩 | 최초 사용 시 클래스 로더가 `.class` 파일 로드 | 최초 invokedynamic 실행 시 LambdaMetafactory가 런타임 생성 |
+| Metaspace 사용 | 각 익명 클래스마다 메타데이터 점유 | 생성된 클래스도 Metaspace 사용 (그러나 프레임워크 제어 가능) |
+| 이후 호출 | 일반 가상 디스패치 | ConstantCallSite 직접 호출 (monomorphic) |
+| 인스턴스 재사용 | 항상 새 인스턴스 | 비캡처링은 JVM이 재사용 |
 
-### Q2: effectively final 제약이 있는 이유는?
+### 8.2 핫 경로에서의 실측 차이
 
-**A:** 람다는 지역 변수를 값으로 복사(copy-by-value)합니다. 메서드가 끝나면 스택 변수는 사라지지만 람다는 힙에서 살아있으므로, 복사 후 원본이 변경되면 복사본과 불일치가 생깁니다. Java는 이 혼란을 방지하기 위해 캡처되는 변수의 변경 자체를 컴파일 타임에 금지합니다.
+```java
+import java.util.function.*;
 
-### Q3: invokedynamic과 LambdaMetafactory의 역할은?
+// 핫 경로: 비캡처링 람다를 상수로 선언 → JVM이 싱글톤 최적화
+private static final Predicate<String> NOT_EMPTY = s -> !s.isEmpty();
 
-**A:** 컴파일러는 람다 바디를 `private static` 메서드로 추출하고 `invokedynamic` 명령어를 삽입합니다. 최초 실행 시 JVM이 `LambdaMetafactory.metafactory()`를 호출해 함수형 인터페이스 구현 클래스를 동적으로 생성하고 `CallSite`에 캐싱합니다. 이후 호출은 캐시된 구현을 직접 사용하므로 익명 클래스보다 클래스 로딩 비용이 적습니다.
+public List<String> filterHot(List<String> input) {
+    // NOT_EMPTY는 매번 같은 인스턴스 — GC 압력 없음
+    return input.stream().filter(NOT_EMPTY).collect(Collectors.toList());
+}
 
-### Q4: 캡처링 람다와 비캡처링 람다의 성능 차이는?
+// 위험 패턴: 루프 내 캡처링 람다 — 매 반복마다 새 객체
+public void dangerousLoop(List<String> input) {
+    for (String prefix : List.of("A", "B", "C")) {
+        // prefix를 캡처하므로 매 반복마다 Predicate 인스턴스 생성
+        long count = input.stream()
+            .filter(s -> s.startsWith(prefix))  // 캡처링!
+            .count();
+        System.out.println(prefix + ": " + count);
+    }
+}
+```
 
-**A:** 비캡처링 람다(외부 변수 미참조)는 JVM이 동일 인스턴스를 재사용할 수 있어 객체 생성이 발생하지 않습니다. 캡처링 람다는 캡처된 값을 저장하기 위해 매번 새 인스턴스를 생성하므로 GC 압력이 발생합니다. 루프 내 캡처링 람다가 성능 병목이면 루프 밖으로 추출하거나 캡처를 제거하는 것이 좋습니다.
+### 8.3 JIT 컴파일 이후
 
-### Q5: Function.andThen()과 compose()의 차이는?
-
-**A:** `f.andThen(g)`는 `g(f(x))`로 왼쪽에서 오른쪽 순서로 실행합니다. `f.compose(g)`는 `f(g(x))`로 오른쪽에서 왼쪽 순서입니다. `andThen`은 파이프라인의 자연스러운 흐름을 표현할 때, `compose`는 수학적 함수 합성을 표현할 때 사용합니다.
+JIT(Just-In-Time) 컴파일러는 ConstantCallSite를 통해 람다 호출이 항상 동일한 구현체임을 알 수 있습니다. 이를 통해 **인라이닝(inlining)** 이 가능합니다. 충분히 호출된 비캡처링 람다는 사실상 직접 메서드 호출과 동등한 성능에 도달합니다.
 
 ---
 
-## 정리 요약
+## 9. 메서드 레퍼런스 — 4가지 유형 완전 분석
+
+> **비유:** 메서드 레퍼런스는 "사람 주소록"입니다. 람다가 "이 사람 찾아가서 이 일 시켜"라고 직접 지시하는 것이라면, 메서드 레퍼런스는 주소록에서 해당 항목을 가리키며 "여기 봐, 이 사람이 해"라고 합니다. 주소록의 항목 형태에 따라 4종류로 나뉩니다.
+
+### 9.1 정적 메서드 참조 (ClassName::staticMethod)
+
+```java
+import java.util.function.*;
+import java.util.*;
+import java.util.stream.*;
+
+// 람다 → 메서드 레퍼런스
+Function<String, Integer> f1 = s -> Integer.parseInt(s);
+Function<String, Integer> f2 = Integer::parseInt;   // 동일
+
+// 인수가 여러 개인 정적 메서드
+BiFunction<String, String, String> join1 = (a, b) -> String.join(", ", a, b);
+// String.join은 (CharSequence, CharSequence...) 이므로 이 형태는 직접 참조 불가
+// 실제 사용 가능한 예:
+BiFunction<Integer, Integer, Integer> max1 = (a, b) -> Integer.max(a, b);
+BiFunction<Integer, Integer, Integer> max2 = Integer::max;   // 동일
+
+// Stream에서 활용
+List<String> strings = List.of("1", "2", "3");
+List<Integer> numbers = strings.stream()
+    .map(Integer::parseInt)
+    .collect(Collectors.toList());   // [1, 2, 3]
+```
+
+바이트코드 수준에서 `Integer::parseInt`는 `invokestatic Integer.parseInt(String)` 메서드 핸들을 LambdaMetafactory에 전달합니다.
+
+### 9.2 특정 인스턴스 메서드 참조 (instance::instanceMethod)
+
+```java
+// 특정 인스턴스(고정됨)의 메서드를 참조
+String greeting = "Hello, ";
+Function<String, String> greeter1 = name -> greeting.concat(name);
+Function<String, String> greeter2 = greeting::concat;   // 동일
+
+// PrintStream 인스턴스 System.out의 println 참조
+Consumer<String> printer1 = s -> System.out.println(s);
+Consumer<String> printer2 = System.out::println;        // 동일
+
+List<String> names = List.of("Alice", "Bob");
+names.forEach(System.out::println);
+
+// 비교자 인스턴스 참조 — 상태를 가진 객체의 메서드
+Comparator<String> byLength = Comparator.comparingInt(String::length);
+List<String> words = new ArrayList<>(List.of("banana", "apple", "kiwi"));
+words.sort(byLength::compare);   // byLength 인스턴스의 compare 참조
+```
+
+### 9.3 임의 인스턴스 메서드 참조 (ClassName::instanceMethod)
+
+파라미터로 들어온 인스턴스의 메서드를 참조합니다. **첫 번째 파라미터가 수신자(receiver)** 가 됩니다.
+
+```java
+// s라는 String 인스턴스의 toUpperCase를 호출
+Function<String, String> upper1 = s -> s.toUpperCase();
+Function<String, String> upper2 = String::toUpperCase;   // 동일
+
+// 두 파라미터 — 첫 번째가 수신자, 두 번째가 인수
+BiFunction<String, String, Boolean> startsWith1 = (str, pfx) -> str.startsWith(pfx);
+BiFunction<String, String, Boolean> startsWith2 = String::startsWith;   // 동일
+
+// BiFunction<String, String, Integer>로 compareTo 참조
+BiFunction<String, String, Integer> compare = String::compareTo;
+int result = compare.apply("apple", "banana");  // 음수
+
+// 정렬에서 임의 인스턴스 참조
+List<String> list = new ArrayList<>(List.of("banana", "apple"));
+list.sort(String::compareTo);  // Comparator<String>으로 SAM 변환
+```
+
+이 유형이 가장 혼동하기 쉽습니다. `String::toUpperCase`는 정적 메서드 참조가 아닙니다. `toUpperCase()`는 인스턴스 메서드이고, `String::toUpperCase`는 "어떤 String 인스턴스든 그것의 toUpperCase를 호출"하는 임의 인스턴스 참조입니다.
+
+### 9.4 생성자 참조 (ClassName::new)
+
+```java
+// 기본 생성자
+Supplier<ArrayList<String>> listFactory1 = () -> new ArrayList<>();
+Supplier<ArrayList<String>> listFactory2 = ArrayList::new;   // 동일
+
+// 파라미터가 있는 생성자
+Function<String, StringBuilder> sbFactory1 = s -> new StringBuilder(s);
+Function<String, StringBuilder> sbFactory2 = StringBuilder::new;   // 동일
+
+// 배열 생성자
+IntFunction<String[]> arrFactory = String[]::new;
+String[] arr = arrFactory.apply(5);  // new String[5]
+
+// Stream.toArray에서 배열 생성자 참조 활용
+List<String> names = List.of("Alice", "Bob", "Charlie");
+String[] nameArr = names.stream().toArray(String[]::new);
+// String[]::new → IntFunction<String[]> — Stream이 크기를 전달
+```
+
+### 9.5 4종 요약
 
 ```mermaid
 graph LR
-    A["람다"] --> B["함수형 인터페이스"]
-    A --> C["타입 추론"]
-    A --> D["effectively final"]
-    A --> E["메서드 레퍼런스"]
+    MR["메서드 레퍼런스"] --> ST["Class::staticMethod"]
+    MR --> IN["obj::method"]
+    MR --> AR["Class::instanceMethod"]
+    MR --> CN["Class::new"]
+```
+
+| 유형 | 문법 | 람다 동등 표현 | 수신자 |
+|---|---|---|---|
+| 정적 메서드 | `Integer::parseInt` | `s -> Integer.parseInt(s)` | 없음 |
+| 특정 인스턴스 | `obj::method` | `x -> obj.method(x)` | 고정 인스턴스 |
+| 임의 인스턴스 | `String::toUpperCase` | `s -> s.toUpperCase()` | 첫 번째 파라미터 |
+| 생성자 | `ArrayList::new` | `() -> new ArrayList<>()` | 없음 |
+
+---
+
+## 10. java.util.function 핵심 인터페이스 — 내부 합성 원리
+
+### 10.1 Function<T, R> — andThen vs compose 내부 구현
+
+```java
+import java.util.function.*;
+
+// Function 소스 코드 (간략화)
+@FunctionalInterface
+public interface Function<T, R> {
+    R apply(T t);
+
+    // andThen: f.andThen(g) → x → g(f(x))
+    // g(f(x)): f를 먼저 적용, 그 결과에 g 적용
+    default <V> Function<T, V> andThen(Function<? super R, ? extends V> after) {
+        Objects.requireNonNull(after);
+        return (T t) -> after.apply(this.apply(t));  // ← 람다로 구현된 합성
+    }
+
+    // compose: f.compose(g) → x → f(g(x))
+    // g를 먼저 적용, 그 결과에 f 적용 (수학적 함수 합성 순서)
+    default <V> Function<V, R> compose(Function<? super V, ? extends T> before) {
+        Objects.requireNonNull(before);
+        return (V v) -> this.apply(before.apply(v));
+    }
+
+    static <T> Function<T, T> identity() {
+        return t -> t;
+    }
+}
+```
+
+```java
+Function<String, String> trim    = String::trim;
+Function<String, String> lower   = String::toLowerCase;
+Function<String, String> exclaim = s -> s + "!";
+
+// andThen: 왼쪽→오른쪽 (파이프라인 순서)
+Function<String, String> pipeline = trim.andThen(lower).andThen(exclaim);
+System.out.println(pipeline.apply("  Hello  "));  // "hello!"
+
+// compose: 오른쪽→왼쪽 (수학 표기 순서)
+// trim.compose(lower): lower 먼저, 그 다음 trim
+Function<String, String> reverse = trim.compose(lower);
+// reverse.apply("  Hello  ") → lower("  Hello  ") → trim("  hello  ") → "hello"
+```
+
+### 10.2 Predicate<T> — and/or/negate의 단락 평가(Short-circuit)
+
+```java
+@FunctionalInterface
+public interface Predicate<T> {
+    boolean test(T t);
+
+    // and: 왼쪽이 false면 오른쪽 평가 안 함 (&&)
+    default Predicate<T> and(Predicate<? super T> other) {
+        Objects.requireNonNull(other);
+        return (t) -> test(t) && other.test(t);  // && 연산자: short-circuit
+    }
+
+    // or: 왼쪽이 true면 오른쪽 평가 안 함 (||)
+    default Predicate<T> or(Predicate<? super T> other) {
+        Objects.requireNonNull(other);
+        return (t) -> test(t) || other.test(t);  // || 연산자: short-circuit
+    }
+
+    // negate: 결과 반전
+    default Predicate<T> negate() {
+        return (t) -> !test(t);
+    }
+
+    // 두 객체가 equals인지 확인하는 정적 팩토리
+    static <T> Predicate<T> isEqual(Object targetRef) {
+        return (null == targetRef)
+            ? Objects::isNull
+            : object -> targetRef.equals(object);
+    }
+}
+```
+
+```java
+import java.util.stream.*;
+
+Predicate<String> isLong   = s -> s.length() > 5;
+Predicate<String> startsA  = s -> s.startsWith("A");
+Predicate<String> hasDigit = s -> s.chars().anyMatch(Character::isDigit);
+
+// 단락 평가 활용 — 비용이 싼 조건을 앞에 배치
+Predicate<String> combined = isLong.and(startsA).and(hasDigit);
+// isLong이 false면 startsA, hasDigit은 평가하지 않음
+
+List<String> data = List.of("Alexander1", "Bob", "Alice2", "Charlie");
+List<String> result = data.stream()
+    .filter(combined)
+    .collect(Collectors.toList());  // ["Alexander1"]
+
+// 동적 Predicate 합성 — 조건 리스트를 런타임에 조합
+List<Predicate<String>> conditions = List.of(isLong, startsA);
+Predicate<String> dynamic = conditions.stream()
+    .reduce(Predicate::and)         // reduce로 순서대로 and 합성
+    .orElse(s -> true);             // 조건 없으면 모두 통과
+```
+
+### 10.3 Consumer<T> — andThen 체이닝
+
+```java
+// Consumer.andThen 소스
+default Consumer<T> andThen(Consumer<? super T> after) {
+    Objects.requireNonNull(after);
+    return (T t) -> { accept(t); after.accept(t); };
+    // accept()에서 예외 발생 시 after.accept()는 실행되지 않음
+}
+```
+
+```java
+Consumer<String> log    = s -> System.out.println("[LOG] " + s);
+Consumer<String> audit  = s -> System.out.println("[AUDIT] " + s);
+Consumer<String> metric = s -> System.out.println("[METRIC] len=" + s.length());
+
+Consumer<String> fullPipeline = log.andThen(audit).andThen(metric);
+fullPipeline.accept("user.login");
+// [LOG] user.login
+// [AUDIT] user.login
+// [METRIC] len=10
+```
+
+### 10.4 Supplier<T> — 지연 평가(Lazy Evaluation)
+
+```java
+import java.util.Optional;
+
+// Supplier는 "값을 나중에 계산"하는 약속
+Supplier<String> expensive = () -> {
+    // DB 조회, 네트워크 호출 등 비용이 큰 연산
+    return fetchFromDatabase();
+};
+
+// 값이 필요할 때만 get() 호출
+public <T> T getOrCompute(T cached, Supplier<T> fallback) {
+    return cached != null ? cached : fallback.get();  // cached가 있으면 fallback 미실행
+}
+
+// Optional.orElseGet — Supplier로 지연 평가
+String value = Optional.<String>empty()
+    .orElseGet(() -> "computed");   // empty일 때만 람다 실행
+
+// orElse는 항상 실행됨 (주의)
+String bad = Optional.<String>empty()
+    .orElse(expensiveDefault());    // expensiveDefault()는 항상 호출됨!
+```
+
+### 10.5 UnaryOperator<T>, BinaryOperator<T>
+
+```java
+import java.util.function.*;
+
+// UnaryOperator<T> extends Function<T, T> — 입출력 타입 동일
+UnaryOperator<String> trim    = String::trim;
+UnaryOperator<String> upper   = String::toUpperCase;
+UnaryOperator<String> trimAndUpper = trim.andThen(upper)::apply;
+// 주의: andThen 반환 타입은 Function<T,R>, UnaryOperator<T>로 직접 체이닝 어려움
+// 명시적 캐스팅 또는 별도 합성 필요
+
+List<String> words = new ArrayList<>(List.of("  hello  ", "  world  "));
+words.replaceAll(String::trim);  // List.replaceAll(UnaryOperator<E>)
+System.out.println(words);  // [hello, world]
+
+// BinaryOperator<T> extends BiFunction<T, T, T> — 두 입력, 한 출력, 모두 같은 타입
+BinaryOperator<Integer> add  = Integer::sum;
+BinaryOperator<Integer> max  = Integer::max;
+BinaryOperator<String>  concat = String::concat;
+
+// Stream.reduce에서 BinaryOperator 활용
+import java.util.stream.*;
+int total = IntStream.rangeClosed(1, 10)
+    .boxed()
+    .reduce(0, Integer::sum);  // BinaryOperator<Integer>
+System.out.println(total);  // 55
+
+Optional<String> joined = Stream.of("Hello", " ", "World")
+    .reduce(String::concat);
+System.out.println(joined.get());  // "Hello World"
 ```
 
 ---
-## 면접 포인트
 
-**Q1. 람다와 익명 클래스의 핵심 차이는?**
-익명 클래스는 항상 새 클래스를 생성하고 `this`는 익명 클래스 인스턴스를 가리킵니다. 람다는 별도 클래스를 만들지 않고 `invokedynamic` 바이트코드를 통해 런타임에 구현 방식을 결정합니다(JVM이 최적화). `this`는 람다를 감싼 외부 클래스를 가리킵니다. 이벤트 리스너를 람다로 등록하면 `this`가 외부 클래스이므로 외부 상태에 접근하기 쉽지만, 외부 클래스가 GC되지 않는 문제에 주의해야 합니다.
+## 11. 커링(Currying)과 부분 적용(Partial Application)
 
-**Q2. effectively final 규칙이 있는 이유는?**
-람다가 외부 변수를 캡처할 때 변수의 복사본을 만듭니다. 만약 캡처 후 원본이 변경되면 람다 내부의 복사본과 불일치가 생깁니다. 특히 람다가 다른 스레드에서 실행될 때 원본과 복사본 사이에 메모리 가시성 문제가 발생할 수 있습니다. effectively final 제약으로 "변경되지 않는 값만 캡처"를 강제해 이 문제를 컴파일 타임에 차단합니다. 변경이 필요하면 `AtomicInteger`나 1-element 배열 등 컨테이너 객체를 사용합니다.
+### 11.1 커링이란?
 
-**Q3. 메서드 레퍼런스 4가지 유형과 사용 기준은?**
-`Class::staticMethod` — 정적 메서드 참조. `Integer::parseInt` = `s -> Integer.parseInt(s)`. `instance::method` — 특정 인스턴스 메서드. `System.out::println`. `Class::instanceMethod` — 임의 인스턴스 메서드. `String::toUpperCase` = `s -> s.toUpperCase()`. `Class::new` — 생성자 참조. `ArrayList::new` = `() -> new ArrayList<>()`. 람다의 본문이 단순히 다른 메서드 호출 하나뿐이라면 메서드 레퍼런스로 가독성을 높입니다. 중간 처리 로직이 있으면 람다를 유지합니다.
+> **비유:** 커링은 "요리 레시피 분리"입니다. "소금 + 설탕 + 재료를 넣어 볶아라"는 3인수 함수를 "소금을 정하면 → 설탕을 정하면 → 재료를 받아 볶는 함수"로 단계별로 분리하는 것입니다. 소금 양을 미리 정해두면 나머지 단계를 재사용할 수 있습니다.
 
-**Q4. 람다를 사용할 때 성능상 주의할 점은?**
-람다는 첫 호출 시 `invokedynamic`으로 구현체를 생성합니다. 이후 동일 람다는 재사용합니다(상태를 캡처하지 않는 경우). 상태를 캡처하는 람다(`() -> doSomething(capturedVar)`)는 매 호출마다 새 인스턴스를 만들 수 있어 GC 압력이 생깁니다. 초당 수만 번 호출되는 핫 경로에서 캡처 없는 람다를 static 상수로 유지하면 인스턴스 재사용이 보장됩니다. 그러나 대부분의 경우 람다 성능 오버헤드는 무시할 수 있는 수준입니다.
+커링은 `f(a, b, c)` 형태의 다인수 함수를 `f(a)(b)(c)` 형태 — 인수를 하나씩 받는 함수들의 연쇄 — 로 변환하는 기법입니다.
 
-**Q5. 함수형 인터페이스를 직접 정의해야 하는 경우는?**
-표준 함수형 인터페이스(`Function`, `Consumer`, `Supplier`, `Predicate`)가 커버하지 못하는 경우입니다. ① checked 예외를 던져야 할 때 — `Function<T, R>`은 unchecked 예외만 허용. `ThrowingFunction<T, R, E extends Exception>`을 정의하거나 checked 예외를 unchecked로 감쌉니다. ② 3개 이상의 파라미터 — `BiFunction`은 2개까지. `TriFunction<A, B, C, R>`을 직접 정의합니다. ③ 도메인 의미가 있는 명시적 타입 — `Predicate<User>` 대신 `UserValidator`로 의도를 명확히 합니다.
+```java
+import java.util.function.*;
+
+// 2인수 함수 → 커링
+// BiFunction<A, B, R> 대신 Function<A, Function<B, R>>
+Function<Integer, Function<Integer, Integer>> curriedAdd =
+    a -> b -> a + b;
+
+// 사용
+Function<Integer, Integer> add5 = curriedAdd.apply(5);  // 5를 고정
+System.out.println(add5.apply(3));   // 8
+System.out.println(add5.apply(10));  // 15
+
+// 3인수 커링
+Function<String, Function<Integer, Function<Boolean, String>>> formatter =
+    prefix -> count -> uppercase ->
+        (uppercase ? prefix.toUpperCase() : prefix) + " x" + count;
+
+String result = formatter.apply("item").apply(3).apply(true);
+System.out.println(result);  // "ITEM x3"
+```
+
+### 11.2 부분 적용(Partial Application)
+
+커링이 인수를 하나씩 받는 함수 체인으로 변환하는 것이라면, 부분 적용은 다인수 함수의 일부 인수를 미리 고정하는 것입니다.
+
+```java
+// BiFunction의 첫 번째 인수를 고정하는 부분 적용 헬퍼
+static <A, B, R> Function<B, R> partial(BiFunction<A, B, R> f, A a) {
+    return b -> f.apply(a, b);
+}
+
+BiFunction<String, String, String> format =
+    (template, value) -> template.replace("{}", value);
+
+// "Hello, {}"라는 템플릿을 고정
+Function<String, String> greeter = partial(format, "Hello, {}");
+System.out.println(greeter.apply("Alice"));  // "Hello, Alice"
+System.out.println(greeter.apply("Bob"));    // "Hello, Bob"
+```
+
+### 11.3 실전 커링 — 설정 주입 패턴
+
+```java
+import java.util.function.*;
+import java.util.*;
+
+// DB 쿼리를 커링으로 구성
+Function<String, Function<Integer, Function<Boolean, List<String>>>> queryBuilder =
+    tableName -> limit -> includeDeleted ->
+        buildQuery(tableName, limit, includeDeleted);
+
+// 테이블명만 고정한 쿼리 팩토리
+Function<Integer, Function<Boolean, List<String>>> userQuery =
+    queryBuilder.apply("users");
+
+// limit만 추가 고정
+Function<Boolean, List<String>> top10Users = userQuery.apply(10);
+
+// 실제 실행 시 includeDeleted만 전달
+List<String> activeUsers  = top10Users.apply(false);
+List<String> allUsers     = top10Users.apply(true);
+```
+
+### 11.4 BiFunction을 커링으로 변환하는 유틸리티
+
+```java
+static <A, B, R> Function<A, Function<B, R>> curry(BiFunction<A, B, R> f) {
+    return a -> b -> f.apply(a, b);
+}
+
+BiFunction<String, Integer, String> repeat = (s, n) ->
+    s.repeat(n);
+
+Function<String, Function<Integer, String>> curriedRepeat = curry(repeat);
+Function<Integer, String> repeatHello = curriedRepeat.apply("Hello");
+System.out.println(repeatHello.apply(3));  // "HelloHelloHello"
+```
+
+---
+
+## 12. 람다 직렬화 (Serialization of Lambda)
+
+### 12.1 람다를 직렬화할 수 있는가?
+
+람다는 기본적으로 직렬화되지 않습니다. 함수형 인터페이스와 람다 모두 `Serializable`을 구현해야 직렬화가 가능합니다.
+
+```java
+import java.io.*;
+import java.util.function.*;
+
+// Serializable과 함수형 인터페이스를 교차 캐스팅으로 직렬화
+Comparator<String> c = (Comparator<String> & Serializable)
+    (a, b) -> a.compareTo(b);
+
+// 직렬화 시도
+try (ObjectOutputStream oos = new ObjectOutputStream(
+        new FileOutputStream("comparator.ser"))) {
+    oos.writeObject(c);  // 동작
+}
+
+// 역직렬화
+try (ObjectInputStream ois = new ObjectInputStream(
+        new FileInputStream("comparator.ser"))) {
+    Comparator<String> restored = (Comparator<String>) ois.readObject();
+    System.out.println(restored.compare("B", "A"));  // 양수
+}
+```
+
+### 12.2 람다 직렬화의 위험성
+
+```java
+// 직렬화된 람다는 생성된 클래스명에 의존
+// → JDK 버전, 컴파일러 버전이 바뀌면 역직렬화 실패
+// → lambda$serialize$0 같은 합성 이름이 변경될 수 있음
+
+// 권장: 람다 대신 명시적 클래스로 직렬화
+public class StringComparator implements Comparator<String>, Serializable {
+    private static final long serialVersionUID = 1L;
+    @Override
+    public int compare(String a, String b) { return a.compareTo(b); }
+}
+```
+
+### 12.3 람다 직렬화가 필요한 경우
+
+Spark, Flink 같은 분산 처리 프레임워크는 람다를 네트워크를 통해 워커 노드로 전송합니다. 이 경우 직렬화가 필수입니다.
+
+```java
+// Spark 스타일 — Serializable 람다
+import java.io.Serializable;
+import java.util.function.*;
+
+@FunctionalInterface
+public interface SerializableFunction<T, R>
+    extends Function<T, R>, Serializable {}
+
+SerializableFunction<String, Integer> lengthFn = String::length;
+// 메서드 레퍼런스도 직렬화 가능 (단, 대상 클래스가 classpath에 있어야 함)
+```
+
+---
+
+## 13. Predicate/Function/Consumer/Supplier 합성 — 실전 파이프라인
+
+### 13.1 데이터 변환 파이프라인
+
+```java
+import java.util.*;
+import java.util.function.*;
+import java.util.stream.*;
+
+// 단계별 독립 변환 함수 정의
+Function<String, String>   trim       = String::trim;
+Function<String, String>   lower      = String::toLowerCase;
+Function<String, Integer>  length     = String::length;
+Predicate<Integer>         isValid    = n -> n >= 3 && n <= 20;
+Function<Integer, String>  classify   = n -> n < 10 ? "SHORT" : "LONG";
+
+// 함수 합성으로 파이프라인 구성
+Function<String, Integer> preprocess = trim.andThen(lower).andThen(length);
+// preprocess: String → (trim) → (lower) → (length) → Integer
+
+List<String> inputs = List.of("  Hello  ", "Hi", "  Java Programming  ", "X");
+
+List<String> results = inputs.stream()
+    .map(preprocess)            // String → Integer
+    .filter(isValid)            // 유효 길이 필터
+    .map(classify)              // Integer → "SHORT"/"LONG"
+    .collect(Collectors.toList());
+
+System.out.println(results);  // [SHORT, LONG]
+```
+
+### 13.2 이벤트 처리 파이프라인
+
+```java
+import java.util.function.*;
+
+record Event(String type, String payload, int priority) {}
+
+Predicate<Event> isHighPriority  = e -> e.priority() >= 8;
+Predicate<Event> isLoginEvent    = e -> e.type().equals("LOGIN");
+Predicate<Event> hasPayload      = e -> !e.payload().isEmpty();
+
+Function<Event, String>  extractPayload = Event::payload;
+Function<String, String> sanitize       = s -> s.replaceAll("[<>]", "");
+
+Consumer<String> store  = payload -> System.out.println("[STORE] " + payload);
+Consumer<String> notify = payload -> System.out.println("[NOTIFY] " + payload);
+
+// 고우선순위 로그인 이벤트의 payload를 sanitize 후 저장 + 알림
+Predicate<Event> shouldProcess = isHighPriority.and(isLoginEvent).and(hasPayload);
+Function<Event, String> transform = extractPayload.andThen(sanitize);
+Consumer<String> action = store.andThen(notify);
+
+List<Event> events = List.of(
+    new Event("LOGIN",  "<admin>",  9),
+    new Event("LOGIN",  "user1",    5),
+    new Event("LOGOUT", "<admin>",  9)
+);
+
+events.stream()
+    .filter(shouldProcess)
+    .map(transform)
+    .forEach(action);
+// [STORE] admin
+// [NOTIFY] admin
+```
+
+---
+
+## 14. 람다와 스트림 — 주요 오용 패턴
+
+### 14.1 parallelStream에서 공유 상태 변경
+
+```java
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.*;
+
+// 위험: ArrayList는 스레드 안전하지 않음
+List<String> unsafe = new ArrayList<>();
+List<String> data = List.of("a", "b", "c", "d", "e");
+
+data.parallelStream()
+    .map(String::toUpperCase)
+    .forEach(unsafe::add);  // 경쟁 조건! 결과 불확정
+
+// 안전: collect 사용
+List<String> safe = data.parallelStream()
+    .map(String::toUpperCase)
+    .collect(Collectors.toList());  // 내부적으로 스레드 안전하게 합산
+
+// 안전: 스레드 안전 컬렉션 사용
+List<String> concurrent = new CopyOnWriteArrayList<>();
+data.parallelStream()
+    .map(String::toUpperCase)
+    .forEach(concurrent::add);  // CopyOnWriteArrayList는 add가 synchronized
+```
+
+### 14.2 체크 예외를 람다 안에서 처리하는 패턴
+
+```java
+import java.nio.file.*;
+import java.util.function.*;
+
+// 안티패턴: 람다 안에서 직접 try-catch
+Function<Path, String> reader = path -> {
+    try {
+        return Files.readString(path);
+    } catch (IOException e) {
+        throw new RuntimeException(e);  // 체크 예외를 unchecked로 래핑
+    }
+};
+
+// 개선: 래핑 헬퍼를 한번만 정의하고 재사용
+@FunctionalInterface
+interface ThrowingFunction<T, R> {
+    R apply(T t) throws Exception;
+
+    static <T, R> Function<T, R> wrap(ThrowingFunction<T, R> f) {
+        return t -> {
+            try { return f.apply(t); }
+            catch (Exception e) { throw new RuntimeException(e); }
+        };
+    }
+}
+
+Function<Path, String> reader2 = ThrowingFunction.wrap(Files::readString);
+
+List<Path> paths = List.of(Path.of("a.txt"), Path.of("b.txt"));
+List<String> contents = paths.stream()
+    .map(ThrowingFunction.wrap(Files::readString))
+    .collect(Collectors.toList());
+```
+
+### 14.3 지나치게 긴 람다
+
+```java
+// 안티패턴: 20줄짜리 람다
+List<Order> orders = fetchOrders();
+List<Invoice> invoices = orders.stream()
+    .filter(order -> {
+        // 10줄의 필터링 로직
+        if (order.getAmount() < 0) return false;
+        if (order.getStatus() == null) return false;
+        // ... 7줄 더
+        return true;
+    })
+    .map(order -> {
+        // 15줄의 변환 로직
+        Invoice invoice = new Invoice();
+        // ...
+        return invoice;
+    })
+    .collect(Collectors.toList());
+
+// 개선: 메서드 추출 후 메서드 레퍼런스
+List<Invoice> invoices2 = orders.stream()
+    .filter(this::isValidOrder)   // 메서드로 추출
+    .map(this::toInvoice)         // 메서드로 추출
+    .collect(Collectors.toList());
+```
+
+---
+
+## 15. 면접 포인트 5개 — 깊은 WHY 분석
+
+### Q1: 람다와 익명 클래스의 근본적인 차이는 무엇인가?
+
+**표면적 차이:** 문법의 간결함, this의 의미, 스코프.
+
+**근본적 차이 — 바이트코드 구현:**
+
+익명 클래스는 컴파일 시 `Outer$1.class`를 생성합니다. JVM은 이 파일을 클래스 로더로 로딩하고, Metaspace에 클래스 메타데이터를 올립니다. 실행 시 `new + invokespecial`로 인스턴스를 생성합니다. 이 과정은 모든 익명 클래스마다 반복됩니다.
+
+람다는 컴파일 시 별도 파일을 생성하지 않습니다. 대신 바이트코드에 `invokedynamic` 명령어를 삽입합니다. 최초 실행 시 JVM이 `LambdaMetafactory.metafactory()`를 호출해 런타임에 구현 클래스를 생성하고 `ConstantCallSite`에 캐싱합니다. 이후 실행은 캐시된 CallSite를 직접 사용합니다.
+
+**실무 함의:** 람다가 익명 클래스보다 무조건 빠른 것은 아닙니다. 클래스 로딩 비용은 줄지만, 비캡처링 람다는 싱글톤 최적화로 GC 압력이 없는 반면, 캡처링 람다는 매번 새 인스턴스를 생성합니다. 최초 invokedynamic 실행 비용(LambdaMetafactory 호출)이 있지만 이후에는 익명 클래스와 동등하거나 더 빠릅니다.
+
+### Q2: effectively final 제약이 필요한 이유를 JVM 메모리 모델 관점에서 설명하라
+
+**스택 vs 힙 생명주기:** 지역 변수는 메서드 스택 프레임에 위치합니다. 메서드 반환 시 스택 프레임이 제거되고 변수는 소멸합니다. 람다 인스턴스는 힙에 존재하며 GC가 수거하기 전까지 살아있습니다. 람다가 소멸된 스택 변수를 직접 참조하면 댕글링 참조가 됩니다.
+
+**해결책 — 복사:** Java는 캡처 시 지역 변수의 현재 값을 람다 인스턴스 필드에 복사합니다. 복사본은 람다와 함께 힙에서 생존합니다.
+
+**불일치 방지:** 복사 이후 원본이 변경되면 람다가 보유한 복사본과 불일치가 발생합니다. 특히 람다가 다른 스레드에서 실행될 때, Java Memory Model의 happens-before 보장 없이 원본 변경이 복사본에 전파되지 않을 수 있습니다. effectively final 제약은 이 불일치 자체를 컴파일 타임에 봉쇄합니다.
+
+**인스턴스 변수가 자유로운 이유:** 인스턴스 변수는 `this` 참조를 통해 접근합니다. `this`는 힙 객체이므로 스택 생명주기 문제가 없습니다. 다만 스레드 안전성은 여전히 고려해야 합니다.
+
+### Q3: invokedynamic과 LambdaMetafactory의 역할을 부트스트랩 메서드까지 설명하라
+
+**invokedynamic의 역할:** `invokedynamic` 명령어는 바이트코드에 "이 지점의 호출 대상은 런타임에 결정하라"고 기록합니다. 각 `invokedynamic` 명령어는 상수 풀(constant pool)에 부트스트랩 메서드 참조를 포함합니다.
+
+**최초 실행:** JVM이 처음으로 `invokedynamic` 명령어를 만나면 부트스트랩 메서드를 호출합니다. 람다의 경우 부트스트랩 메서드는 `LambdaMetafactory.metafactory()`입니다.
+
+**LambdaMetafactory.metafactory()의 동작:**
+1. 호출 컨텍스트(`MethodHandles.Lookup`)를 통해 접근 권한을 검사합니다.
+2. 컴파일러가 추출한 람다 바디 메서드 핸들(`implementation`)을 받습니다.
+3. 함수형 인터페이스(`interfaceMethodType`)를 구현하는 클래스를 바이트코드 수준에서 동적 생성합니다. (내부적으로 ASM 또는 런타임 Proxy 기법 사용)
+4. 생성된 클래스의 인스턴스 또는 팩토리를 담은 `ConstantCallSite`를 반환합니다.
+
+**이후 실행:** JVM은 `ConstantCallSite`에 저장된 `MethodHandle`을 직접 호출합니다. 부트스트랩은 다시 실행되지 않습니다. JIT 컴파일러는 이 ConstantCallSite를 모노모픽(monomorphic) 호출로 최적화하고 인라이닝까지 적용합니다.
+
+### Q4: 캡처링 람다 vs 비캡처링 람다의 성능 차이를 GC 관점에서 설명하라
+
+**비캡처링 람다:**
+```
+factoryType: () → Runnable   (인수 없음 — 캡처 없음)
+```
+LambdaMetafactory는 인수 없는 팩토리를 생성합니다. 팩토리가 항상 같은 인스턴스를 반환하도록 JVM이 최적화할 수 있습니다. 핫스팟 JVM은 실제로 비캡처링 람다를 정적 필드에 캐싱해 싱글톤처럼 동작시킵니다.
+
+```java
+// 비캡처링 — JVM이 싱글톤으로 최적화 가능
+Runnable r1 = () -> System.out.println("hi");
+Runnable r2 = () -> System.out.println("hi");
+System.out.println(r1 == r2);  // JVM에 따라 true 가능
+```
+
+**캡처링 람다:**
+```
+factoryType: (int) → Predicate<String>   (int 인수 — 캡처 있음)
+```
+캡처된 값을 저장하기 위해 매번 새 인스턴스를 생성해야 합니다. 루프에서 10만 번 생성하면 10만 개의 객체가 Young GC 대상이 됩니다.
+
+**실무 해결책:**
+```java
+// 루프 내 캡처링 람다 — 위험
+for (String prefix : prefixes) {
+    list.stream().filter(s -> s.startsWith(prefix)).count();  // 매번 새 Predicate
+}
+
+// 개선 1: 비캡처링으로 전환 (가능하면)
+// 개선 2: static final로 선언 (캡처가 불필요한 경우)
+private static final Predicate<String> NOT_EMPTY = s -> !s.isEmpty();
+```
+
+### Q5: 람다로 커링을 구현할 때의 타입 시스템 한계와 해결 방법은?
+
+**Java 타입 시스템의 한계:** Java의 제네릭은 타입 소거(type erasure)를 사용합니다. 3인수 커링을 표현하면:
+
+```java
+Function<A, Function<B, Function<C, R>>>
+```
+
+이 타입은 가독성이 매우 낮고, 4인수면 더 깊어집니다. 또한 고차 함수 합성 시 타입 추론이 실패해 명시적 타입 지정이 필요한 경우가 많습니다.
+
+**해결 방법 1 — 전용 함수형 인터페이스 정의:**
+```java
+@FunctionalInterface
+interface TriFunction<A, B, C, R> {
+    R apply(A a, B b, C c);
+
+    default <V> TriFunction<A, B, C, V> andThen(Function<? super R, ? extends V> after) {
+        return (a, b, c) -> after.apply(this.apply(a, b, c));
+    }
+
+    default BiFunction<B, C, R> partial(A a) {
+        return (b, c) -> this.apply(a, b, c);
+    }
+}
+```
+
+**해결 방법 2 — Vavr 같은 라이브러리 활용:**
+
+Vavr의 `Function3<A, B, C, R>`은 `curried()`, `partial()`, `andThen()`, `compose()`를 모두 제공합니다. 커링이 필요한 도메인 코드에서는 직접 구현보다 검증된 라이브러리가 더 안전합니다.
+
+**면접 핵심 답변:** Java 람다는 커링 표현이 가능하지만 타입 가독성 한계가 있습니다. 2인수 정도는 `Function<A, Function<B, R>>`이 실용적이고, 3인수 이상이면 전용 함수형 인터페이스나 Vavr를 고려해야 합니다.
+
+---
+
+## 16. 극한 시나리오
+
+### 시나리오 1: 초당 100만 이벤트 필터링 파이프라인
+
+> **비유:** 공항 보안 검색대 100개가 동시에 돌아가는 상황입니다. 1차(금속탐지) → 2차(X-ray) → 3차(수동)로 이어지는 검문을 Predicate 체이닝으로 구현했는데, 각 검문 단계를 런타임에 추가/제거해야 합니다.
+
+**문제:** 초당 100만 건의 로그 이벤트를 레벨, 서비스명, 키워드 등 10가지 이상의 조건으로 필터링합니다. 조건이 자주 변경됩니다.
+
+**구현:**
+```java
+import java.util.*;
+import java.util.function.*;
+import java.util.concurrent.*;
+import java.util.stream.*;
+
+record LogEvent(String level, String service, String message) {}
+
+class EventFilter {
+    // CopyOnWriteArrayList: 읽기 성능 최적화, 드문 쓰기(조건 변경)에 적합
+    private final CopyOnWriteArrayList<Predicate<LogEvent>> conditions =
+        new CopyOnWriteArrayList<>();
+
+    public void addCondition(Predicate<LogEvent> condition) {
+        conditions.add(condition);
+    }
+
+    public void removeCondition(Predicate<LogEvent> condition) {
+        conditions.remove(condition);
+    }
+
+    // 비싼 조건은 뒤에 배치 — and는 short-circuit이므로 앞이 false면 뒤는 미평가
+    public Predicate<LogEvent> buildFilter() {
+        return conditions.stream()
+            .reduce(e -> true, Predicate::and);  // 조건 없으면 모두 통과
+    }
+}
+
+// 사용
+EventFilter filter = new EventFilter();
+filter.addCondition(e -> !"DEBUG".equals(e.level()));             // 저비용
+filter.addCondition(e -> "payment-service".equals(e.service())); // 저비용
+filter.addCondition(e -> isSpamDetected(e.message()));            // 고비용: 뒤에 배치
+
+// parallelStream + 비캡처링 Predicate
+Predicate<LogEvent> combined = filter.buildFilter();
+List<LogEvent> relevant = events.parallelStream()
+    .filter(combined)   // combined는 비캡처링(EventFilter의 인스턴스 변수 아닌 지역)
+    .collect(Collectors.toList());
+```
+
+**핵심 포인트:**
+- `Predicate::and`로 동적 합성 — 재배포 없이 조건 변경
+- 단락 평가 활용을 위해 비용 순서로 배치
+- `combined`가 캡처링 람다면 매 이벤트마다 새 인스턴스 — 반드시 루프 밖으로 추출
+
+### 시나리오 2: 분산 처리 프레임워크에서 람다 직렬화 실패
+
+> **비유:** 공장 라인의 제어 명령을 다른 공장으로 팩스(직렬화)로 보내려는데, 팩스 기계(JDK 버전)가 달라서 명령서(람다 클래스명)를 읽지 못합니다.
+
+**문제:** Apache Spark 작업에서 람다를 직렬화해 워커 노드로 전송하는데, 서버마다 JDK 버전이 달라 `InvalidClassException`이 발생합니다.
+
+**원인:** 람다는 `lambda$processData$0` 같은 합성 이름의 클래스로 생성됩니다. 이 이름은 JDK 버전, 컴파일러 버전, 파일 내 람다 순서에 따라 달라집니다. `serialVersionUID`도 자동 계산되므로 버전 간 불일치가 잦습니다.
+
+**해결:**
+```java
+import java.io.Serializable;
+import java.util.function.*;
+
+// 1. 명시적 Serializable 클래스 사용 (가장 안전)
+public class LengthFilter implements Predicate<String>, Serializable {
+    private static final long serialVersionUID = 1L;
+    private final int minLength;
+
+    public LengthFilter(int minLength) { this.minLength = minLength; }
+
+    @Override
+    public boolean test(String s) { return s.length() >= minLength; }
+}
+
+// 2. Serializable 교차 타입으로 람다 직렬화 (단기 해결)
+Predicate<String> p = (Predicate<String> & Serializable) s -> s.length() >= 5;
+
+// 3. 커스텀 SerializableFunction 인터페이스 (프레임워크 내부 표준)
+@FunctionalInterface
+interface SerializablePredicate<T> extends Predicate<T>, Serializable {
+    // serialVersionUID 정의 불가 (인터페이스), 구현 클래스에서 정의
+}
+```
+
+**교훈:** 분산 환경에서 람다 직렬화는 버전 안정성이 떨어집니다. 운영 환경에서는 명시적 `Serializable` 클래스가 더 안전합니다.
+
+### 시나리오 3: 루프 내 캡처링 람다가 GC를 포화시키는 상황
+
+> **비유:** 100만 장의 즉석사진을 인화하는 것과 같습니다. 한 장(싱글톤 람다)만 있으면 되는데, 매번 새 사진을 인화합니다.
+
+**문제:** 초당 10만 건의 요청을 처리하는 서버에서 GC 로그를 보니 Young GC가 5초마다 발생하고 STW(Stop-The-World) 시간이 50ms에 달합니다. 프로파일링 결과 특정 서비스 클래스에서 람다 객체가 초당 10만 개 생성됩니다.
+
+```java
+// 문제 코드
+public boolean processRequest(Request req) {
+    String userId = req.getUserId();  // 요청마다 다른 값
+    // 매 요청마다 Predicate 인스턴스 생성!
+    return userRepository.findAll().stream()
+        .filter(u -> u.getId().equals(userId))  // userId 캡처
+        .findFirst()
+        .isPresent();
+}
+```
+
+**해결:**
+```java
+// 개선 1: 람다 제거, 직접 메서드 호출
+public boolean processRequest(Request req) {
+    return userRepository.findById(req.getUserId()).isPresent();
+}
+
+// 개선 2: 캡처를 메서드 파라미터로 이동 (람다 자체를 비캡처링으로)
+private static boolean matchesId(User u, String id) {
+    return u.getId().equals(id);
+}
+
+public boolean processRequest(Request req) {
+    String userId = req.getUserId();
+    return userRepository.findAll().stream()
+        .anyMatch(u -> matchesId(u, userId));
+    // anyMatch 내 람다: u -> matchesId(u, userId) — 여전히 userId 캡처
+    // 개선 불완전, 개선 1이 최선
+}
+
+// 개선 3: 비캡처링 Predicate를 static으로 선언 (userId 조건이 고정인 경우만)
+private static final Predicate<User> IS_ACTIVE = u -> u.isActive();
+```
+
+---
+
+## 17. 실무에서 자주 하는 실수 요약
+
+```mermaid
+graph LR
+    L["람다 실수"] --> C1["공유상태 변경"]
+    L --> C2["체크예외 누락"]
+    L --> C3["과도한 길이"]
+    L --> C4["캡처링 대량생성"]
+```
+
+| 실수 | 증상 | 해결 |
+|---|---|---|
+| parallelStream + 공유 ArrayList | 데이터 유실, ConcurrentModificationException | collect 사용, 스레드 안전 컬렉션 |
+| 람다 내 체크 예외 | 컴파일 에러 | ThrowingFunction.wrap(), try-catch 내부 처리 |
+| 20줄 람다 | 가독성 저하, 테스트 불가 | 메서드 추출 후 메서드 레퍼런스 |
+| 루프 내 캡처링 람다 | GC 과부하, 높은 STW 빈도 | 루프 밖으로 추출, 비캡처링 전환 |
+| `orElse(expensive())` | Supplier 미사용 — 항상 실행 | `orElseGet(() -> expensive())` |
+| 람다에서 `this` 혼동 | 예상치 못한 외부 객체 접근 | 익명 클래스와 달리 this는 외부 클래스임을 인지 |
+
+---
+
+## 18. 정리 요약
+
+```mermaid
+graph LR
+    LAMBDA["람다 표현식"] --> FI["함수형 인터페이스"]
+    LAMBDA --> INDY["invokedynamic"]
+    INDY --> LMF["LambdaMetafactory"]
+    LMF --> CS["ConstantCallSite 캐싱"]
+    LAMBDA --> CAP["변수 캡처(복사)"]
+    CAP --> EF["effectively final 제약"]
+```
+
+Java 람다는 문법 설탕이 아닙니다. `invokedynamic`이라는 JVM 명령어 확장 위에, `LambdaMetafactory`라는 런타임 코드 생성기가, `ConstantCallSite` 캐싱으로 성능을 보장하는 정교한 시스템입니다. 이 구조를 이해하면 "왜 비캡처링 람다가 싱글톤으로 최적화되는지", "왜 effectively final이 필요한지", "왜 익명 클래스와 this가 다른지"를 논리적으로 설명할 수 있습니다.
+
+면접에서 람다를 설명할 때 "편한 문법"으로 끝내지 말고, `invokedynamic → LambdaMetafactory → CallSite → 비캡처링 싱글톤 최적화`의 흐름으로 답변하면 시니어 수준의 이해를 보여줄 수 있습니다.

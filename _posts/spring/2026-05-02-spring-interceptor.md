@@ -1,182 +1,122 @@
 ---
 layout: post
-title: "Spring Interceptor Filter와의 차이부터 실전까지"
+title: "Spring Interceptor 완전 정복 — 내부 메커니즘부터 실전 구현까지"
 date: 2026-05-02
 categories: SPRING
 ---
 
-> **한 줄 요약:** Spring Interceptor는 DispatcherServlet과 Controller 사이에서 동작하는 요청/응답 가로채기 메커니즘으로, 인증·로깅·성능 측정 등 횡단 관심사를 컨트롤러 코드 오염 없이 처리하는 핵심 도구다.
+> **한 줄 요약:** Spring Interceptor는 DispatcherServlet이 HandlerMapping으로 컨트롤러를 찾은 직후, 실제 호출 직전에 끼어드는 컴포넌트다. Filter와 달리 Spring ApplicationContext 안에 존재하기 때문에 모든 Bean에 자유롭게 접근할 수 있고, preHandle/postHandle/afterCompletion 세 시점에서 요청 흐름을 정밀하게 제어할 수 있다.
 
 ---
 
-## 공항 보안 검색대 비유로 시작하기
+## 1. 왜 Interceptor가 탄생했는가 — 근본적인 WHY
 
-해외여행을 떠날 때를 상상해보자. 공항에 도착하면 비행기에 탑승하기까지 여러 단계를 거친다.
+### 1-1. Filter만으로는 부족했던 이유
 
-1. **공항 입구 보안 게이트** — 공항 건물 자체에 들어오는 모든 사람을 확인한다. 여행객이든 직원이든 상관없이 동일한 기본 보안 절차를 밟는다.
-2. **탑승 게이트 앞 보안 검색대** — 비행기를 탈 승객에 한해 여권·탑승권을 확인하고, 신체 검색과 수하물 엑스레이를 통과시킨다. 탑승 전에 이루어지고, 탑승 후에도 기록이 남는다.
-3. **기내 승무원의 서비스** — 실제 비행기 안에서 개별 승객에게 맞춤 서비스를 제공한다.
+Servlet Filter는 서블릿 컨테이너(Tomcat) 레벨에서 동작한다. 이 말은 Spring ApplicationContext가 시작되기 전, 즉 **Spring의 DI 컨테이너와 완전히 분리된 공간**에서 실행된다는 뜻이다.
 
-이 비유를 Spring의 처리 흐름에 대입해보면 다음과 같다.
-
-| 공항 비유 | Spring 구성 요소 |
-|---|---|
-| 공항 입구 보안 게이트 | **Filter** (서블릿 컨테이너 레벨) |
-| 탑승 게이트 보안 검색대 | **Interceptor** (Spring MVC 레벨) |
-| 기내 승무원 | **AOP** (비즈니스 로직 레벨) |
-
-탑승 게이트의 검색대처럼, **Interceptor는 특정 목적지(Controller)로 향하는 요청만 골라 처리하고, 도착 전(preHandle)과 도착 후(postHandle), 그리고 모든 처리가 끝난 뒤(afterCompletion) 각각 개입할 수 있다.**
-
----
-
-## Interceptor란 무엇인가
-
-### 기본 개념
-
-Spring Interceptor는 **Spring MVC의 DispatcherServlet이 Controller를 호출하기 전후로 요청을 가로채(intercept) 공통 처리를 수행하는 컴포넌트**다.
-
-`javax.servlet.Filter`가 서블릿 컨테이너(Tomcat 등) 레벨에서 모든 요청을 처리하는 것과 달리, Interceptor는 **Spring의 ApplicationContext 안에서 동작**하기 때문에 Spring의 모든 빈(Bean)에 자유롭게 접근할 수 있다.
-
-```
-HTTP 요청
-  │
-  ▼
-[Tomcat / 서블릿 컨테이너]
-  │
-  ▼
-[Filter Chain]          ← javax.servlet.Filter
-  │
-  ▼
-[DispatcherServlet]
-  │
-  ▼
-[HandlerMapping]
-  │
-  ▼
-[Interceptor Chain]     ← HandlerInterceptor (여기!)
-  │
-  ▼
-[Controller]
-  │
-  ▼
-[Interceptor Chain]     ← postHandle / afterCompletion
-  │
-  ▼
-HTTP 응답
-```
-
-### 왜 Interceptor가 필요한가
-
-컨트롤러마다 인증 확인 코드를 넣는다면 어떻게 될까?
+실제로 어떤 문제가 생기는지 보자.
 
 ```java
-// BAD: 컨트롤러마다 반복되는 인증 코드 (중복의 지옥)
-@GetMapping("/orders")
-public ResponseEntity<List<Order>> getOrders(HttpServletRequest request) {
-    // 모든 컨트롤러에 이 코드가 반복됨
-    String token = request.getHeader("Authorization");
-    if (token == null || !tokenService.isValid(token)) {
-        return ResponseEntity.status(401).build();
-    }
-    // 실제 비즈니스 로직
-    return ResponseEntity.ok(orderService.findAll());
-}
-```
+// Filter에서 Spring Bean을 주입받으려 하면?
+public class AuthFilter implements Filter {
 
-Interceptor를 사용하면 이 횡단 관심사(cross-cutting concern)를 한 곳에서 처리할 수 있다.
+    // 이것은 동작하지 않는다
+    // Filter는 서블릿 컨테이너가 관리하기 때문에
+    // Spring의 @Autowired가 작동하는 시점이 아님
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider; // null!
 
-```java
-// GOOD: Interceptor로 인증을 한 곳에서 처리
-@Component
-public class AuthInterceptor implements HandlerInterceptor {
     @Override
-    public boolean preHandle(HttpServletRequest request,
-                             HttpServletResponse response,
-                             Object handler) throws Exception {
-        String token = request.getHeader("Authorization");
-        if (token == null || !tokenService.isValid(token)) {
-            response.setStatus(401);
-            return false; // 컨트롤러 진입 차단
-        }
-        return true;
+    public void doFilter(ServletRequest request, ServletResponse response,
+                         FilterChain chain) throws IOException, ServletException {
+        // jwtTokenProvider는 null이다 → NullPointerException
+        String token = ((HttpServletRequest) request).getHeader("Authorization");
+        jwtTokenProvider.validate(token); // NPE 발생
+        chain.doFilter(request, response);
     }
 }
 ```
 
----
+Spring은 이 문제를 해결하기 위해 `DelegatingFilterProxy`를 제공하지만, 이는 우회책이지 본질적인 해결책이 아니다. Filter가 Spring Context 밖에 있다는 근본 문제는 그대로다.
 
-## Filter vs Interceptor vs AOP 상세 비교
-
-### 비교 표
-
-| 구분 | Filter | Interceptor | AOP |
-|---|---|---|---|
-| **동작 레벨** | 서블릿 컨테이너 | Spring MVC | Spring AOP (프록시) |
-| **관리 주체** | 서블릿 컨테이너 (Tomcat 등) | Spring DispatcherServlet | Spring ApplicationContext |
-| **Spring Bean 접근** | 제한적 (DelegatingFilterProxy 사용 시 가능) | 가능 | 가능 |
-| **적용 대상** | 모든 HTTP 요청 (정적 리소스 포함) | DispatcherServlet이 처리하는 요청만 | Spring Bean의 메서드 |
-| **URL 패턴 지정** | 가능 | 가능 | 불가 (포인트컷으로 메서드 지정) |
-| **Request/Response 변경** | 가능 (래핑 등) | 가능 | 불가 (파라미터 수준) |
-| **예외 처리** | @ExceptionHandler 미적용 | @ExceptionHandler 적용 가능 | @ExceptionHandler 적용 가능 |
-| **주요 용도** | 인코딩 설정, XSS 방어, CORS, 보안 | 인증/인가, 로깅, 성능 측정 | 트랜잭션, 캐싱, 로깅 (메서드 레벨) |
-| **실행 시점** | 서블릿 전/후 | 컨트롤러 전/후 | 메서드 전/후 |
-| **인터페이스** | `javax.servlet.Filter` | `HandlerInterceptor` | `@Aspect` + `@Around` 등 |
-
-### Mermaid 다이어그램: 처리 흐름 비교
-
-```mermaid
-graph LR
-    A[요청] --> B[Filter]
-    B --> C[Servlet]
-    C --> D[Interceptor]
-    D --> E[Controller]
-    E --> F[응답]
+```
+[서블릿 컨테이너 레벨]
+  Filter → Filter → Servlet(DispatcherServlet)
+                         |
+                  [Spring Context 레벨]
+                  HandlerMapping → Interceptor → Controller
 ```
 
-### 언제 무엇을 사용해야 하는가
+Interceptor는 이 문제를 구조적으로 해결한다. **DispatcherServlet 안에서 실행되므로 처음부터 Spring ApplicationContext의 일부다.** Bean 주입, 예외 처리, 트랜잭션, 모두 자연스럽게 동작한다.
 
-```mermaid
-graph LR
-    A[횡단관심사] --> B{Bean접근?}
-    B -->|No| C[Filter]
-    B -->|Yes| D{URL제어?}
-    D -->|Yes| E[Interceptor]
-    D -->|No| F[AOP]
-```
+### 1-2. AOP만으로는 부족했던 이유
 
----
-
-## HandlerInterceptor 인터페이스 상세 분석
-
-### 인터페이스 정의
+AOP는 Spring Bean의 메서드에 프록시를 씌워 동작한다. 그런데 HTTP 레벨의 작업 — 요청 헤더 읽기, 응답 상태 코드 설정, URL 패턴 기반 분기 — 을 AOP로 처리하면 극도로 불편해진다.
 
 ```java
+// AOP로 HTTP 인증을 구현하면?
+@Aspect
+@Component
+public class AuthAspect {
+
+    @Around("@annotation(requireAuth)")
+    public Object checkAuth(ProceedingJoinPoint pjp, RequireAuth requireAuth)
+            throws Throwable {
+
+        // HTTP 요청 객체를 어떻게 얻나?
+        // RequestContextHolder를 써야 하는데... 이미 코드가 복잡해진다
+        HttpServletRequest request =
+            ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
+            .getRequest();
+
+        // URL 패턴 기반 제외 처리? AOP 포인트컷으로는 클래스/메서드 단위만 가능
+        // /api/public/** 경로 전체를 제외하려면? 모든 메서드에 @NoAuth를 붙여야 한다
+        String token = request.getHeader("Authorization");
+        if (!validate(token)) {
+            // 응답을 직접 조작하려면 또 RequestContextHolder를 써야 한다
+            HttpServletResponse response =
+                ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
+                .getResponse();
+            response.setStatus(401);
+            return null; // 반환값 타입 문제도 발생
+        }
+        return pjp.proceed();
+    }
+}
+```
+
+Interceptor를 쓰면 이 모든 복잡함이 사라진다. `HttpServletRequest`와 `HttpServletResponse`를 파라미터로 바로 받고, URL 패턴은 `addPathPatterns()`로 설정 한 줄이면 된다.
+
+**결론:** Interceptor는 "Spring Bean을 쓸 수 있는 Filter"이자 "HTTP를 직접 다룰 수 있는 AOP"다. 두 세계의 장점을 취한 절충 설계다.
+
+---
+
+## 2. HandlerInterceptor 라이프사이클 — 내부 메커니즘 심층 분석
+
+### 2-1. 인터페이스 전체 구조
+
+```java
+// spring-webmvc: org.springframework.web.servlet.HandlerInterceptor
 public interface HandlerInterceptor {
 
-    /**
-     * 컨트롤러 실행 전 호출
-     * @return true: 다음 단계 진행 / false: 처리 중단 (컨트롤러 미호출)
-     */
+    // 1단계: 컨트롤러 실행 전
     default boolean preHandle(HttpServletRequest request,
                                HttpServletResponse response,
                                Object handler) throws Exception {
         return true;
     }
 
-    /**
-     * 컨트롤러 실행 후, View 렌더링 전 호출
-     * 컨트롤러에서 예외 발생 시 호출되지 않음
-     */
+    // 2단계: 컨트롤러 실행 후, View 렌더링 전
+    // 컨트롤러에서 예외 발생 시 호출되지 않음
     default void postHandle(HttpServletRequest request,
                              HttpServletResponse response,
                              Object handler,
                              @Nullable ModelAndView modelAndView) throws Exception {
     }
 
-    /**
-     * View 렌더링 완료 후 호출 (요청 처리의 가장 마지막 단계)
-     * 예외 발생 여부와 관계없이 항상 호출됨 (preHandle이 true를 반환한 경우에만)
-     */
+    // 3단계: View 렌더링 완료 후 (항상 호출, 예외 발생 시에도)
+    // preHandle이 true를 반환한 경우에만 호출됨
     default void afterCompletion(HttpServletRequest request,
                                   HttpServletResponse response,
                                   Object handler,
@@ -185,653 +125,424 @@ public interface HandlerInterceptor {
 }
 ```
 
-### preHandle 상세 분석
+세 메서드 모두 `default` 구현이 있으므로 필요한 것만 오버라이드하면 된다. Java 8 이전에는 `HandlerInterceptorAdapter`라는 추상 클래스를 상속해서 사용했지만, Spring 5.3부터 deprecated됐다.
 
-```java
-public boolean preHandle(HttpServletRequest request,
-                          HttpServletResponse response,
-                          Object handler) throws Exception
+### 2-2. preHandle — 진입 문지기
+
+```
+DispatcherServlet.doDispatch()
+  → HandlerAdapter를 찾기 전에
+  → applyPreHandle() 호출
+    → 등록된 Interceptor 순서대로 preHandle() 실행
+    → 하나라도 false 반환 시 즉시 중단, triggerAfterCompletion() 호출
 ```
 
-**호출 시점:** DispatcherServlet이 Controller를 호출하기 직전
+**내부 구현 (DispatcherServlet 소스 기반):**
 
-**파라미터 분석:**
-- `HttpServletRequest request`: 클라이언트의 HTTP 요청 정보 (헤더, 파라미터, 바디 등)
-- `HttpServletResponse response`: HTTP 응답 객체 (이 시점에서 직접 응답 작성 가능)
-- `Object handler`: 실행될 핸들러(Controller 메서드) 정보. `HandlerMethod`로 캐스팅하면 어노테이션 정보 등을 얻을 수 있음
+```java
+// DispatcherServlet.doDispatch() 내부 (Spring 소스 코드 요약)
+boolean applyPreHandle(HttpServletRequest request, HttpServletResponse response)
+        throws Exception {
+    for (int i = 0; i < this.interceptorList.size(); i++) {
+        HandlerInterceptor interceptor = this.interceptorList.get(i);
+        if (!interceptor.preHandle(request, response, this.handler)) {
+            // false를 반환한 순간 즉시 afterCompletion 역순 호출
+            triggerAfterCompletion(request, response, null);
+            return false; // 컨트롤러 호출 안 됨
+        }
+        this.interceptorIndex = i; // 몇 번째까지 preHandle 통과했는지 기록
+    }
+    return true;
+}
+```
 
-**반환값의 의미:**
-- `true` 반환: 요청 처리를 계속 진행 (다음 Interceptor 또는 Controller 호출)
-- `false` 반환: 요청 처리를 여기서 중단 (Controller 호출 안 됨, 직접 응답을 작성해야 함)
+`interceptorIndex`를 기록하는 이유: **preHandle이 true를 반환한 인터셉터만 afterCompletion을 호출해야 하기 때문이다.** 3번 인터셉터에서 false를 반환하면 0, 1, 2번의 afterCompletion만 역순으로 호출된다.
+
+**preHandle의 Object handler 파라미터 활용:**
 
 ```java
 @Override
 public boolean preHandle(HttpServletRequest request,
                           HttpServletResponse response,
                           Object handler) throws Exception {
-    // handler를 HandlerMethod로 캐스팅하여 메서드/클래스 어노테이션 확인
-    if (handler instanceof HandlerMethod handlerMethod) {
-        // 메서드에 붙은 어노테이션 확인
-        LoginRequired loginRequired =
-            handlerMethod.getMethodAnnotation(LoginRequired.class);
 
-        // 클래스에 붙은 어노테이션 확인
-        if (loginRequired == null) {
-            loginRequired = handlerMethod.getBeanType()
-                .getAnnotation(LoginRequired.class);
-        }
+    // 정적 리소스 요청은 HandlerMethod가 아니라 ResourceHttpRequestHandler
+    if (!(handler instanceof HandlerMethod handlerMethod)) {
+        return true; // 정적 리소스는 통과
+    }
 
-        if (loginRequired != null) {
-            // 인증이 필요한 경우 처리
-            String token = request.getHeader("Authorization");
-            if (!isValidToken(token)) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json;charset=UTF-8");
-                response.getWriter().write("{\"error\": \"인증이 필요합니다\"}");
-                return false; // 처리 중단
-            }
+    // HandlerMethod로 캐스팅하면 메서드/클래스 레벨 어노테이션 모두 접근 가능
+    Class<?> beanType = handlerMethod.getBeanType();
+    Method method = handlerMethod.getMethod();
+
+    // 메서드 어노테이션 우선, 없으면 클래스 어노테이션 확인
+    LoginRequired anno = handlerMethod.getMethodAnnotation(LoginRequired.class);
+    if (anno == null) {
+        anno = AnnotationUtils.findAnnotation(beanType, LoginRequired.class);
+    }
+
+    if (anno != null) {
+        // 인증 처리
+        return authenticate(request, response, anno.roles());
+    }
+
+    return true;
+}
+
+private boolean authenticate(HttpServletRequest request,
+                               HttpServletResponse response,
+                               String[] requiredRoles) throws IOException {
+    String token = extractBearerToken(request);
+    if (token == null) {
+        sendError(response, 401, "UNAUTHORIZED", "인증 토큰이 없습니다");
+        return false;
+    }
+
+    Claims claims;
+    try {
+        claims = jwtProvider.parseToken(token);
+    } catch (ExpiredJwtException e) {
+        sendError(response, 401, "TOKEN_EXPIRED", "토큰이 만료되었습니다");
+        return false;
+    } catch (JwtException e) {
+        sendError(response, 401, "INVALID_TOKEN", "유효하지 않은 토큰입니다");
+        return false;
+    }
+
+    // 역할 검증
+    if (requiredRoles.length > 0) {
+        List<String> userRoles = claims.get("roles", List.class);
+        boolean hasRole = Arrays.stream(requiredRoles)
+            .anyMatch(userRoles::contains);
+        if (!hasRole) {
+            sendError(response, 403, "FORBIDDEN", "권한이 없습니다");
+            return false;
         }
     }
-    return true; // 계속 진행
+
+    // 이후 컨트롤러에서 사용할 수 있도록 request에 저장
+    request.setAttribute("userId", claims.getSubject());
+    request.setAttribute("userRoles", claims.get("roles"));
+    return true;
+}
+
+private String extractBearerToken(HttpServletRequest request) {
+    String header = request.getHeader("Authorization");
+    if (header != null && header.startsWith("Bearer ")) {
+        return header.substring(7);
+    }
+    return null;
+}
+
+private void sendError(HttpServletResponse response,
+                        int status, String code, String message) throws IOException {
+    response.setStatus(status);
+    response.setContentType("application/json;charset=UTF-8");
+    String body = String.format(
+        "{\"code\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\"}",
+        code, message, Instant.now()
+    );
+    response.getWriter().write(body);
 }
 ```
 
-### postHandle 상세 분석
+### 2-3. postHandle — 응답 가공 시점
 
-```java
-public void postHandle(HttpServletRequest request,
-                        HttpServletResponse response,
-                        Object handler,
-                        @Nullable ModelAndView modelAndView) throws Exception
+```
+컨트롤러 실행 완료
+  → ModelAndView 반환
+  → applyPostHandle() 호출
+    → 등록된 Interceptor 역순으로 postHandle() 실행
+  → View 렌더링
 ```
 
-**호출 시점:** Controller 실행 완료 후, View 렌더링 전
-
-**주의사항:**
-- Controller에서 **예외가 발생하면 호출되지 않는다.**
-- `ModelAndView`는 REST API (@ResponseBody, @RestController)에서는 null이다.
-- Interceptor가 여러 개일 경우 **역순으로 호출**된다.
+**postHandle이 역순인 이유:** 인터셉터 체인은 스택(Stack) 구조로 동작한다. preHandle은 push(순서대로 쌓음), postHandle은 pop(역순으로 꺼냄). 이는 '안쪽'에 있는 인터셉터가 먼저 응답 처리를 할 수 있게 한다. 마치 함수 호출 스택처럼, 가장 나중에 진입한 것이 가장 먼저 빠져나온다.
 
 ```java
 @Override
 public void postHandle(HttpServletRequest request,
                         HttpServletResponse response,
                         Object handler,
-                        ModelAndView modelAndView) throws Exception {
-    // REST API라면 modelAndView는 null
-    if (modelAndView != null) {
-        // 공통 모델 데이터 추가 (예: 메뉴 정보)
-        modelAndView.addObject("commonMenus", menuService.getCommonMenus());
+                        @Nullable ModelAndView modelAndView) throws Exception {
+
+    // REST API에서는 @ResponseBody를 쓰므로 ModelAndView가 null
+    // 이 경우 응답 헤더만 조작 가능 (바디는 이미 직렬화됨)
+    if (modelAndView == null) {
+        // JSON 응답에 공통 헤더 추가
+        response.setHeader("X-Api-Version", "v2");
+        response.setHeader("X-Request-Id",
+            (String) request.getAttribute("REQUEST_ID"));
+        return;
     }
 
-    // 응답 헤더 추가
-    response.setHeader("X-Processed-By", "MyApp");
+    // MVC(Thymeleaf 등) 응답에서는 ModelAndView 조작 가능
+    // 공통 레이아웃 데이터 주입
+    modelAndView.addObject("serverTime", LocalDateTime.now());
+    modelAndView.addObject("appVersion", appConfig.getVersion());
+
+    // 로그인 사용자 정보 모델에 추가
+    User user = (User) request.getAttribute("currentUser");
+    if (user != null) {
+        modelAndView.addObject("loginUser", user);
+    }
 }
 ```
 
-### afterCompletion 상세 분석
+**주의: postHandle은 예외 발생 시 호출되지 않는다.**
 
 ```java
-public void afterCompletion(HttpServletRequest request,
-                              HttpServletResponse response,
-                              Object handler,
-                              @Nullable Exception ex) throws Exception
+// Controller가 예외를 던지면 postHandle은 건너뜀
+// ExceptionResolver → afterCompletion 순서로 바로 넘어감
+@GetMapping("/orders/{id}")
+public OrderDto getOrder(@PathVariable Long id) {
+    return orderService.findById(id)
+        .orElseThrow(() -> new OrderNotFoundException(id));
+    // 이 예외 발생 시 postHandle 호출 안 됨
+    // afterCompletion은 ex 파라미터에 예외 정보 담아서 호출됨
+}
 ```
 
-**호출 시점:** View 렌더링 완료 후 (요청 처리의 가장 마지막)
+### 2-4. afterCompletion — 정리 책임자
 
-**핵심 특징:**
-- **예외 발생 여부와 관계없이 항상 호출된다** (단, preHandle이 true를 반환한 경우에만)
-- 리소스 해제, 로그 마무리 등에 적합
-- 예외 정보가 파라미터로 전달된다 (`Exception ex`)
-- Interceptor가 여러 개일 경우 **역순으로 호출**된다.
+```
+View 렌더링 완료 (또는 예외 발생)
+  → triggerAfterCompletion() 호출
+    → interceptorIndex까지 역순으로 afterCompletion() 실행
+    → 각 afterCompletion에서 예외 발생해도 나머지 계속 호출
+```
+
+`afterCompletion`은 **preHandle이 true를 반환한 인터셉터만** 호출된다. 이 보장 덕분에 preHandle에서 리소스를 획득하면 afterCompletion에서 항상 해제할 수 있다.
 
 ```java
 @Override
 public void afterCompletion(HttpServletRequest request,
                               HttpServletResponse response,
                               Object handler,
-                              Exception ex) throws Exception {
-    // 요청 처리 시간 로깅
-    Long startTime = (Long) request.getAttribute("START_TIME");
-    if (startTime != null) {
-        long elapsed = System.currentTimeMillis() - startTime;
-        log.info("[{}] {} 처리 완료 - {}ms",
-            request.getMethod(), request.getRequestURI(), elapsed);
-    }
-
-    // 예외 발생 시 추가 로깅
-    if (ex != null) {
-        log.error("[{}] {} 예외 발생: {}",
-            request.getMethod(), request.getRequestURI(), ex.getMessage());
-    }
-
-    // ThreadLocal 정리 (메모리 누수 방지!)
-    RequestContextHolder.resetRequestAttributes();
-}
-```
-
----
-
-## 실행 순서와 라이프사이클
-
-### 정상 흐름 Sequence Diagram
-
-```mermaid
-graph LR
-    DS["DispatcherServlet"] -->|"preHandle"| CTR["Controller"]
-    CTR -->|"ModelAndView"| DS
-    DS -->|"postHandle→응답"| CLI["Client"]
-```
-
-### preHandle에서 false 반환 시 흐름
-
-```mermaid
-graph LR
-    DS["DispatcherServlet"] -->|"preHandle→false"| IC["Interceptor1"]
-    IC -->|"afterCompletion"| DS
-    DS -->|"401 응답"| CLI["Client"]
-```
-
-### 예외 발생 시 흐름
-
-```mermaid
-graph LR
-    DS["DispatcherServlet"] -->|"preHandle"| IC["Interceptor1"]
-    DS -->|"핸들러 실행→예외"| ERR["예외 발생"]
-    ERR -->|"afterCompletion(ex)"| IC
-    DS -->|"에러 응답"| CLI["Client"]
-```
-
-### 다중 Interceptor 실행 순서 요약
-
-```
-등록 순서: Interceptor A → Interceptor B → Interceptor C
-
-preHandle 순서:     A → B → C  (등록 순서대로)
-postHandle 순서:    C → B → A  (역순)
-afterCompletion 순서: C → B → A  (역순)
-
-B.preHandle()이 false를 반환하면:
-- C.preHandle() 미호출
-- C.postHandle() 미호출
-- B.postHandle() 미호출
-- A.postHandle() 미호출
-- A.afterCompletion() 호출 (preHandle이 true를 반환했으므로)
-- B.afterCompletion() 미호출 (false 반환했으므로)
-```
-
----
-
-## 실전 구현 예제
-
-### 예제 1: 인증/인가 인터셉터
-
-```java
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class AuthInterceptor implements HandlerInterceptor {
-
-    private final JwtTokenProvider jwtTokenProvider;
-    private final UserRepository userRepository;
-
-    private static final String AUTHORIZATION_HEADER = "Authorization";
-    private static final String BEARER_PREFIX = "Bearer ";
-
-    @Override
-    public boolean preHandle(HttpServletRequest request,
-                              HttpServletResponse response,
-                              Object handler) throws Exception {
-
-        // 정적 리소스나 HandlerMethod가 아닌 경우 통과
-        if (!(handler instanceof HandlerMethod handlerMethod)) {
-            return true;
-        }
-
-        // @NoAuth 어노테이션이 있으면 인증 없이 통과
-        if (handlerMethod.hasMethodAnnotation(NoAuth.class) ||
-            handlerMethod.getBeanType().isAnnotationPresent(NoAuth.class)) {
-            return true;
-        }
-
-        // Authorization 헤더 추출
-        String authHeader = request.getHeader(AUTHORIZATION_HEADER);
-        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-            sendUnauthorized(response, "인증 토큰이 없습니다");
-            return false;
-        }
-
-        String token = authHeader.substring(BEARER_PREFIX.length());
-
-        // 토큰 검증
-        if (!jwtTokenProvider.validateToken(token)) {
-            sendUnauthorized(response, "유효하지 않은 토큰입니다");
-            return false;
-        }
-
-        // 토큰에서 사용자 정보 추출 후 request에 저장
-        Long userId = jwtTokenProvider.getUserId(token);
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다"));
-
-        request.setAttribute("currentUser", user);
-
-        // 역할 기반 인가 확인
-        RequireRole requireRole = handlerMethod.getMethodAnnotation(RequireRole.class);
-        if (requireRole != null && !user.hasRole(requireRole.value())) {
-            sendForbidden(response, "권한이 없습니다");
-            return false;
-        }
-
-        log.debug("인증 성공 - userId: {}, URI: {}", userId, request.getRequestURI());
-        return true;
-    }
-
-    private void sendUnauthorized(HttpServletResponse response, String message)
-        throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        writeJsonError(response, 401, message);
-    }
-
-    private void sendForbidden(HttpServletResponse response, String message)
-        throws IOException {
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        writeJsonError(response, 403, message);
-    }
-
-    private void writeJsonError(HttpServletResponse response, int code, String message)
-        throws IOException {
-        response.setContentType("application/json;charset=UTF-8");
-        String json = String.format(
-            "{\"code\":%d,\"message\":\"%s\",\"timestamp\":\"%s\"}",
-            code, message, LocalDateTime.now()
-        );
-        response.getWriter().write(json);
-    }
-}
-```
-
-커스텀 어노테이션 정의:
-
-```java
-// 인증 불필요 표시
-@Target({ElementType.METHOD, ElementType.TYPE})
-@Retention(RetentionPolicy.RUNTIME)
-public @interface NoAuth {}
-
-// 역할 기반 인가
-@Target(ElementType.METHOD)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface RequireRole {
-    String value();
-}
-```
-
-사용 예:
-
-```java
-@RestController
-@RequestMapping("/api")
-public class UserController {
-
-    @NoAuth
-    @GetMapping("/public/health")
-    public String health() { return "OK"; }
-
-    @GetMapping("/users/me")  // 기본 인증 필요
-    public UserDto getMe(@RequestAttribute("currentUser") User user) {
-        return UserDto.from(user);
-    }
-
-    @RequireRole("ADMIN")
-    @DeleteMapping("/users/{id}")
-    public void deleteUser(@PathVariable Long id) {
-        userService.delete(id);
-    }
-}
-```
-
----
-
-### 예제 2: 로깅 인터셉터
-
-```java
-@Slf4j
-@Component
-public class LoggingInterceptor implements HandlerInterceptor {
-
-    private static final String START_TIME_ATTR = "LOG_START_TIME";
-    private static final String REQUEST_ID_ATTR = "REQUEST_ID";
-
-    @Override
-    public boolean preHandle(HttpServletRequest request,
-                              HttpServletResponse response,
-                              Object handler) {
-        String requestId = UUID.randomUUID().toString().substring(0, 8);
-        long startTime = System.currentTimeMillis();
-
-        request.setAttribute(START_TIME_ATTR, startTime);
-        request.setAttribute(REQUEST_ID_ATTR, requestId);
-
-        // MDC에 요청 ID 설정 (로그 추적용)
-        MDC.put("requestId", requestId);
-
-        if (handler instanceof HandlerMethod handlerMethod) {
-            log.info("[{}] 요청 시작 - {} {} | Controller: {}.{}",
-                requestId,
-                request.getMethod(),
-                request.getRequestURI(),
-                handlerMethod.getBeanType().getSimpleName(),
-                handlerMethod.getMethod().getName()
-            );
-        } else {
-            log.info("[{}] 요청 시작 - {} {}",
-                requestId,
-                request.getMethod(),
-                request.getRequestURI()
-            );
-        }
-
-        // 쿼리 파라미터 로깅 (민감 정보 제외)
-        if (log.isDebugEnabled()) {
-            logRequestParams(request, requestId);
-        }
-
-        return true;
-    }
-
-    @Override
-    public void afterCompletion(HttpServletRequest request,
-                                 HttpServletResponse response,
-                                 Object handler,
-                                 Exception ex) {
-        Long startTime = (Long) request.getAttribute(START_TIME_ATTR);
-        String requestId = (String) request.getAttribute(REQUEST_ID_ATTR);
-
-        if (startTime != null) {
-            long elapsed = System.currentTimeMillis() - startTime;
-            int status = response.getStatus();
-
-            if (ex != null) {
-                log.error("[{}] 요청 실패 - {} {} | status={} | elapsed={}ms | error={}",
-                    requestId,
-                    request.getMethod(),
-                    request.getRequestURI(),
-                    status,
-                    elapsed,
-                    ex.getMessage()
-                );
-            } else {
-                log.info("[{}] 요청 완료 - {} {} | status={} | elapsed={}ms",
-                    requestId,
-                    request.getMethod(),
-                    request.getRequestURI(),
-                    status,
-                    elapsed
-                );
-            }
-        }
-
-        // MDC 정리 (ThreadLocal 기반이므로 반드시 제거)
-        MDC.clear();
-    }
-
-    private void logRequestParams(HttpServletRequest request, String requestId) {
-        // 민감 파라미터 목록
-        Set<String> sensitiveParams = Set.of("password", "token", "secret", "key");
-
-        Map<String, String> params = new HashMap<>();
-        request.getParameterMap().forEach((key, values) -> {
-            if (sensitiveParams.contains(key.toLowerCase())) {
-                params.put(key, "***MASKED***");
-            } else {
-                params.put(key, String.join(",", values));
-            }
-        });
-
-        if (!params.isEmpty()) {
-            log.debug("[{}] 요청 파라미터: {}", requestId, params);
-        }
-    }
-}
-```
-
----
-
-### 예제 3: API 요청 시간 측정 인터셉터
-
-성능 모니터링과 슬로우 쿼리 감지에 활용할 수 있다.
-
-```java
-@Slf4j
-@Component
-public class PerformanceInterceptor implements HandlerInterceptor {
-
-    private static final String START_TIME_KEY = "PERF_START_TIME";
-
-    // 경고 임계값 (밀리초)
-    private static final long WARN_THRESHOLD_MS = 500L;
-    // 에러 임계값 (밀리초)
-    private static final long ERROR_THRESHOLD_MS = 2000L;
-
-    // 메트릭 수집용 (Micrometer 활용)
-    private final MeterRegistry meterRegistry;
-    private final Timer.Builder timerBuilder;
-
-    public PerformanceInterceptor(MeterRegistry meterRegistry) {
-        this.meterRegistry = meterRegistry;
-        this.timerBuilder = Timer.builder("http.server.requests.custom");
-    }
-
-    @Override
-    public boolean preHandle(HttpServletRequest request,
-                              HttpServletResponse response,
-                              Object handler) {
-        request.setAttribute(START_TIME_KEY, System.nanoTime());
-        return true;
-    }
-
-    @Override
-    public void afterCompletion(HttpServletRequest request,
-                                 HttpServletResponse response,
-                                 Object handler,
-                                 Exception ex) {
-        Long startNano = (Long) request.getAttribute(START_TIME_KEY);
-        if (startNano == null) return;
-
-        long elapsedNano = System.nanoTime() - startNano;
-        long elapsedMs = elapsedNano / 1_000_000;
-
+                              @Nullable Exception ex) throws Exception {
+
+    // 1. 성능 로그 (항상 실행되어야 하므로 postHandle이 아닌 여기에)
+    Long startNano = (Long) request.getAttribute("START_NANO");
+    if (startNano != null) {
+        long elapsedMs = (System.nanoTime() - startNano) / 1_000_000;
         String uri = request.getRequestURI();
         String method = request.getMethod();
-        String status = String.valueOf(response.getStatus());
+        int status = response.getStatus();
 
-        // Micrometer 메트릭 기록
-        timerBuilder
-            .tag("uri", normalizeUri(uri))
-            .tag("method", method)
-            .tag("status", status)
-            .register(meterRegistry)
-            .record(elapsedNano, TimeUnit.NANOSECONDS);
-
-        // 임계값에 따른 로그 레벨 구분
-        if (elapsedMs >= ERROR_THRESHOLD_MS) {
-            log.error("SLOW REQUEST - {} {} | {}ms (임계값: {}ms)",
-                method, uri, elapsedMs, ERROR_THRESHOLD_MS);
-        } else if (elapsedMs >= WARN_THRESHOLD_MS) {
-            log.warn("SLOW REQUEST - {} {} | {}ms (임계값: {}ms)",
-                method, uri, elapsedMs, WARN_THRESHOLD_MS);
+        if (ex != null) {
+            log.error("[PERF] {} {} → {} ({}ms) EXCEPTION: {}",
+                method, uri, status, elapsedMs, ex.getMessage());
+        } else if (elapsedMs > 1000) {
+            log.warn("[PERF] SLOW {} {} → {} ({}ms)", method, uri, status, elapsedMs);
         } else {
-            log.debug("성능 측정 - {} {} | {}ms", method, uri, elapsedMs);
+            log.info("[PERF] {} {} → {} ({}ms)", method, uri, status, elapsedMs);
         }
     }
 
-    /**
-     * /users/123, /users/456 → /users/{id} 로 정규화
-     * (메트릭 카디널리티 폭발 방지)
-     */
-    private String normalizeUri(String uri) {
-        return uri.replaceAll("/\\d+", "/{id}");
+    // 2. MDC 정리 (스레드 풀 재사용 시 이전 요청 정보 누출 방지)
+    MDC.clear();
+
+    // 3. ThreadLocal 정리
+    RequestContextHolder.resetRequestAttributes();
+
+    // 4. 임시 파일, DB 커넥션 등 리소스 해제
+    TempFileHolder tempFile = (TempFileHolder) request.getAttribute("TEMP_FILE");
+    if (tempFile != null) {
+        tempFile.cleanup();
     }
 }
 ```
 
 ---
 
-### 예제 4: Rate Limiting 인터셉터
+## 3. Filter vs Interceptor — 실행 순서의 정확한 이해
+
+### 3-1. 전체 실행 흐름
+
+```mermaid
+graph LR
+    A[HTTP 요청] --> B[FilterChain]
+    B --> C[DispatcherServlet]
+    C --> D[HandlerMapping]
+    D --> E[Interceptor Chain]
+    E --> F[Controller]
+    F --> E
+```
+
+1. HTTP 요청 도착
+2. Filter Chain 진입 (Tomcat 레벨, Spring Context 밖)
+3. DispatcherServlet 진입 (Spring MVC 진입점)
+4. HandlerMapping → 어떤 컨트롤러를 실행할지 결정
+5. HandlerAdapter 선택
+6. **Interceptor Chain의 preHandle 순차 실행**
+7. Controller(핸들러) 실행
+8. **Interceptor Chain의 postHandle 역순 실행** (예외 없을 때만)
+9. View 렌더링 (또는 ResponseBody 직렬화)
+10. **Interceptor Chain의 afterCompletion 역순 실행** (항상)
+11. Filter Chain 복귀
+12. HTTP 응답 전송
+
+### 3-2. 코드로 보는 실행 순서 증명
 
 ```java
-@Slf4j
+// Filter 구현
 @Component
-public class RateLimitInterceptor implements HandlerInterceptor {
-
-    // IP 당 요청 카운터 (실제 운영에서는 Redis 사용 권장)
-    private final Map<String, RateLimitBucket> buckets = new ConcurrentHashMap<>();
-
-    // 기본 설정: 분당 100 요청
-    private static final int MAX_REQUESTS_PER_MINUTE = 100;
-    private static final long WINDOW_MS = 60_000L;
-
+public class TraceFilter implements Filter {
     @Override
-    public boolean preHandle(HttpServletRequest request,
-                              HttpServletResponse response,
-                              Object handler) throws Exception {
-        String clientIp = getClientIp(request);
-        String key = clientIp + ":" + request.getRequestURI();
+    public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+            throws IOException, ServletException {
+        System.out.println("1. Filter - 요청 진입");
+        chain.doFilter(req, res); // 이 안에서 DispatcherServlet 실행
+        System.out.println("8. Filter - 응답 반환");
+    }
+}
 
-        RateLimitBucket bucket = buckets.computeIfAbsent(key,
-            k -> new RateLimitBucket(MAX_REQUESTS_PER_MINUTE, WINDOW_MS));
-
-        if (!bucket.tryConsume()) {
-            log.warn("Rate limit 초과 - IP: {}, URI: {}", clientIp, request.getRequestURI());
-
-            response.setStatus(429); // Too Many Requests
-            response.setHeader("Retry-After", String.valueOf(bucket.getRetryAfterSeconds()));
-            response.setHeader("X-RateLimit-Limit", String.valueOf(MAX_REQUESTS_PER_MINUTE));
-            response.setHeader("X-RateLimit-Remaining", "0");
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write(
-                "{\"error\":\"요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.\"}"
-            );
-            return false;
-        }
-
-        // 남은 요청 수 헤더에 추가
-        response.setHeader("X-RateLimit-Limit", String.valueOf(MAX_REQUESTS_PER_MINUTE));
-        response.setHeader("X-RateLimit-Remaining", String.valueOf(bucket.getRemainingRequests()));
-
+// Interceptor 구현
+@Component
+public class TraceInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object h) {
+        System.out.println("2. Interceptor preHandle");
         return true;
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        // 프록시 환경에서의 실제 IP 추출
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isBlank()) {
-            return xRealIp;
-        }
-        return request.getRemoteAddr();
+    @Override
+    public void postHandle(HttpServletRequest req, HttpServletResponse res,
+                            Object h, ModelAndView mv) {
+        System.out.println("5. Interceptor postHandle");
     }
 
-    // 슬라이딩 윈도우 버킷 구현
-    @Getter
-    private static class RateLimitBucket {
-        private final int maxRequests;
-        private final long windowMs;
-        private final Deque<Long> requestTimestamps = new ArrayDeque<>();
-
-        RateLimitBucket(int maxRequests, long windowMs) {
-            this.maxRequests = maxRequests;
-            this.windowMs = windowMs;
-        }
-
-        synchronized boolean tryConsume() {
-            long now = System.currentTimeMillis();
-            long windowStart = now - windowMs;
-
-            // 윈도우 밖의 오래된 요청 제거
-            while (!requestTimestamps.isEmpty() &&
-                   requestTimestamps.peekFirst() < windowStart) {
-                requestTimestamps.pollFirst();
-            }
-
-            if (requestTimestamps.size() < maxRequests) {
-                requestTimestamps.addLast(now);
-                return true;
-            }
-            return false;
-        }
-
-        synchronized long getRetryAfterSeconds() {
-            if (requestTimestamps.isEmpty()) return 0;
-            long oldestRequest = requestTimestamps.peekFirst();
-            return Math.max(0, (oldestRequest + windowMs - System.currentTimeMillis()) / 1000);
-        }
-
-        synchronized int getRemainingRequests() {
-            return Math.max(0, maxRequests - requestTimestamps.size());
-        }
+    @Override
+    public void afterCompletion(HttpServletRequest req, HttpServletResponse res,
+                                 Object h, Exception ex) {
+        System.out.println("7. Interceptor afterCompletion");
     }
 }
+
+// Controller
+@RestController
+public class TraceController {
+    @GetMapping("/trace")
+    public String trace() {
+        System.out.println("3. Controller 실행");
+        return "OK";
+        // 반환 후: 4. @ResponseBody 직렬화
+        // → 5. postHandle → 6. View 렌더링 → 7. afterCompletion → 8. Filter 복귀
+    }
+}
+
+// 실행 결과:
+// 1. Filter - 요청 진입
+// 2. Interceptor preHandle
+// 3. Controller 실행
+// 5. Interceptor postHandle
+// 7. Interceptor afterCompletion
+// 8. Filter - 응답 반환
 ```
 
-> 실제 운영 환경에서는 인메모리 Map 대신 Redis + Lua 스크립트를 활용하는 것이 강력히 권장된다. `ConcurrentHashMap`은 서버가 여러 대일 때 각 서버가 독립적으로 카운트하기 때문에 실제 Rate Limit 효과를 보장할 수 없다.
+### 3-3. Filter vs Interceptor 선택 기준
+
+```mermaid
+graph LR
+    A[횡단관심사 구현] --> B{Spring Bean 필요?}
+    B -->|No| C[Filter]
+    B -->|Yes| D{HTTP 레벨 제어?}
+    D -->|Yes| E[Interceptor]
+    D -->|No| F[AOP]
+```
+
+| 기준 | Filter | Interceptor | AOP |
+|---|---|---|---|
+| **실행 위치** | Tomcat (Spring 밖) | DispatcherServlet 안 | Spring Proxy 레이어 |
+| **Spring Bean 접근** | DelegatingFilterProxy 필요 | 직접 주입 가능 | 직접 주입 가능 |
+| **적용 대상** | 모든 HTTP 요청 (정적 리소스 포함) | Spring이 처리하는 요청만 | Bean 메서드 |
+| **Request/Response 수정** | 래핑(Wrapper) 가능 | 직접 수정 가능 | 어렵고 비자연스러움 |
+| **예외 처리** | @ExceptionHandler 미작동 | @ExceptionHandler 작동 | @ExceptionHandler 작동 |
+| **URL 패턴 제어** | web.xml 또는 @WebFilter | addPathPatterns() | 포인트컷(메서드 단위) |
+| **실무 용도** | 인코딩, 보안 헤더, HTTPS 강제 | 인증, 로깅, Rate Limit | 트랜잭션, 캐싱, 감사 로그 |
 
 ---
 
-## WebMvcConfigurer로 등록하기
+## 4. HandlerMapping과 Interceptor Chain의 관계
 
-### 기본 등록 방법
+### 4-1. HandlerMapping이 Interceptor를 포함하는 방식
+
+Spring에서 HandlerMapping은 단순히 "URL → Handler" 매핑만 하지 않는다. `HandlerExecutionChain`이라는 객체를 반환하는데, 이 안에 Handler(컨트롤러)와 해당 요청에 적용될 Interceptor 목록이 함께 담긴다.
 
 ```java
+// DispatcherServlet이 HandlerMapping에서 받아오는 것
+HandlerExecutionChain mappedHandler = getHandler(processedRequest);
+
+// HandlerExecutionChain 내부 구조
+public class HandlerExecutionChain {
+    private final Object handler;           // 실제 Controller 메서드
+    private final List<HandlerInterceptor> interceptorList; // 적용될 Interceptor 목록
+    private int interceptorIndex = -1;      // preHandle 통과한 마지막 인덱스
+}
+```
+
+**핵심:** `mappedHandler.getInterceptors()`는 해당 요청 URL에 매핑된 인터셉터만 포함한다. `/api/public/**`는 제외하도록 설정한 인터셉터는 이 목록에 들어오지 않는다. 즉, 제외된 경로는 인터셉터 코드 자체가 실행되지 않는다.
+
+### 4-2. WebMvcConfigurer가 Interceptor를 등록하는 내부 과정
+
+```java
+// WebMvcConfigurer 등록 과정 (Spring 내부)
+// WebMvcConfigurationSupport → RequestMappingHandlerMapping 생성 시
+// InterceptorRegistry에 등록된 인터셉터들을 MappedInterceptor로 변환
+//   → HandlerMapping이 요청을 처리할 때 URL 패턴 매칭 후 적용
+
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
+    // 빈 주입 - new로 직접 생성하면 Bean이 아니므로 @Autowired 동작 안 함
     private final AuthInterceptor authInterceptor;
     private final LoggingInterceptor loggingInterceptor;
     private final PerformanceInterceptor performanceInterceptor;
     private final RateLimitInterceptor rateLimitInterceptor;
+    private final CorsInterceptor corsInterceptor;
 
     public WebMvcConfig(AuthInterceptor authInterceptor,
                         LoggingInterceptor loggingInterceptor,
                         PerformanceInterceptor performanceInterceptor,
-                        RateLimitInterceptor rateLimitInterceptor) {
+                        RateLimitInterceptor rateLimitInterceptor,
+                        CorsInterceptor corsInterceptor) {
         this.authInterceptor = authInterceptor;
         this.loggingInterceptor = loggingInterceptor;
         this.performanceInterceptor = performanceInterceptor;
         this.rateLimitInterceptor = rateLimitInterceptor;
+        this.corsInterceptor = corsInterceptor;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
 
-        // 1. 로깅 인터셉터 (모든 요청)
+        // order()는 실행 우선순위를 결정
+        // 낮은 숫자가 먼저 preHandle 실행됨 (postHandle/afterCompletion은 역순)
+
+        // 1순위: 로깅 (모든 요청 추적)
         registry.addInterceptor(loggingInterceptor)
                 .addPathPatterns("/**")
-                .order(1); // 가장 먼저 실행
+                .order(1);
 
-        // 2. 성능 측정 인터셉터 (API 경로만)
+        // 2순위: 성능 측정 (API 경로만)
         registry.addInterceptor(performanceInterceptor)
                 .addPathPatterns("/api/**")
                 .order(2);
 
-        // 3. Rate Limiting 인터셉터 (API 경로만)
+        // 3순위: Rate Limiting (API 경로만)
         registry.addInterceptor(rateLimitInterceptor)
                 .addPathPatterns("/api/**")
                 .order(3);
 
-        // 4. 인증 인터셉터 (공개 경로 제외)
+        // 4순위: 인증 (공개 경로 제외)
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                     "/api/auth/login",
                     "/api/auth/signup",
+                    "/api/auth/refresh",
                     "/api/public/**",
                     "/api/health",
+                    "/actuator/**",
                     "/swagger-ui/**",
                     "/v3/api-docs/**"
                 )
@@ -840,84 +551,1013 @@ public class WebMvcConfig implements WebMvcConfigurer {
 }
 ```
 
-### order() 값과 실행 순서
+### 4-3. 다중 Interceptor 실행 순서 상세
 
 ```
-order(1) 로깅    → order(2) 성능    → order(3) RateLimit → order(4) 인증
-                  ↓ preHandle 순서 (낮은 번호 먼저)
+등록: A(order=1) → B(order=2) → C(order=3)
 
-order(4) 인증    → order(3) RateLimit → order(2) 성능    → order(1) 로깅
-                  ↓ postHandle / afterCompletion 순서 (높은 번호 먼저)
+=== 정상 흐름 ===
+요청 → A.preHandle → B.preHandle → C.preHandle
+     → Controller 실행
+     → C.postHandle → B.postHandle → A.postHandle
+     → View 렌더링
+     → C.afterCompletion → B.afterCompletion → A.afterCompletion
+
+=== B.preHandle이 false 반환 ===
+요청 → A.preHandle(true) → B.preHandle(false)
+     ← C.preHandle 미호출
+     ← Controller 미호출
+     ← C.postHandle 미호출, B.postHandle 미호출, A.postHandle 미호출
+     → A.afterCompletion (A만 preHandle 통과했으므로)
+     ← B.afterCompletion 미호출 (false 반환했으므로)
+     ← C.afterCompletion 미호출 (preHandle 미실행이므로)
+
+=== Controller에서 예외 발생 ===
+요청 → A.preHandle → B.preHandle → C.preHandle
+     → Controller 실행 → 예외 발생
+     ← C.postHandle 미호출 (예외 발생)
+     ← B.postHandle 미호출
+     ← A.postHandle 미호출
+     → ExceptionResolver 처리 (예: @ExceptionHandler)
+     → C.afterCompletion(ex) → B.afterCompletion(ex) → A.afterCompletion(ex)
 ```
-
-### PathPattern 문법
-
-| 패턴 | 설명 | 예시 |
-|---|---|---|
-| `/api/**` | `/api/` 이하 모든 경로 | `/api/users`, `/api/orders/1` |
-| `/api/*` | `/api/` 바로 아래 한 단계 | `/api/users` (O), `/api/users/1` (X) |
-| `/api/users/{id}` | 경로 변수 | `/api/users/123` |
-| `/**/*.html` | `.html`로 끝나는 모든 경로 | 정적 리소스 제외에 활용 |
 
 ---
 
-## 트래픽 시나리오별 분석
+## 5. AsyncHandlerInterceptor — 비동기 요청 처리
 
-### 시나리오 1: 트래픽 적을 때 (100 TPS)
+### 5-1. 왜 별도 인터페이스가 필요한가
 
-```mermaid
-graph LR
-    A["요청"] --> B[Interceptor Chain]
-    B --> C[Controller]
-    C --> D["응답"]
-    E["단순 구현 OK"] --> F["동기 처리 가능"]
+Spring MVC에서 `@Async`, `Callable`, `DeferredResult`, `CompletableFuture`를 컨트롤러에서 반환하면 비동기 처리가 시작된다. 이 경우 일반 `HandlerInterceptor`는 **비동기 처리가 완료되기 전에 afterCompletion이 호출된다.** 즉, 실제 응답이 나가기 전에 정리 코드가 실행된다.
+
+```
+일반 HandlerInterceptor + 비동기 컨트롤러:
+
+요청 스레드:
+  preHandle → Controller (Callable 반환) → postHandle 미호출
+            → afterCompletion 호출 ← 여기! 아직 응답 안 나감
+
+별도 스레드:
+  Callable 실행 → 응답 생성
+  → 새 요청으로 재진입 → preHandle 다시 호출 → postHandle → afterCompletion
 ```
 
-100 TPS 수준에서는 대부분의 구현이 문제없이 동작한다.
-
-**권장 구현 방식:**
-- 동기 방식의 단순한 인터셉터 구현
-- 인메모리 `HashMap`이나 `ConcurrentHashMap` 사용 가능
-- 복잡한 최적화 불필요
+이 문제를 해결하는 것이 `AsyncHandlerInterceptor`다.
 
 ```java
-// 100 TPS 환경: 단순하고 읽기 쉬운 구현 우선
-@Component
-public class SimpleAuthInterceptor implements HandlerInterceptor {
+// AsyncHandlerInterceptor는 HandlerInterceptor를 상속
+public interface AsyncHandlerInterceptor extends HandlerInterceptor {
 
-    @Autowired
-    private TokenService tokenService;
+    // 비동기 처리가 시작될 때 호출
+    // 이 시점에서 ThreadLocal 정리, MDC 클리어 등을 해야 함
+    // (비동기 스레드에는 현재 스레드의 ThreadLocal이 복사되지 않음)
+    default void afterConcurrentHandlingStarted(HttpServletRequest request,
+                                                 HttpServletResponse response,
+                                                 Object handler) throws Exception {
+    }
+}
+```
+
+### 5-2. 비동기 인터셉터 구현
+
+```java
+@Slf4j
+@Component
+public class AsyncLoggingInterceptor implements AsyncHandlerInterceptor {
+
+    private static final String REQUEST_ID_KEY = "REQUEST_ID";
+    private static final String START_TIME_KEY = "START_NANO";
 
     @Override
     public boolean preHandle(HttpServletRequest request,
                               HttpServletResponse response,
                               Object handler) throws Exception {
-        String token = request.getHeader("Authorization");
-        if (token == null || !tokenService.validate(token)) {
-            response.sendError(401);
-            return false;
-        }
+        String requestId = generateRequestId();
+        request.setAttribute(REQUEST_ID_KEY, requestId);
+        request.setAttribute(START_TIME_KEY, System.nanoTime());
+
+        // MDC 설정 (이 스레드에서만 유효)
+        MDC.put("requestId", requestId);
+        MDC.put("uri", request.getRequestURI());
+
+        log.info("[{}] 요청 시작: {} {}", requestId, request.getMethod(),
+                 request.getRequestURI());
         return true;
+    }
+
+    @Override
+    public void afterConcurrentHandlingStarted(HttpServletRequest request,
+                                                HttpServletResponse response,
+                                                Object handler) throws Exception {
+        // 비동기 처리 시작 직전 호출
+        // 현재 스레드의 MDC/ThreadLocal을 정리해야 함
+        // (비동기 스레드는 별도 스레드이므로 상태가 공유되지 않음)
+        String requestId = (String) request.getAttribute(REQUEST_ID_KEY);
+        log.debug("[{}] 비동기 처리 시작, 요청 스레드 자원 정리", requestId);
+        MDC.clear(); // 요청 스레드의 MDC 정리
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request,
+                            HttpServletResponse response,
+                            Object handler,
+                            @Nullable ModelAndView modelAndView) throws Exception {
+        // 비동기 완료 후 재진입 시 호출
+        String requestId = (String) request.getAttribute(REQUEST_ID_KEY);
+        log.debug("[{}] 비동기 처리 완료 후 postHandle", requestId);
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request,
+                                 HttpServletResponse response,
+                                 Object handler,
+                                 @Nullable Exception ex) throws Exception {
+        // 비동기 처리의 경우 비동기 완료 후 재진입된 요청의 afterCompletion
+        String requestId = (String) request.getAttribute(REQUEST_ID_KEY);
+        Long startNano = (Long) request.getAttribute(START_TIME_KEY);
+
+        long elapsedMs = startNano != null
+            ? (System.nanoTime() - startNano) / 1_000_000 : -1;
+
+        log.info("[{}] 요청 완료: {} {} → {} ({}ms)",
+            requestId, request.getMethod(), request.getRequestURI(),
+            response.getStatus(), elapsedMs);
+
+        MDC.clear();
+    }
+
+    private String generateRequestId() {
+        return UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 }
 ```
 
-**주의 사항:**
-- 로그를 너무 상세하게 남기면 디스크 I/O가 병목이 될 수 있다. (100 TPS도 하루 860만 요청)
-- DB 조회가 포함된 인터셉터라면 커넥션 풀 설정 확인 필요
+### 5-3. 비동기 컨트롤러와 조합
+
+```java
+@RestController
+@RequestMapping("/api/async")
+public class AsyncController {
+
+    private final OrderService orderService;
+
+    // Callable: 별도 스레드에서 실행, Spring MVC 스레드 풀 활용
+    @GetMapping("/orders/callable")
+    public Callable<List<OrderDto>> getOrdersCallable() {
+        return () -> {
+            // 이 코드는 별도 스레드에서 실행됨
+            // AsyncHandlerInterceptor.afterConcurrentHandlingStarted 이후
+            Thread.sleep(100); // 시뮬레이션
+            return orderService.findAll().stream()
+                .map(OrderDto::from)
+                .collect(toList());
+        };
+    }
+
+    // DeferredResult: 외부 이벤트 기반 응답
+    @GetMapping("/orders/deferred")
+    public DeferredResult<List<OrderDto>> getOrdersDeferred() {
+        DeferredResult<List<OrderDto>> result = new DeferredResult<>(5000L);
+        result.onTimeout(() -> result.setErrorResult(
+            ResponseEntity.status(408).body("요청 시간 초과")));
+
+        // 비동기로 결과 설정
+        CompletableFuture.supplyAsync(() -> orderService.findAll())
+            .thenAccept(orders ->
+                result.setResult(orders.stream().map(OrderDto::from).collect(toList())));
+
+        return result;
+    }
+
+    // CompletableFuture: Spring이 직접 비동기 처리
+    @GetMapping("/orders/future")
+    public CompletableFuture<List<OrderDto>> getOrdersFuture() {
+        return CompletableFuture.supplyAsync(() ->
+            orderService.findAll().stream()
+                .map(OrderDto::from)
+                .collect(toList()));
+    }
+}
+```
 
 ---
 
-### 시나리오 2: 트래픽 높을 때 (10,000 TPS)
+## 6. CORS Interceptor — 원리부터 구현까지
 
-10,000 TPS는 초당 10,000개의 요청, 즉 동시에 수백~수천 개의 스레드가 Interceptor를 통과한다.
+### 6-1. CORS를 Interceptor에서 처리하는 이유
 
-**핵심 위험 요소: ThreadLocal 메모리 누수**
+Spring Security와 `@CrossOrigin`은 각각 Filter와 HandlerMapping 레벨에서 CORS를 처리한다. 하지만 Interceptor에서 직접 처리하면 **요청별 세밀한 제어**가 가능하다. 예를 들어 인증된 사용자는 더 많은 출처(Origin)를 허용하거나, 특정 API 경로별로 다른 CORS 정책을 적용할 수 있다.
+
+### 6-2. CORS Preflight 흐름 이해
+
+```
+브라우저 → OPTIONS 요청 (Preflight)
+  headers: Origin, Access-Control-Request-Method, Access-Control-Request-Headers
+
+서버 → 허용 응답
+  headers: Access-Control-Allow-Origin, Access-Control-Allow-Methods,
+           Access-Control-Allow-Headers, Access-Control-Max-Age
+
+브라우저 → 실제 요청 (Preflight 통과 시)
+  headers: Origin
+
+서버 → 실제 응답
+  headers: Access-Control-Allow-Origin (매 응답마다 포함)
+```
+
+### 6-3. CORS Interceptor 구현
 
 ```java
-// 위험: ThreadLocal을 afterCompletion에서 정리하지 않으면 메모리 누수 발생
+@Slf4j
 @Component
-public class DangerousInterceptor implements HandlerInterceptor {
+public class CorsInterceptor implements HandlerInterceptor {
+
+    // 허용할 출처 목록 (설정으로 관리)
+    @Value("${app.cors.allowed-origins:http://localhost:3000}")
+    private String allowedOriginsConfig;
+
+    private Set<String> allowedOrigins;
+    private static final Set<String> ALLOWED_METHODS =
+        Set.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+    private static final String ALLOWED_HEADERS =
+        "Authorization, Content-Type, X-Requested-With, X-Request-Id";
+    private static final long MAX_AGE_SECONDS = 3600L;
+
+    @PostConstruct
+    public void init() {
+        allowedOrigins = Arrays.stream(allowedOriginsConfig.split(","))
+            .map(String::trim)
+            .collect(Collectors.toSet());
+    }
+
+    @Override
+    public boolean preHandle(HttpServletRequest request,
+                              HttpServletResponse response,
+                              Object handler) throws Exception {
+        String origin = request.getHeader("Origin");
+
+        if (origin == null) {
+            // Origin 헤더 없음 = 동일 출처 요청 → CORS 처리 불필요
+            return true;
+        }
+
+        // 허용된 출처인지 확인
+        if (!isOriginAllowed(origin, request)) {
+            log.warn("CORS 거부: origin={}, uri={}", origin, request.getRequestURI());
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write(
+                "{\"error\":\"CORS_REJECTED\",\"message\":\"허용되지 않은 출처입니다\"}");
+            return false;
+        }
+
+        // CORS 응답 헤더 설정
+        response.setHeader("Access-Control-Allow-Origin", origin);
+        response.setHeader("Access-Control-Allow-Credentials", "true");
+        response.setHeader("Vary", "Origin"); // 캐시 오염 방지
+
+        // Preflight 요청 처리 (OPTIONS)
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            response.setHeader("Access-Control-Allow-Methods",
+                String.join(", ", ALLOWED_METHODS));
+            response.setHeader("Access-Control-Allow-Headers", ALLOWED_HEADERS);
+            response.setHeader("Access-Control-Max-Age",
+                String.valueOf(MAX_AGE_SECONDS));
+            response.setStatus(HttpServletResponse.SC_OK);
+            return false; // Preflight는 Controller 호출 없이 여기서 종료
+        }
+
+        return true;
+    }
+
+    private boolean isOriginAllowed(String origin, HttpServletRequest request) {
+        // 허용 목록에 있는지 확인
+        if (allowedOrigins.contains(origin)) {
+            return true;
+        }
+        // 와일드카드 도메인 처리 (예: *.example.com)
+        return allowedOrigins.stream()
+            .filter(o -> o.startsWith("*."))
+            .anyMatch(pattern -> {
+                String domain = pattern.substring(2);
+                return origin.endsWith("." + domain) || origin.equals(domain);
+            });
+    }
+}
+```
+
+---
+
+## 7. 인증/인가 Interceptor — JWT 기반 완전 구현
+
+### 7-1. 어노테이션 기반 세밀한 인가 제어
+
+```java
+// 인증 없이 접근 가능한 API 표시
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface Public {
+}
+
+// 역할 기반 인가
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface RequiresRole {
+    String[] value();                          // 필요한 역할
+    boolean anyOf() default true;              // true: OR 조건, false: AND 조건
+}
+
+// 권한 기반 인가 (더 세밀한 제어)
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface RequiresPermission {
+    String value();                            // 예: "order:write", "user:delete"
+}
+```
+
+### 7-2. 완전한 인증/인가 Interceptor
+
+```java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class AuthInterceptor implements HandlerInterceptor {
+
+    private final JwtTokenProvider jwtTokenProvider;
+    private final UserCacheService userCacheService;
+    private final AuditEventPublisher auditEventPublisher;
+
+    @Override
+    public boolean preHandle(HttpServletRequest request,
+                              HttpServletResponse response,
+                              Object handler) throws Exception {
+
+        // HandlerMethod가 아닌 경우 (정적 리소스, ResourceHttpRequestHandler 등) 통과
+        if (!(handler instanceof HandlerMethod handlerMethod)) {
+            return true;
+        }
+
+        // @Public 어노테이션 확인 (메서드 > 클래스 우선순위)
+        if (isPublicEndpoint(handlerMethod)) {
+            return true;
+        }
+
+        // JWT 토큰 추출 및 검증
+        String token = extractToken(request);
+        if (token == null) {
+            log.debug("인증 토큰 없음: {} {}", request.getMethod(), request.getRequestURI());
+            sendJsonError(response, 401, "TOKEN_MISSING", "인증 토큰이 필요합니다");
+            return false;
+        }
+
+        // 토큰 파싱 (캐시 활용)
+        AuthPrincipal principal;
+        try {
+            principal = userCacheService.getOrValidate(token);
+        } catch (TokenExpiredException e) {
+            sendJsonError(response, 401, "TOKEN_EXPIRED", "토큰이 만료되었습니다. 재로그인해주세요");
+            return false;
+        } catch (InvalidTokenException e) {
+            log.warn("유효하지 않은 토큰: {}", e.getMessage());
+            sendJsonError(response, 401, "TOKEN_INVALID", "유효하지 않은 토큰입니다");
+            return false;
+        }
+
+        // 계정 상태 확인 (블랙리스트, 정지 계정 등)
+        if (!principal.isActive()) {
+            sendJsonError(response, 403, "ACCOUNT_INACTIVE", "비활성화된 계정입니다");
+            return false;
+        }
+
+        // 역할 기반 인가 확인
+        RequiresRole requiresRole = getAnnotation(handlerMethod, RequiresRole.class);
+        if (requiresRole != null && !hasRequiredRole(principal, requiresRole)) {
+            log.warn("권한 부족: userId={}, required={}, actual={}",
+                principal.getUserId(), Arrays.toString(requiresRole.value()),
+                principal.getRoles());
+            auditEventPublisher.publishAccessDenied(principal, request);
+            sendJsonError(response, 403, "INSUFFICIENT_ROLE", "필요한 권한이 없습니다");
+            return false;
+        }
+
+        // 권한 기반 인가 확인
+        RequiresPermission requiresPermission =
+            getAnnotation(handlerMethod, RequiresPermission.class);
+        if (requiresPermission != null &&
+                !principal.hasPermission(requiresPermission.value())) {
+            log.warn("권한 없음: userId={}, required={}", principal.getUserId(),
+                requiresPermission.value());
+            sendJsonError(response, 403, "INSUFFICIENT_PERMISSION", "이 작업을 수행할 권한이 없습니다");
+            return false;
+        }
+
+        // 인증 성공: 이후 컨트롤러에서 사용하도록 request에 저장
+        request.setAttribute("principal", principal);
+        request.setAttribute("userId", principal.getUserId());
+
+        log.debug("인증 성공: userId={}, uri={}", principal.getUserId(),
+            request.getRequestURI());
+        return true;
+    }
+
+    private boolean isPublicEndpoint(HandlerMethod handlerMethod) {
+        // 메서드 어노테이션 우선
+        if (handlerMethod.hasMethodAnnotation(Public.class)) return true;
+        // 클래스 어노테이션 확인
+        return handlerMethod.getBeanType().isAnnotationPresent(Public.class);
+    }
+
+    private <A extends Annotation> A getAnnotation(HandlerMethod method,
+                                                    Class<A> annotationType) {
+        A anno = method.getMethodAnnotation(annotationType);
+        if (anno != null) return anno;
+        return AnnotationUtils.findAnnotation(method.getBeanType(), annotationType);
+    }
+
+    private boolean hasRequiredRole(AuthPrincipal principal, RequiresRole requiresRole) {
+        List<String> userRoles = principal.getRoles();
+        String[] required = requiresRole.value();
+        if (requiresRole.anyOf()) {
+            // OR: 하나라도 있으면 통과
+            return Arrays.stream(required).anyMatch(userRoles::contains);
+        } else {
+            // AND: 모두 있어야 통과
+            return Arrays.stream(required).allMatch(userRoles::contains);
+        }
+    }
+
+    private String extractToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring(7).trim();
+            return token.isEmpty() ? null : token;
+        }
+        // 쿼리 파라미터 폴백 (WebSocket 등에서 활용)
+        String paramToken = request.getParameter("access_token");
+        return (paramToken != null && !paramToken.isEmpty()) ? paramToken : null;
+    }
+
+    private void sendJsonError(HttpServletResponse response,
+                                int status, String code, String message)
+            throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json;charset=UTF-8");
+        String body = String.format(
+            "{\"success\":false,\"error\":{\"code\":\"%s\",\"message\":\"%s\"}," +
+            "\"timestamp\":\"%s\"}",
+            code, message, Instant.now()
+        );
+        response.getWriter().write(body);
+    }
+}
+```
+
+### 7-3. 컨트롤러에서 인증 정보 활용
+
+```java
+@RestController
+@RequestMapping("/api/orders")
+@RequiredArgsConstructor
+public class OrderController {
+
+    private final OrderService orderService;
+
+    // 기본 인증 필요 (AuthInterceptor가 처리)
+    @GetMapping
+    public List<OrderDto> getMyOrders(
+            @RequestAttribute("principal") AuthPrincipal principal) {
+        return orderService.findByUserId(principal.getUserId());
+    }
+
+    // 공개 API (인증 불필요)
+    @Public
+    @GetMapping("/popular")
+    public List<OrderDto> getPopularOrders() {
+        return orderService.findPopular();
+    }
+
+    // 관리자만 접근 가능
+    @RequiresRole("ADMIN")
+    @GetMapping("/all")
+    public List<OrderDto> getAllOrders() {
+        return orderService.findAll();
+    }
+
+    // 특정 권한 필요
+    @RequiresPermission("order:export")
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportOrders() {
+        byte[] data = orderService.exportToCsv();
+        return ResponseEntity.ok()
+            .header("Content-Disposition", "attachment; filename=orders.csv")
+            .contentType(MediaType.TEXT_PLAIN)
+            .body(data);
+    }
+}
+```
+
+---
+
+## 8. 로깅/MDC Interceptor — 분산 추적 구현
+
+### 8-1. MDC(Mapped Diagnostic Context)가 필요한 이유
+
+MSA 환경에서는 하나의 사용자 요청이 여러 서비스를 거친다. 로그만 보면 어떤 요청에서 발생한 로그인지 추적이 불가능하다. MDC는 **현재 스레드의 로그에 공통 컨텍스트 정보를 자동으로 추가**해주는 메커니즘이다.
+
+```yaml
+# logback-spring.xml 패턴 설정
+# MDC의 requestId, userId가 자동으로 로그에 포함됨
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{requestId}] [%X{userId}] %-5level %logger{36} - %msg%n</pattern>
+```
+
+### 8-2. MDC 기반 로깅 Interceptor
+
+```java
+@Slf4j
+@Component
+public class MdcLoggingInterceptor implements HandlerInterceptor {
+
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
+    private static final String TRACE_ID_HEADER = "X-Trace-Id"; // 분산 추적용
+    private static final String REQUEST_ID_ATTR = "REQUEST_ID";
+    private static final String START_NANO_ATTR = "START_NANO";
+
+    // 로깅에서 제외할 경로 (헬스체크, 메트릭 등)
+    private static final Set<String> SKIP_LOG_PATHS = Set.of(
+        "/actuator/health", "/actuator/prometheus", "/api/health"
+    );
+
+    // 응답 바디에서 마스킹할 필드
+    private static final Set<String> SENSITIVE_PARAMS = Set.of(
+        "password", "token", "secret", "card_number", "cvv"
+    );
+
+    @Override
+    public boolean preHandle(HttpServletRequest request,
+                              HttpServletResponse response,
+                              Object handler) throws Exception {
+
+        String uri = request.getRequestURI();
+
+        // 헬스체크 등은 로그 스킵 (노이즈 방지)
+        boolean skipLog = SKIP_LOG_PATHS.contains(uri);
+
+        // 요청 ID 생성 (상위 서비스에서 전달된 경우 재사용)
+        String requestId = Optional.ofNullable(request.getHeader(REQUEST_ID_HEADER))
+            .filter(h -> !h.isBlank())
+            .orElse(generateRequestId());
+
+        String traceId = Optional.ofNullable(request.getHeader(TRACE_ID_HEADER))
+            .filter(h -> !h.isBlank())
+            .orElse(requestId);
+
+        // MDC 설정 (이 스레드의 모든 로그에 자동 포함)
+        MDC.put("requestId", requestId);
+        MDC.put("traceId", traceId);
+        MDC.put("uri", uri);
+        MDC.put("method", request.getMethod());
+        MDC.put("clientIp", getClientIp(request));
+
+        // 응답 헤더에 요청 ID 포함 (클라이언트 디버깅용)
+        response.setHeader(REQUEST_ID_HEADER, requestId);
+        response.setHeader(TRACE_ID_HEADER, traceId);
+
+        // request에도 저장 (다른 컴포넌트에서 접근 가능)
+        request.setAttribute(REQUEST_ID_ATTR, requestId);
+        request.setAttribute(START_NANO_ATTR, System.nanoTime());
+
+        if (!skipLog) {
+            logRequest(request, requestId);
+        }
+
+        return true;
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request,
+                                 HttpServletResponse response,
+                                 Object handler,
+                                 @Nullable Exception ex) throws Exception {
+
+        Long startNano = (Long) request.getAttribute(START_NANO_ATTR);
+        String requestId = (String) request.getAttribute(REQUEST_ID_ATTR);
+        long elapsedMs = startNano != null
+            ? (System.nanoTime() - startNano) / 1_000_000 : -1;
+
+        String uri = request.getRequestURI();
+        boolean skipLog = SKIP_LOG_PATHS.contains(uri);
+
+        if (!skipLog) {
+            if (ex != null) {
+                log.error("[{}] {} {} → {} ({}ms) EXCEPTION: {}",
+                    requestId, request.getMethod(), uri,
+                    response.getStatus(), elapsedMs, ex.getMessage());
+            } else {
+                log.info("[{}] {} {} → {} ({}ms)",
+                    requestId, request.getMethod(), uri,
+                    response.getStatus(), elapsedMs);
+            }
+        }
+
+        // userId가 인증 인터셉터에 의해 설정된 경우 MDC에 추가 (afterCompletion에서도 유효)
+        // (이미 preHandle에서 인증 처리가 완료되어 request에 저장됨)
+
+        // MDC 반드시 정리 (스레드 풀 재사용 시 다음 요청으로 누출 방지)
+        MDC.clear();
+    }
+
+    private void logRequest(HttpServletRequest request, String requestId) {
+        if (log.isDebugEnabled()) {
+            // 요청 파라미터 (민감 정보 마스킹)
+            Map<String, String> params = new LinkedHashMap<>();
+            request.getParameterMap().forEach((key, values) -> {
+                String value = SENSITIVE_PARAMS.contains(key.toLowerCase())
+                    ? "***" : String.join(",", values);
+                params.put(key, value);
+            });
+
+            log.debug("[{}] 요청 파라미터: {}", requestId, params);
+
+            // 주요 헤더 로깅
+            List<String> logHeaders = List.of(
+                "User-Agent", "Accept", "Content-Type", "X-Forwarded-For"
+            );
+            Map<String, String> headers = new LinkedHashMap<>();
+            logHeaders.forEach(h -> {
+                String val = request.getHeader(h);
+                if (val != null) headers.put(h, val);
+            });
+            log.debug("[{}] 요청 헤더: {}", requestId, headers);
+        }
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        // 프록시 뒤에 있을 때 실제 클라이언트 IP 추출
+        String[] headers = {
+            "X-Forwarded-For", "X-Real-IP", "Proxy-Client-IP",
+            "WL-Proxy-Client-IP", "HTTP_X_FORWARDED_FOR"
+        };
+        for (String header : headers) {
+            String ip = request.getHeader(header);
+            if (ip != null && !ip.isBlank() && !"unknown".equalsIgnoreCase(ip)) {
+                // X-Forwarded-For는 콤마로 여러 IP가 올 수 있음 (첫 번째가 실제 클라이언트)
+                return ip.split(",")[0].trim();
+            }
+        }
+        return request.getRemoteAddr();
+    }
+
+    private String generateRequestId() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
+    }
+}
+```
+
+---
+
+## 9. Rate Limiting Interceptor — 슬라이딩 윈도우 구현
+
+### 9-1. 왜 Redis 기반 Rate Limiting이 필요한가
+
+인메모리 Map 기반 Rate Limiting은 서버가 한 대일 때만 동작한다. 로드밸런서 뒤에 서버가 3대 있으면, 같은 클라이언트가 각 서버에 100개씩 총 300개 요청을 보낼 수 있다. 분산 환경에서는 **Redis를 공유 저장소로 사용**해야 한다.
+
+### 9-2. Redis + Lua 스크립트 기반 구현
+
+```java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class RateLimitInterceptor implements HandlerInterceptor {
+
+    private final StringRedisTemplate redisTemplate;
+
+    // Lua 스크립트: 원자적 슬라이딩 윈도우 카운터
+    // 여러 Redis 명령을 하나의 원자적 트랜잭션으로 실행
+    private static final String RATE_LIMIT_SCRIPT = """
+        local key = KEYS[1]
+        local window = tonumber(ARGV[1])
+        local limit = tonumber(ARGV[2])
+        local now = tonumber(ARGV[3])
+        local window_start = now - window
+
+        -- 만료된 요청 제거
+        redis.call('ZREMRANGEBYSCORE', key, '-inf', window_start)
+
+        -- 현재 윈도우 내 요청 수 확인
+        local count = redis.call('ZCARD', key)
+
+        if count >= limit then
+            -- 가장 오래된 요청의 만료 시간 반환 (Retry-After 계산용)
+            local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+            return {0, tonumber(oldest[2]) + window - now}
+        end
+
+        -- 현재 요청 추가
+        redis.call('ZADD', key, now, now .. '-' .. math.random())
+        redis.call('PEXPIRE', key, window)
+
+        return {1, limit - count - 1}
+        """;
+
+    private final RedisScript<List<Long>> luaScript =
+        RedisScript.of(RATE_LIMIT_SCRIPT, List.class);
+
+    // Rate Limit 설정
+    private static final long WINDOW_MS = 60_000L;       // 1분 윈도우
+    private static final int DEFAULT_LIMIT = 100;         // 기본: 분당 100 요청
+    private static final int AUTHENTICATED_LIMIT = 1000; // 인증 사용자: 분당 1000 요청
+
+    @Override
+    public boolean preHandle(HttpServletRequest request,
+                              HttpServletResponse response,
+                              Object handler) throws Exception {
+
+        // Rate Limit 제외 경로
+        String uri = request.getRequestURI();
+        if (uri.startsWith("/actuator") || uri.startsWith("/swagger-ui")) {
+            return true;
+        }
+
+        String clientKey = buildClientKey(request);
+        int limit = determineLimit(request);
+
+        try {
+            List<Long> result = redisTemplate.execute(
+                luaScript,
+                List.of("ratelimit:" + clientKey),
+                String.valueOf(WINDOW_MS),
+                String.valueOf(limit),
+                String.valueOf(System.currentTimeMillis())
+            );
+
+            if (result == null || result.isEmpty()) {
+                log.error("Rate limit Lua 스크립트 실행 실패");
+                return true; // Redis 오류 시 통과 (서비스 중단 방지)
+            }
+
+            long allowed = result.get(0);
+            long remaining = result.get(1);
+
+            // 응답 헤더 설정
+            response.setHeader("X-RateLimit-Limit", String.valueOf(limit));
+            response.setHeader("X-RateLimit-Remaining",
+                allowed == 1 ? String.valueOf(remaining) : "0");
+            response.setHeader("X-RateLimit-Window", "60");
+
+            if (allowed == 0) {
+                long retryAfterMs = remaining;
+                long retryAfterSec = Math.max(1, retryAfterMs / 1000);
+
+                log.warn("Rate limit 초과: key={}, uri={}", clientKey, uri);
+                response.setStatus(429);
+                response.setHeader("Retry-After", String.valueOf(retryAfterSec));
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write(String.format(
+                    "{\"error\":\"RATE_LIMIT_EXCEEDED\"," +
+                    "\"message\":\"요청 한도를 초과했습니다\"," +
+                    "\"retryAfter\":%d}", retryAfterSec));
+                return false;
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            log.error("Rate limit 처리 중 오류 발생: {}", e.getMessage(), e);
+            return true; // 오류 시 통과 (가용성 우선)
+        }
+    }
+
+    private String buildClientKey(HttpServletRequest request) {
+        // 인증된 사용자는 userId로 키 생성 (IP 변경에도 일관된 제한)
+        String userId = (String) request.getAttribute("userId");
+        if (userId != null) {
+            return "user:" + userId;
+        }
+        // 비인증 요청은 IP로 키 생성
+        return "ip:" + getClientIp(request);
+    }
+
+    private int determineLimit(HttpServletRequest request) {
+        // 인증된 사용자는 더 높은 한도
+        if (request.getAttribute("userId") != null) {
+            return AUTHENTICATED_LIMIT;
+        }
+        return DEFAULT_LIMIT;
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
+    }
+}
+```
+
+---
+
+## 10. Performance Measurement Interceptor — Micrometer 연동
+
+### 10-1. 메트릭 카디널리티 폭발 문제
+
+URI를 그대로 메트릭 태그로 사용하면 `/users/1`, `/users/2`, `/users/999999`가 모두 별개 메트릭으로 저장된다. Prometheus 같은 시계열 DB에서 카디널리티(고유 값의 수)가 폭발하면 심각한 성능 문제가 발생한다.
+
+```java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class PerformanceInterceptor implements HandlerInterceptor {
+
+    private final MeterRegistry meterRegistry;
+
+    private static final String START_NANO_KEY = "PERF_START_NANO";
+    private static final long WARN_THRESHOLD_MS = 500;
+    private static final long ERROR_THRESHOLD_MS = 2000;
+
+    @Override
+    public boolean preHandle(HttpServletRequest request,
+                              HttpServletResponse response,
+                              Object handler) throws Exception {
+        request.setAttribute(START_NANO_KEY, System.nanoTime());
+        return true;
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request,
+                                 HttpServletResponse response,
+                                 Object handler,
+                                 @Nullable Exception ex) throws Exception {
+
+        Long startNano = (Long) request.getAttribute(START_NANO_KEY);
+        if (startNano == null) return;
+
+        long elapsedNano = System.nanoTime() - startNano;
+        long elapsedMs = elapsedNano / 1_000_000;
+
+        // URI 정규화: /users/123 → /users/{id} (카디널리티 폭발 방지)
+        String normalizedUri = normalizeUri(request, handler);
+        String method = request.getMethod();
+        String status = String.valueOf(response.getStatus());
+        String outcome = resolveOutcome(response.getStatus());
+
+        // Micrometer 타이머 기록
+        Timer.builder("http.server.requests")
+            .tag("method", method)
+            .tag("uri", normalizedUri)
+            .tag("status", status)
+            .tag("outcome", outcome)
+            .tag("exception", ex != null ? ex.getClass().getSimpleName() : "None")
+            .description("HTTP 요청 처리 시간")
+            .register(meterRegistry)
+            .record(elapsedNano, TimeUnit.NANOSECONDS);
+
+        // Micrometer Counter (요청 수)
+        Counter.builder("http.server.requests.count")
+            .tag("method", method)
+            .tag("uri", normalizedUri)
+            .tag("outcome", outcome)
+            .register(meterRegistry)
+            .increment();
+
+        // 임계값 기반 로그
+        if (elapsedMs >= ERROR_THRESHOLD_MS) {
+            log.error("[SLOW] {} {} → {} {}ms (임계값: {}ms) exception={}",
+                method, normalizedUri, status, elapsedMs, ERROR_THRESHOLD_MS,
+                ex != null ? ex.getClass().getSimpleName() : "None");
+        } else if (elapsedMs >= WARN_THRESHOLD_MS) {
+            log.warn("[SLOW] {} {} → {} {}ms (임계값: {}ms)",
+                method, normalizedUri, status, elapsedMs, WARN_THRESHOLD_MS);
+        }
+    }
+
+    /**
+     * URI 정규화: 경로 변수의 구체적인 값을 {변수명}으로 대체
+     * HandlerMethod의 패턴 정보를 활용하여 정확한 정규화
+     */
+    private String normalizeUri(HttpServletRequest request, Object handler) {
+        // HandlerMethod에서 패턴 정보 추출 (가장 정확)
+        if (handler instanceof HandlerMethod) {
+            Object pattern = request.getAttribute(
+                HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+            if (pattern != null) {
+                return pattern.toString();
+            }
+        }
+        // 폴백: 숫자를 {id}로 치환
+        String uri = request.getRequestURI();
+        return uri.replaceAll("/\\d+", "/{id}")
+                  .replaceAll("/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                              "/{uuid}");
+    }
+
+    private String resolveOutcome(int status) {
+        if (status >= 500) return "SERVER_ERROR";
+        if (status >= 400) return "CLIENT_ERROR";
+        if (status >= 300) return "REDIRECTION";
+        if (status >= 200) return "SUCCESS";
+        return "UNKNOWN";
+    }
+}
+```
+
+---
+
+## 11. 면접 포인트 5개 — 깊은 WHY 답변
+
+### Q1. Interceptor와 Filter의 차이점을 설명하고, 각각 언제 사용하는지 말씀해주세요.
+
+**핵심 WHY:**
+
+Filter는 javax.servlet 스펙의 일부로, Tomcat 같은 서블릿 컨테이너가 초기화하고 관리한다. Spring ApplicationContext가 아직 시작되지 않은 시점에도 동작할 수 있으며, 이것이 핵심 차이다.
+
+```
+[Tomcat 생명주기]
+  1. 서블릿 컨테이너 시작
+  2. Filter 초기화 (Spring Context 없음)
+  3. Spring ApplicationContext 시작
+  4. DispatcherServlet 초기화
+  5. 요청 처리 시작
+
+[요청 흐름]
+  HTTP → Filter(Tomcat 레벨) → DispatcherServlet → Interceptor(Spring 레벨) → Controller
+```
+
+이 구조적 차이로 인해:
+- Filter에서는 `@Autowired`가 작동하지 않음 (Spring Context가 Filter를 관리하지 않음)
+- Filter는 `@ExceptionHandler`나 `@ControllerAdvice`로 예외 처리 불가
+- Filter는 정적 리소스(js, css, 이미지)에도 적용됨, Interceptor는 DispatcherServlet이 처리하는 요청만
+
+```java
+// 선택 기준
+// Filter: Spring Bean 접근 불필요, 서블릿 수준 처리
+//   → 문자 인코딩, XSS 필터, HTTPS 강제, 요청 래핑
+// Interceptor: Spring Bean 필요, HTTP 요청/응답 처리
+//   → JWT 인증, 요청 로깅, Rate Limiting
+// AOP: 메서드 수준 처리, HTTP 관계 없음
+//   → 트랜잭션, 캐싱, 메서드 실행 로깅
+```
+
+---
+
+### Q2. preHandle이 false를 반환하면 afterCompletion은 어떻게 되나요? 내부 동작을 설명해주세요.
+
+**핵심 WHY:**
+
+DispatcherServlet은 `interceptorIndex`라는 변수로 몇 번째 인터셉터까지 preHandle이 true를 반환했는지 추적한다. false를 반환한 인터셉터는 afterCompletion 호출 대상에 포함되지 않는다.
+
+```java
+// DispatcherServlet 내부 (개념 코드)
+int interceptorIndex = -1;
+
+// preHandle 단계
+for (int i = 0; i < interceptors.length; i++) {
+    if (!interceptors[i].preHandle(request, response, handler)) {
+        // false 반환: 여기서 중단
+        // interceptorIndex까지만 afterCompletion 호출
+        triggerAfterCompletion(request, response, null);
+        return; // Controller 호출 안 됨
+    }
+    interceptorIndex = i; // true 반환한 마지막 인덱스 기록
+}
+
+// afterCompletion 단계 (triggerAfterCompletion)
+// interceptorIndex부터 0까지 역순으로 호출
+for (int i = interceptorIndex; i >= 0; i--) {
+    interceptors[i].afterCompletion(request, response, handler, ex);
+}
+```
+
+**실용적 함의:** preHandle에서 리소스를 획득한 경우(DB 커넥션, 파일 핸들 등) afterCompletion에서 반드시 해제해야 한다. 이 메커니즘 덕분에 "preHandle에서 true를 반환한 인터셉터는 반드시 afterCompletion이 호출된다"는 보장이 성립한다.
+
+---
+
+### Q3. Interceptor에서 ThreadLocal을 사용할 때 왜 afterCompletion에서 반드시 remove()를 해야 하나요?
+
+**핵심 WHY:**
+
+Tomcat(과 대부분의 WAS)은 스레드 풀을 사용한다. 요청마다 새 스레드를 생성하지 않고 기존 스레드를 재사용한다. ThreadLocal은 스레드에 종속된 저장소이므로, 스레드가 풀로 반환될 때 이전 요청의 데이터가 남아있으면 다음 요청에서 그 데이터를 읽게 된다.
+
+```
+[스레드 풀 재사용 시나리오]
+
+1. 요청 A (스레드 T1): ThreadLocal에 userId=100 저장
+   → preHandle: ThreadLocal.set(userId=100)
+   → afterCompletion에서 remove() 안 함
+
+2. 요청 B (스레드 T1 재사용): ThreadLocal에 userId=100이 남아있음
+   → 다른 사용자의 요청인데 userId=100이 보임
+   → 보안 취약점 발생!
+   → 메모리 누수도 발생 (GC가 수집 못함)
+```
+
+```java
+// 올바른 ThreadLocal 사용 패턴
+@Component
+public class SafeInterceptor implements HandlerInterceptor {
 
     private static final ThreadLocal<RequestContext> CONTEXT = new ThreadLocal<>();
 
@@ -933,429 +1573,272 @@ public class DangerousInterceptor implements HandlerInterceptor {
     public void afterCompletion(HttpServletRequest request,
                                  HttpServletResponse response,
                                  Object handler, Exception ex) {
-        CONTEXT.remove(); // 반드시 제거! 없으면 스레드 풀에서 재사용될 때 이전 값이 남음
+        CONTEXT.remove(); // 반드시 제거! try-finally 없이도 afterCompletion은 항상 호출됨
+    }
+
+    // 다른 클래스에서 접근 (서비스, 리포지토리에서)
+    public static RequestContext getCurrentContext() {
+        return CONTEXT.get();
     }
 }
 ```
 
-Tomcat의 스레드 풀은 요청마다 새 스레드를 만들지 않고 재사용한다. `ThreadLocal`을 정리하지 않으면 이전 요청의 데이터가 다음 요청으로 노출되는 보안 이슈와 메모리 누수가 동시에 발생한다.
-
-**10,000 TPS 환경의 권장 구현:**
-
-```java
-@Slf4j
-@Component
-public class OptimizedLoggingInterceptor implements HandlerInterceptor {
-
-    // 비동기 로그 처리로 I/O 블로킹 최소화
-    private final AsyncLogger asyncLogger;
-
-    // 인스턴스 변수는 공유 상태가 되므로 절대 요청 정보 저장 금지!
-    // private String currentUser; // 절대 금지! 스레드 안전하지 않음
-
-    @Override
-    public boolean preHandle(HttpServletRequest request,
-                              HttpServletResponse response,
-                              Object handler) {
-        // request 객체에 상태를 저장 (요청 스코프, 안전)
-        request.setAttribute("START_TIME", System.nanoTime());
-        return true;
-    }
-
-    @Override
-    public void afterCompletion(HttpServletRequest request,
-                                 HttpServletResponse response,
-                                 Object handler, Exception ex) {
-        Long startNano = (Long) request.getAttribute("START_TIME");
-        if (startNano != null) {
-            long elapsed = (System.nanoTime() - startNano) / 1_000_000;
-            // 비동기로 로그 기록 (I/O 블로킹 없음)
-            asyncLogger.log(request.getMethod(), request.getRequestURI(),
-                response.getStatus(), elapsed);
-        }
-    }
-}
-```
-
-**10,000 TPS 체크리스트:**
-
-| 항목 | 위험 구현 | 안전 구현 |
-|---|---|---|
-| 상태 저장 | Interceptor 인스턴스 변수 | `request.setAttribute()` 또는 `ThreadLocal` + 반드시 remove |
-| 로그 I/O | 동기 파일 로그 | 비동기 로거 (Logback async appender) |
-| DB 조회 | 인터셉터마다 DB 조회 | 캐시 활용 (Redis, Caffeine) |
-| 외부 API 호출 | 동기 HTTP 호출 | 비동기 또는 캐시 |
-| 객체 생성 | 요청마다 무거운 객체 생성 | 재사용 가능한 객체 풀링 |
+MDC도 동일한 이유로 `MDC.clear()`가 필수다. Logback의 MDC는 내부적으로 ThreadLocal을 사용한다.
 
 ---
 
-### 시나리오 3: 극한 트래픽 (100,000 TPS)
+### Q4. postHandle이 예외 발생 시 호출되지 않는 이유와, 이것이 실무에서 어떤 문제를 일으킬 수 있나요?
 
-100,000 TPS에서는 Interceptor 체인 자체가 병목이 될 수 있다.
+**핵심 WHY:**
 
-**핵심 전략: 불필요한 Interceptor 제거 + 조기 단락(Short-circuit)**
+DispatcherServlet의 `doDispatch()` 메서드를 보면, Controller 실행 부분이 try-catch로 감싸져 있고 예외 발생 시 postHandle을 건너뛴다.
 
 ```java
-@Component
-public class UltraOptimizedInterceptor implements HandlerInterceptor {
+// DispatcherServlet 내부 (개념 코드)
+try {
+    // Controller 실행
+    mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+    // postHandle 호출 (예외 없을 때만 실행됨)
+    mappedHandler.applyPostHandle(processedRequest, response, mv);
+} catch (Exception handlerException) {
+    dispatchException = handlerException;
+}
 
-    // 핫 패스: 자주 통과하는 경로를 BloomFilter나 Set으로 빠르게 처리
-    private static final Set<String> WHITE_LIST_PATHS = Set.of(
-        "/api/health", "/api/metrics", "/api/public/status"
-    );
+// afterCompletion은 finally 블록처럼 항상 실행
+processDispatchResult(processedRequest, response, mappedHandler, mv, dispatchException);
+// processDispatchResult 안에서 afterCompletion 호출
+```
 
-    // 컴파일된 패턴 재사용 (매번 컴파일 금지)
-    private static final Pattern UUID_PATTERN =
-        Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+**실무 문제 패턴:**
 
-    @Override
-    public boolean preHandle(HttpServletRequest request,
-                              HttpServletResponse response,
-                              Object handler) {
-        String uri = request.getRequestURI();
+```java
+// 안티패턴: 리소스 해제를 postHandle에 구현
+@Override
+public void postHandle(..., ModelAndView mv) {
+    // Controller에서 예외 발생하면 이 코드 실행 안 됨
+    dbConnection.close(); // 커넥션 누수!
+    tempFile.delete();    // 임시 파일 미삭제!
+}
 
-        // 화이트리스트 경로는 즉시 통과 (Set.contains는 O(1))
-        if (WHITE_LIST_PATHS.contains(uri)) {
-            return true;
-        }
+// 올바른 패턴: 반드시 실행되어야 하는 코드는 afterCompletion에
+@Override
+public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
+                              Object handler, Exception ex) {
+    // 예외 발생 여부와 관계없이 항상 실행
+    dbConnection.close(); // 안전
+    tempFile.delete();    // 안전
+}
+```
 
-        // handler 타입 체크를 최우선으로 (가장 저렴한 연산)
-        if (!(handler instanceof HandlerMethod)) {
-            return true;
-        }
+정리하면:
+- `postHandle`: View에 공통 데이터 추가, 응답 헤더 조작 (예외 없을 때만)
+- `afterCompletion`: 리소스 해제, 성능 로그, MDC/ThreadLocal 정리 (항상)
 
-        // 이후 비용이 드는 처리...
-        return doActualWork(request, response, (HandlerMethod) handler);
-    }
+---
 
-    private boolean doActualWork(HttpServletRequest request,
-                                  HttpServletResponse response,
-                                  HandlerMethod handler) {
-        // 실제 처리 로직
-        return true;
+### Q5. Interceptor 체인에서 인터셉터가 예외를 던지면 어떻게 되나요? 극한 시나리오를 설명해주세요.
+
+**극한 시나리오 1: preHandle에서 예외 발생**
+
+```java
+@Override
+public boolean preHandle(HttpServletRequest request, ...) throws Exception {
+    // 예외 발생 시 DispatcherServlet이 이를 catch
+    // triggerAfterCompletion이 호출되고, 예외가 ExceptionResolver로 전달됨
+    throw new RuntimeException("예상치 못한 오류");
+}
+```
+
+```
+결과:
+- 이후 인터셉터의 preHandle 미호출
+- Controller 미호출
+- postHandle 미호출
+- 이미 통과한 인터셉터의 afterCompletion 역순 호출 (ex 파라미터에 예외 전달)
+- @ExceptionHandler가 예외 처리 (500 응답)
+```
+
+**극한 시나리오 2: afterCompletion에서 예외 발생**
+
+```java
+@Override
+public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
+                              Object handler, Exception ex) throws Exception {
+    throw new RuntimeException("afterCompletion에서 예외"); // 여기서도 예외 가능
+}
+```
+
+```java
+// DispatcherServlet 내부 처리
+for (int i = interceptorIndex; i >= 0; i--) {
+    try {
+        interceptors[i].afterCompletion(request, response, handler, ex);
+    } catch (Throwable ex2) {
+        // afterCompletion의 예외는 로그만 남기고 나머지 afterCompletion 계속 호출
+        logger.error("HandlerInterceptor.afterCompletion threw exception", ex2);
+        // 이미 응답이 완료된 상태이므로 클라이언트에게 영향 없음
     }
 }
 ```
 
-**Interceptor 체인 최적화 원칙:**
+**핵심:** afterCompletion에서 예외가 발생해도 나머지 afterCompletion은 계속 호출된다. 이미 응답이 클라이언트에게 전송된 후이므로 응답 변경은 불가하지만, 리소스 정리는 보장된다.
+
+**극한 시나리오 3: 비동기 + 인터셉터 조합의 함정**
+
+```java
+@GetMapping("/async")
+public Callable<String> asyncEndpoint() {
+    return () -> {
+        // 이 코드는 별도 스레드에서 실행
+        // AsyncHandlerInterceptor.afterConcurrentHandlingStarted 이후
+        // preHandle에서 설정한 ThreadLocal이 없음 (별도 스레드)
+        String userId = SafeInterceptor.getCurrentContext().getUserId(); // null!
+        return "done";
+    };
+}
+```
+
+해결책은 `AsyncHandlerInterceptor`를 구현하고 `afterConcurrentHandlingStarted`에서 비동기 스레드에 컨텍스트를 전달하는 것이다. 또는 `RequestContextHolder.setRequestAttributes(attributes, true)`의 `true` 파라미터로 자식 스레드에 컨텍스트를 상속시킨다.
+
+---
+
+## 12. 인터셉터 설계 원칙과 실수 방지
+
+### 12-1. 싱글톤 인터셉터의 스레드 안전성
 
 ```mermaid
 graph LR
-    A["요청"] --> G{"경로 분기"}
-    G -->|"/public"| H["성능만"]
-    G -->|"/api"| I["로깅+인증+RL"]
-    G -->|"/internal"| J["인증만"]
+    A[Thread-1] --> IC[Interceptor 싱글톤]
+    B[Thread-2] --> IC
+    C[Thread-3] --> IC
+    IC --> D[인스턴스 변수 공유]
 ```
 
-**100,000 TPS 최적화 기법 목록:**
-
-1. **경로 기반 분리 등록**: 불필요한 경로에 인터셉터 등록 않기
-2. **토큰 검증 캐싱**: JWT 검증 결과를 짧은 TTL로 Redis 캐싱 (같은 토큰을 매 요청마다 검증하면 CPU 낭비)
-3. **비동기 로깅**: Logback의 AsyncAppender 활용, 로그 버퍼링
-4. **객체 재사용**: 인터셉터 인스턴스는 싱글톤으로 유지, 요청마다 새 객체 생성 최소화
-5. **조기 단락**: 화이트리스트, 빠른 실패(fail-fast) 구현
-6. **Rate Limit 분산화**: 인메모리 대신 Redis + Lua 스크립트 (원자적 연산)
+Interceptor는 Spring 싱글톤 Bean이다. 수천 개의 요청 스레드가 동일한 인터셉터 인스턴스를 동시에 사용한다. **인스턴스 변수에 요청별 상태를 저장하면 데이터 레이스(Data Race)가 발생한다.**
 
 ```java
-// JWT 검증 결과 캐싱 예시
+// 위험: 인스턴스 변수에 요청 데이터 저장
 @Component
-public class CachedAuthInterceptor implements HandlerInterceptor {
+public class DangerousInterceptor implements HandlerInterceptor {
+    private String currentUserId;  // 수천 스레드가 동시에 쓰고 읽음 → 데이터 오염
 
-    private final Cache<String, UserInfo> tokenCache = Caffeine.newBuilder()
-        .maximumSize(50_000)    // 최대 5만 개 캐시
-        .expireAfterWrite(30, TimeUnit.SECONDS)  // 30초 TTL
-        .build();
-
-    @Override
-    public boolean preHandle(HttpServletRequest request,
-                              HttpServletResponse response,
-                              Object handler) throws Exception {
-        String token = extractToken(request);
-        if (token == null) {
-            response.sendError(401);
-            return false;
-        }
-
-        // 캐시에서 먼저 확인 (O(1), JWT 파싱/검증 생략)
-        UserInfo userInfo = tokenCache.get(token, this::validateAndGetUserInfo);
-
-        if (userInfo == null) {
-            response.sendError(401);
-            return false;
-        }
-
-        request.setAttribute("userInfo", userInfo);
-        return true;
-    }
-
-    private UserInfo validateAndGetUserInfo(String token) {
-        // 실제 JWT 검증 (캐시 미스 시에만 실행)
-        try {
-            return jwtProvider.parse(token);
-        } catch (Exception e) {
-            return null; // null은 캐시되지 않음 (Caffeine 기본 동작)
-        }
-    }
-}
-```
-
----
-
-## 자주 하는 실수 TOP 5
-
-### 실수 1: Interceptor 인스턴스 변수에 상태 저장
-
-```java
-// 위험: 멀티스레드 환경에서 데이터 오염
-@Component
-public class BadInterceptor implements HandlerInterceptor {
-    private long startTime; // 공유 상태! 스레드 A의 값이 스레드 B에 의해 덮어쓰여짐
-
-    @Override
-    public boolean preHandle(...) {
-        startTime = System.currentTimeMillis(); // 위험!
-        return true;
-    }
-
-    @Override
-    public void afterCompletion(...) {
-        long elapsed = System.currentTimeMillis() - startTime; // 다른 스레드 값일 수 있음
-    }
-}
-
-// 올바른 방법: request 객체에 저장
-@Component
-public class GoodInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, ...) {
-        request.setAttribute("START_TIME", System.currentTimeMillis()); // 요청 스코프
+        currentUserId = request.getHeader("X-User-Id"); // 위험!
+        return true;
+    }
+}
+
+// 안전: request 스코프에 저장
+@Component
+public class SafeInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request, ...) {
+        request.setAttribute("userId", request.getHeader("X-User-Id")); // 안전
         return true;
     }
 }
 ```
 
-### 실수 2: postHandle에서의 예외 처리를 afterCompletion으로 착각
+### 12-2. false 반환 전 응답 필수 작성
 
 ```java
-// 함정: Controller에서 예외 발생 시 postHandle은 호출되지 않는다
+// 위험: 응답 없이 false 반환
 @Override
-public void postHandle(...) {
-    // Controller가 예외를 던지면 이 코드는 실행되지 않는다
-    log.info("처리 완료"); // 신뢰할 수 없는 로그
-}
-
-// 올바른 방법: 리소스 해제나 반드시 실행되어야 하는 코드는 afterCompletion에
-@Override
-public void afterCompletion(...) {
-    // 예외 여부와 관계없이 항상 실행
-    log.info("처리 완료 (예외 여부: {})", ex != null);
-    cleanupResources(); // 여기에 넣어야 함
-}
-```
-
-### 실수 3: false 반환 후 응답 작성 누락
-
-```java
-// 위험: false만 반환하고 응답을 작성하지 않으면 클라이언트는 빈 응답을 받는다
-@Override
-public boolean preHandle(...) {
-    if (!isAuthenticated) {
-        return false; // 응답 없음! 클라이언트 hang 또는 빈 응답
+public boolean preHandle(HttpServletRequest request,
+                          HttpServletResponse response, Object handler) {
+    if (!isValid()) {
+        return false; // 클라이언트는 빈 응답 받음 (HTTP 200 + 빈 바디 또는 연결 끊김)
     }
     return true;
 }
 
-// 올바른 방법: false 반환 전 반드시 응답 작성
+// 올바른 방법
 @Override
 public boolean preHandle(HttpServletRequest request,
-                          HttpServletResponse response, ...) throws Exception {
-    if (!isAuthenticated) {
-        response.setStatus(401);
+                          HttpServletResponse response, Object handler) throws IOException {
+    if (!isValid()) {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"error\":\"인증이 필요합니다\"}");
+        response.getWriter().write("{\"error\":\"인증 필요\"}");
         return false;
     }
     return true;
 }
 ```
 
-### 실수 4: WebMvcConfigurer 대신 @Bean으로 직접 Interceptor 등록
+### 12-3. excludePathPatterns 슬래시 함정
 
 ```java
-// 위험: 이 방법은 Spring Boot 자동 설정을 우회하여 예기치 않은 동작 발생 가능
-@Configuration
-public class BadConfig {
-    @Bean
-    public MappedInterceptor myInterceptor() {
-        return new MappedInterceptor(new String[]{"/**"}, new AuthInterceptor()); // 비권장
-    }
-}
-
-// 올바른 방법: WebMvcConfigurer.addInterceptors() 사용
-@Configuration
-public class GoodConfig implements WebMvcConfigurer {
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new AuthInterceptor())
-                .addPathPatterns("/api/**");
-    }
-}
-```
-
-### 실수 5: excludePathPatterns의 함정 (슬래시 처리)
-
-```java
-// 함정: 경로 끝에 슬래시가 있거나 없을 때 매칭이 다를 수 있다
+// 함정: 슬래시 유무에 따라 매칭이 달라질 수 있음
 registry.addInterceptor(authInterceptor)
-        .addPathPatterns("/api/**")
-        .excludePathPatterns("/api/public"); // /api/public/ 은 제외 안 됨!
+        .excludePathPatterns("/api/public"); // /api/public/login은 제외 안 됨!
 
-// 안전한 방법: 슬래시 유무 모두 명시하거나 와일드카드 사용
+// 안전한 방법
 registry.addInterceptor(authInterceptor)
-        .addPathPatterns("/api/**")
         .excludePathPatterns(
-            "/api/public",
-            "/api/public/",
-            "/api/public/**"  // 하위 경로까지 모두 제외
+            "/api/public",     // 슬래시 없는 정확한 경로
+            "/api/public/**"   // 하위 경로 모두 제외
         );
 ```
 
----
-
-## 면접 포인트
-
-### Q1. Filter와 Interceptor의 가장 큰 차이점은 무엇인가요?
-
-**모범 답변:**
-
-Filter는 서블릿 컨테이너(Tomcat 등) 레벨에서 동작하며 Spring ApplicationContext 바깥에 위치합니다. 따라서 Spring Bean에 직접 접근하기 어렵고(DelegatingFilterProxy를 사용하면 가능), `@ExceptionHandler`로 예외 처리를 할 수 없습니다.
-
-반면 Interceptor는 Spring MVC의 DispatcherServlet 이후에 동작하며 Spring ApplicationContext 안에 있기 때문에 모든 Spring Bean에 자유롭게 접근할 수 있고, `@ControllerAdvice`를 통한 예외 처리도 가능합니다.
-
-실무에서는 **인코딩 설정, XSS 방어 같은 서블릿 수준 처리는 Filter**, **인증/인가, 로깅 등 Spring 컴포넌트를 활용하는 처리는 Interceptor**를 사용합니다.
-
----
-
-### Q2. preHandle이 false를 반환하면 어떻게 되나요?
-
-**모범 답변:**
-
-`preHandle`이 `false`를 반환하면:
-1. 이후 등록된 Interceptor의 `preHandle`은 호출되지 않습니다.
-2. Controller(핸들러 메서드)가 호출되지 않습니다.
-3. `postHandle`은 어떤 Interceptor에서도 호출되지 않습니다.
-4. `false`를 반환하기 **이전**에 `preHandle`이 `true`를 반환한 Interceptor들의 `afterCompletion`은 **역순으로 호출**됩니다.
-
-따라서 `false`를 반환하기 전에 반드시 적절한 응답(에러 코드, 메시지)을 직접 작성해야 합니다.
-
----
-
-### Q3. Interceptor를 멀티스레드 환경에서 안전하게 사용하려면 어떻게 해야 하나요?
-
-**모범 답변:**
-
-Interceptor는 Spring에서 **싱글톤 Bean**으로 관리됩니다. 따라서 모든 요청(스레드)이 동일한 Interceptor 인스턴스를 공유합니다.
-
-스레드 안전성을 확보하려면:
-1. **인스턴스 변수에 요청별 상태를 저장하지 않는다.** 대신 `request.setAttribute()` 또는 `ThreadLocal`을 사용합니다.
-2. **ThreadLocal을 사용할 경우 `afterCompletion`에서 반드시 `remove()`를 호출**합니다. Tomcat은 스레드를 재사용하기 때문에 정리하지 않으면 이전 요청의 데이터가 노출됩니다.
-3. **공유 자원(캐시, 카운터 등)은 `ConcurrentHashMap`, `AtomicLong` 등 스레드 안전한 자료구조를 사용**합니다.
-
----
-
-### Q4. Interceptor와 AOP는 어떤 기준으로 선택하나요?
-
-**모범 답변:**
-
-| 선택 기준 | Interceptor | AOP |
-|---|---|---|
-| 처리 단위 | HTTP 요청/응답 | 메서드 실행 |
-| 적용 범위 | URL 패턴 | 클래스/메서드 (포인트컷) |
-| Request/Response 접근 | 직접 가능 | 불편 (파라미터로 주입 필요) |
-| 주요 사용처 | 인증, 로깅, CORS | 트랜잭션, 캐싱, 감사 로그 |
-
-**HTTP 요청/응답을 다뤄야 하거나 URL 기반으로 적용 범위를 제어해야 하면 Interceptor**, **특정 메서드나 클래스에 횡단 관심사를 적용해야 하면 AOP**를 선택합니다.
-
-예를 들어 "모든 `/api/admin/**` 요청에 관리자 인증 적용"은 Interceptor가 적합하고, "모든 `@Transactional` 메서드의 실행 시간 측정"은 AOP가 적합합니다.
-
----
-
-### Q5. Interceptor에서 Spring Bean을 주입받아 사용할 수 있나요?
-
-**모범 답변:**
-
-네, 가능합니다. Interceptor를 `@Component`로 등록하거나 `@Configuration`에서 `@Bean`으로 생성하면 Spring이 관리하는 Bean이 되어 `@Autowired` 또는 생성자 주입으로 다른 Bean을 주입받을 수 있습니다.
-
-단, `WebMvcConfigurer`에서 등록할 때 `new AuthInterceptor()` 처럼 직접 인스턴스를 생성하면 Spring이 관리하지 않아 주입이 되지 않습니다. 반드시 Spring이 관리하는 Bean을 주입받아 사용해야 합니다.
+### 12-4. new로 직접 생성 시 DI 실패
 
 ```java
-// 올바른 방법
+// 위험: new로 생성하면 Spring이 관리하지 않음 → @Autowired null
+@Configuration
+public class BadConfig implements WebMvcConfigurer {
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new AuthInterceptor()); // @Autowired 동작 안 함!
+    }
+}
+
+// 올바른 방법: Spring Bean을 주입받아 사용
 @Configuration
 @RequiredArgsConstructor
-public class WebMvcConfig implements WebMvcConfigurer {
-    private final AuthInterceptor authInterceptor; // Spring Bean 주입
+public class GoodConfig implements WebMvcConfigurer {
+    private final AuthInterceptor authInterceptor; // Spring이 주입
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(authInterceptor); // 주입받은 Bean 사용
+        registry.addInterceptor(authInterceptor); // Spring 관리 Bean 사용
     }
 }
 ```
 
 ---
 
-## 핵심 포인트 정리
+## 13. 핵심 정리
 
 ```mermaid
 graph LR
-    IC["Spring Interceptor"] --> POS["위치: DS 이후/Bean접근"]
-    IC --> PRE["preHandle: false면 중단"]
-    IC --> POST["postHandle: 예외시 미호출"]
-    IC --> AFTER["afterCompletion: 항상호출"]
-    IC --> USE["용도: 인증/로깅/RateLimit"]
+    A[요청] --> B[preHandle 순차]
+    B --> C[Controller]
+    C --> D[postHandle 역순]
+    D --> E[afterCompletion 역순]
 ```
 
-### 한눈에 보는 핵심 체크리스트
-
-| 항목 | 설명 |
-|---|---|
-| **위치** | DispatcherServlet ↔ Controller 사이 |
-| **인터페이스** | `HandlerInterceptor` (preHandle/postHandle/afterCompletion) |
-| **등록 방법** | `WebMvcConfigurer.addInterceptors()` |
-| **Spring Bean 접근** | 가능 (싱글톤 Bean으로 관리) |
-| **스레드 안전성** | 인스턴스 변수 사용 금지, request.setAttribute() 활용 |
-| **ThreadLocal 사용 시** | afterCompletion에서 반드시 remove() 호출 |
-| **false 반환 시** | 반드시 응답 직접 작성 후 반환 |
-| **예외와 afterCompletion** | 예외 발생 시에도 afterCompletion은 호출됨 |
-| **postHandle 주의** | 컨트롤러 예외 발생 시 호출되지 않음 |
-| **실행 순서** | preHandle: 등록 순서, postHandle/afterCompletion: 역순 |
-
----
-
-Spring Interceptor는 Filter보다 Spring 친화적이고 AOP보다 HTTP 수준에서 직접 다루기 쉬운 절충점에 위치한 강력한 도구다. 인증·로깅·성능 측정 같은 횡단 관심사를 컨트롤러 코드 오염 없이 처리하되, 싱글톤 특성으로 인한 스레드 안전성과 ThreadLocal 정리를 반드시 챙겨야 실무에서 문제 없이 활용할 수 있다.
-
----
-
-## 실무에서 자주 하는 실수
-
-1. **`preHandle()`에서 `false` 반환 후 응답 미작성** — `preHandle()`이 `false`를 반환하면 이후 처리가 중단되지만, 응답 바디를 직접 작성하지 않으면 빈 응답이 클라이언트에 반환된다. `response.setStatus(401)`과 `response.getWriter().write(...)`로 명시적으로 오류 응답을 작성해야 한다.
-
-2. **`afterCompletion()`에서 MDC.clear() 누락** — Interceptor의 `preHandle()`에서 `MDC.put("traceId", ...)`를 설정했다면 반드시 `afterCompletion()`에서 `MDC.clear()`를 호출해야 한다. 스레드 풀이 스레드를 재사용하므로, 정리하지 않으면 이전 요청의 MDC 값이 다음 요청 로그에 섞인다.
-
-3. **Interceptor에서 Spring Bean 사용 불가로 착각** — Filter와 달리 Interceptor는 Spring ApplicationContext 안에서 동작하므로 `@Autowired`로 모든 Spring Bean을 주입받을 수 있다. Spring Bean에 접근해야 하는 공통 처리는 Filter보다 Interceptor에 구현하는 것이 올바르다.
-
-4. **`postHandle()`이 예외 시 호출되지 않는다는 점 간과** — `postHandle()`은 컨트롤러가 정상 반환한 경우에만 호출된다. 예외가 발생하면 호출되지 않는다. 예외 포함 모든 요청 완료 후 실행해야 하는 로직(응답 시간 측정, 리소스 정리)은 반드시 `afterCompletion()`에 구현해야 한다.
-
-5. **Interceptor 등록 시 `addPathPatterns` 누락** — `WebMvcConfigurer.addInterceptors()`에서 `addPathPatterns("/**")`를 명시하지 않으면 인터셉터가 어떤 경로에도 적용되지 않는다. 반대로 `excludePathPatterns("/api/public/**")`로 공개 API는 제외해야 불필요한 인증 검사를 방지한다.
-
----
-
-## 왜 이 기술인가? (보강)
-
-| 방식 | 동작 레벨 | Spring Bean 접근 | 적합한 상황 |
+| 단계 | 실행 조건 | 실행 순서 | 주요 용도 |
 |---|---|---|---|
-| Filter | 서블릿 컨테이너 | 어려움 (DelegatingFilterProxy 필요) | 인코딩, CORS, 보안 전처리 |
-| Interceptor | Spring MVC | 쉬움 (@Autowired) | 인증, 로깅, 권한 확인 |
-| AOP | 빈 메서드 | 완전 | 트랜잭션, 성능 측정, 공통 예외 처리 |
+| **preHandle** | 항상 (등록 순서대로) | 1→2→3 | 인증, Rate Limit, 로깅 시작 |
+| **postHandle** | Controller 정상 완료 시만 | 3→2→1 | 응답 헤더 추가, 모델 데이터 주입 |
+| **afterCompletion** | preHandle true 반환한 경우만 (예외와 무관) | 3→2→1 | 리소스 해제, 성능 로그, MDC 정리 |
 
-**결론:** Spring Bean을 활용한 인증·인가, 요청/응답 로깅, 공통 헤더 처리에는 Interceptor가 최적이다. 서블릿 컨테이너 수준의 처리(문자 인코딩, HTTPS 강제)는 Filter, 메서드 수준의 횡단 관심사(트랜잭션, 캐시)는 AOP를 사용한다.
+**인터셉터 선택 체크리스트:**
+1. Spring Bean이 필요한가? → Filter 대신 Interceptor
+2. URL 패턴으로 제어가 필요한가? → AOP 대신 Interceptor
+3. HTTP Request/Response를 직접 다뤄야 하는가? → Interceptor
+4. 특정 메서드/클래스에만 적용하고 싶은가? → AOP 고려
+5. 서블릿 수준의 전처리인가? → Filter
+
+**스레드 안전 원칙:**
+- 인터셉터 인스턴스 변수에 요청별 상태 저장 금지
+- ThreadLocal 사용 시 afterCompletion에서 반드시 `remove()`
+- MDC 설정 시 afterCompletion에서 반드시 `MDC.clear()`
+- 분산 환경 Rate Limiting은 Redis + Lua 스크립트 활용
+
+**비동기 주의사항:**
+- `@Async`, `Callable`, `DeferredResult` 사용 시 `AsyncHandlerInterceptor` 구현
+- `afterConcurrentHandlingStarted`에서 요청 스레드 정리
+- 비동기 스레드에 컨텍스트 전달 시 `RequestContextHolder.setRequestAttributes(attrs, true)`
