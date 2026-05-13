@@ -1,60 +1,56 @@
 ---
-title: "캐시 무효화 전략"
+title: "캐시 무효화 전략 — 왜 어렵고, 어떻게 완전히 해결하는가"
 categories:
 - CACHING
-tags: [캐시무효화, TTL, CacheStampede, PER알고리즘, MutexLock, RedisPubSub, CDC, 분산캐시]
+tags: [캐시무효화, TTL, Jitter, DoubleDelete, TransactionalEventListener, CDC, Debezium, RedisPubSub, ThunderingHerd, MultiLayerCache]
 toc: true
 toc_sticky: true
 toc_label: 목차
 date: 2026-05-03
 ---
 
-캐시 무효화(Cache Invalidation)는 캐시된 데이터가 원본과 달라졌을 때 이를 감지하고 제거하거나 갱신하는 기법이다. 컴퓨터 과학에서 "가장 어려운 두 가지 문제" 중 하나로 꼽힐 만큼, 올바르게 설계하지 않으면 사용자에게 오래된 데이터를 보여주거나 시스템 전체가 장애를 일으킨다.
+컴퓨터 과학에는 유명한 농담이 있다. Phil Karlton의 말이다.
 
-> **비유:** 편의점 진열대에 유통기한이 지난 우유가 놓여 있다고 생각해보자. 손님이 이걸 사서 마시면 탈이 난다. "언제, 어떻게 유통기한 지난 상품을 치울 것인가"가 바로 캐시 무효화 문제다. 너무 자주 치우면 매대가 비어서 불편하고(Cache Miss), 너무 늦게 치우면 상한 우유를 파는 셈이다(Stale Data).
+> "There are only two hard things in Computer Science: cache invalidation and naming things."
 
----
+이 농담이 오래도록 회자되는 이유는, 실제로 캐시 무효화가 **단순해 보이지만 극도로 어렵기** 때문이다. 데이터를 캐시에 넣는 것은 한 줄이다. 하지만 "언제, 어떤 방식으로, 어느 서버의 캐시를" 버려야 하는지는 분산 시스템의 모든 복잡성이 집약된 문제다.
 
-## 왜 캐시 무효화가 어려운가?
-
-캐시를 넣는 것은 쉽다. 어려운 것은 "언제 버릴 것인가"다. 단일 서버라면 DB 업데이트 직후 캐시를 지우면 되지만, 분산 환경에서는 여러 서버가 각자의 로컬 캐시를 들고 있고, 네트워크 지연과 장애가 끼어든다.
-
-> **비유:** 회사 전체에 "오늘부터 회의실 예약 규칙이 바뀌었다"는 공지를 내렸는데, 한 층만 공지를 못 봤다면? 그 층은 구 규칙대로 예약하고, 다른 층은 새 규칙으로 예약해서 충돌이 발생한다. 이것이 분산 캐시 무효화의 핵심 난제다.
-
-```mermaid
-graph LR
-    U["사용자"] -->|"주문"| S1["서버 A"]
-    U -->|"주문"| S2["서버 B"]
-    S1 -->|"재고 10개"| R1["구 데이터"]
-    S2 -->|"재고 0개"| R2["품절 응답"]
-```
-
-같은 시점에 같은 상품을 조회했는데 서버마다 다른 답을 내놓는다. 이것이 실제 운영에서 발생하는 캐시 불일치 문제다.
+이 글은 TTL 설정부터 CDC 파이프라인까지, 캐시 무효화의 모든 핵심 전략을 Java/Spring 실전 코드와 함께 깊이 다룬다.
 
 ---
 
-## 1. TTL 기반 무효화 — 가장 단순한 방법
+## 왜 캐시 무효화는 어려운가
 
-TTL(Time To Live)은 캐시에 저장할 때 "이 데이터는 N초 후에 자동 폐기하라"고 지정하는 방식이다. 구현이 가장 쉽고 대부분의 시스템에서 기본으로 사용한다.
+캐시 무효화가 어려운 이유를 세 가지 층위로 나누면 이해가 쉽다.
 
-> **비유:** 편의점 우유에 "유통기한 3일"이라고 찍혀 있으면, 3일이 지나면 자동으로 폐기한다. 그 사이에 우유 공장에서 성분이 바뀌어도 3일 동안은 구 우유가 팔린다. 유통기한이 길수록 폐기 비용은 줄지만, 오래된 상품이 팔릴 위험은 커진다.
+**첫째, Stale Data 문제.** DB에서 값이 바뀌어도 캐시는 그것을 모른다. 두 시스템 사이에는 물리적인 시간 격차가 존재한다. 이 격차를 0으로 만들려면 모든 쓰기를 캐시와 DB에 동시에 해야 하는데, 이는 원자적 트랜잭션이 불가능한 두 저장소 간의 일관성 문제로 이어진다.
 
-### TTL 설정의 트레이드오프
+**둘째, 분산 환경의 레이스 컨디션.** 서버가 10대 있고 각각 로컬 캐시(L1)를 가진다고 가정하자. 서버 1에서 데이터를 수정하고 자신의 L1 캐시를 삭제한다. 서버 2~10이 여전히 구 데이터를 캐시하고 있다면, 같은 순간 같은 데이터를 조회한 사용자가 서버에 따라 다른 결과를 받는다.
 
-TTL이 짧을수록 데이터 신선도는 올라가지만 Cache Miss가 자주 발생해 DB 부하가 커진다. 반대로 TTL이 길면 DB 부하는 줄지만 사용자가 오래된 데이터를 볼 확률이 높아진다.
+**셋째, 성능과 일관성의 트레이드오프.** CAP 정리에 따르면 분산 시스템에서 Consistency(일관성)와 Availability(가용성)는 동시에 완벽하게 달성할 수 없다. 캐시는 가용성과 성능을 택하는 대신 강한 일관성을 포기한다. 문제는 "얼마나 포기할 것인가"를 데이터 성격에 맞게 결정해야 한다는 것이다.
+
+> **비유:** 병원 응급실의 재고 관리와 도서관 신간 목록을 생각해보자. 응급실 혈액 재고는 1분이라도 틀리면 안 된다(강한 일관성 필요). 도서관 신간 목록은 하루 정도 늦게 업데이트되어도 큰 문제가 없다(약한 일관성 허용). 같은 캐시 무효화 전략을 두 시스템에 동일하게 적용하는 것이 바로 실무에서 흔히 보는 설계 실수다.
 
 ```mermaid
 graph LR
-    A["TTL 짧음"] -->|"신선도 높음"| B["Cache Miss 빈번"]
-    C["TTL 긺"] -->|"Cache Hit 높음"| D["Stale Data 위험"]
-    E["적정 TTL"] -->|"데이터 성격에 따라"| F["신선도와 성능"]
+    Write["DB 쓰기"] -->|"커밋 완료"| Gap["불일치 구간"]
+    Gap -->|"캐시 무효화"| Sync["일관성 회복"]
+    Gap -->|"이 구간이 문제"| Stale["구 데이터 서빙"]
 ```
 
-데이터 성격별로 TTL을 달리 설정하는 것이 핵심이다. 아래 코드는 Spring에서 캐시 이름별로 서로 다른 TTL을 설정하는 방법이다.
+이 "불일치 구간"을 최소화하는 것이 캐시 무효화 설계의 본질이다.
 
-실무에서는 모든 캐시에 동일한 TTL을 거는 실수를 자주 한다. 상품 정보처럼 하루에 한 번 바뀌는 데이터와, 재고처럼 초 단위로 바뀌는 데이터에 같은 TTL을 걸면 둘 중 하나는 반드시 문제가 된다. 상품 정보에 10초 TTL을 걸면 DB에 불필요한 부하가 가고, 재고에 1시간 TTL을 걸면 품절인데도 "재고 있음"이 표시된다.
+---
 
-따라서 데이터를 분류하고 각 카테고리에 맞는 TTL을 적용해야 한다. 아래 코드가 바로 그 구현이다.
+## 1. TTL 기반 무효화 — 단순하지만 함정이 많다
+
+TTL(Time To Live)은 "이 캐시는 N초 후 자동 폐기"를 선언한다. 구현이 가장 단순하고 Redis, Caffeine 등 모든 캐시 라이브러리가 기본 지원한다.
+
+> **비유:** 편의점 우유에 찍힌 유통기한과 같다. 유통기한이 지나면 자동 폐기된다. 문제는 유통기한 내에 우유가 상할 수도 있고(DB 먼저 변경), 유통기한이 너무 짧으면 멀쩡한 우유를 매일 버리는 낭비가 생긴다는 것이다.
+
+### 고정 TTL의 트레이드오프
+
+TTL이 짧을수록 DB 부하가 늘고, 길수록 Stale Data 위험이 커진다. 데이터 성격을 4개 계층으로 분류하면 TTL 설정이 명확해진다.
 
 ```java
 @Configuration
@@ -62,23 +58,31 @@ public class CacheConfig {
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory factory) {
-        // 데이터 성격별 TTL 분리
+        /*
+         * 데이터 성격별 TTL 분류
+         * - 정적 참조 데이터(약관, 설정): 변경 빈도 낮음 → 긴 TTL
+         * - 도메인 데이터(상품, 사용자): 간헐적 변경 → 중간 TTL
+         * - 트랜잭션 데이터(재고, 잔액): 빈번한 변경 → 짧은 TTL
+         * - 실시간 데이터(환율, 주가): TTL 대신 이벤트 기반 무효화 권장
+         */
         Map<String, RedisCacheConfiguration> configs = Map.of(
-            "userProfile",  cacheConfig(Duration.ofHours(1)),    // 자주 안 바뀜
-            "productDetail", cacheConfig(Duration.ofMinutes(30)), // 가끔 바뀜
-            "inventory",    cacheConfig(Duration.ofSeconds(30)),  // 자주 바뀜
-            "exchangeRate", cacheConfig(Duration.ofSeconds(10))   // 실시간성
+            "termsOfService",  ttlConfig(Duration.ofHours(24)),   // 정적 참조
+            "userProfile",     ttlConfig(Duration.ofHours(1)),    // 도메인 데이터
+            "productDetail",   ttlConfig(Duration.ofMinutes(30)), // 도메인 데이터
+            "inventory",       ttlConfig(Duration.ofSeconds(30)), // 트랜잭션 데이터
+            "seatAvailability",ttlConfig(Duration.ofSeconds(10))  // 트랜잭션 데이터
         );
 
         return RedisCacheManager.builder(factory)
-            .cacheDefaults(cacheConfig(Duration.ofMinutes(10)))
+            .cacheDefaults(ttlConfig(Duration.ofMinutes(10)))
             .withInitialCacheConfigurations(configs)
             .build();
     }
 
-    private RedisCacheConfiguration cacheConfig(Duration ttl) {
+    private RedisCacheConfiguration ttlConfig(Duration ttl) {
         return RedisCacheConfiguration.defaultCacheConfig()
             .entryTtl(ttl)
+            .disableCachingNullValues()
             .serializeValuesWith(
                 RedisSerializationContext.SerializationPair
                     .fromSerializer(new GenericJackson2JsonRedisSerializer()));
@@ -86,49 +90,127 @@ public class CacheConfig {
 }
 ```
 
-**이 코드의 핵심:** 캐시 이름별로 서로 다른 TTL을 설정한다. `userProfile`은 1시간, `inventory`는 30초로, 데이터의 변경 빈도에 맞춘다. `cacheDefaults`로 명시하지 않은 캐시의 기본 TTL도 설정한다.
+**설계 근거:** 재고(`inventory`)에 30분 TTL을 걸면 품절인데도 "재고 있음"이 30분간 서빙된다. 반대로 약관(`termsOfService`)에 10초 TTL을 걸면 불필요한 DB 부하만 생긴다. 데이터를 분류하지 않고 모두 같은 TTL로 설정하는 것이 가장 흔한 실수다.
 
-### TTL Jitter — 만료 시점 분산
+### Jitter TTL — 왜 동시 만료가 위험한가
 
-모든 캐시가 정각에 동시 만료되면 DB에 순간적으로 엄청난 부하가 몰린다. 이를 방지하기 위해 TTL에 랜덤 편차(Jitter)를 추가한다.
+100개의 상품 캐시를 모두 TTL 10분으로 설정했다. 10분 후 100개가 동시에 만료된다. 그 순간 Cache Miss가 100개 동시에 발생하고 DB에 쿼리가 폭발한다. 이것이 **Thundering Herd(폭발적 군집 요청)**의 한 형태다.
 
-> **비유:** 학교 종이 울리면 1000명이 동시에 매점으로 달려간다. 그런데 반마다 쉬는 시간이 1~2분씩 다르면? 매점은 분산된 인파를 감당할 수 있다. TTL Jitter가 바로 이 "시차 두기"다.
+Jitter는 TTL에 무작위 편차를 추가해 만료 시점을 분산시킨다.
 
 ```java
-public Duration jitteredTtl(Duration baseTtl) {
-    // 기본 TTL의 ±20% 범위에서 랜덤 편차 추가
-    long baseSeconds = baseTtl.toSeconds();
-    long jitter = (long) (baseSeconds * 0.2 * (Math.random() * 2 - 1));
-    return Duration.ofSeconds(baseSeconds + jitter);
-}
+@Component
+public class JitteredCacheService {
 
-// 사용 예: 기본 600초(10분) → 실제 TTL은 480~720초 사이
-redisTemplate.opsForValue().set(key, value, jitteredTtl(Duration.ofMinutes(10)));
+    private final StringRedisTemplate redis;
+    private final Random random = new Random();
+
+    /**
+     * Jitter 적용 TTL 계산
+     *
+     * 원리: baseTtl의 ±20% 범위에서 무작위 편차 추가
+     * 10분 기준 → 실제 TTL: 8분~12분 사이에서 균등 분포
+     *
+     * 왜 20%인가: 너무 작으면 분산 효과 미미, 너무 크면 신선도 예측이 어려워짐
+     * 실무 권장: ±10%~±30% 범위에서 데이터 중요도에 따라 조정
+     */
+    public void setWithJitter(String key, Object value, Duration baseTtl) {
+        long baseSeconds = baseTtl.toSeconds();
+        // -0.2 ~ +0.2 범위의 jitter factor 계산
+        double jitterFactor = (random.nextDouble() * 0.4) - 0.2;
+        long jitteredSeconds = (long) (baseSeconds * (1 + jitterFactor));
+
+        redis.opsForValue().set(key, serialize(value),
+            Duration.ofSeconds(Math.max(1, jitteredSeconds)));
+    }
+
+    /**
+     * 더 정밀한 제어가 필요할 때: 절대값 jitter
+     * baseTtl=600초, maxJitter=120초 → 480~720초 사이
+     */
+    public void setWithAbsoluteJitter(String key, Object value,
+                                       Duration baseTtl, Duration maxJitter) {
+        long jitter = (long) (maxJitter.toSeconds() * (random.nextDouble() * 2 - 1));
+        long finalTtl = baseTtl.toSeconds() + jitter;
+
+        redis.opsForValue().set(key, serialize(value),
+            Duration.ofSeconds(Math.max(1, finalTtl)));
+    }
+
+    private String serialize(Object value) {
+        // ObjectMapper를 통한 직렬화 (생략)
+        return value.toString();
+    }
+}
 ```
 
-**이 코드의 핵심:** `Math.random() * 2 - 1`로 -1 ~ +1 사이의 값을 만들고, 기본 TTL의 20%를 곱해서 편차를 만든다. 10분 기준 8분~12분 사이에서 랜덤으로 만료된다.
+**왜 Jitter가 효과적인가:** 100개 캐시의 만료 시각이 8분~12분 사이에 균등 분포하면, 매 분당 약 25개씩 만료된다. 순간 폭발이 지속적인 소량 부하로 변환된다.
+
+### Sliding TTL — 접근할 때마다 TTL 갱신
+
+고정 TTL은 마지막 접근 시각과 관계없이 생성 시각 기준으로 만료된다. Sliding TTL은 접근할 때마다 TTL을 리셋한다. 자주 조회되는 인기 항목은 살아남고, 조회가 없는 항목은 자연 만료된다.
+
+```java
+@Component
+@RequiredArgsConstructor
+public class SlidingTtlCacheService {
+
+    private final StringRedisTemplate redis;
+    private static final Duration SLIDING_TTL = Duration.ofMinutes(30);
+
+    public String get(String key) {
+        String value = redis.opsForValue().get(key);
+        if (value != null) {
+            // 접근 시마다 TTL 리셋 → Sliding 효과
+            redis.expire(key, SLIDING_TTL);
+        }
+        return value;
+    }
+
+    public void set(String key, String value) {
+        redis.opsForValue().set(key, value, SLIDING_TTL);
+    }
+
+    /*
+     * 주의: Sliding TTL의 함정
+     * 매우 인기 있는 키는 영원히 만료되지 않을 수 있다.
+     * 이를 방지하려면 최대 TTL(hardTtl)을 별도 키로 관리해야 한다.
+     *
+     * ex) "key:expire_at" 에 절대 만료 시각을 저장하고,
+     *     GET 시 현재시각 > expire_at 이면 강제 evict
+     */
+}
+```
 
 ---
 
-## 2. 이벤트 기반 무효화 — 데이터가 바뀔 때 즉시 삭제
+## 2. 이벤트 기반 무효화 — DB 커밋 후 즉시 삭제
 
-TTL 기반 무효화는 단순하지만, TTL이 만료되기 전까지는 구 데이터가 서빙된다는 근본적인 한계가 있다. 이벤트 기반 무효화는 데이터가 변경되는 순간 캐시를 즉시 삭제하거나 갱신한다.
+TTL 기반 무효화의 근본 한계는 "TTL이 만료되기 전까지는 반드시 구 데이터가 서빙된다"는 것이다. 이벤트 기반 무효화는 데이터가 변경되는 순간 캐시를 즉시 삭제한다.
 
-> **비유:** 편의점 본사에서 "A우유 리콜 발생, 즉시 매대에서 치워라"라는 긴급 통보를 보내는 것이다. 유통기한이 남아있더라도 즉시 제거하니까 손님이 상한 우유를 살 일이 없다.
+> **비유:** 슈퍼마켓 본사에서 "A제품 리콜 발령"이라는 긴급 문자를 모든 매장에 보낸다. 각 매장은 유통기한 잔여와 관계없이 즉시 매대에서 해당 제품을 치운다. 이것이 이벤트 기반 무효화다.
 
-### Spring @CacheEvict 기반 무효화
+### @TransactionalEventListener(AFTER_COMMIT) — 왜 AFTER_COMMIT인가
 
-가장 기본적인 이벤트 기반 무효화는 데이터를 수정하는 메서드에 `@CacheEvict`를 붙이는 것이다. 메서드가 성공적으로 완료되면 해당 캐시 항목이 자동으로 삭제된다.
+단순히 `@CacheEvict`를 서비스 메서드에 붙이면 위험한 레이스 컨디션이 발생한다.
 
-하지만 단순히 `@CacheEvict`만 붙이면 문제가 생긴다. DB 트랜잭션이 커밋되기 전에 캐시가 먼저 삭제되면, 다른 스레드가 그 틈에 구 데이터를 DB에서 읽어와 캐시에 다시 넣을 수 있다. 따라서 트랜잭션 커밋 이후에 캐시를 삭제하는 것이 안전하다.
+```mermaid
+graph LR
+    Tx["트랜잭션 시작"] -->|"캐시 먼저 삭제"| Del["EVICT 실행"]
+    Del -->|"다른 스레드 캐시 미스"| Read["구 DB 데이터 캐시"]
+    Read -->|"트랜잭션 롤백"| Wrong["잘못된 데이터 서빙"]
+```
 
-아래 코드는 Spring의 `@TransactionalEventListener`를 활용해 트랜잭션 커밋 후에만 캐시를 무효화하는 패턴이다.
+캐시를 먼저 삭제한 직후, 트랜잭션이 커밋되기 전 그 찰나에 다른 스레드가 Cache Miss를 감지하고 DB에서 구 데이터를 읽어 캐시에 다시 넣을 수 있다. 그 상태에서 원래 트랜잭션이 롤백되면, 캐시에는 DB와도 다른 임시 상태가 들어가게 된다.
+
+**AFTER_COMMIT이 해결책인 이유:** 트랜잭션이 DB에 영구 커밋된 후에만 캐시 삭제가 발생한다. 롤백 시에는 이벤트 자체가 발행되지 않는다.
 
 ```java
-// 1. 도메인 이벤트 정의
-public record ProductUpdatedEvent(Long productId) {}
+// 1. 도메인 이벤트 정의 (record로 불변 보장)
+public record ProductUpdatedEvent(Long productId, String cacheName) {}
+public record ProductDeletedEvent(Long productId) {}
 
-// 2. 서비스에서 이벤트 발행
+// 2. 서비스: 트랜잭션 내에서 이벤트 발행 (캐시는 아직 건드리지 않음)
 @Service
 @RequiredArgsConstructor
 public class ProductService {
@@ -138,80 +220,445 @@ public class ProductService {
 
     @Transactional
     public void updateProduct(Long productId, ProductUpdateRequest request) {
-        Product product = repository.findById(productId).orElseThrow();
+        Product product = repository.findById(productId)
+            .orElseThrow(() -> new EntityNotFoundException("Product: " + productId));
+
         product.update(request);
         repository.save(product);
-        // 트랜잭션 내에서 이벤트 발행 (아직 캐시 삭제 안 함)
-        eventPublisher.publishEvent(new ProductUpdatedEvent(productId));
+
+        /*
+         * 이벤트는 트랜잭션 컨텍스트 안에서 발행한다.
+         * 실제 캐시 삭제는 AFTER_COMMIT 단계에서 발생하므로
+         * 트랜잭션 커밋이 보장된 후에만 캐시가 삭제된다.
+         */
+        eventPublisher.publishEvent(new ProductUpdatedEvent(productId, "products"));
+    }
+
+    @Transactional
+    public void deleteProduct(Long productId) {
+        repository.deleteById(productId);
+        eventPublisher.publishEvent(new ProductDeletedEvent(productId));
     }
 }
 
-// 3. 트랜잭션 커밋 후에만 캐시 무효화
+// 3. 캐시 무효화 핸들러: AFTER_COMMIT 단계에서만 실행
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class CacheInvalidationHandler {
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final CacheManager cacheManager;
+
+    /*
+     * TransactionPhase.AFTER_COMMIT:
+     *   - 트랜잭션이 성공적으로 커밋된 후 실행
+     *   - 롤백 시 실행되지 않음 → 잘못된 무효화 방지
+     *
+     * TransactionPhase.AFTER_COMPLETION (피해야 할 선택):
+     *   - 커밋/롤백 모두 후 실행
+     *   - 롤백되었는데도 캐시가 삭제되어, 다음 조회 시 DB에서 (롤백 전) 구 데이터가 캐시됨
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onProductUpdated(ProductUpdatedEvent event) {
+        String redisKey = "product:" + event.productId();
+        Boolean deleted = redisTemplate.delete(redisKey);
+
+        // Spring Cache 추상화 계층도 함께 무효화
+        Cache cache = cacheManager.getCache(event.cacheName());
+        if (cache != null) {
+            cache.evict(event.productId());
+        }
+
+        log.info("캐시 무효화 완료: key={}, deleted={}", redisKey, deleted);
+    }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void handleProductUpdate(ProductUpdatedEvent event) {
+    public void onProductDeleted(ProductDeletedEvent event) {
         redisTemplate.delete("product:" + event.productId());
+
+        // 목록 캐시도 함께 무효화 (특정 상품 삭제 시 목록이 바뀌므로)
+        redisTemplate.delete("products:list:*");
     }
 }
 ```
 
-**이 코드의 핵심:** `TransactionPhase.AFTER_COMMIT`으로 트랜잭션이 확실히 커밋된 후에만 캐시를 삭제한다. 롤백되면 캐시 삭제도 발생하지 않으므로 일관성이 보장된다.
+**AFTER_COMMIT의 함정 하나:** AFTER_COMMIT 단계에서 예외가 발생해도 트랜잭션은 이미 커밋된 상태다. 따라서 캐시 무효화 실패를 감지해도 롤백이 불가능하다. 이 경우 짧은 TTL이 안전망이 된다. TTL이 만료되면 자연히 일관성이 회복된다.
 
 ---
 
-## 3. 버전 기반 무효화 — 데이터에 버전 번호 부여
+## 3. Write-Through 무효화 — 왜 Update가 아닌 Delete인가
 
-캐시 키에 버전 번호를 포함시켜 데이터가 변경될 때마다 새로운 버전의 캐시 키를 사용하는 방식이다. 구 버전의 캐시는 TTL에 의해 자연스럽게 만료된다.
+캐시 무효화에서 가장 많이 하는 질문이 있다. "데이터가 바뀌면 캐시를 삭제(delete)해야 하나요, 아니면 새 값으로 업데이트(update)해야 하나요?"
 
-> **비유:** 교과서가 개정될 때 "수학 7판"에서 "수학 8판"으로 바뀌는 것과 같다. 서점에 7판이 아직 남아있더라도, 학생들은 "8판"이라는 이름으로 검색하니까 구판을 살 일이 없다. 7판은 자연스럽게 창고에서 폐기된다.
-
-### 동작 원리
+답은 **대부분의 경우 삭제(delete)가 안전하다**이다. 이유는 레이스 컨디션 때문이다.
 
 ```mermaid
 graph LR
-    App["App"]
-    DB["DB"]
-    R["Redis"]
-    App -->|"SELECT"| DB
-    App -->|"UPDATE→INCR v4"| R
-    App -->|"GET v4→Miss→저장"| R
+    T1["스레드1 쓰기"] -->|"캐시에 새값 PUT"| Race["레이스 구간"]
+    T2["스레드2 쓰기"] -->|"더 최신값 PUT"| Race
+    Race -->|"T1이 늦게 도착"| Wrong["구값이 캐시에 덮어씌워짐"]
 ```
 
-이 방식의 장점은 구 버전 캐시를 명시적으로 삭제할 필요가 없다는 것이다. 키 자체가 달라지니까 구 데이터에 접근 자체가 불가능하다. 단점은 Redis에 키가 좀 더 많이 쌓인다는 것인데, TTL이 지나면 자동 정리되므로 큰 문제는 아니다.
+두 스레드가 동시에 다른 값으로 업데이트할 때, 네트워크 지연으로 인해 나중에 쓴 스레드의 캐시 PUT이 먼저 도착하고, 먼저 쓴 스레드의 PUT이 늦게 도착하면, 최종적으로 캐시에는 구 값이 남는다.
 
-아래 코드는 버전 기반 캐시의 구현이다. 핵심은 캐시 키에 버전 번호를 포함시키는 것과, 데이터 변경 시 버전만 올리면 된다는 점이다.
+삭제(delete)는 이 문제를 회피한다. 캐시를 삭제하면 다음 조회 시 Cache Miss가 발생하고, 그 시점의 DB 값(항상 최신)을 읽어 캐시를 채운다. 쓰기 순서가 어떻든 결과적으로 최신 DB 값이 캐시에 들어간다.
+
+```java
+@Service
+@RequiredArgsConstructor
+public class ProductWriteService {
+
+    private final ProductRepository repository;
+    private final StringRedisTemplate redis;
+
+    /*
+     * Cache-Aside Delete 패턴
+     *
+     * 잘못된 방법: 캐시를 새 값으로 업데이트
+     *   redis.opsForValue().set("product:" + id, newProduct);
+     *   → 동시 쓰기 시 레이스 컨디션 발생
+     *
+     * 올바른 방법: 캐시 삭제
+     *   redis.delete("product:" + id);
+     *   → 다음 조회 시 항상 DB에서 최신 값을 읽어옴
+     */
+    @Transactional
+    public Product updateProduct(Long productId, ProductUpdateRequest request) {
+        Product product = repository.findById(productId).orElseThrow();
+        product.update(request);
+        Product saved = repository.save(product);
+
+        // DB 커밋 후 캐시 삭제 (update가 아닌 delete)
+        // @TransactionalEventListener와 함께 쓸 때는 이벤트 발행으로 분리
+        return saved;
+    }
+}
+```
+
+---
+
+## 4. Double-Delete 패턴 — 레이스 컨디션의 완전한 방어
+
+단순히 DB 업데이트 후 캐시를 한 번 삭제하는 것도 완벽하지 않다. 미묘한 레이스 컨디션이 여전히 존재한다.
+
+**레이스 컨디션 타임라인:**
+
+```
+시각  스레드A (쓰기)           스레드B (읽기)
+0ms   DB 업데이트 시작
+5ms                            Cache Miss 감지
+10ms  DB 업데이트 완료
+15ms                            DB에서 구 값 읽기 (replication lag)
+20ms  캐시 DELETE
+25ms                            캐시에 구 값 PUT  ← 이미 삭제 후 구 값이 다시 들어옴
+```
+
+스레드 B가 캐시 Miss를 감지하고 DB에서 읽기 시작할 때, Read Replica의 replication lag 때문에 아직 구 값을 읽는다. 스레드 A가 캐시를 삭제한 후, 스레드 B가 그 구 값을 캐시에 저장하면 다시 stale cache가 만들어진다.
+
+**Double-Delete는 이를 방어한다.**
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class DoubleDeleteCacheService {
+
+    private final ProductRepository repository;
+    private final StringRedisTemplate redis;
+    private final ScheduledExecutorService scheduler =
+        Executors.newScheduledThreadPool(2);
+
+    /*
+     * Double-Delete 패턴
+     *
+     * 1차 삭제: DB 업데이트 전 → 쓰기 중 오래된 캐시 읽기 방지
+     * DB 업데이트
+     * 딜레이 (replication lag 대기)
+     * 2차 삭제: DB 업데이트 후 → 1차 삭제 후 들어온 stale 캐시 제거
+     *
+     * 왜 딜레이가 필요한가:
+     * - Read Replica의 replication lag이 보통 수십~수백 ms
+     * - 그 사이에 스레드 B가 구 값을 읽어 캐시에 넣을 수 있음
+     * - 딜레이 후 2차 삭제를 하면 그 stale 캐시까지 제거됨
+     *
+     * 최적 딜레이 계산:
+     * delay = max(replication_lag_p99, 100ms) + 10ms (여유분)
+     * 실무에서는 200~500ms를 많이 사용
+     */
+    @Transactional
+    public Product updateProductWithDoubleDelete(Long productId,
+                                                  ProductUpdateRequest request) {
+        String cacheKey = "product:" + productId;
+
+        // 1차 삭제: DB 업데이트 전
+        redis.delete(cacheKey);
+        log.debug("Double-Delete 1차: key={}", cacheKey);
+
+        Product product = repository.findById(productId).orElseThrow();
+        product.update(request);
+        Product saved = repository.save(product);
+
+        // 2차 삭제: DB 커밋 후 지연 실행
+        // @Async나 ScheduledExecutor로 트랜잭션 밖에서 실행
+        scheduleSecondDelete(cacheKey, Duration.ofMillis(300));
+
+        return saved;
+    }
+
+    private void scheduleSecondDelete(String cacheKey, Duration delay) {
+        scheduler.schedule(() -> {
+            try {
+                redis.delete(cacheKey);
+                log.debug("Double-Delete 2차 완료: key={}", cacheKey);
+            } catch (Exception e) {
+                log.error("Double-Delete 2차 실패: key={}", cacheKey, e);
+                // 실패해도 TTL에 의해 결국 만료됨 → 안전망
+            }
+        }, delay.toMillis(), TimeUnit.MILLISECONDS);
+    }
+}
+```
+
+**Double-Delete의 한계와 트레이드오프:**
+
+Double-Delete 도입 후 2차 삭제까지의 딜레이(200~500ms) 동안은 Cache Miss가 지속된다. 이 구간에 들어오는 모든 조회가 DB를 직접 hit한다. 트래픽이 높은 서비스에서는 이 딜레이가 DB 부하 증가로 이어질 수 있으므로, Mutex Lock 또는 PER 알고리즘과 조합하는 것이 좋다.
+
+---
+
+## 5. CDC 기반 무효화 — Debezium + Kafka로 완전 자동화
+
+이벤트 기반 무효화(`@TransactionalEventListener`)는 여전히 개발자가 모든 수정 경로에 이벤트 발행 코드를 넣어야 한다는 문제가 있다. 직접 SQL을 실행하는 배치 작업, 마이그레이션 스크립트, 다른 서비스의 직접 DB 접근 — 어느 하나라도 이벤트 발행이 누락되면 캐시 불일치가 발생한다.
+
+CDC(Change Data Capture)는 이 문제를 구조적으로 해결한다. 애플리케이션 코드가 아닌 **DB 자체의 변경 로그(MySQL binlog, PostgreSQL WAL)**를 캡처해 이벤트를 생성한다. 어떤 경로로 DB가 변경되든 반드시 로그에 남으므로, 무효화 누락이 구조적으로 불가능하다.
+
+> **비유:** 건물의 모든 출입구에 카메라를 설치하는 대신, 중앙 전력 미터 하나로 "전기가 얼마나 쓰였는지"를 측정하는 것과 같다. 누가 어느 출입구로 들어왔든, 전력계는 반드시 반응한다.
+
+### CDC 파이프라인 전체 구조
+
+```mermaid
+graph LR
+    DB["MySQL binlog"] -->|"캡처"| Deb["Debezium"]
+    Deb -->|"이벤트"| Kafka["Kafka"]
+    Kafka -->|"구독"| Con["Consumer"]
+    Con -->|"DEL"| Redis["Redis L2"]
+    Con -->|"evict"| L1["Caffeine L1"]
+```
+
+### Debezium 설정 (MySQL)
+
+```json
+{
+  "name": "product-cdc-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql-host",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "secret",
+    "database.server.name": "dbserver1",
+    "database.include.list": "mydb",
+    "table.include.list": "mydb.products,mydb.inventory",
+    "database.history.kafka.bootstrap.servers": "kafka:9092",
+    "database.history.kafka.topic": "schema-changes.mydb",
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
+    "snapshot.mode": "initial"
+  }
+}
+```
+
+### Kafka Consumer — CDC 이벤트로 캐시 무효화
+
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class ProductCdcCacheInvalidator {
+
+    private final StringRedisTemplate redis;
+    private final CaffeineCacheManager localCache;
+    private final ObjectMapper objectMapper;
+
+    /*
+     * Debezium CDC 이벤트 구조 (MySQL 기준)
+     * {
+     *   "op": "u",           // c=create, u=update, d=delete, r=snapshot read
+     *   "before": { "id": 1, "name": "구 이름", "price": 1000 },
+     *   "after":  { "id": 1, "name": "새 이름", "price": 1200 },
+     *   "ts_ms": 1714567890000
+     * }
+     *
+     * 왜 eventually consistent인가:
+     * - binlog 생성 → Debezium 캡처 → Kafka 전송 → Consumer 처리
+     * - 이 파이프라인 지연: 수백 ms ~ 수 초
+     * - 그러나 "반드시 처리됨"이 보장됨 (at-least-once delivery)
+     * - 실시간성보다 신뢰성이 중요한 시스템에 적합
+     */
+    @KafkaListener(
+        topics = "dbserver1.mydb.products",
+        groupId = "cache-invalidator",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void handleProductChange(
+            ConsumerRecord<String, String> record,
+            Acknowledgment ack) {
+        try {
+            JsonNode payload = objectMapper.readTree(record.value()).get("payload");
+            String operation = payload.get("op").asText();
+
+            // snapshot read는 무효화 불필요
+            if ("r".equals(operation)) {
+                ack.acknowledge();
+                return;
+            }
+
+            Long productId = extractProductId(payload, operation);
+            if (productId == null) {
+                log.warn("CDC 이벤트에서 productId 추출 실패: {}", record.value());
+                ack.acknowledge();
+                return;
+            }
+
+            invalidateProductCache(productId);
+            log.info("CDC 캐시 무효화: op={}, productId={}", operation, productId);
+
+            ack.acknowledge(); // 수동 커밋 → 처리 완료 후 오프셋 커밋
+
+        } catch (Exception e) {
+            log.error("CDC 캐시 무효화 실패: {}", record.value(), e);
+            // ack 하지 않음 → Kafka가 재전송 → at-least-once 보장
+            // 단, 무한 재시도 방지를 위해 DLT(Dead Letter Topic) 설정 권장
+        }
+    }
+
+    @KafkaListener(topics = "dbserver1.mydb.inventory", groupId = "cache-invalidator")
+    public void handleInventoryChange(ConsumerRecord<String, String> record,
+                                       Acknowledgment ack) {
+        try {
+            JsonNode payload = objectMapper.readTree(record.value()).get("payload");
+            String op = payload.get("op").asText();
+
+            if (!"r".equals(op)) {
+                JsonNode data = "d".equals(op) ? payload.get("before") : payload.get("after");
+                Long productId = data.get("product_id").asLong();
+                redis.delete("inventory:" + productId);
+
+                Cache cache = localCache.getCache("inventory");
+                if (cache != null) cache.evict(productId);
+            }
+            ack.acknowledge();
+        } catch (Exception e) {
+            log.error("재고 CDC 캐시 무효화 실패", e);
+        }
+    }
+
+    private Long extractProductId(JsonNode payload, String operation) {
+        try {
+            JsonNode data = "d".equals(operation)
+                ? payload.get("before")   // delete: before에 데이터
+                : payload.get("after");    // create/update: after에 데이터
+            return data != null ? data.get("id").asLong() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void invalidateProductCache(Long productId) {
+        // L2(Redis) 캐시 무효화
+        redis.delete("product:" + productId);
+
+        // L1(Caffeine) 캐시 무효화
+        Cache l1Cache = localCache.getCache("products");
+        if (l1Cache != null) {
+            l1Cache.evict(productId);
+        }
+
+        // 목록 캐시도 무효화 (상품 변경 시 목록에 반영되어야 함)
+        // 패턴 삭제는 Redis Cluster에서 지원하지 않으므로 태그 방식 권장 (섹션 9 참고)
+        redis.delete("products:list:all");
+    }
+}
+
+// Kafka 설정 (수동 커밋 + 역직렬화)
+@Configuration
+public class KafkaConsumerConfig {
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String>
+            kafkaListenerContainerFactory(ConsumerFactory<String, String> cf) {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
+            new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(cf);
+        // 수동 커밋으로 처리 완료 후 오프셋 커밋 → at-least-once 보장
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+        return factory;
+    }
+}
+```
+
+### CDC vs 이벤트 기반 비교
+
+| 항목 | @TransactionalEventListener | CDC (Debezium + Kafka) |
+|------|-----------------------------|------------------------|
+| 무효화 누락 | 코드 누락 시 발생 | 구조적으로 불가능 |
+| 지연 | 수 ms (즉시) | 수백 ms ~ 수 초 |
+| 인프라 | 추가 불필요 | Kafka, Debezium 필요 |
+| 직접 SQL 대응 | 불가 | 가능 (binlog 캡처) |
+| 메시지 보장 | 트랜잭션 연동 | at-least-once |
+| 적합 규모 | 단일 서비스 | 마이크로서비스, 대규모 |
+
+---
+
+## 6. 버전 기반 무효화 — ETag와 낙관적 동시성
+
+캐시 키에 버전 번호를 포함시켜, 데이터 변경 시 새 버전 키를 사용하는 방식이다. 구 버전 캐시를 명시적으로 삭제하지 않아도 된다. 버전이 바뀌면 구 키로는 접근 자체가 불가능하기 때문이다.
+
+**HTTP ETag와 동일한 원리다.** 브라우저가 `If-None-Match: "v3"` 헤더로 요청하면, 서버는 현재 버전이 v4면 새 데이터를 반환하고, v3이면 `304 Not Modified`를 반환한다. 캐시와 원본의 버전을 비교해 동기화한다.
 
 ```java
 @Service
 @RequiredArgsConstructor
 public class VersionedCacheService {
 
-    private final RedisTemplate<String, Object> redis;
+    private final StringRedisTemplate redis;
     private final ProductRepository repository;
+    private final ObjectMapper objectMapper;
 
-    public Product getProduct(Long productId) {
-        // 현재 버전 조회
+    private static final Duration VERSION_TTL = Duration.ofHours(1);
+    private static final Duration DATA_TTL = Duration.ofHours(2);
+
+    /*
+     * 버전 기반 캐시 조회
+     *
+     * 키 구조:
+     * - "product:{id}:version"  → 현재 버전 번호 (Long)
+     * - "product:{id}:v{ver}"   → 실제 데이터
+     *
+     * 왜 삭제가 필요 없는가:
+     * - updateProduct() 호출 시 버전만 올림 (v3 → v4)
+     * - 이후 조회는 "product:{id}:v4"를 찾으므로 v3 데이터에 접근 불가
+     * - v3 데이터는 DATA_TTL 만료 시 자동 정리
+     */
+    public Product getProduct(Long productId) throws Exception {
         String versionKey = "product:" + productId + ":version";
-        Long version = (Long) redis.opsForValue().get(versionKey);
-        if (version == null) {
-            version = 1L;
-            redis.opsForValue().set(versionKey, version);
+
+        String versionStr = redis.opsForValue().get(versionKey);
+        if (versionStr == null) {
+            // 버전 키가 없으면 DB에서 조회 후 초기화
+            return loadAndCache(productId, 1L);
         }
 
-        // 버전이 포함된 캐시 키로 조회
-        String cacheKey = "product:" + productId + ":v" + version;
-        Product cached = (Product) redis.opsForValue().get(cacheKey);
-        if (cached != null) return cached;
+        long version = Long.parseLong(versionStr);
+        String dataKey = "product:" + productId + ":v" + version;
+        String cached = redis.opsForValue().get(dataKey);
 
-        // Cache Miss → DB 조회 후 버전 키로 저장
-        Product product = repository.findById(productId).orElseThrow();
-        redis.opsForValue().set(cacheKey, product, Duration.ofHours(1));
-        return product;
+        if (cached != null) {
+            return objectMapper.readValue(cached, Product.class);
+        }
+
+        // 버전 키는 있으나 데이터 캐시가 만료된 경우
+        return loadAndCache(productId, version);
     }
 
     @Transactional
@@ -219,514 +666,815 @@ public class VersionedCacheService {
         Product product = repository.findById(productId).orElseThrow();
         product.update(request);
         repository.save(product);
-        // 버전만 올리면 구 캐시는 자동으로 무시됨
+
+        /*
+         * 핵심: 캐시를 삭제하지 않고 버전만 증가
+         * INCR은 원자적 연산 → 동시 업데이트 시 버전 충돌 없음
+         *
+         * 낙관적 동시성:
+         * - v3을 읽은 클라이언트가 수정 후 저장 시도
+         * - 그 사이 다른 클라이언트가 v4로 올렸다면
+         * - v3 기반 수정은 거부 (버전 불일치)
+         * → DB의 optimistic locking (@Version)과 동일한 원리
+         */
         redis.opsForValue().increment("product:" + productId + ":version");
-    }
-}
-```
 
-**이 코드의 핵심:** `updateProduct`에서 캐시를 삭제하지 않는다. 버전 번호만 올리면 된다. 구 버전 캐시(`v3`)는 아무도 조회하지 않으니 TTL 만료 시 자연 삭제된다. 캐시 삭제 실패에 대한 걱정이 사라진다.
-
----
-
-## 4. Cache Stampede 방지 — Mutex Lock
-
-Cache Stampede는 인기 캐시 키가 만료되는 순간 수백~수천 요청이 동시에 Cache Miss를 겪고 모두 DB로 달려가는 현상이다. 이전 포스트에서 개념을 다뤘으므로, 여기서는 실전에서 안전하게 구현하는 방법에 집중한다.
-
-> **비유:** 인기 식당이 오전 11시에 문을 여는데, 200명이 문 앞에서 대기하다가 문이 열리는 순간 동시에 밀려들면 아수라장이 된다. 해결책은 번호표(Lock)를 나눠주고, 1번만 먼저 들어가서 자리를 잡게 하고, 나머지는 "1번이 자리 잡으면 들어오세요"라고 안내하는 것이다.
-
-### Mutex Lock의 위험과 안전한 구현
-
-단순 Mutex Lock에는 세 가지 함정이 있다.
-
-1. **데드락:** Lock을 잡은 스레드가 예외로 죽으면 Lock이 영원히 풀리지 않는다
-2. **Lock 소유권:** 스레드 A가 잡은 Lock을 스레드 B가 풀어버릴 수 있다
-3. **재귀 대기:** Lock을 못 잡은 스레드가 무한 재귀에 빠진다
-
-```mermaid
-graph LR
-    T1["Thread1"]
-    R["Redis"]
-    T2["Thread2"]
-    T1 -->|"DB조회→캐시저장"| R
-    T1 -->|"DEL lock"| R
-    T2 -->|"GET cache→Hit"| R
-```
-
-아래 코드는 위 세 가지 함정을 모두 방어하는 안전한 Mutex Lock 구현이다. Lock에 고유 ID를 부여해 소유권을 확인하고, 최대 재시도 횟수를 두어 무한 루프를 방지하며, finally 블록에서 반드시 Lock을 해제한다.
-
-```java
-@Service
-@RequiredArgsConstructor
-public class StampedeProtectedCache {
-
-    private final StringRedisTemplate redis;
-    private final ProductRepository repository;
-    private final ObjectMapper objectMapper;
-
-    private static final int MAX_RETRIES = 10;
-    private static final Duration LOCK_TTL = Duration.ofSeconds(5);
-    private static final Duration CACHE_TTL = Duration.ofMinutes(10);
-
-    public Product getProduct(Long productId) throws InterruptedException {
-        String cacheKey = "product:" + productId;
-        String cached = redis.opsForValue().get(cacheKey);
-        if (cached != null) {
-            return deserialize(cached);
-        }
-
-        String lockKey = "lock:" + cacheKey;
-        String lockValue = UUID.randomUUID().toString(); // 소유권 식별용 고유 ID
-
-        for (int retry = 0; retry < MAX_RETRIES; retry++) {
-            Boolean acquired = redis.opsForValue()
-                .setIfAbsent(lockKey, lockValue, LOCK_TTL);
-
-            if (Boolean.TRUE.equals(acquired)) {
-                try {
-                    // Double-check: Lock 획득 후 다시 캐시 확인
-                    cached = redis.opsForValue().get(cacheKey);
-                    if (cached != null) return deserialize(cached);
-
-                    Product product = repository.findById(productId).orElseThrow();
-                    redis.opsForValue().set(cacheKey, serialize(product), CACHE_TTL);
-                    return product;
-                } finally {
-                    // 내가 잡은 Lock만 해제 (다른 스레드의 Lock을 풀지 않음)
-                    String currentLock = redis.opsForValue().get(lockKey);
-                    if (lockValue.equals(currentLock)) {
-                        redis.delete(lockKey);
-                    }
-                }
-            }
-
-            // Lock 실패 → 짧게 대기 후 캐시 재확인
-            Thread.sleep(50 + (long)(Math.random() * 50));
-            cached = redis.opsForValue().get(cacheKey);
-            if (cached != null) return deserialize(cached);
-        }
-
-        // 모든 재시도 실패 → DB 직접 조회 (Fallback)
-        return repository.findById(productId).orElseThrow();
-    }
-}
-```
-
-**이 코드의 핵심:** (1) `UUID`로 Lock 소유권을 식별해서 남의 Lock을 풀지 않는다. (2) Lock 획득 후 Double-check로 이미 다른 스레드가 캐시를 채웠는지 확인한다. (3) `MAX_RETRIES`로 무한 루프를 방지하고, 실패 시 DB Fallback으로 가용성을 보장한다.
-
----
-
-## 5. PER 알고리즘 — 확률적 조기 갱신
-
-PER(Probabilistic Early Recomputation)은 캐시가 만료되기 전에 확률적으로 미리 갱신하는 알고리즘이다. Lock 없이 Cache Stampede를 방지할 수 있어서, Mutex Lock보다 더 우아한 해결책으로 평가받는다.
-
-> **비유:** 편의점 우유의 유통기한이 3일 남았다고 하자. 유통기한 당일에 한꺼번에 치우면 매대가 비는 시간이 생긴다. 대신 "유통기한 1일 전부터 30% 확률로 미리 새 우유로 교체"하면, 매대가 비는 일 없이 항상 신선한 우유가 진열된다.
-
-### PER의 수학적 원리
-
-PER의 핵심 공식은 다음과 같다.
-
-```
-현재시각 - (만료시각 - TTL × beta × log(random())) > 만료시각
-```
-
-- `beta`: 갱신 민감도 (보통 1.0). 클수록 더 일찍 갱신을 시도한다
-- `log(random())`: 0~1 사이 랜덤 값의 로그. 만료 시점에 가까울수록 갱신 확률이 급격히 올라간다
-
-```mermaid
-graph LR
-    T1["TTL 9분"] --> T2["TTL 5분"]
-    T2 --> T3["TTL 1분"]
-    T3 --> T4["TTL 10초"]
-```
-
-만료 시점이 멀면 거의 갱신하지 않고, 가까워질수록 확률이 급등한다. 덕분에 만료 직전에 단 하나의 요청만이 DB를 조회해 캐시를 미리 갱신하게 된다.
-
-아래 코드에서 `shouldRecompute` 메서드가 PER의 핵심이다. 현재 시각과 만료 시각의 거리를 기반으로 갱신 여부를 확률적으로 결정한다. Lock이 전혀 없다는 점을 주목하자.
-
-```java
-@Service
-@RequiredArgsConstructor
-public class PERCacheService {
-
-    private final StringRedisTemplate redis;
-    private final ProductRepository repository;
-    private static final double BETA = 1.0;
-
-    public Product getProduct(Long productId) {
-        String key = "product:" + productId;
-        String cached = redis.opsForValue().get(key);
-        Long ttlSeconds = redis.getExpire(key, TimeUnit.SECONDS);
-
-        if (cached != null && ttlSeconds != null && ttlSeconds > 0) {
-            if (!shouldRecompute(ttlSeconds, Duration.ofMinutes(10))) {
-                return deserialize(cached);  // 아직 갱신 불필요
-            }
-            // 확률적으로 "갱신 당첨" → 백그라운드에서 캐시 갱신
-            CompletableFuture.runAsync(() -> recompute(productId, key));
-            return deserialize(cached);  // 현재 값은 즉시 반환
-        }
-
-        // 캐시 없음 → 동기 조회
-        return recompute(productId, key);
+        // 버전 키 TTL 갱신 (데이터와 버전 키가 같이 살아있어야 함)
+        redis.expire("product:" + productId + ":version", VERSION_TTL);
     }
 
-    private boolean shouldRecompute(long remainingTtl, Duration originalTtl) {
-        double delta = originalTtl.toSeconds() * BETA;
-        double threshold = delta * (-Math.log(Math.random()));
-        return remainingTtl <= threshold;
-    }
-
-    private Product recompute(Long productId, String key) {
+    private Product loadAndCache(Long productId, long version) throws Exception {
         Product product = repository.findById(productId).orElseThrow();
-        redis.opsForValue().set(key, serialize(product), Duration.ofMinutes(10));
+        String dataKey = "product:" + productId + ":v" + version;
+        redis.opsForValue().set(dataKey,
+            objectMapper.writeValueAsString(product), DATA_TTL);
         return product;
     }
 }
 ```
 
-**이 코드의 핵심:** `shouldRecompute`가 PER 공식을 구현한다. Lock이 없으므로 드물게 2~3개의 요청이 동시에 DB를 조회할 수 있지만, 수백 개가 몰리는 Stampede에 비하면 무시할 수준이다. 기존 캐시 값을 즉시 반환하면서 백그라운드에서 갱신하므로 사용자 응답 지연이 없다.
-
-### Mutex Lock vs PER 비교
-
-| 구분 | Mutex Lock | PER |
-|------|-----------|-----|
-| Stampede 방지 | 완벽 (1개만 통과) | 거의 완벽 (2~3개 통과 가능) |
-| 구현 복잡도 | Lock 관리 필요 | 수학 공식만 적용 |
-| 응답 지연 | Lock 대기 스레드 지연 발생 | 지연 없음 (기존 값 반환) |
-| 장애 위험 | Lock 해제 실패 시 데드락 | 장애 요소 없음 |
-| 적합한 상황 | DB 조회 비용이 매우 클 때 | 일반적인 캐시 갱신 |
+**버전 기반의 강점:** 캐시 삭제 실패에 대한 걱정이 없다. 버전만 올리면 된다. 네트워크 장애로 Redis에 연결할 수 없을 때도, 버전 증가만 재시도하면 된다. 구 버전 데이터는 자동으로 무시된다.
 
 ---
 
-## 6. 분산 환경에서의 캐시 일관성
+## 7. Redis Pub/Sub — 멀티 인스턴스 L1 캐시 동기화
 
-서버가 여러 대이고 각각 로컬 캐시(L1)를 가지고 있을 때, 한 서버에서 데이터를 변경하면 다른 서버들의 L1 캐시도 무효화해야 한다. 이를 위한 두 가지 주요 방식이 있다.
+서버 10대가 각각 Caffeine L1 캐시를 가지고 있을 때, 서버 1에서 데이터가 변경되면 서버 2~10의 L1 캐시도 즉시 무효화해야 한다. Redis Pub/Sub이 이 브로드캐스트 역할을 한다.
 
-### 6-1. Redis Pub/Sub 기반 무효화
-
-> **비유:** 학교 방송 시스템과 같다. 교무실(데이터를 변경한 서버)에서 방송(Pub/Sub 메시지)을 하면, 모든 교실(서버)의 스피커가 동시에 울려서 "3학년 시간표 변경됨"이라는 안내를 받는다. 각 교실은 자기 칠판(L1 캐시)에 적힌 구 시간표를 지운다.
+> **비유:** 학교 교내 방송 시스템이다. 교무실(변경 발생 서버)에서 마이크를 잡고 "3층 회의실 예약 취소됨"을 방송하면, 모든 교실(서버)의 스피커가 동시에 울린다. 각 교실은 자기 칠판(L1 캐시)에서 해당 예약을 지운다.
 
 ```mermaid
 graph LR
-    SA["서버A"]
-    R["Redis"]
-    SB["서버B/C"]
-    SA -->|"PUBLISH invalidate"| R
-    R -->|"L1 삭제"| SA
-    R -->|"L1 삭제"| SB
+    SA["서버A 변경"] -->|"PUBLISH"| RPub["Redis Pub/Sub"]
+    RPub -->|"SUBSCRIBE"| SB["서버B L1 evict"]
+    RPub -->|"SUBSCRIBE"| SC["서버C L1 evict"]
+    RPub -->|"SUBSCRIBE"| SA2["서버A L1 evict"]
 ```
 
-Redis Pub/Sub은 "fire and forget" 방식이다. 메시지를 보내는 시점에 구독자가 연결되어 있지 않으면 메시지를 받지 못한다. 따라서 서버가 재시작 중이거나 네트워크가 순간 끊기면 무효화 메시지를 놓칠 수 있다.
+### 왜 Fire-and-Forget 한계가 있는가
 
-이 한계를 완화하기 위해 L1 캐시의 TTL을 짧게 설정(10~60초)하는 것이 핵심이다. Pub/Sub 메시지를 놓치더라도 짧은 TTL 내에 구 데이터가 자연 만료되어 결국 일관성이 수렴한다.
+Redis Pub/Sub은 메시지를 보내는 순간 구독자가 연결되어 있지 않으면 메시지를 잃는다. 서버가 재시작 중이거나 네트워크가 순간 단절되면 무효화 메시지를 못 받는다. 이것이 "fire-and-forget" 한계다.
 
-아래 코드는 Spring Boot에서 Redis Pub/Sub을 활용한 L1 캐시 무효화의 전체 구현이다. 메시지를 보내는 쪽(Publisher)과 받는 쪽(Listener) 모두를 포함한다.
+이 한계를 완화하는 전략: L1 캐시 TTL을 짧게(30~60초) 설정한다. Pub/Sub 메시지를 놓쳐도 짧은 TTL 내에 자연 만료되어 최종 일관성이 수렴한다.
 
 ```java
-// === 1. Redis Pub/Sub 설정 ===
+// === Pub/Sub 설정 ===
 @Configuration
 public class RedisPubSubConfig {
 
+    public static final String CACHE_INVALIDATION_CHANNEL = "cache:invalidate";
+
     @Bean
     public ChannelTopic cacheInvalidationTopic() {
-        return new ChannelTopic("cache:invalidate");
+        return new ChannelTopic(CACHE_INVALIDATION_CHANNEL);
     }
 
     @Bean
     public RedisMessageListenerContainer listenerContainer(
             RedisConnectionFactory factory,
-            CacheInvalidationSubscriber subscriber,
+            MessageListener cacheInvalidationListener,
             ChannelTopic topic) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(factory);
-        container.addMessageListener(subscriber, topic);
+        container.addMessageListener(cacheInvalidationListener, topic);
+        // 별도 스레드풀로 리스너 실행 (메인 이벤트 루프 블로킹 방지)
+        container.setTaskExecutor(Executors.newFixedThreadPool(2));
         return container;
     }
 }
 
-// === 2. 무효화 메시지 발행 (데이터 변경 측) ===
+// === 무효화 메시지 구조 ===
+public record CacheInvalidationMessage(
+    String cacheName,
+    String key,
+    long timestamp   // 오래된 메시지 필터링에 사용
+) {
+    public String serialize() {
+        return cacheName + "|" + key + "|" + timestamp;
+    }
+
+    public static CacheInvalidationMessage deserialize(String payload) {
+        String[] parts = payload.split("\\|", 3);
+        return new CacheInvalidationMessage(
+            parts[0], parts[1], Long.parseLong(parts[2]));
+    }
+}
+
+// === 발행자: 데이터 변경 시 브로드캐스트 ===
 @Service
 @RequiredArgsConstructor
-public class CacheInvalidationPublisher {
+@Slf4j
+public class L1CacheInvalidationPublisher {
 
     private final StringRedisTemplate redis;
     private final ChannelTopic topic;
 
-    public void publishInvalidation(String cacheName, String key) {
-        String message = cacheName + ":" + key;
-        redis.convertAndSend(topic.getTopic(), message);
+    /*
+     * @TransactionalEventListener(AFTER_COMMIT)와 조합:
+     * 트랜잭션 커밋 후 Pub/Sub 메시지 발행 → 모든 서버 L1 무효화
+     *
+     * 주의: 이 메서드 자체에 @Transactional을 붙이지 않는다.
+     * 트랜잭션 커밋 후 실행되므로 새 트랜잭션 컨텍스트가 없어야 한다.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void broadcastInvalidation(ProductUpdatedEvent event) {
+        CacheInvalidationMessage message = new CacheInvalidationMessage(
+            "products",
+            String.valueOf(event.productId()),
+            System.currentTimeMillis()
+        );
+
+        try {
+            redis.convertAndSend(topic.getTopic(), message.serialize());
+            log.debug("L1 무효화 브로드캐스트: {}", message);
+        } catch (Exception e) {
+            // Pub/Sub 실패 시 경고만 (캐시 일관성은 TTL로 수렴)
+            log.warn("Pub/Sub 발행 실패, TTL 만료로 수렴 예정: {}", message, e);
+        }
     }
 }
 
-// === 3. 무효화 메시지 수신 (모든 서버) ===
+// === 구독자: 모든 서버 인스턴스에서 실행 ===
 @Component
 @RequiredArgsConstructor
-public class CacheInvalidationSubscriber implements MessageListener {
+@Slf4j
+public class L1CacheInvalidationSubscriber implements MessageListener {
 
-    private final CaffeineCacheManager localCacheManager;
+    private final CaffeineCacheManager caffeineCacheManager;
+    private static final long MAX_MESSAGE_AGE_MS = 5000; // 5초 이상 된 메시지 무시
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        String payload = new String(message.getBody());
-        String[] parts = payload.split(":", 2);
-        String cacheName = parts[0];
-        String key = parts[1];
+        try {
+            String payload = new String(message.getBody(), StandardCharsets.UTF_8);
+            CacheInvalidationMessage msg =
+                CacheInvalidationMessage.deserialize(payload);
 
-        Cache cache = localCacheManager.getCache(cacheName);
-        if (cache != null) {
-            cache.evict(key);
-        }
-    }
-}
-
-// === 4. 서비스에서 사용 ===
-@Service
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository repository;
-    private final CacheInvalidationPublisher invalidationPublisher;
-
-    @Transactional
-    public void updateProduct(Long productId, ProductUpdateRequest request) {
-        Product product = repository.findById(productId).orElseThrow();
-        product.update(request);
-        repository.save(product);
-        // 모든 서버의 L1 캐시 무효화
-        invalidationPublisher.publishInvalidation("products", String.valueOf(productId));
-    }
-}
-```
-
-**이 코드의 핵심:** 데이터를 변경한 서버가 `publishInvalidation`을 호출하면, Redis Pub/Sub을 통해 모든 서버의 `CacheInvalidationSubscriber`가 메시지를 수신하고 자신의 L1 캐시에서 해당 키를 삭제한다.
-
-### 6-2. CDC(Change Data Capture) 기반 무효화
-
-> **비유:** 은행 거래가 발생하면 자동으로 감사 로그가 남고, 이 로그를 보고 있는 시스템들이 각자 업데이트하는 것과 같다. 애플리케이션 코드에서 "캐시도 지워야지"라고 신경 쓸 필요가 없다. DB 변경 자체가 이벤트를 발생시킨다.
-
-CDC는 데이터베이스의 변경 로그(MySQL의 binlog, PostgreSQL의 WAL)를 직접 캡처해서 캐시 무효화 이벤트로 변환하는 방식이다. 애플리케이션 코드에 캐시 무효화 로직을 넣지 않아도 되므로, 캐시 무효화 누락이 구조적으로 불가능하다.
-
-```mermaid
-graph LR
-    App["애플리케이션"] -->|"쓰기"| DB["MySQL"]
-    DB -->|"binlog"| Debezium["Debezium"]
-    Debezium -->|"변경 이벤트"| Kafka["Kafka"]
-    Kafka -->|"구독"| Worker["캐시 무효화"]
-    Worker -->|"DEL"| Redis["Redis"]
-    Worker -->|"evict"| L1["각 서버 L1"]
-```
-
-CDC의 가장 큰 장점은 **누락 방지**다. 직접 SQL로 데이터를 수정하든, 배치 작업으로 수정하든, 어떤 경로로 DB가 변경되든 binlog에 남으니까 캐시 무효화가 반드시 발생한다. Pub/Sub 방식에서는 애플리케이션이 `publishInvalidation`을 호출하는 것을 깜빡하면 캐시 불일치가 발생하지만, CDC에서는 이런 실수가 구조적으로 불가능하다.
-
-단점은 인프라 복잡도다. Debezium, Kafka 등 추가 컴포넌트가 필요하고, binlog 파싱 지연(보통 수백 ms ~ 수 초)이 있어서 실시간성은 Pub/Sub보다 떨어진다.
-
-아래 코드는 Debezium의 CDC 이벤트를 Kafka로 수신해서 Redis 캐시를 무효화하는 Consumer 구현이다.
-
-```java
-@Component
-@RequiredArgsConstructor
-public class CdcCacheInvalidator {
-
-    private final StringRedisTemplate redis;
-    private final CaffeineCacheManager localCache;
-
-    @KafkaListener(topics = "dbserver1.mydb.products")
-    public void handleProductChange(ConsumerRecord<String, String> record) {
-        JsonNode payload = parsePayload(record.value());
-        String operation = payload.get("op").asText(); // c=create, u=update, d=delete
-
-        if ("u".equals(operation) || "d".equals(operation)) {
-            Long productId = payload.get("after") != null
-                ? payload.get("after").get("id").asLong()
-                : payload.get("before").get("id").asLong();
-
-            // Redis(L2) 캐시 삭제
-            redis.delete("product:" + productId);
-
-            // 로컬(L1) 캐시 삭제
-            Cache cache = localCache.getCache("products");
-            if (cache != null) {
-                cache.evict(productId);
+            // 오래된 메시지 필터링 (네트워크 지연으로 뒤늦게 도착한 메시지)
+            long age = System.currentTimeMillis() - msg.timestamp();
+            if (age > MAX_MESSAGE_AGE_MS) {
+                log.warn("오래된 Pub/Sub 메시지 무시: age={}ms, key={}",
+                    age, msg.key());
+                return;
             }
+
+            Cache cache = caffeineCacheManager.getCache(msg.cacheName());
+            if (cache != null) {
+                cache.evict(Long.parseLong(msg.key()));
+                log.debug("L1 캐시 무효화 완료: cacheName={}, key={}",
+                    msg.cacheName(), msg.key());
+            }
+
+        } catch (Exception e) {
+            log.error("Pub/Sub 메시지 처리 실패: {}", new String(message.getBody()), e);
         }
     }
 }
 ```
-
-**이 코드의 핵심:** Debezium이 MySQL binlog를 캡처해 Kafka 토픽 `dbserver1.mydb.products`로 전달하면, 이 Consumer가 `op` 필드로 변경 유형을 판단하고 캐시를 무효화한다. 애플리케이션 코드 어디에도 캐시 무효화 호출이 없어도 동작한다.
-
-### Pub/Sub vs CDC 비교
-
-| 구분 | Redis Pub/Sub | CDC (Debezium + Kafka) |
-|------|--------------|----------------------|
-| 지연 | 수 ms (거의 즉시) | 수백 ms ~ 수 초 |
-| 누락 가능성 | 코드 누락 가능 | 구조적으로 불가능 |
-| 인프라 복잡도 | 낮음 | 높음 (Kafka, Debezium 필요) |
-| 메시지 보장 | At-most-once | At-least-once |
-| 적합한 규모 | 중소 규모 | 대규모, 마이크로서비스 |
 
 ---
 
+## 8. 태그 기반 무효화 — 관련 캐시 그룹 일괄 삭제
+
+"이 사용자와 관련된 모든 캐시를 삭제하라"는 요구가 있을 때, 개별 키를 하나씩 삭제하는 것은 실수가 잦다. 태그 기반 무효화는 연관된 캐시들에 동일한 태그를 부여하고, 태그 단위로 일괄 무효화한다.
+
+> **비유:** 슈퍼마켓 매대에 "유제품" 라벨이 붙은 상품들이 있다. 유제품 전체 리콜 시 "유제품" 라벨이 붙은 것을 모두 치우면 된다. 개별 상품 이름을 일일이 기억할 필요가 없다.
+
+```java
+@Service
+@RequiredArgsConstructor
+public class TagBasedCacheService {
+
+    private final StringRedisTemplate redis;
+    private static final String TAG_PREFIX = "cache:tag:";
+
+    /*
+     * 캐시 저장 시 태그 등록
+     *
+     * 사용 예:
+     *   캐시 키 "product:1:detail" → 태그 "product:1", "category:electronics"
+     *   캐시 키 "product:1:reviews" → 태그 "product:1"
+     *   캐시 키 "user:42:orders" → 태그 "user:42"
+     *
+     * 태그 구조 (Redis Set):
+     *   "cache:tag:product:1" → {"product:1:detail", "product:1:reviews"}
+     */
+    public void setWithTags(String cacheKey, String value,
+                             Duration ttl, String... tags) {
+        // 실제 데이터 저장
+        redis.opsForValue().set(cacheKey, value, ttl);
+
+        // 태그 → 캐시키 역인덱스 저장
+        for (String tag : tags) {
+            String tagKey = TAG_PREFIX + tag;
+            redis.opsForSet().add(tagKey, cacheKey);
+            // 태그 TTL은 데이터보다 여유 있게
+            redis.expire(tagKey, ttl.plus(Duration.ofMinutes(10)));
+        }
+    }
+
+    /*
+     * 태그로 관련 캐시 일괄 삭제
+     *
+     * product:1 태그 무효화 → product:1:detail, product:1:reviews 모두 삭제
+     * 상품 수정 시 해당 상품과 관련된 모든 캐시를 한 번에 제거
+     */
+    public void invalidateByTag(String tag) {
+        String tagKey = TAG_PREFIX + tag;
+        Set<String> cacheKeys = redis.opsForSet().members(tagKey);
+
+        if (cacheKeys != null && !cacheKeys.isEmpty()) {
+            redis.delete(cacheKeys);  // 배치 삭제 (파이프라인)
+        }
+
+        // 태그 키 자체도 삭제
+        redis.delete(tagKey);
+    }
+
+    /*
+     * Spring @CacheEvict allEntries=true vs 태그 방식 비교
+     *
+     * @CacheEvict(value = "products", allEntries = true)
+     *   - 해당 캐시 이름의 모든 항목 삭제
+     *   - 관계없는 항목까지 삭제됨 (과도한 무효화)
+     *   - 구현 간단
+     *
+     * 태그 방식:
+     *   - 정확히 연관된 항목만 삭제 (선택적 무효화)
+     *   - 구현 복잡하지만 Cache Miss 최소화
+     *   - 예: 상품 1 수정 → 상품 1 관련 캐시만 삭제 (다른 상품 캐시 보존)
+     */
+}
+
+// 서비스에서 태그 기반 무효화 사용
+@Service
+@RequiredArgsConstructor
+public class ProductCacheService {
+
+    private final TagBasedCacheService tagCache;
+
+    public void cacheProductDetail(Product product) {
+        String key = "product:" + product.getId() + ":detail";
+        tagCache.setWithTags(
+            key,
+            serialize(product),
+            Duration.ofMinutes(30),
+            "product:" + product.getId(),              // 상품별 태그
+            "category:" + product.getCategoryId()      // 카테고리별 태그
+        );
+    }
+
+    // 상품 수정 시: 해당 상품과 관련된 모든 캐시 삭제
+    public void invalidateProduct(Long productId) {
+        tagCache.invalidateByTag("product:" + productId);
+    }
+
+    // 카테고리 변경 시: 해당 카테고리의 모든 상품 캐시 삭제
+    public void invalidateCategory(Long categoryId) {
+        tagCache.invalidateByTag("category:" + categoryId);
+    }
+
+    private String serialize(Object obj) {
+        return obj.toString(); // ObjectMapper 생략
+    }
+}
+```
+
+---
+
+## 9. 멀티레이어 캐시 무효화 — L1(Caffeine) + L2(Redis) 일관성
+
+L1(로컬 JVM 캐시)과 L2(Redis 분산 캐시)를 동시에 운영하면 성능이 극대화되지만, 두 계층의 일관성을 유지하는 것이 복잡해진다.
+
+### 멀티레이어 읽기/쓰기 프로토콜
+
+```mermaid
+graph LR
+    Req["요청"] -->|"L1 체크"| L1["Caffeine"]
+    L1 -->|"Miss"| L2["Redis"]
+    L2 -->|"Miss"| DB["Database"]
+    DB -->|"L2 채움"| L2
+    L2 -->|"L1 채움"| L1
+```
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class MultiLayerCacheService {
+
+    private final CaffeineCacheManager l1CacheManager;
+    private final StringRedisTemplate redis;
+    private final ProductRepository repository;
+    private final ObjectMapper objectMapper;
+    private final L1CacheInvalidationPublisher invalidationPublisher;
+
+    private static final Duration L1_TTL = Duration.ofSeconds(30); // 짧게: Pub/Sub 실패 시 안전망
+    private static final Duration L2_TTL = Duration.ofMinutes(30);
+
+    @Cacheable(cacheNames = "products", cacheManager = "caffeineCacheManager")
+    public Product getFromL1(Long productId) {
+        // L1 Miss → L2 확인
+        return getFromL2(productId);
+    }
+
+    private Product getFromL2(Long productId) {
+        String l2Key = "product:" + productId;
+        String cached = redis.opsForValue().get(l2Key);
+
+        if (cached != null) {
+            try {
+                return objectMapper.readValue(cached, Product.class);
+            } catch (Exception e) {
+                log.warn("L2 역직렬화 실패, DB fallback: {}", productId);
+            }
+        }
+
+        // L2 Miss → DB 조회 후 두 계층 채우기
+        Product product = repository.findById(productId).orElseThrow();
+        populateBothLayers(productId, product);
+        return product;
+    }
+
+    private void populateBothLayers(Long productId, Product product) {
+        try {
+            String serialized = objectMapper.writeValueAsString(product);
+
+            // L2 먼저 (영구 저장소에 가까운 계층)
+            redis.opsForValue().set("product:" + productId, serialized, L2_TTL);
+
+            // L1은 캐시 관리자를 통해 (TTL은 Caffeine 설정에서 관리)
+            Cache l1Cache = l1CacheManager.getCache("products");
+            if (l1Cache != null) {
+                l1Cache.put(productId, product);
+            }
+        } catch (Exception e) {
+            log.error("캐시 채우기 실패: productId={}", productId, e);
+        }
+    }
+
+    /*
+     * 멀티레이어 무효화 순서: L1 먼저, L2 나중
+     *
+     * 왜 L1 먼저인가:
+     * - L2를 먼저 삭제하면, L1에 아직 구 데이터가 있는 상태에서
+     *   다른 요청이 L1 Hit로 구 데이터를 계속 서빙함
+     * - L1을 먼저 삭제하면 L1 Miss → L2 확인 → L2도 곧 삭제됨
+     *   이 순서가 더 안전
+     *
+     * 단, 분산 환경에서는 다른 서버의 L1을 Pub/Sub으로 브로드캐스트해야 함
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void invalidateMultiLayer(ProductUpdatedEvent event) {
+        Long productId = event.productId();
+
+        // 1. 자신의 L1 먼저 무효화
+        Cache l1Cache = l1CacheManager.getCache("products");
+        if (l1Cache != null) {
+            l1Cache.evict(productId);
+        }
+
+        // 2. L2(Redis) 무효화
+        redis.delete("product:" + productId);
+
+        // 3. 다른 서버들의 L1 무효화 브로드캐스트
+        invalidationPublisher.broadcastInvalidation(event);
+
+        log.info("멀티레이어 캐시 무효화 완료: productId={}", productId);
+    }
+}
+
+// Caffeine L1 설정 (짧은 TTL이 핵심)
+@Configuration
+public class CaffeineConfig {
+
+    @Bean
+    public CaffeineCacheManager caffeineCacheManager() {
+        CaffeineCacheManager manager = new CaffeineCacheManager();
+        manager.setCaffeine(Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(30, TimeUnit.SECONDS)  // 짧은 TTL: Pub/Sub 실패 시 안전망
+            .recordStats()  // 통계 수집 (Hit Rate 모니터링)
+        );
+        return manager;
+    }
+}
+```
+
+---
+
+## 10. Thundering Herd 방어 — Mutex Lock과 확률적 조기 갱신
+
+캐시가 무효화된 직후, 수백~수천의 요청이 동시에 Cache Miss를 겪고 DB로 몰리는 현상을 **Thundering Herd** 또는 **Cache Stampede**라고 한다. 무효화 전략이 완벽해도, 무효화된 직후의 이 순간을 방어하지 않으면 DB가 죽는다.
+
+> **비유:** 콘서트 표 예매 사이트에서 티켓이 오픈되는 순간 10만 명이 동시에 새로고침을 누르는 것과 같다. 서버가 동시 요청을 감당하지 못하고 다운된다. 번호표를 나눠주고(Mutex Lock), 미리 준비를 마쳐두는 것(PER)이 해결책이다.
+
+### Mutex Lock — 하나만 통과시키기
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class MutexCacheService {
+
+    private final StringRedisTemplate redis;
+    private final ProductRepository repository;
+    private final ObjectMapper objectMapper;
+
+    private static final int MAX_RETRIES = 15;
+    private static final Duration LOCK_TTL = Duration.ofSeconds(10);
+    private static final Duration CACHE_TTL = Duration.ofMinutes(10);
+    private static final long RETRY_BASE_MS = 30;
+
+    public Product getProduct(Long productId) throws Exception {
+        String cacheKey = "product:" + productId;
+
+        // 빠른 경로: 캐시 있으면 즉시 반환
+        String cached = redis.opsForValue().get(cacheKey);
+        if (cached != null) {
+            return objectMapper.readValue(cached, Product.class);
+        }
+
+        // 느린 경로: Mutex Lock 획득 시도
+        return acquireAndLoad(productId, cacheKey);
+    }
+
+    private Product acquireAndLoad(Long productId, String cacheKey) throws Exception {
+        String lockKey = "lock:" + cacheKey;
+        // UUID로 소유권 식별: 내가 잡은 Lock만 내가 해제
+        String lockOwner = UUID.randomUUID().toString();
+
+        for (int retry = 0; retry < MAX_RETRIES; retry++) {
+            // SET NX EX: 원자적 Lock 획득
+            Boolean acquired = redis.opsForValue()
+                .setIfAbsent(lockKey, lockOwner, LOCK_TTL);
+
+            if (Boolean.TRUE.equals(acquired)) {
+                return loadWithLock(productId, cacheKey, lockKey, lockOwner);
+            }
+
+            // Lock 획득 실패 → 대기 후 캐시 재확인
+            long waitMs = RETRY_BASE_MS + (long)(Math.random() * RETRY_BASE_MS);
+            Thread.sleep(waitMs); // Exponential backoff 적용 권장
+
+            // 다른 스레드가 캐시를 채웠을 수 있음
+            String recheckCached = redis.opsForValue().get(cacheKey);
+            if (recheckCached != null) {
+                return objectMapper.readValue(recheckCached, Product.class);
+            }
+        }
+
+        // 모든 재시도 실패 → DB 직접 조회 (가용성 보장)
+        log.warn("Lock 획득 실패, DB Fallback: productId={}", productId);
+        return repository.findById(productId).orElseThrow();
+    }
+
+    private Product loadWithLock(Long productId, String cacheKey,
+                                  String lockKey, String lockOwner) throws Exception {
+        try {
+            // Double-check: Lock 획득 후 캐시 재확인
+            String cached = redis.opsForValue().get(cacheKey);
+            if (cached != null) {
+                return objectMapper.readValue(cached, Product.class);
+            }
+
+            // 실제 DB 조회
+            Product product = repository.findById(productId).orElseThrow();
+            redis.opsForValue().set(cacheKey,
+                objectMapper.writeValueAsString(product), CACHE_TTL);
+
+            log.debug("캐시 채우기 완료: productId={}", productId);
+            return product;
+
+        } finally {
+            // 내가 잡은 Lock만 해제 (소유권 검증)
+            // 주의: GET + DEL은 원자적이지 않음 → Lua 스크립트 사용
+            releaseLockSafely(lockKey, lockOwner);
+        }
+    }
+
+    /*
+     * 원자적 Lock 해제 (Lua 스크립트)
+     *
+     * GET lockKey → lockOwner 비교 → DEL의 세 단계가 원자적이어야 함
+     * 그렇지 않으면 GET 후 DEL 전에 Lock TTL 만료 → 다른 스레드가 Lock 획득
+     * → 내가 남의 Lock을 삭제하는 사고 발생
+     */
+    private static final String RELEASE_LOCK_SCRIPT =
+        "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+        "  return redis.call('del', KEYS[1]) " +
+        "else " +
+        "  return 0 " +
+        "end";
+
+    private void releaseLockSafely(String lockKey, String lockOwner) {
+        try {
+            redis.execute(
+                new DefaultRedisScript<>(RELEASE_LOCK_SCRIPT, Long.class),
+                Collections.singletonList(lockKey),
+                lockOwner
+            );
+        } catch (Exception e) {
+            log.error("Lock 해제 실패: lockKey={}", lockKey, e);
+            // Lock TTL 만료로 자동 해제됨 → 데드락 없음
+        }
+    }
+}
+```
+
+### PER(Probabilistic Early Recomputation) — 만료 전 확률적 갱신
+
+Mutex Lock은 만료 후 첫 요청이 Lock을 잡을 때까지 나머지 요청이 대기한다. PER은 만료되기 **전에** 미리 갱신해 만료 시점에 이미 새 캐시가 준비되게 한다. Lock이 전혀 필요 없다.
+
+**PER 수학적 원리:**
+
+```
+recompute = (현재시각) - (만료시각 - TTL × beta × log(random())) > 만료시각
+          = 잔여TTL < TTL × beta × (-log(random()))
+```
+
+- `beta`: 갱신 민감도 (기본 1.0)
+- `-log(random())`: 0~∞ 지수 분포. 만료 시점에 가까울수록 갱신 확률 급상승
+- 만료 10분 전: 갱신 확률 ~0%, 만료 1분 전: 갱신 확률 급상승
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class PERCacheService {
+
+    private final StringRedisTemplate redis;
+    private final ProductRepository repository;
+    private final ObjectMapper objectMapper;
+    private final Executor asyncExecutor = Executors.newFixedThreadPool(4);
+
+    private static final double BETA = 1.0;
+    private static final Duration CACHE_TTL = Duration.ofMinutes(10);
+
+    public Product getProduct(Long productId) throws Exception {
+        String key = "product:" + productId;
+        String cached = redis.opsForValue().get(key);
+        Long remainingTtl = redis.getExpire(key, TimeUnit.SECONDS);
+
+        if (cached != null && remainingTtl != null && remainingTtl > 0) {
+            if (shouldEarlyRecompute(remainingTtl, CACHE_TTL)) {
+                /*
+                 * "갱신 당첨": 백그라운드에서 비동기로 캐시 갱신
+                 * 현재 요청은 기존 캐시 값을 즉시 반환 → 사용자 지연 없음
+                 *
+                 * 왜 비동기인가:
+                 * - 갱신 당첨 여부는 확률적 → 여러 요청이 동시에 당첨될 수 있음
+                 * - 하나가 DB 조회 중이더라도 나머지 2~3개도 DB를 조회할 수 있음
+                 * - 이는 허용 가능한 수준 (수백 개 Stampede에 비해 무시할 수준)
+                 */
+                log.debug("PER 조기 갱신 트리거: productId={}, remainingTtl={}s",
+                    productId, remainingTtl);
+                asyncExecutor.execute(() -> backgroundRecompute(productId, key));
+            }
+            return objectMapper.readValue(cached, Product.class);
+        }
+
+        // 캐시 없음 → 동기 조회 (Cache Miss)
+        return synchronousRecompute(productId, key);
+    }
+
+    /*
+     * PER 갱신 여부 결정
+     *
+     * beta × (-log(random()))의 기대값 = beta
+     * beta=1.0, TTL=600s → 평균 600s 전부터 갱신 시작이 아닌,
+     * 만료 직전에 확률이 급상승하는 지수 분포
+     *
+     * 실제 갱신 시작 시점 기대값 = TTL × beta × e^(-1) ≈ TTL × 0.37
+     * 즉, 잔여 TTL이 원래 TTL의 37% 이하로 떨어질 때부터 의미 있는 확률 발생
+     */
+    private boolean shouldEarlyRecompute(long remainingTtlSeconds, Duration originalTtl) {
+        double delta = originalTtl.toSeconds() * BETA;
+        double threshold = delta * (-Math.log(Math.random()));
+        return remainingTtlSeconds <= threshold;
+    }
+
+    private void backgroundRecompute(Long productId, String key) {
+        try {
+            Product product = repository.findById(productId).orElseThrow();
+            redis.opsForValue().set(key,
+                objectMapper.writeValueAsString(product), CACHE_TTL);
+            log.debug("PER 백그라운드 갱신 완료: productId={}", productId);
+        } catch (Exception e) {
+            log.error("PER 백그라운드 갱신 실패: productId={}", productId, e);
+        }
+    }
+
+    private Product synchronousRecompute(Long productId, String key) throws Exception {
+        Product product = repository.findById(productId).orElseThrow();
+        redis.opsForValue().set(key,
+            objectMapper.writeValueAsString(product), CACHE_TTL);
+        return product;
+    }
+}
+```
+
+### Mutex Lock vs PER 선택 기준
+
+| 구분 | Mutex Lock | PER |
+|------|-----------|-----|
+| DB 조회 동시성 | 정확히 1개 | 2~3개 허용 |
+| 사용자 대기 | Lock 대기 발생 | 없음 (기존 캐시 즉시 반환) |
+| 구현 복잡도 | Lua 스크립트, 소유권 관리 | 확률 공식만 |
+| 데드락 위험 | Lock TTL로 방어 | 없음 |
+| 적합한 상황 | DB 조회 1건이 매우 무거울 때 | 대부분의 일반 캐시 |
+
+---
 
 ## 극한 시나리오
 
-### 시나리오 1: 블랙 프라이데이 — 100K TPS에서 인기 상품 캐시 만료
+### 시나리오 1 — 블랙프라이데이 자정, 50만 TPS에서 인기 상품 캐시 동시 만료
 
-금요일 자정, 할인 상품 캐시의 TTL이 동시에 만료된다. 100K TPS 트래픽이 한꺼번에 DB로 몰린다.
+상품 캐시 500개가 모두 같은 TTL로 설정되어 자정에 동시 만료된다. 50만 TPS 트래픽이 DB로 몰린다.
 
-> **비유:** 백화점 세일 오픈 시각에 1000명이 동시에 문을 밀면 유리문이 깨진다. 회전문(PER 알고리즘)을 설치하면 한 번에 2~3명씩만 통과한다.
+> **비유:** 백화점 자정 세일 오픈과 동시에 50만 명이 유리문을 밀면 유리가 박살난다. 회전문(Mutex Lock)을 설치하면 한 번에 1~2명만 통과하지만 줄이 끝없이 늘어선다. 해결책은 세일 5분 전에 이미 진열을 바꿔두는 것(PER + Cache Warmup)이다.
 
-**방어 전략:**
-1. **TTL Jitter 필수**: 할인 상품 100개의 TTL을 모두 10분으로 설정하면, 10분 후에 100개가 동시 만료. Jitter로 8~12분에 분산시킨다
-2. **PER 알고리즘 적용**: 만료 전에 확률적으로 미리 갱신해서, 만료 시점에 이미 새 캐시가 준비되어 있게 한다
-3. **Cache Warmup**: 세일 시작 5분 전에 할인 상품 목록을 미리 캐시에 로드한다
-4. **Circuit Breaker**: DB 응답 시간이 임계치를 넘으면 캐시 갱신 요청을 차단하고 구 데이터를 반환한다
-
-### 시나리오 2: DB 마스터 장애 — 캐시 무효화 불가
-
-DB 마스터가 죽으면 쓰기가 불가능하고, 이벤트 기반 무효화도 동작하지 않는다. 이 상태에서 캐시 TTL이 만료되면?
-
-**방어 전략:**
-1. **Stale-while-revalidate**: TTL 만료 후에도 구 데이터를 "grace period" 동안 반환하면서 백그라운드에서 갱신 시도
-2. **TTL 연장**: DB 장애 감지 시 기존 캐시의 TTL을 자동 연장해서 데이터 유실을 방지
-3. **Read Replica Fallback**: 마스터 장애 시 Replica에서 읽어서 캐시 갱신
+**방어 전략 조합:**
 
 ```java
-public Product getProductWithGracePeriod(Long productId) {
-    String key = "product:" + productId;
-    String graceKey = key + ":grace";
+@Service
+@RequiredArgsConstructor
+public class BlackFridayCacheStrategy {
 
-    // 1차: 메인 캐시 조회
-    Product cached = redis.opsForValue().get(key);
-    if (cached != null) return cached;
+    private final PERCacheService perCache;
+    private final JitteredCacheService jitteredCache;
+    private final ProductRepository repository;
 
-    // 2차: Grace 캐시 조회 (TTL 만료 후에도 사용 가능)
-    Product graceCached = redis.opsForValue().get(graceKey);
+    // 세일 시작 5분 전 미리 캐시 채우기 (Cache Warmup)
+    @Scheduled(cron = "0 55 23 * * FRI") // 금요일 23:55
+    public void warmupSaleCache() {
+        List<Long> topProductIds = repository.findTopSaleProductIds(500);
 
-    try {
-        Product fresh = repository.findById(productId).orElseThrow();
-        redis.opsForValue().set(key, fresh, Duration.ofMinutes(10));
-        redis.opsForValue().set(graceKey, fresh, Duration.ofHours(24)); // Grace: 24시간
-        return fresh;
-    } catch (Exception e) {
-        if (graceCached != null) {
-            log.warn("DB 장애 — Grace 캐시 반환: productId={}", productId);
-            return graceCached;  // 구 데이터라도 반환
+        // 병렬로 캐시 채우기
+        topProductIds.parallelStream().forEach(id -> {
+            try {
+                Product product = repository.findById(id).orElseThrow();
+                // Jitter TTL로 만료 시점 분산: 1시간 ±20% (48분~72분)
+                jitteredCache.setWithJitter("product:" + id,
+                    product, Duration.ofHours(1));
+            } catch (Exception e) {
+                log.error("Warmup 실패: productId={}", id, e);
+            }
+        });
+    }
+}
+```
+
+**5중 방어:**
+1. Jitter TTL로 만료 시점 분산
+2. PER로 만료 전 조기 갱신
+3. Cache Warmup으로 세일 전 캐시 준비
+4. Mutex Lock으로 동시 DB 조회 1개로 제한
+5. Circuit Breaker로 DB 부하 임계치 초과 시 구 데이터 반환
+
+### 시나리오 2 — Redis 전체 장애, 모든 요청이 DB로 직행
+
+Redis 클러스터가 죽으면 L2 캐시가 없어지고 10만 TPS가 DB로 직행한다. DB는 평소 1천 QPS 처리 용량인데 갑자기 10만 QPS를 감당해야 한다.
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisFailoverCacheService {
+
+    private final CaffeineCacheManager l1CacheManager;
+    private final StringRedisTemplate redis;
+    private final ProductRepository repository;
+    private final RateLimiter dbRateLimiter =
+        RateLimiter.create(500); // DB로 초당 최대 500 요청
+
+    public Product getProduct(Long productId) throws Exception {
+        // L1 먼저 확인 (Redis 장애와 무관하게 동작)
+        Cache l1 = l1CacheManager.getCache("products");
+        if (l1 != null) {
+            Cache.ValueWrapper v = l1.get(productId);
+            if (v != null) return (Product) v.get();
         }
-        throw e;
+
+        // L2(Redis) 시도
+        try {
+            String cached = redis.opsForValue().get("product:" + productId);
+            if (cached != null) {
+                // L2 Hit → L1에도 채우기
+                Product product = deserialize(cached);
+                if (l1 != null) l1.put(productId, product);
+                return product;
+            }
+        } catch (Exception e) {
+            // Redis 장애 → L1 Fallback 모드
+            log.warn("Redis 장애, L1 only 모드: {}", e.getMessage());
+        }
+
+        // Rate Limiting으로 DB 보호
+        if (!dbRateLimiter.tryAcquire(100, TimeUnit.MILLISECONDS)) {
+            throw new ServiceUnavailableException("DB 용량 초과, 잠시 후 재시도");
+        }
+
+        Product product = repository.findById(productId).orElseThrow();
+
+        // L1에만 저장 (Redis 장애 상태)
+        if (l1 != null) l1.put(productId, product);
+
+        return product;
+    }
+
+    private Product deserialize(String json) throws Exception {
+        return new ObjectMapper().readValue(json, Product.class);
     }
 }
 ```
 
-### 시나리오 3: 캐시 서버(Redis) 전체 장애
+### 시나리오 3 — Pub/Sub 메시지 유실, 일부 서버의 L1 캐시가 24시간 구 데이터
 
-Redis가 죽으면 모든 요청이 DB로 직행한다. 10K TPS 기준으로 DB가 평소 100 QPS만 처리하던 상태에서 갑자기 10,000 QPS를 감당해야 한다.
+서버 C가 배포 중 재시작하면서 Pub/Sub 구독이 끊겼다. 그 5분 동안의 캐시 무효화 메시지를 모두 놓쳤다. 이후 재연결했지만 이전 메시지는 받을 수 없다.
 
-**방어 전략:**
-1. **Local Cache Fallback**: Redis 장애 시 JVM 내 Caffeine 캐시로 전환 (네트워크 없이 동작)
-2. **Rate Limiting**: DB로 향하는 쿼리에 Rate Limiter를 걸어서 초당 500건 이상 차단
-3. **Redis Sentinel/Cluster**: Redis 자체를 HA 구성해서 단일 장애점 제거
-
----
-## 실무에서 자주 하는 실수
-
-### 실수 1: 캐시 삭제를 먼저 하고 DB를 나중에 업데이트
+**방어 계층:**
+1. L1 TTL 30초: 메시지를 놓쳐도 30초 내 자연 만료
+2. 주기적 L1 전체 플러시: 1분마다 L1을 완전 비움
+3. L2 Redis가 진실의 원천: L1 Miss 시 항상 L2에서 읽음
 
 ```java
-// 잘못된 순서
-public void updateProduct(Long id, Request req) {
-    redis.delete("product:" + id);   // 1. 캐시 삭제
-    repository.save(product);         // 2. DB 업데이트 (여기서 실패하면?)
-}
-// 캐시는 삭제됐는데 DB는 구 데이터 → 다음 조회 시 구 데이터가 캐시됨
-```
-
-**올바른 순서:** DB 업데이트 → 트랜잭션 커밋 확인 → 캐시 삭제
-
-### 실수 2: 모든 캐시에 같은 TTL
-
-상품 정보(일 1회 변경)와 재고(초 단위 변경)에 같은 30분 TTL을 적용하면, 재고는 30분간 틀린 정보를 보여주게 된다. 데이터 성격별로 TTL을 분리해야 한다.
-
-### 실수 3: @CacheEvict 없이 @Cacheable만 사용
-
-조회에만 `@Cacheable`을 붙이고, 수정/삭제 메서드에 `@CacheEvict`를 빠뜨리는 경우가 매우 흔하다. 코드 리뷰 시 "이 엔티티를 수정하는 모든 경로에 캐시 무효화가 있는가?"를 반드시 체크해야 한다.
-
-### 실수 4: 네거티브 캐싱 미적용
-
-존재하지 않는 데이터를 반복 조회하면 매번 Cache Miss → DB 쿼리가 발생한다. 악의적인 사용자가 없는 ID로 수만 건을 요청하면 DB가 죽는다.
-
-```java
-// 네거티브 캐싱: 없는 데이터도 짧은 TTL로 캐시
-public Product getProduct(Long productId) {
-    String key = "product:" + productId;
-    ValueWrapper cached = cacheManager.getCache("products").get(key);
-    if (cached != null) {
-        return (Product) cached.get(); // null일 수도 있음 (네거티브 캐시)
-    }
-
-    Product product = repository.findById(productId).orElse(null);
-    cacheManager.getCache("products").put(key, product); // null도 캐시
-    return product;
+// 주기적 L1 플러시 (보조 안전망)
+@Scheduled(fixedDelay = 60_000) // 1분마다
+public void periodicL1Flush() {
+    caffeineCacheManager.getCacheNames()
+        .forEach(name -> {
+            Cache cache = caffeineCacheManager.getCache(name);
+            if (cache != null) cache.clear();
+        });
+    log.debug("L1 캐시 주기적 플러시 완료");
 }
 ```
 
-### 실수 5: 분산 환경에서 로컬 캐시만 무효화
+---
 
-서버 A에서 상품을 수정하고 서버 A의 로컬 캐시만 지우면, 서버 B~Z는 여전히 구 데이터를 가지고 있다. Redis Pub/Sub 등으로 전체 서버에 무효화를 전파해야 한다.
+## 면접 포인트 5개 — 깊은 WHY 답변
+
+### Q1: "캐시 무효화가 왜 어렵다고 하나요? Phil Karlton 인용 이후로 실제로 무엇이 문제인가요?"
+
+**핵심 WHY:** 어려운 이유는 세 가지다.
+
+첫째, **두 저장소 간 원자성 부재**다. DB와 캐시에 동시에 쓰는 원자적 트랜잭션이 불가능하다. DB가 성공하고 캐시 삭제가 실패하거나, 삭제 명령이 전송 중에 서버가 죽는다. 2PC(Two-Phase Commit)로 해결하려면 캐시 서버가 XA 트랜잭션을 지원해야 하는데 Redis는 지원하지 않는다.
+
+둘째, **레이스 컨디션**이다. DB 업데이트와 캐시 삭제 사이의 마이크로초 단위 틈새에 다른 요청이 구 데이터를 읽어 캐시에 다시 넣을 수 있다. Double-Delete로 완화하지만 완전 제거는 불가능하다.
+
+셋째, **분산 시스템의 부분 실패**다. 10대 서버 중 1대의 Pub/Sub 구독이 끊기면, 그 서버만 구 데이터를 가진다. 사용자는 로드 밸런서에 따라 최신/구 데이터를 번갈아 받는다. 짧은 TTL만이 최후 안전망이다.
+
+### Q2: "@CacheEvict(afterInvocation=true)와 @TransactionalEventListener(AFTER_COMMIT)의 차이는?"
+
+**afterInvocation=true (기본값):** 메서드 실행 후 캐시 삭제. 트랜잭션 커밋 여부와 무관하다. 메서드는 성공했지만 트랜잭션이 롤백되면, 캐시는 삭제됐는데 DB는 구 데이터다. 다음 조회에서 DB 구 데이터가 캐시에 들어가 영구적으로 잘못된 상태가 된다.
+
+**AFTER_COMMIT:** 트랜잭션이 DB에 영구 기록된 후에만 캐시 삭제. 롤백 시 캐시 삭제 자체가 발생하지 않는다. 트랜잭션 경계와 캐시 무효화가 완전히 정렬된다. 단점은 트랜잭션 없는 메서드에서는 동작하지 않는다는 것이다. 이 경우 `BEFORE_COMMIT` 또는 직접 삭제로 보완한다.
+
+### Q3: "Double-Delete에서 딜레이는 얼마로 설정해야 하나요?"
+
+**계산 공식:** `딜레이 = max(replication_lag_p99, 100ms) + 여유 10ms`
+
+Read Replica의 replication lag을 측정해야 한다. MySQL `SHOW SLAVE STATUS`에서 `Seconds_Behind_Master` 값의 P99를 기준으로 한다. 대부분의 환경에서 100~200ms 이내이므로 실무에서는 200~300ms를 많이 사용한다. 단, 딜레이 동안은 Cache Miss가 지속되므로 DB 부하가 늘어난다. 트래픽이 높은 키에는 Mutex Lock이나 PER과 함께 사용해 DB 직접 조회를 제한해야 한다.
+
+### Q4: "Redis Pub/Sub 대신 Redis Keyspace Notifications를 쓰면 안 되나요?"
+
+**쓸 수 있지만 한계가 있다.** Redis Keyspace Notifications는 Redis 자체가 키 만료/삭제 이벤트를 Pub/Sub으로 발행하는 기능이다. `notify-keyspace-events KEA` 설정으로 활성화한다. 그러나 두 가지 문제가 있다.
+
+첫째, **성능 오버헤드**다. 모든 키 이벤트를 추적하므로 Redis 자체 CPU가 10~30% 증가한다. 대규모 서비스에서는 부담이다.
+
+둘째, **이벤트 유형 제한**다. 만료(`expired`)와 삭제(`del`) 이벤트만 받을 수 있다. SET 이벤트도 추적하면 더 많은 부하가 생긴다. 반면 애플리케이션 레벨 Pub/Sub은 정확히 필요한 이벤트만 발행할 수 있어 더 효율적이다.
+
+### Q5: "CDC 기반 무효화에서 at-least-once delivery가 문제가 되는 경우는?"
+
+**중복 무효화가 발생한다.** Kafka Consumer가 메시지를 처리하고 커밋하기 전에 재시작되면, 같은 메시지를 두 번 처리한다. 캐시 삭제는 **멱등적**이므로 두 번 삭제해도 결과가 동일하다. 따라서 at-least-once는 캐시 무효화에 적합하다.
+
+문제가 되는 경우는 무효화 후 캐시를 **새 값으로 채우는 Write-Through 패턴**을 CDC와 함께 사용할 때다. 같은 이벤트가 두 번 처리되면 DB를 두 번 조회해 캐시를 두 번 채운다. 이 자체는 무해하지만, 첫 번째 처리와 두 번째 처리 사이에 다른 업데이트가 있었다면 순서가 뒤바뀔 수 있다. 이를 방지하려면 CDC 이벤트의 `ts_ms` 타임스탬프를 비교해 더 최신 이벤트만 처리하는 **이벤트 순서 보장 로직**이 필요하다.
 
 ---
 
-## 면접 포인트
+## 전략 종합 비교
 
-### Q1: "Cache Stampede가 뭐고, 어떻게 해결하나요?"
+| 전략 | 신선도 | 구현 복잡도 | 누락 위험 | 적합한 상황 |
+|------|--------|-----------|---------|-----------|
+| 고정 TTL | 낮음 | 매우 쉬움 | 없음 (자동) | 참조 데이터 기본 설정 |
+| Jitter TTL | 낮음 | 쉬움 | 없음 | Thundering Herd 방지 |
+| 이벤트 기반 AFTER_COMMIT | 높음 | 중간 | 코드 누락 가능 | 도메인 데이터 변경 |
+| Double-Delete | 높음 | 중간 | 낮음 | replication lag 환경 |
+| CDC (Debezium+Kafka) | 중간(지연) | 높음 | 구조적 불가능 | 대규모 분산 시스템 |
+| 버전 기반 | 높음 | 중간 | 없음 | 삭제 실패 없애고 싶을 때 |
+| Pub/Sub L1 동기화 | 높음 | 중간 | Fire-and-forget | 멀티 인스턴스 L1 |
+| 태그 기반 | 높음 | 높음 | 없음 | 그룹 단위 무효화 |
+| Mutex Lock | 즉각 | 높음 | 없음 | Stampede 완전 차단 |
+| PER | 높음 | 중간 | 없음 | Stampede 우아한 방지 |
 
-**모범 답변:** 인기 캐시 키가 만료되는 순간 다수의 요청이 동시에 DB로 몰리는 현상입니다. 해결 방법은 세 가지가 있습니다. (1) Mutex Lock으로 하나의 스레드만 DB를 조회하게 하고 나머지는 대기, (2) PER 알고리즘으로 만료 전에 확률적으로 미리 갱신, (3) TTL Jitter로 만료 시점을 분산시키는 것입니다. 실무에서는 PER + Jitter를 기본으로 적용하고, DB 조회 비용이 매우 큰 경우에만 Mutex Lock을 추가합니다.
-
-### Q2: "캐시와 DB의 일관성을 어떻게 보장하나요?"
-
-**모범 답변:** 완벽한 일관성은 분산 시스템의 CAP 정리에 의해 불가능합니다. 대신 "최종 일관성(Eventual Consistency)"을 목표로 합니다. 구체적으로는 (1) DB 트랜잭션 커밋 후 캐시 삭제, (2) Double Delete 패턴으로 Race Condition 방어, (3) 짧은 TTL로 자연 수렴, (4) CDC 기반으로 구조적 누락 방지를 조합합니다. 금융처럼 강한 일관성이 필요하면 Write-Through + 분산 락을 사용합니다.
-
-### Q3: "TTL을 어떻게 설정하나요? 기준이 있나요?"
-
-**모범 답변:** 데이터의 변경 빈도와 허용 가능한 Stale 시간을 기준으로 합니다. (1) 거의 안 바뀌는 데이터(약관, 설정): 1시간~24시간, (2) 가끔 바뀌는 데이터(상품 정보): 5~30분, (3) 자주 바뀌는 데이터(재고, 좌석): 10~60초, (4) 실시간 데이터(환율, 주가): TTL 대신 이벤트 기반 무효화. 추가로 모든 TTL에 ±20% Jitter를 적용해서 동시 만료를 방지합니다.
-
-### Q4: "Pub/Sub과 CDC 중 어떤 걸 선택하나요?"
-
-**모범 답변:** 규모와 인프라 성숙도에 따라 다릅니다. 중소 규모(서버 10대 이하)에서는 Redis Pub/Sub이 구현이 간단하고 지연이 낮아서 적합합니다. 대규모 마이크로서비스 환경에서는 CDC가 구조적으로 누락을 방지하고, 여러 서비스가 동일한 DB 변경 이벤트를 각자의 목적에 맞게 소비할 수 있어서 유리합니다. 다만 CDC는 Kafka, Debezium 등 추가 인프라가 필요하므로 운영 부담이 큽니다.
-
----
-
-## 핵심 정리
+캐시 무효화에 은탄환은 없다. 실전에서는 **TTL(기본) + Jitter(만료 분산) + AFTER_COMMIT(즉시 무효화) + PER(Stampede 방지) + Pub/Sub(L1 동기화)**를 계층적으로 조합한다. 데이터 중요도와 변경 빈도에 따라 CDC를 추가하고, 항상 짧은 TTL을 최후 안전망으로 유지한다.
 
 ```mermaid
 graph LR
-    A["캐시 무효화 전략"]
-    A --> B["시간 기반"]
-    A --> C["이벤트 기반"]
-    A --> D["버전 기반"]
+    Data["데이터 변경"] -->|"즉시"| EVICT["캐시 무효화"]
+    EVICT -->|"브로드캐스트"| L1["L1 동기화"]
+    EVICT -->|"L2 삭제"| L2["Redis 삭제"]
+    L2 -->|"Miss 후"| Herd["Stampede 방어"]
+    Herd -->|"PER/Lock"| Reload["캐시 재적재"]
 ```
-
-| 전략 | 신선도 | 구현 난이도 | DB 부하 | 적합한 상황 |
-|------|--------|-----------|---------|-----------|
-| TTL | 낮음 | 매우 쉬움 | 보통 | 모든 캐시의 기본 설정 |
-| 이벤트 기반 | 높음 | 중간 | 낮음 | 변경이 빈번한 데이터 |
-| 버전 기반 | 높음 | 중간 | 낮음 | 삭제 실패 위험을 없애고 싶을 때 |
-| PER | 높음 | 중간 | 매우 낮음 | Stampede 방지가 중요할 때 |
-| CDC | 매우 높음 | 높음 | 매우 낮음 | 대규모 분산 시스템 |
-
-캐시 무효화에 은탄환은 없다. TTL을 기본으로 깔고, 데이터 중요도에 따라 이벤트 기반이나 CDC를 계층적으로 적용하는 것이 실전의 정석이다.
-
----
-
-## 왜 이 전략인가
-
-**캐시 무효화 전략은 데이터 일관성과 성능 사이의 트레이드오프를 결정한다.**
-
-| 전략 | 적합한 상황 | 부적합한 상황 |
-|------|------------|--------------|
-| TTL 기반 만료 | 실시간 일관성이 불필요한 참조 데이터 | 재고/잔액처럼 즉시 반영이 필요한 데이터 |
-| 이벤트 기반 무효화 | 변경 즉시 캐시를 갱신해야 하는 경우 | 변경 빈도가 매우 높아 무효화 폭풍 발생 우려 |
-| 버전 기반 키 | 읽기 전용 정적 콘텐츠, CDN 캐시 | 키가 동적으로 변하는 실시간 데이터 |
-
-이벤트 기반 무효화는 Kafka나 DB Trigger로 변경 사실을 전달하고, 소비자가 캐시를 삭제 또는 갱신한다. 변경 빈도가 낮고 일관성이 중요한 상품 정보, 사용자 프로필에 적합하다.
