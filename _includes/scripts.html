@@ -73,6 +73,25 @@
   update();
 })();
 
+// 본문 중간 광고 삽입 — h2 기준 3번째, 6번째 뒤에 in-article 광고
+(function() {
+  var content = document.querySelector('.page__content');
+  if (!content) return;
+
+  var h2s = Array.from(content.querySelectorAll('h2'));
+  var adPositions = [2, 5]; // 3번째(idx 2), 6번째(idx 5) h2 뒤
+
+  adPositions.forEach(function(idx) {
+    if (idx >= h2s.length) return;
+    var h2 = h2s[idx];
+    var adWrap = document.createElement('div');
+    adWrap.className = 'ad-unit ad-unit--mid';
+    adWrap.innerHTML = '<ins class="adsbygoogle" style="display:block; text-align:center;" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843"></ins>';
+    h2.parentNode.insertBefore(adWrap, h2);
+    try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
+  });
+})();
+
 // 극한 시나리오 이후의 모든 h2를 접기/펼치기로 변환 + 광고
 (function() {
   var content = document.querySelector('.page__content');

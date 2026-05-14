@@ -649,7 +649,9 @@ code.highlighter-rouge {
    테이블 — 교대 행 강조
    ============================================ */
 .page__content table {
-  width: 100%;
+  width: auto;
+  min-width: 40%;
+  max-width: 100%;
   margin: 2em 0;
   border-collapse: separate;
   border-spacing: 0;
