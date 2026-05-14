@@ -591,22 +591,17 @@ const UserContext = createContext(null);
 
 ## 면접 포인트
 
-**Q1. Virtual DOM이 항상 실제 DOM보다 빠른가요?**
-
+### Q1. Virtual DOM이 항상 실제 DOM보다 빠른가요?
 아닙니다. Virtual DOM은 DOM 조작을 배치로 묶고 최소한의 실제 DOM 변경만 수행해 일반적인 경우에 효율적입니다. 하지만 단순한 단일 업데이트에서는 직접 DOM 조작이 더 빠릅니다. Virtual DOM의 장점은 속도보다 **예측 가능성**입니다. 선언적으로 상태를 바꾸면 React가 최적의 DOM 업데이트를 결정합니다. Svelte처럼 컴파일 타임 최적화 방식이 Virtual DOM보다 빠를 수 있지만, React의 성숙한 생태계가 실용적 선택입니다.
 
-**Q2. React의 Reconciliation(재조정) 과정을 설명하세요.**
-
+### Q2. React의 Reconciliation(재조정) 과정을 설명하세요.
 상태 변경 시 React는 새 Virtual DOM 트리를 생성하고 이전 트리와 비교(Diffing)합니다. 같은 타입의 요소면 속성만 업데이트하고, 타입이 다르면 기존 트리를 버리고 새로 만듭니다. `key`는 형제 요소를 구분해 불필요한 재생성을 방지합니다. React Fiber는 이 과정을 청크로 나눠 우선순위에 따라 처리해 메인 스레드를 블로킹하지 않습니다.
 
-**Q3. 함수형 컴포넌트와 클래스 컴포넌트의 차이는?**
-
+### Q3. 함수형 컴포넌트와 클래스 컴포넌트의 차이는?
 클래스 컴포넌트는 lifecycle 메서드(`componentDidMount`, `componentDidUpdate`)와 `this.state`를 사용합니다. 함수형 컴포넌트는 Hooks(`useState`, `useEffect`)로 동일한 기능을 더 간결하게 구현합니다. 핵심 차이: 함수형 컴포넌트는 **렌더 시점의 props/state를 클로저로 캡처**합니다. 클래스 컴포넌트는 `this`를 통해 항상 최신 값을 참조하므로 비동기 핸들러에서 다른 동작을 보일 수 있습니다.
 
-**Q4. React에서 불변성을 유지해야 하는 이유는?**
-
+### Q4. React에서 불변성을 유지해야 하는 이유는?
 React는 상태 변경을 참조 비교(`===`)로 감지합니다. 배열을 직접 변경(`push`, `splice`)하면 참조가 같아 React가 변경을 인식하지 못합니다. 불변 업데이트(spread, `map`, `filter`)는 새 참조를 생성해 변경을 명확히 알립니다. 또한 `React.memo`, `useMemo`, `useCallback`의 메모이제이션도 참조 동등성에 의존합니다.
 
-**Q5. React 18의 Concurrent Mode가 해결하는 문제는?**
-
+### Q5. React 18의 Concurrent Mode가 해결하는 문제는?
 기존 React는 한 번 시작한 렌더링을 중단할 수 없어(동기 렌더링) 무거운 업데이트가 UI를 블로킹했습니다. Concurrent Mode에서는 렌더링을 중단/재개할 수 있습니다. `startTransition`으로 긴급하지 않은 업데이트를 낮은 우선순위로 표시하면 타이핑 같은 긴급 업데이트가 먼저 처리됩니다. `Suspense`와 결합해 데이터 로딩 중 fallback UI를 선언적으로 처리합니다.

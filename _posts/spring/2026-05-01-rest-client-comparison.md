@@ -873,17 +873,17 @@ Spring Boot 3.x 신규 프로젝트라면 **동기는 RestClient, 비동기는 W
 
 ## 면접 포인트
 
-**Q1. RestTemplate이 deprecated 예정인 이유와 대안은?**
+### Q1. RestTemplate이 deprecated 예정인 이유와 대안은?
 > RestTemplate은 블로킹 I/O 기반으로 논블로킹 WebFlux 환경과 통합이 어렵다. Spring 6.1에서 동기 방식의 새 API인 `RestClient`가 도입됐다. 기존 코드에서는 `RestTemplate`을 유지하되, 신규 개발은 `RestClient` 또는 `WebClient`를 사용한다.
 
-**Q2. WebClient를 MVC(블로킹) 환경에서 사용해도 되는가?**
+### Q2. WebClient를 MVC(블로킹) 환경에서 사용해도 되는가?
 > 가능하다. `WebClient`는 WebFlux에서만 동작하는 것이 아니다. MVC 환경에서도 `block()`을 호출해 동기로 사용할 수 있다. 단, 이벤트 루프 스레드에서 `block()`을 호출하면 데드락이 발생한다. MVC 서블릿 스레드에서는 안전하게 사용 가능하다.
 
-**Q3. OpenFeign과 RestClient의 선택 기준은?**
+### Q3. OpenFeign과 RestClient의 선택 기준은?
 > 서비스 간 호출이 많고 인터페이스 정의로 계약을 명확히 하고 싶다면 OpenFeign. OpenFeign은 인터페이스 선언만으로 HTTP 클라이언트를 생성해 코드량이 적다. 유연한 요청 구성이나 스트리밍 처리가 필요하면 RestClient/WebClient가 적합하다.
 
-**Q4. OpenFeign에서 Circuit Breaker와 Retry를 통합하는 방법은?**
+### Q4. OpenFeign에서 Circuit Breaker와 Retry를 통합하는 방법은?
 > `spring-cloud-starter-openfeign` + `spring-cloud-starter-circuitbreaker-resilience4j`를 추가하고, `feign.circuitbreaker.enabled=true`로 설정한다. `@FeignClient(fallback = OrderFallback.class)`로 폴백 구현체를 지정한다. Retry는 `FeignClient`의 `Retryer` 인터페이스로 커스터마이징한다.
 
-**Q5. RestClient의 기본 사용 패턴과 에러 처리는?**
+### Q5. RestClient의 기본 사용 패턴과 에러 처리는?
 > `RestClient.create(baseUrl).get().uri("/orders/{id}", id).retrieve().body(Order.class)`로 간결하게 사용한다. 에러 처리는 `.onStatus(HttpStatusCode::is4xxClientError, (req, res) -> { throw new ClientException(...); })`로 상태 코드별로 처리한다. `RestClient.Builder`를 통해 기본 헤더, 인터셉터, 타임아웃을 전역 설정한다.

@@ -644,22 +644,17 @@ const url = process.env.DATABASE_URL; // 서버: OK, 클라이언트: undefined
 
 ## 면접 포인트
 
-**Q1. SSR, SSG, ISR, CSR의 차이와 각각 언제 사용하나요?**
-
+### Q1. SSR, SSG, ISR, CSR의 차이와 각각 언제 사용하나요?
 SSR(서버사이드 렌더링)은 매 요청마다 서버에서 HTML을 생성합니다. 개인화된 데이터(대시보드, 마이페이지)에 적합합니다. SSG(정적 생성)는 빌드 시 HTML을 미리 생성합니다. 거의 바뀌지 않는 콘텐츠(블로그, 문서)에 최적입니다. ISR(증분 정적 재생성)은 SSG + 주기적 재생성으로 성능과 신선도를 균형합니다. CSR은 클라이언트에서 데이터를 가져오며 SEO가 불필요한 경우에 사용합니다.
 
-**Q2. React Server Components(RSC)와 기존 SSR의 차이는?**
-
+### Q2. React Server Components(RSC)와 기존 SSR의 차이는?
 기존 SSR은 전체 페이지를 서버에서 렌더링해 HTML로 보내고, 클라이언트에서 하이드레이션합니다. RSC는 컴포넌트 단위로 서버/클라이언트를 구분합니다. 서버 컴포넌트는 번들에 포함되지 않아 JS 크기를 줄이고, 직접 DB에 접근할 수 있습니다. 클라이언트 컴포넌트(`use client`)만 하이드레이션됩니다. RSC는 스트리밍과 Suspense로 점진적 UI 로딩도 지원합니다.
 
-**Q3. Next.js App Router와 Pages Router의 주요 차이는?**
-
+### Q3. Next.js App Router와 Pages Router의 주요 차이는?
 App Router(Next.js 13+)는 `app/` 디렉토리를 사용하며 React Server Components가 기본입니다. 중첩 레이아웃(`layout.tsx`), Streaming, Server Actions를 지원합니다. Pages Router는 `pages/` 디렉토리를 사용하며 `getServerSideProps`/`getStaticProps`로 데이터를 가져옵니다. 신규 프로젝트는 App Router가 권장이지만, 기존 Pages Router 프로젝트는 혼용도 가능합니다.
 
-**Q4. Next.js에서 SEO를 최적화하는 방법은?**
-
+### Q4. Next.js에서 SEO를 최적화하는 방법은?
 App Router에서는 `metadata` 객체 또는 `generateMetadata` 함수로 동적 메타태그를 설정합니다. `next/image`로 LCP를 개선하고, `priority` prop으로 첫 화면 이미지를 미리 로드합니다. SSG/ISR로 크롤러가 완성된 HTML을 받도록 합니다. `next-sitemap`으로 sitemap.xml을 자동 생성하고, `robots.txt`를 `app/robots.ts`로 관리합니다.
 
-**Q5. Server Actions란 무엇이며 기존 API Route와 어떻게 다른가요?**
-
+### Q5. Server Actions란 무엇이며 기존 API Route와 어떻게 다른가요?
 Server Actions는 클라이언트 컴포넌트에서 서버 함수를 직접 호출하는 방식입니다. `'use server'` 지시어를 붙인 함수는 자동으로 API 엔드포인트로 변환됩니다. 폼 제출이나 데이터 변경에서 별도 API Route 없이 서버 로직을 실행할 수 있어 코드가 간결해집니다. 단, 내부적으로 POST 요청을 생성하므로 CSRF 방어가 Next.js에 의해 자동 처리됩니다.

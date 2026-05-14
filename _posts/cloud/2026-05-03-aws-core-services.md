@@ -1166,24 +1166,19 @@ aws elbv2 describe-load-balancers \
 
 ## 면접 포인트
 
-**Q1. EC2, ECS, Lambda의 선택 기준은?**
-
+### Q1. EC2, ECS, Lambda의 선택 기준은?
 처리 시간과 트래픽 패턴으로 결정한다. Lambda는 요청당 최대 15분, 이벤트 드리븐, 트래픽이 불규칙할 때 최적이다. ECS/EKS는 항상 실행 중인 서비스, 컨테이너 기반 MSA에 적합하다. EC2는 OS 수준 제어가 필요하거나, 특수 하드웨어(GPU, 고메모리)가 필요할 때 선택한다. 비용 관점에서 Lambda는 호출 없으면 0원, EC2는 24시간 과금이다.
 
-**Q2. SQS와 SNS의 차이와 함께 사용하는 이유는?**
-
+### Q2. SQS와 SNS의 차이와 함께 사용하는 이유는?
 SQS는 메시지 큐 — 메시지를 보관하고 Consumer가 pull해서 처리한다. 하나의 Consumer가 하나의 메시지를 처리한다. SNS는 Pub/Sub — 메시지를 여러 구독자에게 동시에 push한다. Fan-out 패턴이 필요할 때(주문 완료 이벤트를 이메일, SMS, 재고 서비스에 동시 전달) SNS → 여러 SQS 큐를 구성한다. SQS가 버퍼 역할을 하여 각 서비스가 독립적인 속도로 처리할 수 있다.
 
-**Q3. RDS와 DynamoDB의 선택 기준은?**
-
+### Q3. RDS와 DynamoDB의 선택 기준은?
 RDS(관계형 DB)는 복잡한 JOIN, 트랜잭션, 정규화된 데이터 구조가 필요할 때 선택한다. DynamoDB는 단순한 Key-Value/Document 접근, 예측 불가한 트래픽 스파이크(자동 스케일링), 글로벌 복제가 필요할 때 선택한다. DynamoDB의 한계: 복잡한 쿼리 불가, 테이블 설계 시 액세스 패턴을 미리 정의해야 하며 나중에 변경이 어렵다.
 
-**Q4. VPC, 서브넷, 보안 그룹의 관계는?**
-
+### Q4. VPC, 서브넷, 보안 그룹의 관계는?
 VPC는 AWS 내 논리적 네트워크 경계다. 서브넷은 VPC를 AZ별로 나눈 IP 범위로, Public(인터넷 게이트웨이 연결)과 Private(NAT 게이트웨이만 연결)으로 구분한다. 보안 그룹은 인스턴스 레벨의 상태 기반(Stateful) 방화벽이다. 실무 구성: ALB는 Public 서브넷, EC2/ECS는 Private 서브넷, RDS는 Private 서브넷(보안 그룹으로 EC2에서만 허용).
 
-**Q5. CloudFront를 S3, ALB와 각각 연동하는 차이는?**
-
+### Q5. CloudFront를 S3, ALB와 각각 연동하는 차이는?
 S3 연동은 정적 콘텐츠 배포에 사용하며, OAC(Origin Access Control)로 S3 버킷을 직접 공개하지 않고 CloudFront만 접근 허용한다. ALB 연동은 동적 콘텐츠(API, SSR)에 사용하며, 커스텀 헤더를 CloudFront에서 ALB로 전달하여 CloudFront를 우회한 직접 ALB 접근을 차단한다. 두 방식 모두 CloudFront의 엣지 캐싱, DDoS 방어(AWS Shield), WAF 통합의 이점을 누릴 수 있다.
 
 각 서비스의 제약(한계), 비용 구조, 장애 패턴을 알아야 프로덕션에서 살아남을 수 있다. 이 글이 그 출발점이 되길 바란다.

@@ -1355,22 +1355,18 @@ graph LR
 
 ## 17. 면접 포인트 5개 — 깊은 WHY 답변
 
-**Q1. OAuth2 Authorization Code Flow에서 state 파라미터의 역할은 무엇이며, 왜 CSRF를 막는가?**
-
+### Q1. OAuth2 Authorization Code Flow에서 state 파라미터의 역할은 무엇이며, 왜 CSRF를 막는가?
 > 클라이언트가 인가 요청 시 생성한 무작위 값을 세션에 저장하고 Authorization Server에 보낸다. AS가 콜백 URL로 같은 값을 돌려주면 클라이언트가 세션 값과 비교한다. 공격자가 피해자 브라우저에서 콜백 URL을 강제로 호출해도 세션의 state와 공격자가 제어하는 state가 일치하지 않아 거부된다. 세션-파라미터 바인딩으로 요청의 연속성을 증명하는 메커니즘이다.
 
-**Q2. JWT RS256과 HS256의 차이를 설명하고, 마이크로서비스에서 RS256을 써야 하는 이유는?**
-
+### Q2. JWT RS256과 HS256의 차이를 설명하고, 마이크로서비스에서 RS256을 써야 하는 이유는?
 > HS256은 같은 비밀키로 서명과 검증을 수행한다. 여러 Resource Server가 검증하려면 모두 비밀키를 알아야 하므로, 비밀키 유출 경로가 서버 수만큼 늘어난다. 유출된 비밀키로 임의의 JWT 위조가 가능하다. RS256은 개인키로 서명, 공개키로 검증을 분리한다. 개인키는 Authorization Server 한 곳에만 존재하고, Resource Server는 공개키(JWK Set)만 있으면 독립적으로 검증할 수 있다. 공개키가 유출돼도 서명 위조는 불가하다. Authorization Server 없이도 각 서비스가 오프라인으로 검증할 수 있어 분산 시스템에 적합하다.
 
-**Q3. Refresh Token Rotation에서 Token Family를 사용하는 이유는?**
-
+### Q3. Refresh Token Rotation에서 Token Family를 사용하는 이유는?
 > 단순 Rotation(사용 후 무효화)만으로는 공격자가 먼저 토큰을 사용하면 정상 사용자가 그 다음 요청에서 실패한다. 정상 사용자가 재로그인하는 동안 공격자는 새로 발급된 토큰을 계속 사용한다. Token Family는 최초 로그인부터 이어진 토큰 계보를 추적한다. 이미 회전된 이전 Refresh Token으로 갱신 요청이 오면 토큰 탈취로 판단하고 Family 전체를 무효화한다. 공격자와 정상 사용자 모두 재로그인이 필요해지므로 공격자가 장기간 접근하는 것을 막는다.
 
-**Q4. @PreAuthorize가 같은 클래스 내부 호출에서 동작하지 않는 이유와 해결책은?**
-
+### Q4. @PreAuthorize가 같은 클래스 내부 호출에서 동작하지 않는 이유와 해결책은?
 > `@EnableMethodSecurity`는 AOP 프록시를 통해 `@PreAuthorize`를 처리한다. Spring이 서비스 빈을 직접 리턴하지 않고, 어노테이션이 붙은 메서드 호출을 가로채는 프록시 객체를 리턴한다. 외부에서 `orderService.deleteOrder(id)`를 호출하면 프록시 → 권한 체크 → 실제 메서드 순으로 실행된다. 하지만 `this.deleteOrder(id)`처럼 같은 클래스 내에서 호출하면 프록시를 거치지 않고 실제 객체 메서드를 직접 호출한다. 해결책은 권한 체크가 필요한 메서드를 별도 서비스 빈으로 분리하거나, `@Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)`를 써서 자기 자신을 빈으로 주입받아 프록시를 통해 호출하는 것이다.
 
-**Q5. CORS에서 preflight 캐시(Access-Control-Max-Age)의 의미와, allowedOrigins("*")와 allowCredentials(true)를 함께 쓸 수 없는 이유는?**
+### Q5. CORS preflight 캐시의 의미와, allowedOrigins("*")와 allowCredentials(true)를 함께 쓸 수 없는 이유는?
 
 > `Access-Control-Max-Age`는 브라우저가 preflight `OPTIONS` 요청 결과를 캐시하는 시간(초)이다. 캐시가 없으면 `Content-Type: application/json`을 쓰는 모든 POST 요청마다 실제 요청 전에 `OPTIONS` 요청이 선행되어 네트워크 왕복 횟수가 2배가 된다. W3C CORS 스펙이 와일드카드 출처(`*`)와 자격증명(`allowCredentials: true`)의 조합을 명시적으로 금지하는 이유는, 모든 출처에서 쿠키·Authorization 헤더를 포함한 요청을 허용하면 임의의 사이트가 인증된 API를 호출할 수 있어 CSRF 방어가 사실상 무력화되기 때문이다. 특정 출처 목록이나 패턴을 명시해야 한다. Spring은 `allowedOriginPatterns()`로 이를 지원하며 설정 시점에 유효성을 검사한다.

@@ -539,20 +539,16 @@ int max = IntStream.of(arr).max().getAsInt();
 
 ## 면접 포인트
 
-**Q1. Integer 캐시(-128~127)의 원리와 실무적 위험성을 설명하세요.**
-
+### Q1. Integer 캐시(-128~127)의 원리와 실무적 위험성을 설명하세요.
 JVM은 시작 시 -128~127 범위의 Integer 객체를 미리 생성해 배열에 캐싱합니다. `Integer.valueOf(n)`은 이 범위라면 캐시에서 반환하므로 `==` 비교가 true가 됩니다. 실무 위험성은 테스트에서 소량의 수를 사용해 `==`가 통과했다가 운영에서 큰 값으로 실패하는 버그입니다. 해결책은 래퍼 클래스는 항상 `equals()`로 비교하는 것입니다.
 
-**Q2. 오토박싱/언박싱이 성능에 미치는 영향과 주의점은?**
-
+### Q2. 오토박싱/언박싱이 성능에 미치는 영향과 주의점은?
 오토박싱은 컴파일러가 `Integer.valueOf()`를 삽입하는 문법 설탕으로, 힙에 객체를 생성합니다. 루프 내 반복 박싱은 대량의 단명 객체를 생성해 GC 부담을 증가시킵니다. 특히 `Long sum = 0L`처럼 래퍼 타입으로 누산할 때 매 반복마다 Long 객체가 생성됩니다. 언박싱 시 래퍼 타입이 null이면 NPE가 발생하므로 null 체크가 필요합니다.
 
-**Q3. OptionalInt와 Optional<Integer>의 차이는?**
-
+### Q3. OptionalInt와 Optional<Integer>의 차이는?
 `Optional<Integer>`는 Integer 객체를 감싸므로 박싱이 발생합니다. `OptionalInt`는 int 기본형을 직접 저장해 박싱이 없습니다. `getAsInt()`로 값을 꺼냅니다. 성능이 중요한 코드에서는 `OptionalInt`/`OptionalLong`/`OptionalDouble`을 사용하세요. Stream에서도 `IntStream.findFirst()`는 `OptionalInt`를 반환합니다.
 
-**Q4. switch 문에서 Integer를 쓸 때 주의사항은?**
-
+### Q4. switch 문에서 Integer를 쓸 때 주의사항은?
 switch 표현식에서 Integer를 쓸 때 값이 null이면 자동으로 언박싱이 발생해 NPE가 됩니다. Java 17+ switch 패턴 매칭에서는 null을 명시적으로 처리할 수 있습니다(`case null -> ...`). 안전하게 하려면 switch 전에 null 체크 후 기본형으로 변환하거나 `getOrDefault()`를 활용합니다.
 
 ---
@@ -572,10 +568,10 @@ graph LR
 ---
 ## 면접 포인트
 
-**Q1. 오토박싱이 성능에 미치는 영향과 방지 방법은?**
+### Q1. 오토박싱이 성능에 미치는 영향과 방지 방법은?
 `List<Integer>`에 int를 add할 때마다 `Integer.valueOf(int)` 호출로 객체가 생성됩니다. 10만 개 루프에서 10만 번 박싱 → GC 압력 증가. 성능 크리티컬한 코드에서 기본형 대신 박싱 타입을 사용하면 처리량이 50% 이상 저하될 수 있습니다. 방지: 기본형 특화 컬렉션(Eclipse Collections의 `IntArrayList`, Trove의 `TIntArrayList`) 사용, 또는 배열(`int[]`)을 직접 사용합니다. JMH로 측정하면 `int[]` vs `Integer[]`의 처리 속도 차이가 3~5배에 달합니다.
 
-**Q2. Integer 캐시 범위(-128~127)가 실무에서 버그를 만드는 경우는?**
+### Q2. Integer 캐시 범위(-128~127)가 실무에서 버그를 만드는 경우는?
 ```java
 Integer a = 127;
 Integer b = 127;
@@ -587,7 +583,7 @@ System.out.println(c == d);   // false (새 객체)
 ```
 DB에서 조회한 ID, 사용자 입력 등 런타임 Integer 비교에 `==`를 사용하면 127 이하에서는 우연히 동작하다가 128 이상에서 버그가 발생합니다. 실제로 userId가 100일 때는 정상, 200일 때는 인증 실패하는 버그로 발현됩니다. Integer 비교는 반드시 `equals()` 또는 `Objects.equals()`를 사용합니다.
 
-**Q3. null이 포함된 컬렉션에서 언박싱 시 NPE가 발생하는 이유는?**
+### Q3. null이 포함된 컬렉션에서 언박싱 시 NPE가 발생하는 이유는?
 ```java
 Map<String, Integer> map = new HashMap<>();
 int value = map.get("nonExistent");  // NPE!
@@ -595,8 +591,8 @@ int value = map.get("nonExistent");  // NPE!
 ```
 `Map.getOrDefault("key", 0)`으로 기본값을 지정하거나 `Optional.ofNullable(map.get("key")).orElse(0)`으로 처리합니다. 특히 Stream의 `mapToInt()`에서 null이 포함된 컬렉션을 처리할 때 발생하는 NPE는 원인 파악이 어렵습니다. 박싱 타입이 null일 수 있는 경우 반드시 언박싱 전 null 체크가 필요합니다.
 
-**Q4. 숫자 타입 간 변환 시 정밀도 손실이 발생하는 경우는?**
+### Q4. 숫자 타입 간 변환 시 정밀도 손실이 발생하는 경우는?
 `long`을 `int`로 좁히는 변환: 상위 32비트가 잘립니다. `Long.MAX_VALUE`를 int로 캐스팅하면 -1이 됩니다. `double`을 `long`으로 변환: 소수점 이하가 잘립니다. `double`을 `int`로: 오버플로우 시 `Integer.MAX_VALUE` 또는 `Integer.MIN_VALUE`로 클램핑됩니다. 안전한 변환: `Math.toIntExact(long)`은 오버플로우 시 `ArithmeticException`을 던집니다. 금융 계산에서 double → int 변환은 절대 금지이며 `BigDecimal`을 유지합니다.
 
-**Q5. Optional과 래퍼 클래스 중 null 표현에 무엇을 사용하는가?**
+### Q5. Optional과 래퍼 클래스 중 null 표현에 무엇을 사용하는가?
 래퍼 클래스의 null: 값의 부재를 나타내지만 NPE 위험이 있습니다. 메서드 반환 타입으로 `Integer`를 사용하면 호출자가 null 체크를 잊기 쉽습니다. `Optional<Integer>`: null이 아닌 "값이 없을 수 있음"을 명시적으로 표현합니다. 호출자가 `.orElse()`, `.ifPresent()` 등으로 처리를 강제받습니다. 단, Optional은 직렬화되지 않으므로 DTO 필드로는 부적합합니다. 메서드 반환 타입으로는 Optional, 필드와 파라미터에는 기본형 또는 null 허용 주석(`@Nullable`)을 사용합니다.

@@ -877,32 +877,27 @@ graph LR
 
 ## 10. 면접 포인트 5선
 
-**Q1. 데드락이 발생하는 4가지 필요충분조건(Coffman 조건)을 설명하고, 실무에서 가장 쉽게 깨트릴 수 있는 조건이 무엇인지 말해주세요.**
-
+### Q1. 데드락이 발생하는 4가지 필요충분조건(Coffman 조건)을 설명하고, 실무에서 가장 쉽게 깨트릴 수 있는 조건이 무엇인지 말해주세요.
 A. 상호 배제(Mutual Exclusion), 점유 대기(Hold and Wait), 비선점(No Preemption), 순환 대기(Circular Wait)의 4가지 조건이 모두 성립해야 데드락이 발생합니다. 실무에서 가장 쉽게 깨트릴 수 있는 조건은 **순환 대기**입니다. 모든 트랜잭션이 자원을 항상 동일한 전역 순서(예: PK 오름차순)로 획득하도록 강제하면, 순환 구조 자체가 만들어지지 않아 데드락이 원천 차단됩니다. 반면 상호 배제를 없애면 데이터 정합성이 깨지고, 비선점을 없애면 롤백이 임의로 발생해 일관성 보장이 어렵습니다.
 
 ---
 
-**Q2. InnoDB의 Gap Lock이 데드락을 일으키는 원리를 설명해주세요. 언제 Gap Lock이 활성화되고, 어떻게 비활성화할 수 있나요?**
-
+### Q2. InnoDB의 Gap Lock이 데드락을 일으키는 원리를 설명해주세요. 언제 Gap Lock이 활성화되고, 어떻게 비활성화할 수 있나요?
 A. Gap Lock은 REPEATABLE READ 격리 수준에서 인덱스 레코드 사이 **간격**에 걸리는 락입니다. Gap Lock끼리는 서로 호환되어 두 트랜잭션이 같은 범위에 동시에 Gap Lock을 걸 수 있습니다. 문제는 INSERT 시 생성되는 **Insert Intention Lock**이 기존 Gap Lock과 충돌한다는 점입니다. 트랜잭션 A가 gap(20~50)에 Gap Lock을 보유하고 INSERT(35)를 시도할 때, 트랜잭션 B도 같은 gap에 Gap Lock을 보유하고 INSERT(40)를 시도하면 서로 상대방의 Gap Lock에 막혀 순환 대기가 형성됩니다. Gap Lock을 비활성화하려면 격리 수준을 `READ COMMITTED`로 낮추면 됩니다. 이 경우 팬텀 리드가 허용되므로 비즈니스 요건을 먼저 확인해야 합니다.
 
 ---
 
-**Q3. InnoDB가 데드락을 자동으로 감지하는 내부 메커니즘(Wait-for Graph)을 설명하고, 피해자 선정 기준을 말해주세요.**
-
+### Q3. InnoDB가 데드락을 자동으로 감지하는 내부 메커니즘(Wait-for Graph)을 설명하고, 피해자 선정 기준을 말해주세요.
 A. InnoDB는 **Wait-for Graph(WFG)** 라는 방향 그래프를 내부적으로 유지합니다. 각 트랜잭션이 노드이고, "A가 B의 락을 기다린다"는 관계가 A→B 방향 간선입니다. 새 락 대기가 발생할 때마다 WFG에 간선을 추가하고 DFS로 사이클 존재 여부를 탐지합니다. 사이클이 발견되면 데드락이 확정되고, InnoDB는 **롤백 비용이 가장 적은 트랜잭션**을 피해자(Victim)로 선정합니다. 피해자 선정 기준은 주로 변경한 행의 수와 Undo Log 크기입니다. `innodb_deadlock_detect=ON`일 때만 이 메커니즘이 동작하며, 끄면 `innodb_lock_wait_timeout` 만료로만 해소됩니다.
 
 ---
 
-**Q4. Spring @Transactional 환경에서 데드락이 발생했을 때 재시도 전략을 구현하는 방법을 설명해주세요. 재시도 구현 시 반드시 주의해야 할 점은?**
-
+### Q4. Spring @Transactional 환경에서 데드락이 발생했을 때 재시도 전략을 구현하는 방법을 설명해주세요. 재시도 구현 시 반드시 주의해야 할 점은?
 A. Spring Retry의 `@Retryable` 어노테이션으로 구현합니다. `value`에 `DeadlockLoserDataAccessException.class`와 `CannotAcquireLockException.class`를 지정하고, `backoff`에 지수 백오프와 랜덤 jitter를 설정합니다. jitter는 재시도가 동시에 몰려 Thundering Herd 문제가 발생하는 것을 막습니다. **가장 중요한 주의사항은 재시도 로직이 멱등(Idempotent)해야 한다는 점**입니다. 재시도 시 중복 처리(결제 중복, 주문 중복)가 발생하면 데드락보다 더 큰 문제가 됩니다. 멱등 키(idempotency key)를 사용하거나, DB 유니크 제약으로 중복을 차단해야 합니다. `@Recover` 메서드에서는 최대 재시도 횟수 초과 시 사용자에게 명확한 안내와 알림을 제공해야 합니다.
 
 ---
 
-**Q5. "데드락이 자주 발생한다"는 장애 리포트를 받았을 때, 어떤 순서로 원인을 파악하고 해결하겠습니까?**
-
+### Q5. "데드락이 자주 발생한다"는 장애 리포트를 받았을 때, 어떤 순서로 원인을 파악하고 해결하겠습니까?
 A. 다음 순서로 접근합니다.
 
 **1단계 — 데이터 수집**: `SET GLOBAL innodb_print_all_deadlocks = ON`으로 모든 데드락을 에러 로그에 기록하고, `SHOW ENGINE INNODB STATUS`로 마지막 데드락 상세 정보를 확인합니다. `SHOW GLOBAL STATUS LIKE 'Innodb_deadlocks'`로 누적 발생 빈도를 파악합니다.
@@ -914,9 +909,6 @@ A. 다음 순서로 접근합니다.
 **4단계 — 패턴 분류**: 교차 업데이트(락 순서 고정), Gap Lock(격리 수준 낮추기 또는 정확한 인덱스 조건), INSERT 중복(INSERT IGNORE/ON DUPLICATE KEY) 중 어느 패턴인지 분류합니다.
 
 **5단계 — 수정 및 검증**: 수정 후 스테이징에서 재현 테스트를 실행하고, 프로덕션 배포 후 `Innodb_deadlocks` 카운터가 감소하는지 모니터링합니다.
-
-</details>
-
 <br>
 
 ---

@@ -722,17 +722,17 @@ class PureOrderDomainTest {
 
 ## 면접 포인트
 
-**Q1. 헥사고날 아키텍처의 핵심 개념인 Port와 Adapter를 설명하라.**
+### Q1. 헥사고날 아키텍처의 핵심 개념인 Port와 Adapter를 설명하라.
 > Port는 도메인이 외부 세계와 소통하는 인터페이스다. Inbound Port(Driving): 외부에서 도메인으로 들어오는 계약(UseCase 인터페이스). Outbound Port(Driven): 도메인이 외부에 요구하는 계약(Repository, MessagePublisher 인터페이스). Adapter는 Port의 구현체로 실제 기술을 연결한다(REST Controller, JPA Repository 구현).
 
-**Q2. 헥사고날과 전통적 레이어드 아키텍처의 핵심 차이는?**
+### Q2. 헥사고날과 전통적 레이어드 아키텍처의 핵심 차이는?
 > 레이어드 아키텍처는 Controller → Service → Repository 방향으로 의존성이 흐른다. 서비스가 JPA Repository에 직접 의존해 기술 종속이 발생한다. 헥사고날은 의존성 역전(DIP)을 적용해 모든 외부 기술이 도메인을 향해 의존한다. 도메인은 어떤 기술에도 의존하지 않는다.
 
-**Q3. 도메인 모델과 JPA 엔티티를 분리해야 하는 이유는?**
+### Q3. 도메인 모델과 JPA 엔티티를 분리해야 하는 이유는?
 > JPA 어노테이션(`@Entity`, `@Id`, `@Column`)은 영속성 기술에 종속된 메타데이터다. 도메인 모델에 이를 포함하면 DB 스키마 변경이 도메인을 수정하게 만든다. 분리하면 도메인 모델은 순수 Java 객체로 유지되고, JPA 엔티티는 별도로 DB 스키마에 맞게 설계할 수 있다.
 
-**Q4. UseCase 인터페이스가 없어도 되는가?**
+### Q4. UseCase 인터페이스가 없어도 되는가?
 > UseCase 인터페이스(Inbound Port)는 테스트 목적보다는 계약 명세 역할이다. 구현체가 하나뿐이라면 인터페이스 없이 구체 클래스를 직접 사용하는 실용적 접근도 가능하다. 단, Controller가 Application Service에 직접 의존하면 Controller 테스트 시 Application Service 전체가 실행된다.
 
-**Q5. Spring에서 헥사고날을 구현할 때 패키지 구조는?**
+### Q5. Spring에서 헥사고날을 구현할 때 패키지 구조는?
 > `domain/` (순수 Java: Entity, ValueObject, DomainService, Repository 인터페이스), `application/` (UseCase 인터페이스 + 구현체, Port 인터페이스), `adapter/in/web/` (REST Controller), `adapter/out/persistence/` (JPA Repository 구현체). `domain/`과 `application/`은 Spring 의존성 없이 순수 Java 모듈로 분리할 수 있다.

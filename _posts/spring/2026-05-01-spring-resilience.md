@@ -1666,24 +1666,19 @@ private ProductDto fallback(Long id, Throwable t) {
 
 ## 면접 포인트
 
-**Q1. Circuit Breaker의 HALF_OPEN 상태가 왜 필요한가? OPEN에서 바로 CLOSED로 가면 안 되는 이유는?**
-
+### Q1. Circuit Breaker의 HALF_OPEN 상태가 왜 필요한가? OPEN에서 바로 CLOSED로 가면 안 되는 이유는?
 > OPEN 상태에서 `waitDurationInOpenState`가 경과한 뒤 바로 CLOSED로 전환하면, 아직 불안정할 수 있는 외부 서비스에 전체 트래픽이 한꺼번에 쏟아진다. 이것이 Second Wave 장애를 유발한다. 예를 들어 DB 서버가 30초 다운됐다가 재시작했는데 커넥션 풀 워밍업에 10초가 더 필요한 상황에서, 바로 CLOSED로 전환하면 대기 중이던 요청이 폭발해 또 다운된다. HALF_OPEN은 `permittedNumberOfCallsInHalfOpenState`(예: 5개)만 허용해 안전하게 타진한 후, 성공하면 CLOSED, 실패하면 OPEN으로 되돌아가 서비스가 완전히 회복됐음을 확인 후 전환한다. 이것이 두꺼비집 비유에서 "반만 켜보는" 단계다.
 
-**Q2. Resilience4j의 Ring Buffer 슬라이딩 윈도우가 LinkedList 대신 원형 배열을 사용하는 이유는?**
-
+### Q2. Resilience4j의 Ring Buffer 슬라이딩 윈도우가 LinkedList 대신 원형 배열을 사용하는 이유는?
 > LinkedList는 가장 오래된 원소를 제거할 때 O(1)이지만, 각 노드가 next/prev 포인터를 가져 메모리 오버헤드가 크고 캐시 지역성(cache locality)이 나쁘다. 슬라이딩 윈도우 크기가 N이면 N개 노드가 메모리 여기저기 흩어져 있어 CPU 캐시 미스가 잦다. 반면 원형 배열은 연속된 메모리 블록에 N개 슬롯이 있고, 포인터 하나만 이동해 가장 오래된 슬롯을 덮어쓴다. 메모리 할당도 없고 GC 압박도 없다. 윈도우 크기 100짜리 Ring Buffer는 고정 크기 배열 100개 + 포인터 1개가 전부다. Resilience4j가 낮은 오버헤드를 자랑하는 핵심 구현 이유가 여기에 있다.
 
-**Q3. Jitter(지터)가 Thundering Herd를 방지하는 수학적 원리는?**
-
+### Q3. Jitter(지터)가 Thundering Herd를 방지하는 수학적 원리는?
 > Thundering Herd는 모든 클라이언트가 동일한 지수 간격(500ms, 1000ms, 2000ms)으로 동시에 재시도할 때 발생한다. Full Jitter는 각 재시도 간격을 `random(0, min(cap, base × 2^n))`으로 계산해 클라이언트마다 서로 다른 시간에 재시도하게 만든다. 100개 클라이언트가 모두 0~2000ms 사이의 서로 다른 시간에 재시도하면, 평균적으로 매 20ms마다 1개의 요청이 들어와 서버 부하가 균등하게 분산된다. 수학적으로 Full Jitter는 평균 대기 시간을 약 절반으로 줄이면서(cap/2) 동시 재시도 집중을 제거해 서버 회복 시간을 단축한다.
 
-**Q4. Semaphore Bulkhead와 ThreadPool Bulkhead를 선택하는 기준은? WebFlux에서 Semaphore가 나쁜 이유는?**
-
+### Q4. Semaphore Bulkhead와 ThreadPool Bulkhead를 선택하는 기준은? WebFlux에서 Semaphore가 나쁜 이유는?
 > Semaphore Bulkhead는 호출자 스레드에서 직접 실행하므로 ThreadLocal(MDC 로그, SecurityContext) 전파에 유리하고 스레드 전환 비용이 없다. Spring MVC처럼 스레드 당 요청을 처리하는 환경에 적합하다. ThreadPool Bulkhead는 호출자 스레드를 즉시 반환하고 별도 풀에서 실행하므로 느린 외부 호출에서 호출자 스레드를 완전히 해방한다. WebFlux에서 Semaphore Bulkhead가 나쁜 이유: WebFlux는 이벤트 루프 기반으로 소수의 스레드(Netty event-loop 스레드)가 모든 요청을 처리한다. Semaphore Bulkhead가 이벤트 루프 스레드를 블로킹하면 해당 스레드가 처리하는 모든 요청이 멈춘다. 리액티브 환경에서는 블로킹 자체가 금기다. ThreadPool Bulkhead는 별도 풀에서 실행해 이벤트 루프를 보호하거나, 아예 Reactor의 `Schedulers.boundedElastic()`으로 블로킹 작업을 격리한다.
 
-**Q5. Circuit Breaker가 OPEN 상태일 때 Retry를 어떻게 설정해야 하고, CallNotPermittedException을 ignore-exceptions에 넣지 않으면 어떤 일이 발생하는가?**
-
+### Q5. Circuit Breaker가 OPEN 상태일 때 Retry를 어떻게 설정해야 하고, CallNotPermittedException을 ignore-exceptions에 넣지 않으면 어떤 일이 발생하는가?
 > Retry가 Circuit Breaker 바깥을 감싸는 구조에서, Circuit Breaker가 OPEN이면 즉시 `CallNotPermittedException`을 던진다. Retry가 이 예외를 재시도 대상으로 보면, 재시도 횟수만큼 즉시 예외를 반복해서 발생시킨다(실제 외부 호출은 없지만 빠른 루프로 Retry가 소진된다). 더 심각한 문제는 이 과정에서 Circuit Breaker 메트릭에는 기록되지 않지만 불필요한 연산과 로그가 폭발적으로 발생한다는 점이다. 올바른 설정: `ignore-exceptions: [CallNotPermittedException]`으로 설정하면 Retry가 OPEN 상태의 즉각 거부를 재시도하지 않고 바로 Fallback으로 넘어간다. 이렇게 하면 Circuit Breaker의 HALF_OPEN 전환을 기다렸다가, 다음 요청에서 자연스럽게 재시도가 이뤄진다.
 
 ---

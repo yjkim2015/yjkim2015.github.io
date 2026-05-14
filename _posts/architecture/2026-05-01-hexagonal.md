@@ -656,13 +656,13 @@ JPA Repository Adapter에서 `if (entity.getStatus() == PENDING) entity.setStatu
 ---
 ## 면접 포인트
 
-**Q1. 헥사고날 아키텍처의 가장 큰 실무 이점은?**
+### Q1. 헥사고날 아키텍처의 가장 큰 실무 이점은?
 테스트 용이성입니다. Outbound Port가 인터페이스이므로 Mock으로 교체해 DB 없이 도메인 로직 단위 테스트가 가능합니다. 실제 JPA 영속성 없이 `OrderCommandService`의 비즈니스 로직만 빠르게 테스트할 수 있습니다. 또한 PostgreSQL → MongoDB 저장소 교체 시 `JpaOrderRepository` Adapter만 교체하면 되고 Application Service와 Domain은 수정이 없습니다.
 
-**Q2. 헥사고날이 레이어드 아키텍처보다 나은 이유는?**
+### Q2. 헥사고날이 레이어드 아키텍처보다 나은 이유는?
 레이어드에서는 도메인이 Infrastructure(JPA Entity)에 의존하는 경우가 많습니다. `@Entity` 어노테이션이 도메인 클래스에 붙고, JPA 제약(`@Column`, `fetch = LAZY`)이 도메인 설계를 오염시킵니다. 헥사고날은 Domain이 어떤 외부 기술에도 의존하지 않고(순수 Java), Adapter가 Domain을 향해 의존합니다. Domain 테스트에 Spring Context, H2 DB가 필요 없습니다.
 
-**Q3. Port와 Adapter의 개수가 늘어날 때 패키지 구조는?**
+### Q3. Port와 Adapter의 개수가 늘어날 때 패키지 구조는?
 ```
 com.example.order
 ├── domain/           # 순수 도메인 (의존성 0)
@@ -680,10 +680,10 @@ com.example.order
 ```
 패키지 구조 자체가 아키텍처를 문서화합니다.
 
-**Q4. 헥사고날과 MSA의 관계는?**
+### Q4. 헥사고날과 MSA의 관계는?
 헥사고날은 단일 서비스 내부 구조 패턴이고, MSA는 서비스 간 분리 패턴입니다. 둘은 다른 레벨의 아키텍처입니다. MSA 각 서비스 내부에 헥사고날을 적용하는 것이 이상적입니다. 헥사고날로 설계된 서비스는 외부 의존(DB, 다른 서비스 API)이 Outbound Adapter에 격리되어 있어, 나중에 MSA로 분리할 때 Adapter만 교체하면 됩니다.
 
-**Q5. 헥사고날의 단점과 도입 시 주의사항은?**
+### Q5. 헥사고날의 단점과 도입 시 주의사항은?
 보일러플레이트 코드가 많습니다. UseCase 인터페이스, Command/Response DTO, Mapper, Adapter 클래스가 각각 필요해 파일 수가 레이어드 대비 3~4배. 소규모 팀이나 단순 CRUD 서비스에는 오버엔지니어링입니다. 도입 기준: 도메인 로직이 복잡하고(비즈니스 규칙 10개+), 팀 인원이 4명 이상이며, 저장소 기술 교체 가능성이 있을 때. 단순 게시판 API에는 레이어드 아키텍처로 충분합니다.
 
 ---

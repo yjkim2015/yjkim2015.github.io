@@ -1316,22 +1316,17 @@ public class OrderPipelineService {
 
 ## 16. 면접 포인트
 
-**Q1. Redis Sorted Set이 내부적으로 skip list를 사용하는 이유는? Red-Black Tree 대신 선택한 근거를 설명하라.**
-
+### Q1. Redis Sorted Set이 내부적으로 skip list를 사용하는 이유는? Red-Black Tree 대신 선택한 근거를 설명하라.
 Skip list는 Red-Black Tree에 비해 세 가지 장점이 있다. 첫째, 구현 단순성이다. Red-Black Tree는 회전(rotation)과 색 변경(recoloring)으로 수백 줄의 코드가 필요하지만, skip list는 확률적 레벨 배정과 포인터 연결로 수십 줄에 구현된다. 버그 가능성이 낮고 유지보수가 쉽다. 둘째, 범위 쿼리 성능이다. `ZRANGE`처럼 score 범위 내 원소를 순차 반환할 때, skip list의 레벨 1 연결 리스트를 순서대로 순회하면 O(M) 추가 비용으로 처리된다. Red-Black Tree의 in-order traversal은 포인터 추적이 복잡하고 캐시 미스가 잦다. 셋째, 역방향 포인터 추가가 용이하다. `ZREVRANGE`를 위한 역방향 포인터를 skip list에 추가하는 것은 간단하다. Skip list는 O(log N) 삽입·삭제·검색을 보장하면서 이 이점들을 제공한다.
 
-**Q2. HyperLogLog가 12KB 메모리로 0.81% 오차를 달성하는 메커니즘은?**
-
+### Q2. HyperLogLog가 12KB 메모리로 0.81% 오차를 달성하는 메커니즘은?
 HyperLogLog는 원소를 해시 후 이진수로 변환하고, 맨 앞의 0 개수(leading zeros)를 기록한다. k개의 leading zeros가 있으면 대략 2^k개의 고유 원소가 있다는 확률적 추정이 가능하다. 단일 레지스터는 분산이 너무 크므로, Redis는 m = 2^14 = 16384개의 레지스터로 분산한다. 해시값의 앞 14비트로 레지스터 인덱스를 결정하고, 나머지 비트에서 leading zeros를 계산한다. 최종 카디널리티는 조화평균으로 추정한다: `E = α_m × m² × (Σ 2^(-registers[i]))^(-1)`. 조화평균은 극단적으로 큰 레지스터 값의 영향을 억제해 과대 추정을 방지한다. 각 레지스터는 6비트(0~63), 16384 × 6비트 = 98,304비트 = **12KB**. 표준 오차 ≈ 1.04 / √16384 = **0.81%**.
 
-**Q3. Redis Hash의 listpack에서 hashtable로 전환 시 무슨 일이 일어나는가? 전환을 막으려면?**
-
+### Q3. Redis Hash의 listpack에서 hashtable로 전환 시 무슨 일이 일어나는가? 전환을 막으려면?
 listpack은 연속 메모리 블록에 엔트리를 순서대로 저장한다. 포인터가 없으므로 메모리 효율이 높지만, 검색은 O(N) 선형 탐색이다. 필드 수가 `hash-max-listpack-entries`(기본 128) 또는 필드 값이 `hash-max-listpack-value`(기본 64바이트)를 초과하면, Redis는 hashtable로 전환한다. Hashtable은 버킷 배열 + 연결 리스트 포인터 오버헤드로 메모리 사용량이 listpack의 3~5배가 된다. **전환은 단방향**이다. 필드를 삭제해도 listpack으로 되돌아가지 않는다. 막으려면 Hash 설계 시 필드 수를 128 미만으로 유지하고, 로그나 타임스탬프 기반 필드처럼 무한히 증가하는 구조를 Hash에 넣지 않아야 한다. `OBJECT ENCODING key`로 현재 인코딩을 모니터링한다.
 
-**Q4. Redis Stream의 XPENDING과 XCLAIM이 필요한 이유는? Kafka의 offset commit과 어떻게 다른가?**
-
+### Q4. Redis Stream의 XPENDING과 XCLAIM이 필요한 이유는? Kafka의 offset commit과 어떻게 다른가?
 Stream은 소비자 그룹(Consumer Group)으로 메시지를 분산 처리한다. 소비자가 `XREADGROUP`으로 메시지를 가져가면, 해당 메시지는 PEL(Pending Entry List)에 기록된다. 소비자가 처리 완료 후 `XACK`를 보내면 PEL에서 제거된다. 소비자가 `XACK` 없이 죽으면 메시지가 PEL에 남는다. `XPENDING`으로 PEL을 조회하면 어떤 메시지가 얼마나 오래 미처리 상태인지 확인할 수 있다. `XCLAIM`으로 특정 메시지의 소유권을 다른 소비자에게 이전해 재처리한다. Kafka의 offset commit과 다른 점은, Kafka는 파티션 내 오프셋 위치 하나를 커밋하지만, Redis Stream PEL은 개별 메시지 단위로 ACK 상태를 추적한다. 따라서 메시지 5가 실패하고 6이 성공한 경우, Redis Stream에서는 메시지 5만 재처리 대상이 되지만, Kafka에서는 오프셋 5부터 다시 읽어야 한다.
 
-**Q5. String embstr 인코딩이 raw보다 빠른 이유는? 어떤 상황에서 embstr이 raw로 자동 전환되는가?**
-
+### Q5. String embstr 인코딩이 raw보다 빠른 이유는? 어떤 상황에서 embstr이 raw로 자동 전환되는가?
 `embstr`은 `robj`(Redis Object 헤더, 16바이트)와 `SDS`(Simple Dynamic String)를 하나의 연속 메모리 블록에 할당한다. 단일 `malloc` 호출로 두 구조체가 인접하게 배치되므로, 첫 번째 이점은 `malloc`/`free` 호출 횟수가 절반이다. 두 번째 이점은 CPU 캐시 친화성이다. `robj`에 접근하면 `SDS`가 같은 캐시 라인에 있어 캐시 미스 없이 읽힌다. `raw`는 두 번 `malloc`으로 `robj`와 `SDS`가 메모리 다른 위치에 있어 캐시 미스가 발생할 수 있다. 자동 전환은 두 가지 상황에서 발생한다: 값의 길이가 44바이트를 초과할 때(저장 시점에 raw로 생성), 또는 `embstr` 상태에서 **어떤 수정 명령이든 적용될 때**다. `embstr`은 불변으로 취급하므로, `APPEND key "x"`처럼 단 1바이트를 추가해도 즉시 `raw`로 전환된다. 따라서 자주 수정하는 키는 처음부터 `raw`로 관리된다고 이해해야 한다.

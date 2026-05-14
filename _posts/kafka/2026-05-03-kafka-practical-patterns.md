@@ -960,17 +960,17 @@ Kafka는 "일단 넣고 꺼내면 된다"에서 시작하지만, 프로덕션에
 
 ## 면접 포인트
 
-**Q1. Kafka에서 메시지 순서를 보장하는 방법은?**
+### Q1. Kafka에서 메시지 순서를 보장하는 방법은?
 A. 같은 키를 가진 메시지는 동일 파티션에 라우팅되므로 파티션 내 순서가 보장된다. 그러나 파티션 간 순서는 보장되지 않는다. 전체 토픽 수준의 순서가 필요하면 파티션을 1개로 제한해야 하지만 처리량이 감소한다. 실무에서는 주문 ID, 사용자 ID를 키로 써서 관련 이벤트를 같은 파티션에 모은다.
 
-**Q2. Exactly-Once Semantics(EOS)를 어떻게 구현하나요?**
+### Q2. Exactly-Once Semantics(EOS)를 어떻게 구현하나요?
 A. Producer에서 idempotent 설정(enable.idempotence=true)으로 재시도 시 중복 발행을 방지한다. Kafka Streams나 Kafka Transactions API를 쓰면 consume-transform-produce 사이클을 원자적으로 처리할 수 있다. 단, EOS는 성능 오버헤드가 있어 At-Least-Once + 소비자 측 멱등성 처리가 더 실용적인 경우가 많다.
 
-**Q3. Consumer Lag이 급증할 때 어떻게 대응하나요?**
+### Q3. Consumer Lag이 급증할 때 어떻게 대응하나요?
 A. 우선 lag 원인을 파악한다. 소비 속도 부족이면 Consumer 인스턴스를 파티션 수만큼 수평 확장한다. 처리 로직이 느리면 비동기 처리나 배치 처리를 적용한다. 파티션 수 자체가 부족하면 파티션을 늘리고 Consumer를 함께 증가시킨다. Prometheus + Grafana로 consumer_lag 메트릭을 실시간 모니터링해야 한다.
 
-**Q4. Dead Letter Queue(DLQ)를 Kafka에서 어떻게 구현하나요?**
+### Q4. Dead Letter Queue(DLQ)를 Kafka에서 어떻게 구현하나요?
 A. 처리 실패 메시지를 별도 DLQ 토픽에 발행한다. 최대 재시도 횟수를 초과하거나 비즈니스 예외(역직렬화 실패, 유효성 오류)가 발생하면 원본 메시지와 오류 정보를 DLQ 토픽에 저장한다. DLQ는 별도 Consumer가 모니터링하고, 수동 검토 후 재처리하거나 폐기한다.
 
-**Q5. Kafka와 RabbitMQ의 선택 기준은?**
+### Q5. Kafka와 RabbitMQ의 선택 기준은?
 A. Kafka는 높은 처리량, 메시지 영속성, 재처리(오프셋 리셋), 스트림 처리가 필요할 때 적합하다. RabbitMQ는 복잡한 라우팅(Exchange/Binding), 짧은 지연, 메시지 우선순위가 필요할 때 적합하다. 이벤트 스트리밍과 로그 수집에는 Kafka, 작업 큐와 RPC 패턴에는 RabbitMQ가 일반적인 선택이다.

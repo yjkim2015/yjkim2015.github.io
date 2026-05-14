@@ -1119,22 +1119,17 @@ public SseEmitter streamOrders(@PathVariable Long userId) {
 
 ## 13. 면접 포인트
 
-**Q1. Blocking I/O에서 스레드가 대기할 때 CPU는 실제로 무엇을 하는가?**
-
+### Q1. Blocking I/O에서 스레드가 대기할 때 CPU는 실제로 무엇을 하는가?
 A. 블로킹 시스템 콜을 호출하면 커널은 해당 스레드의 `task_struct.__state`를 `TASK_INTERRUPTIBLE`로 변경하고 소켓의 wait queue에 등록한다. 그리고 `schedule()`을 호출해 스케줄러가 run queue에서 다음 태스크를 선택하게 한다. **CPU는 즉시 다른 스레드를 실행**한다. 대기 중인 스레드는 CPU를 전혀 사용하지 않는다. 소켓에 데이터가 도착하면 NIC 인터럽트 → 드라이버 → `sk->sk_data_ready()` 콜백 → wait queue의 스레드를 `TASK_RUNNING`으로 전환 → run queue에 재삽입 → 다음 스케줄링 기회에 실행 재개. 비용은 컨텍스트 스위치 2회(언마운트 + 리마운트), 각각 1~3μs이다.
 
-**Q2. epoll이 select보다 빠른 근본 이유는 무엇인가? O(1)이 어떻게 가능한가?**
-
+### Q2. epoll이 select보다 빠른 근본 이유는 무엇인가? O(1)이 어떻게 가능한가?
 A. select/poll은 매번 모든 fd를 순회해서 준비 여부를 확인한다(O(n)). 그리고 어떤 fd가 준비됐는지 알기 위해 다시 순회해야 한다. epoll은 세 가지로 이 문제를 해결한다. 첫째, fd를 red-black tree에 한 번만 등록한다(O(log n)). 둘째, 각 fd의 소켓 드라이버 wait queue에 epoll 콜백을 등록한다. 셋째, fd가 준비되면 드라이버가 인터럽트에서 직접 epoll의 ready list에 추가한다. `epoll_wait()`은 이 ready list만 반환하므로 **"준비된 fd 수"에만 비례**한다. 1만 개 fd를 감시해도 준비된 fd가 10개면 10개만 처리한다. 또한 select는 fd 목록을 매 호출마다 유저→커널 공간으로 복사하지만, epoll은 최초 등록 시만 복사하고 이후에는 ready list 포인터만 복사한다.
 
-**Q3. Spring WebFlux에서 블로킹 코드를 실수로 넣으면 어떤 일이 발생하는가? 내부 메커니즘과 함께 설명하라.**
-
+### Q3. Spring WebFlux에서 블로킹 코드를 실수로 넣으면 어떤 일이 발생하는가? 내부 메커니즘과 함께 설명하라.
 A. Netty의 Worker EventLoop는 기본적으로 CPU 코어 수만큼의 스레드로 구성된다. 각 EventLoop 스레드는 `epoll_wait()`으로 이벤트를 기다리다가 이벤트가 오면 처리하고 다시 대기하는 루프를 실행한다. 하나의 EventLoop 스레드는 수천 개의 채널(연결)을 담당한다. 이 스레드에서 `Thread.sleep(1000)`이나 블로킹 JDBC 쿼리를 실행하면, 그 1초 동안 해당 스레드가 담당하는 수천 개 채널의 이벤트가 전혀 처리되지 않는다. 즉, 수천 개 요청이 동시에 타임아웃 위기에 처한다. `subscribeOn(Schedulers.boundedElastic())`을 사용하면 블로킹 작업이 별도 스레드 풀에서 실행되고 EventLoop 스레드는 즉시 해방된다.
 
-**Q4. Java Virtual Thread가 synchronized 블록 내부에서 블로킹 I/O를 만나면 어떤 일이 발생하는가?**
-
+### Q4. Java Virtual Thread가 synchronized 블록 내부에서 블로킹 I/O를 만나면 어떤 일이 발생하는가?
 A. Virtual Thread가 블로킹 I/O를 만나면 정상적으로는 캐리어 스레드(OS 스레드)에서 언마운트되고 스택을 heap에 저장한다. 그런데 `synchronized` 블록 안에서 이 언마운트가 발생하면 JVM은 언마운트를 할 수 없다. 이유는 `synchronized`가 OS 모니터(Monitor)를 기반으로 동작하는데, 모니터는 **OS 스레드에 연결**되어 있기 때문이다. Virtual Thread를 언마운트하면 어떤 OS 스레드가 모니터를 보유하고 있는지 추적이 깨진다. 결과적으로 캐리어 스레드(OS 스레드)가 블로킹 I/O 동안 점유된다 — 이를 "핀(pin)"이라고 한다. Virtual Thread 1만 개가 모두 핀되면 캐리어 스레드 풀이 고갈된다. 해결책은 `synchronized` → `ReentrantLock`/`StampedLock` 교체다. 이들은 JVM 레벨 락으로 OS 모니터와 독립적으로 동작해 언마운트를 허용한다.
 
-**Q5. CompletableFuture의 thenApply()와 thenApplyAsync()는 어떤 스레드에서 실행되는가? 어떤 상황에서 deadlock이 발생할 수 있는가?**
-
+### Q5. CompletableFuture의 thenApply()와 thenApplyAsync()는 어떤 스레드에서 실행되는가? 어떤 상황에서 deadlock이 발생할 수 있는가?
 A. `thenApply(fn)`은 이전 단계를 완료한 스레드에서 fn을 실행한다. 이전 단계가 이미 완료된 상태이면 `thenApply()`를 호출하는 스레드에서 즉시 실행된다. `thenApplyAsync(fn)`은 `ForkJoinPool.commonPool()`에서 실행한다. Deadlock 시나리오: `ForkJoinPool.commonPool()`의 모든 스레드가 `CompletableFuture.get()`을 호출하며 대기 중인데, 그 get()이 기다리는 CompletableFuture가 역시 commonPool에서 실행되어야 하는 경우다. 예를 들어 commonPool이 4개 스레드인데, 4개 태스크가 각각 또 다른 CompletableFuture를 commonPool에 제출하고 `join()`으로 기다리면 — 나머지 태스크를 실행할 스레드가 없어 deadlock이 발생한다. 해결책은 블로킹 대기(`get()/join()`)를 commonPool에서 하지 않거나, 전용 스레드 풀을 사용하는 것이다.

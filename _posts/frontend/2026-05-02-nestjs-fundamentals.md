@@ -455,22 +455,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
 ## 면접 포인트
 
-**Q1. NestJS의 DI(의존성 주입)가 왜 테스트에 유리한가요?**
-
+### Q1. NestJS의 DI(의존성 주입)가 왜 테스트에 유리한가요?
 DI 컨테이너가 의존성을 외부에서 주입하므로 테스트 시 실제 구현 대신 Mock을 주입할 수 있습니다. `Test.createTestingModule()`로 테스트 모듈을 만들고, `{ provide: UsersService, useValue: mockUsersService }`로 Mock을 교체합니다. 데이터베이스 연결 없이 순수한 비즈니스 로직만 단위 테스트할 수 있습니다.
 
-**Q2. NestJS의 실행 파이프라인 순서를 설명하세요.**
-
+### Q2. NestJS의 실행 파이프라인 순서를 설명하세요.
 요청이 들어오면 순서대로: Middleware → Guard → Interceptor(before) → Pipe → Controller Handler → Interceptor(after) → Exception Filter(에러 시). Guard에서 false를 반환하면 403, Pipe에서 검증 실패 시 400, Exception Filter가 나머지 에러를 처리합니다.
 
-**Q3. `@Module()` decorator의 imports와 providers의 차이는?**
-
+### Q3. `@Module()` decorator의 imports와 providers의 차이는?
 `providers`는 현재 모듈 내에서 DI 컨테이너에 등록할 클래스입니다. `imports`는 다른 모듈을 가져와 그 모듈이 `exports`한 providers를 현재 모듈에서 사용할 수 있게 합니다. 다른 모듈의 Service를 사용하려면 그 모듈이 `exports`에 Service를 등록하고, 사용하는 모듈이 `imports`에 그 모듈을 추가해야 합니다.
 
-**Q4. Interceptor로 응답 포맷을 통일하는 방법은?**
-
+### Q4. Interceptor로 응답 포맷을 통일하는 방법은?
 `NestInterceptor`를 구현하고 `intercept(context, next)`에서 `next.handle().pipe(map(data => ({ success: true, data })))`로 모든 응답을 래핑합니다. `APP_INTERCEPTOR` 토큰으로 전역 등록하면 모든 엔드포인트에 자동 적용됩니다. Exception Filter와 조합해 성공/실패 응답 포맷을 완전히 통일합니다.
 
-**Q5. NestJS와 Express를 혼용할 수 있나요?**
-
+### Q5. NestJS와 Express를 혼용할 수 있나요?
 가능합니다. NestJS는 기본적으로 Express 위에서 동작하므로 `app.use()`로 Express 미들웨어를 그대로 사용할 수 있습니다. `@nestjs/platform-fastify`로 교체하면 Fastify 기반으로 전환됩니다. 단, Fastify로 교체 시 Express 전용 미들웨어는 호환되지 않을 수 있습니다. 기존 Express 미들웨어 생태계 활용이 필요하면 플랫폼을 Express로 유지합니다.

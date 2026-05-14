@@ -557,17 +557,17 @@ Weight Predicate를 사용한 카나리 배포 중 설정을 동적으로 변경
 
 ## 면접 포인트
 
-**Q1. Spring Cloud Gateway와 Zuul의 차이는?**
+### Q1. Spring Cloud Gateway와 Zuul의 차이는?
 > Zuul 1.x는 서블릿 기반 동기/블로킹 모델이다. Spring Cloud Gateway는 Reactor Netty 기반 비동기/논블로킹으로 동일한 스레드 수로 훨씬 많은 요청을 처리할 수 있다. Zuul 2는 논블로킹이지만 Spring과의 통합이 부족해 신규 도입 시 Gateway가 표준이다.
 
-**Q2. GlobalFilter와 GatewayFilter의 차이는?**
+### Q2. GlobalFilter와 GatewayFilter의 차이는?
 > `GlobalFilter`는 모든 Route에 적용되고, `GatewayFilter`는 특정 Route에만 적용된다. 인증·로깅 같은 공통 관심사는 `GlobalFilter`로, 특정 서비스의 헤더 변환이나 Rate Limiting은 `GatewayFilter`로 구현한다.
 
-**Q3. Circuit Breaker를 Gateway에 통합하는 방법은?**
+### Q3. Circuit Breaker를 Gateway에 통합하는 방법은?
 > `spring-cloud-starter-circuitbreaker-reactor-resilience4j` 의존성 추가 후 Route에 `CircuitBreaker` GatewayFilter를 설정한다. `fallbackUri`로 폴백 응답을 반환하고, Resilience4j 설정으로 OPEN 임계값과 대기 시간을 조정한다.
 
-**Q4. Gateway에서 JWT 인증을 어떻게 구현하는가?**
+### Q4. Gateway에서 JWT 인증을 어떻게 구현하는가?
 > `GlobalFilter`를 구현해 `Authorization` 헤더에서 JWT를 추출하고 검증한다. 검증 성공 시 `exchange.getRequest().mutate().header("X-User-Id", userId)`로 다운스트림에 사용자 정보를 전달한다. Spring Security의 `ReactiveSecurityContextHolder`와 통합하면 더 표준적인 구현이 된다.
 
-**Q5. Predicate와 Filter의 역할 구분은?**
+### Q5. Predicate와 Filter의 역할 구분은?
 > `Predicate`는 요청이 Route에 매칭되는지 판단한다(경로, 헤더, 쿼리 파라미터, 시간대 등). `Filter`는 매칭된 요청/응답을 변환한다(헤더 추가/제거, 인증, Rate Limiting, 경로 재작성). Predicate는 라우팅 결정, Filter는 처리 로직이다.

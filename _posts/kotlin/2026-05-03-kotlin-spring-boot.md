@@ -565,24 +565,19 @@ suspend fun fetchWithRetry(id: Long): User? =
 
 ## 면접 포인트 총정리
 
-**Q1. `data class`와 일반 `class`의 차이는?**
-
+### Q1. `data class`와 일반 `class`의 차이는?
 `data class`는 주 생성자의 모든 프로퍼티를 기반으로 `equals()`, `hashCode()`, `toString()`, `copy()`, `componentN()`을 자동 생성한다. 불변 DTO에 적합하지만, JPA Entity처럼 동일성 개념이 DB 식별자 기반인 경우에는 직접 구현이 더 안전하다.
 
-**Q2. `all-open` 플러그인이 없으면 어떻게 되나?**
-
+### Q2. `all-open` 플러그인이 없으면 어떻게 되나?
 `@Transactional` 같은 Spring AOP 어노테이션이 동작하지 않는다. CGLIB 프록시는 서브클래스를 만들어야 하는데, Kotlin 기본 `final` 클래스는 상속이 불가능하기 때문이다. `kotlin-spring` 플러그인이 Spring 어노테이션이 붙은 클래스를 자동으로 `open`으로 처리한다.
 
-**Q3. `suspend` 함수와 `Mono`의 차이는?**
-
+### Q3. `suspend` 함수와 `Mono`의 차이는?
 `Mono`는 리액티브 스트림 타입으로, 연산 체이닝을 선언적으로 구성한다. `suspend` 함수는 코루틴 컨텍스트에서 중단 가능한 함수로, 동기 코드처럼 쓰되 내부적으로 논블로킹이다. Spring WebFlux에서 둘 다 지원하며, `kotlinx-coroutines-reactor`가 상호 변환을 담당한다.
 
-**Q4. 플랫폼 타입이란?**
-
+### Q4. 플랫폼 타입이란?
 Java에서 오는 타입은 Kotlin이 null 여부를 알 수 없어 `T!`로 표현된다. 이를 그대로 쓰면 런타임 NPE 가능성이 있다. Java 코드에 `@Nullable`/`@NonNull` 어노테이션을 붙이거나, Kotlin 호출 시 명시적으로 `T?`로 선언해 안전하게 처리해야 한다.
 
-**Q5. MockK를 Mockito 대신 써야 하는 이유는?**
-
+### Q5. MockK를 Mockito 대신 써야 하는 이유는?
 Kotlin의 `object`, `companion object`, `final` 함수, `suspend` 함수를 mock할 때 Mockito는 PowerMock 등 추가 설정이 필요하다. MockK는 코틀린을 위해 설계돼 이런 것들을 기본으로 지원하고, `coEvery`/`coVerify`로 코루틴 테스트도 자연스럽게 작성할 수 있다.
 
 ---

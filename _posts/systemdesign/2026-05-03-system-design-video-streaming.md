@@ -1147,17 +1147,17 @@ public void scheduleTranscoding(String videoId, String rawS3Key) {
 ---
 ## 면접 포인트
 
-**Q1. HLS와 DASH의 차이는? 실무에서 무엇을 선택하는가?**
+### Q1. HLS와 DASH의 차이는? 실무에서 무엇을 선택하는가?
 HLS(HTTP Live Streaming): Apple이 개발. `.m3u8` 매니페스트, `.ts` 세그먼트. iOS/macOS 네이티브 지원 필수. DASH(Dynamic Adaptive Streaming over HTTP): 오픈 표준. `.mpd` 매니페스트, `.mp4` 세그먼트. DRM 유연성 높음. 실무 선택: 글로벌 서비스는 두 가지 모두 제공합니다. iOS는 HLS, Android/Web은 DASH. YouTube는 DASH + HLS 병행, Netflix는 DASH + Widevine DRM 중심.
 
-**Q2. 트랜스코딩 비용을 최소화하는 전략은?**
+### Q2. 트랜스코딩 비용을 최소화하는 전략은?
 모든 업로드 영상을 최고 화질로 트랜스코딩하면 비용이 폭증합니다. 전략: ① 조회수 임계값 기반 트랜스코딩 — 1080p는 즉시, 4K는 조회수 1천 초과 후 시작 ② 원본 해상도 초과 트랜스코딩 금지 — 720p 원본을 1080p로 올리는 것은 낭비 ③ GPU 인스턴스 Spot Instance 활용 — 비용 60~70% 절감, 중단 시 재시도 로직 필수. 실제 YouTube는 트랜스코딩 인프라에 연간 수억 달러를 지출하며 효율화가 핵심 과제입니다.
 
-**Q3. 라이브 스트리밍과 VOD의 아키텍처 차이는?**
+### Q3. 라이브 스트리밍과 VOD의 아키텍처 차이는?
 VOD: 업로드 → 트랜스코딩 → CDN 배포의 단방향 파이프라인. 지연 허용 가능. 라이브: RTMP로 수신 → 실시간 트랜스코딩(< 2초) → HLS/DASH 세그먼트 생성(2초 단위) → CDN Edge에 즉시 배포. LL-HLS 사용 시 세그먼트를 200ms 단위로 더 잘게 쪼개 E2E 지연 2~3초 달성. 라이브는 CDN 캐시 TTL을 세그먼트 길이(2~4초)로 매우 짧게 유지해야 합니다.
 
-**Q4. 영상 불법 복제 방지를 어떻게 구현하는가?**
+### Q4. 영상 불법 복제 방지를 어떻게 구현하는가?
 DRM(Digital Rights Management): Widevine(Google, Android/Chrome), FairPlay(Apple, iOS/Safari), PlayReady(Microsoft) 세 가지를 동시 지원. 라이선스 서버가 재생 권한을 토큰으로 발급합니다. Signed URL: S3/CDN 세그먼트 URL에 만료 시각과 서명을 포함해 URL 공유만으로는 재생 불가. 워터마킹: 사용자 ID를 영상 픽셀에 비가시적으로 삽입해 유출 경로 추적.
 
-**Q5. 영상 추천 시스템과 스트리밍의 연계 포인트는?**
+### Q5. 영상 추천 시스템과 스트리밍의 연계 포인트는?
 추천 시스템이 영상 ID를 반환하면 스트리밍 시스템은 해당 영상의 CDN 프리페치를 트리거합니다. 사용자가 추천 영상에 마우스를 올리는 순간(`hover` 이벤트) 첫 세그먼트를 미리 로드하면 재생 버튼 클릭 후 지연이 0에 가깝습니다. 이 프리페치 신호는 서버에 전달되어 해당 영상 세그먼트를 Edge CDN에 미리 올립니다. Netflix는 이 방식으로 재생 시작 시간을 평균 200ms 이하로 달성합니다.

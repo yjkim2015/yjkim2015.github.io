@@ -765,17 +765,17 @@ DLQ로 메시지를 보내놓고 아무도 확인하지 않으면, 처리 실패
 
 ## 면접 포인트
 
-**Q1. Kafka와 RabbitMQ를 동시에 쓰는 경우가 있는가?**
+### Q1. Kafka와 RabbitMQ를 동시에 쓰는 경우가 있는가?
 드물지만 있다. RabbitMQ는 복잡한 라우팅(topic exchange, header exchange), 요청-응답 패턴(RPC), 우선순위 큐가 필요한 경우에 적합하다. Kafka는 대용량 이벤트 스트리밍, 재처리, 감사 로그에 적합하다. 두 가지 요구사항이 동시에 있는 시스템에서 혼용하기도 한다. 단, 운영 복잡도가 두 배가 된다.
 
-**Q2. Kafka Streams와 Apache Flink의 차이는?**
+### Q2. Kafka Streams와 Apache Flink의 차이는?
 Kafka Streams는 Kafka 클라이언트 라이브러리로 별도 클러스터 없이 앱 내에서 실행된다. 소규모~중규모 스트림 처리에 적합하다. Flink는 독립 클러스터가 필요하지만 복잡한 CEP(복합 이벤트 처리), 대규모 stateful 처리, 낮은 지연(밀리초 수준)에서 강점이 있다. Kafka Streams로 시작해 요구사항이 복잡해지면 Flink로 전환하는 경로가 일반적이다.
 
-**Q3. Schema Registry를 사용하는 이유는?**
+### Q3. Schema Registry를 사용하는 이유는?
 프로듀서와 컨슈머가 메시지 스키마(Avro, Protobuf, JSON Schema)를 공유하기 위해서다. 스키마 변경 시 하위 호환성을 강제하고, 메시지에 스키마 ID만 포함해 페이로드 크기를 줄인다. 스키마 없이 JSON을 직렬화하면 컬럼 추가/제거 시 컨슈머가 조용히 깨진다.
 
-**Q4. Kafka Connect와 직접 Consumer/Producer 코드의 차이는?**
+### Q4. Kafka Connect와 직접 Consumer/Producer 코드의 차이는?
 Kafka Connect는 DB, S3, Elasticsearch 등 외부 시스템과 Kafka를 연결하는 표준화된 프레임워크다. 커넥터만 설정하면 코드 없이 데이터 파이프라인을 구성할 수 있다. 복잡한 비즈니스 로직이나 커스텀 처리가 필요하면 직접 Consumer/Producer를 구현한다. Debezium CDC, JDBC Sink Connector가 대표적인 커넥터다.
 
-**Q5. Kafka 운영에서 가장 자주 보는 알림은?**
+### Q5. Kafka 운영에서 가장 자주 보는 알림은?
 ① `UnderReplicatedPartitions > 0`: 복제 지연, ISR 문제 — 즉시 확인 ② `Consumer Lag > 임계값`: 처리 속도 < 생산 속도 — Consumer 스케일 아웃 ③ `ActiveControllerCount != 1`: Controller 이중화 또는 부재 — 클러스터 불안정 ④ `OfflinePartitionsCount > 0`: 리더 없는 파티션 — 서비스 중단 가능성 ⑤ `BytesInPerSec 급증`: 트래픽 스파이크 — 브로커 과부하 점검.

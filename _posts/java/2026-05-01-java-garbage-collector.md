@@ -1406,8 +1406,7 @@ public class AllocationProfiler {
 
 ## 면접 포인트
 
-**Q1. G1 GC와 ZGC의 구체적인 차이와 선택 기준은 무엇인가요?**
-
+### Q1. G1 GC와 ZGC의 구체적인 차이와 선택 기준은 무엇인가요?
 G1은 힙을 Region으로 나눠 가비지 밀도 높은 Region을 우선 수집합니다. STW 중에 객체를 이동(Evacuation)하므로 힙이 클수록 STW가 길어집니다. `MaxGCPauseMillis`는 목표일 뿐 보장이 아닙니다. Mixed GC에서 수십~수백 ms STW가 발생합니다.
 
 ZGC는 Colored Pointer(포인터의 여분 비트에 GC 상태 저장)와 Load Barrier(참조 접근마다 포인터 색상 검사·자가수복)를 사용해 객체 이동을 STW 없이 동시에 수행합니다. STW는 GC Root만 처리하는 세 번의 극단적으로 짧은 단계(각 <1ms)뿐입니다.
@@ -1416,28 +1415,24 @@ ZGC는 Colored Pointer(포인터의 여분 비트에 GC 상태 저장)와 Load B
 
 ---
 
-**Q2. Full GC가 발생하는 원인과 방지 방법은 무엇인가요?**
-
+### Q2. Full GC가 발생하는 원인과 방지 방법은 무엇인가요?
 G1 GC에서 Full GC는 세 가지 상황에서 발생합니다. 첫째, **Concurrent Mode Failure**: Concurrent Mark가 Young GC 승격 속도를 따라잡지 못해 Old Gen이 꽉 차면 Single-Thread Full GC로 전환됩니다. 처방은 `InitiatingHeapOccupancyPercent`를 낮춰 일찍 Concurrent Mark를 시작하는 것입니다. 둘째, **Humongous 객체**: Region 크기의 50% 이상 객체가 빈번히 생성되면 Old Gen을 직접 점유하고 단편화를 유발합니다. 처방은 G1HeapRegionSize를 키우거나 코드에서 대형 객체를 분할하는 것입니다. 셋째, **Evacuation Failure**: Young GC 중 객체를 이동할 빈 Region이 없으면 Full GC로 폴백합니다. 처방은 `G1ReservePercent`를 높여 예비 공간을 확보하는 것입니다.
 
 ---
 
-**Q3. 삼색 마킹(Tri-Color Marking)이 동시 GC에서 왜 필요한가요?**
-
+### Q3. 삼색 마킹(Tri-Color Marking)이 동시 GC에서 왜 필요한가요?
 단순 흑/백 마킹만으로는 동시 마킹 중 "잃어버린 객체 문제"가 발생합니다. 이미 검정(완료)으로 표시된 객체 A가 아직 흰색(미방문)인 객체 C를 새로 참조하고, 동시에 회색(진행 중) 객체 B에서 C로의 참조가 끊어지면, C는 GC 워크 큐에서 사라져 수거될 위험이 있습니다. 삼색 마킹은 이 상황을 Write Barrier로 탐지합니다. G1은 SATB(Snapshot-At-The-Beginning) 방식을 사용해 마킹 시작 시점의 참조 스냅샷 기준으로 처리하고, ZGC는 Load Barrier로 구 포인터 접근 시 마킹 큐에 재삽입합니다. 이 메커니즘 없이는 애플리케이션과 동시에 마킹하는 것이 불가능합니다.
 
 ---
 
-**Q4. 약한 세대 가설이 틀리는 경우와 그 대처법은 무엇인가요?**
-
+### Q4. 약한 세대 가설이 틀리는 경우와 그 대처법은 무엇인가요?
 약한 세대 가설이 맞지 않는 대표적인 워크로드는 대용량 캐시 서버, 인메모리 데이터 그리드, ML 모델 서빙입니다. 객체가 짧게 살지 않고 수분~수시간 살아있다가 한꺼번에 죽습니다. 이 패턴에서는 Young Gen이 커봤자 Minor GC마다 객체가 살아남아 Old로 승격되고, Old가 빠르게 차서 Major GC가 빈발합니다.
 
 대처법은 세 가지입니다. 첫째, ZGC나 Shenandoah처럼 세대 구분 없이(혹은 ZGenerational 없이) 전체 힙을 균일하게 처리하는 GC를 선택합니다. 둘째, `MaxTenuringThreshold=1`로 낮춰 Young에서 한 번만 살아남으면 바로 Old로 승격시켜 Survivor 낭비를 줄입니다. 셋째, Off-heap 저장소(DirectByteBuffer, Memcached, Chronicle Map)로 캐시를 JVM 힙 밖으로 옮겨 GC 대상 자체를 줄입니다.
 
 ---
 
-**Q5. OOM: GC Overhead Limit Exceeded는 왜 발생하며 어떻게 대응하나요?**
-
+### Q5. OOM: GC Overhead Limit Exceeded는 왜 발생하며 어떻게 대응하나요?
 JVM이 GC에 CPU 시간의 98% 이상을 쓰면서 힙을 2% 미만밖에 회수하지 못하는 상황이 5번 연속 발생하면 이 에러를 던집니다. "GC를 아무리 해도 메모리가 안 비워진다"는 뜻이므로 힙 크기 문제가 아닌 **메모리 누수**인 경우가 대부분입니다.
 
 대응 순서: 1) `-XX:+HeapDumpOnOutOfMemoryError`로 힙 덤프를 확보합니다. 2) Eclipse MAT으로 Dominator Tree를 열어 Retained Heap 상위 객체를 확인합니다. 3) GC Root Chain을 추적해 어느 static 필드나 스레드가 수십 GB를 붙잡고 있는지 찾습니다. 일시적으로 `-XX:-UseGCOverheadLimit`으로 에러를 억제해 덤프를 확보할 시간을 버는 방법도 있습니다. 단, 이것은 임시방편이고 근본 원인인 누수 코드를 반드시 수정해야 합니다.

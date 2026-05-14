@@ -859,24 +859,19 @@ var entry = map.entrySet().iterator().next(); // OK
 
 ## 면접 포인트
 
-**Q1. Java 8의 가장 중요한 변경점 3가지를 설명하세요.**
-
+### Q1. Java 8의 가장 중요한 변경점 3가지를 설명하세요.
 Lambda와 함수형 인터페이스(코드 간결성, 전략 패턴 단순화), Stream API(선언형 데이터 처리, 지연 평가), java.time 패키지(불변 날짜/시간 API, thread-safe, 직관적 설계)입니다. 이 세 가지가 Java 8 이후 코딩 스타일을 완전히 바꿨습니다.
 
-**Q2. Java Record란 무엇이고 언제 사용하나요?**
-
+### Q2. Java Record란 무엇이고 언제 사용하나요?
 불변 데이터 클래스를 선언하는 간결한 문법입니다. `public record Point(double x, double y) {}`로 선언하면 생성자, getter(x(), y()), equals, hashCode, toString이 자동 생성됩니다. DTO, VO, Command 객체처럼 데이터만 담는 클래스에 사용합니다. JPA Entity처럼 기본 생성자와 setter가 필요한 클래스에는 사용할 수 없습니다.
 
-**Q3. Sealed Class의 목적과 이점은?**
-
+### Q3. Sealed Class의 목적과 이점은?
 허용된 서브클래스를 컴파일 타임에 명시적으로 제한합니다. `sealed interface Shape permits Circle, Rectangle`처럼 선언하면 외부 라이브러리나 악의적인 코드가 Shape를 상속할 수 없습니다. Pattern Matching switch와 결합하면 모든 케이스를 처리했는지 컴파일러가 검증해 default 없이도 exhaustive 검사를 받을 수 있습니다.
 
-**Q4. Java 9의 모듈 시스템이 실무에서 잘 사용되지 않는 이유는?**
-
+### Q4. Java 9의 모듈 시스템이 실무에서 잘 사용되지 않는 이유는?
 Spring, Hibernate 등 주요 프레임워크가 리플렉션을 광범위하게 사용하기 때문에 완전한 모듈화가 어렵습니다. `module-info.java` 작성이 복잡하고 서드파티 라이브러리의 모듈 지원이 불완전합니다. 실무에서는 주로 `--add-opens` 옵션으로 특정 패키지만 열어주거나, `jlink`로 경량 런타임 이미지를 만드는 용도로 활용합니다.
 
-**Q5. Java 17과 21의 주요 차이점은?**
-
+### Q5. Java 17과 21의 주요 차이점은?
 Java 17에서 Pattern Matching for instanceof, Sealed Classes, Text Blocks가 정식화됐습니다. Java 21에서는 Virtual Thread(Project Loom), Record Patterns, Sequenced Collections가 추가됐습니다. 특히 Virtual Thread는 I/O 바운드 서비스의 동시성 처리 방식을 근본적으로 바꿉니다. Spring Boot 3.2+에서 `spring.threads.virtual.enabled=true`로 즉시 적용 가능합니다.
 
 ---
@@ -921,13 +916,13 @@ graph LR
 ---
 ## 면접 포인트
 
-**Q1. Java 8의 Stream API와 for 루프의 성능 차이는?**
+### Q1. Java 8의 Stream API와 for 루프의 성능 차이는?
 단순 순회는 for 루프가 Stream보다 빠릅니다. Stream은 파이프라인 구성, 람다 인스턴스 생성, 이터레이터 오버헤드가 있습니다. 소규모 컬렉션(100개 이하)에서 Stream이 10~30% 느릴 수 있습니다. 그러나 `parallelStream()`을 사용하면 CPU 코어 수만큼 병렬 처리가 가능해 대규모 데이터에서 for 루프를 압도합니다. 실무에서 성능 차이는 프로파일링으로 확인하기 전까지는 가독성을 우선해 Stream을 사용합니다.
 
-**Q2. Java 9 모듈 시스템이 실무에서 잘 채택되지 않는 이유는?**
+### Q2. Java 9 모듈 시스템이 실무에서 잘 채택되지 않는 이유는?
 레거시 코드와의 호환성 문제입니다. 많은 라이브러리가 모듈 정보(`module-info.java`)를 제공하지 않아 `Unnamed Module`로 취급됩니다. 리플렉션 접근 제한으로 Spring, Hibernate, Lombok 등이 `--add-opens` JVM 플래그 없이 동작하지 않습니다. 대규모 레거시 프로젝트를 모듈화하는 비용이 실제 이점보다 큽니다. 실무에서는 모듈 시스템 대신 패키지 가시성 컨벤션과 아키텍처 테스트(ArchUnit)로 의존성을 관리하는 경우가 많습니다.
 
-**Q3. Java 17 LTS의 Sealed Classes가 유용한 경우는?**
+### Q3. Java 17 LTS의 Sealed Classes가 유용한 경우는?
 ```java
 // 결과 타입 계층을 완전히 통제
 public sealed interface PaymentResult
@@ -948,8 +943,8 @@ String message = switch (result) {
 ```
 Sealed Classes + Record + Pattern Matching은 Java에서 대수적 데이터 타입을 안전하게 모델링합니다.
 
-**Q4. Java 21의 Virtual Thread는 기존 프로젝트에 어떻게 적용하는가?**
+### Q4. Java 21의 Virtual Thread는 기존 프로젝트에 어떻게 적용하는가?
 Spring Boot 3.2+ 환경에서 `spring.threads.virtual.enabled=true` 하나로 활성화됩니다. 기존 코드 변경 없이 Tomcat, `@Async`, 스케줄러가 Virtual Thread를 사용합니다. 주의: `synchronized` 블록 내 블로킹 I/O는 Carrier Thread를 고정(pin)합니다. JDBC 드라이버의 내부 `synchronized` 사용이 문제가 될 수 있습니다. `jdk.tracePinnedThreads=full` JVM 플래그로 pin 발생 위치를 추적하고 `ReentrantLock`으로 교체합니다.
 
-**Q5. LTS 버전 선택 시 Java 11 vs Java 17 vs Java 21 비교는?**
+### Q5. LTS 버전 선택 시 Java 11 vs Java 17 vs Java 21 비교는?
 Java 11: 2023년 9월 EOL 예정(Oracle 무료 지원). 유지하면 보안 패치 미적용. Java 17: 2029년까지 지원. Record, Sealed Classes, Text Block, Pattern Matching 미리보기 포함. 현재 가장 많이 사용되는 LTS. Java 21: 2031년까지 지원. Virtual Thread, Sequenced Collections, Record Patterns 정식 포함. 신규 프로젝트 권장. 마이그레이션 비용: 11→17은 대부분 호환. 17→21도 호환성 높음. 단, 삭제된 API 확인 필요(`jdeprscan` 활용).

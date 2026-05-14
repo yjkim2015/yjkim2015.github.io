@@ -440,17 +440,17 @@ Try는 성공했지만 서버가 재시작되면 Confirm/Cancel이 실행되지 
 
 ## 면접 포인트
 
-**Q1. 2PC와 Saga의 핵심 차이는 무엇인가?**
+### Q1. 2PC와 Saga의 핵심 차이는 무엇인가?
 > 2PC는 코디네이터가 모든 참여자를 동기로 잠그는 블로킹 프로토콜이다. 코디네이터 장애 시 참여자들이 PREPARED 상태로 무기한 대기한다. Saga는 각 서비스가 로컬 트랜잭션을 커밋하고 이벤트를 발행하는 비동기 패턴이다. 최종 일관성을 수용하는 대신 가용성이 높다.
 
-**Q2. Outbox Pattern이 해결하는 문제는?**
+### Q2. Outbox Pattern이 해결하는 문제는?
 > 비즈니스 DB 쓰기와 Kafka 발행이 각각 다른 시스템이라 동시에 실패할 수 있다. Outbox Pattern은 이벤트를 같은 DB 트랜잭션 안의 outbox 테이블에 저장하고, 별도 폴러/CDC가 이를 Kafka로 발행한다. DB 커밋이 성공하면 이벤트 발행도 반드시 성공한다.
 
-**Q3. TCC의 Try-Confirm-Cancel 각 단계의 책임은?**
+### Q3. TCC의 Try-Confirm-Cancel 각 단계의 책임은?
 > Try: 리소스를 임시 예약(실제 차감 아님). Confirm: 예약된 리소스를 실제 차감. Cancel: 예약된 리소스를 복원. 모든 단계는 멱등해야 하며, Confirm과 Cancel은 반드시 성공해야 한다(무한 재시도 + 알람).
 
-**Q4. Saga Choreography vs Orchestration 선택 기준은?**
+### Q4. Saga Choreography vs Orchestration 선택 기준은?
 > 서비스가 3개 이하이고 흐름이 단순하면 Choreography(이벤트 기반, 중앙 제어 없음). 서비스가 많고 비즈니스 흐름이 복잡하면 Orchestration(Saga 오케스트레이터가 흐름 제어). Choreography는 이벤트 추적이 어렵고, Orchestration은 오케스트레이터가 단일 장애점이 될 수 있다.
 
-**Q5. 분산 트랜잭션에서 멱등성을 구현하는 방법은?**
+### Q5. 분산 트랜잭션에서 멱등성을 구현하는 방법은?
 > 각 이벤트에 고유 `eventId`를 부여하고, 처리 전 `processed_events` 테이블에서 중복 확인 후 INSERT한다. DB의 유니크 제약으로 중복 처리를 원자적으로 방지한다. Kafka `enable.idempotence=true`와 조합하면 발행 측도 중복을 방지할 수 있다.

@@ -1006,8 +1006,7 @@ log.dirs=/var/kafka/data
 
 ## 면접 포인트
 
-**Q1. Kafka가 수백만 TPS를 달성하는 이유를 OS 레벨에서 설명하라.**
-
+### Q1. Kafka가 수백만 TPS를 달성하는 이유를 OS 레벨에서 설명하라.
 네 가지 메커니즘이 결합된다.
 
 첫째, **Sequential I/O**다. 메시지를 파일 끝에만 append한다. HDD에서 랜덤 쓰기는 100~200 IOPS이지만 Sequential write는 초당 100MB 이상이다. 헤드 이동(seek)이 거의 없기 때문이다.
@@ -1020,8 +1019,7 @@ log.dirs=/var/kafka/data
 
 ---
 
-**Q2. Partition Assignment Strategy 4가지의 내부 알고리즘과 각각 언제 써야 하는지 설명하라.**
-
+### Q2. Partition Assignment Strategy 4가지의 내부 알고리즘과 각각 언제 써야 하는지 설명하라.
 **RangeAssignor:** 토픽별로 파티션을 정렬 후 컨슈머에게 연속 범위로 배정한다. 여러 토픽의 같은 번호 파티션이 같은 컨슈머에게 가서 데이터 로컬리티를 확보한다. 단, 파티션이 나누어 떨어지지 않으면 앞쪽 컨슈머에 집중된다. 여러 토픽의 동일 파티션 번호를 같은 컨슈머에서 처리해야 할 때 사용한다.
 
 **RoundRobinAssignor:** 모든 파티션을 하나의 리스트로 합쳐 라운드 로빈으로 배정한다. 균등 분배에 유리하지만 컨슈머마다 구독 토픽이 다르면 문제가 생긴다.
@@ -1032,8 +1030,7 @@ log.dirs=/var/kafka/data
 
 ---
 
-**Q3. Exactly-Once를 달성하기 위한 PID/Epoch 메커니즘을 설명하라.**
-
+### Q3. Exactly-Once를 달성하기 위한 PID/Epoch 메커니즘을 설명하라.
 `enable.idempotence=true` 활성화 시 브로커가 프로듀서에게 PID(Producer ID)를 부여한다. 프로듀서는 각 메시지에 `(PID, Partition, Sequence Number)` 3-tuple을 포함해 전송한다. Sequence Number는 파티션별로 0부터 단조 증가한다.
 
 브로커는 각 `(PID, Partition)` 조합에 대해 마지막으로 성공한 Sequence Number를 메모리에 유지한다. 동일 Sequence Number가 다시 오면 중복으로 판단해 저장하지 않고 ACK만 반환한다. 네트워크 오류로 ACK를 못 받아 프로듀서가 재시도해도 브로커가 자동으로 필터링한다.
@@ -1044,8 +1041,7 @@ Epoch는 좀비 프로듀서 문제를 해결한다. 프로듀서가 죽고 새 
 
 ---
 
-**Q4. Consumer Rebalancing의 Stop-the-World 문제와 CooperativeSticky가 이를 어떻게 해결하는지 설명하라.**
-
+### Q4. Consumer Rebalancing의 Stop-the-World 문제와 CooperativeSticky가 이를 어떻게 해결하는지 설명하라.
 Eager 방식(RangeAssignor 등)에서 리밸런싱 발생 시 GroupCoordinator는 모든 컨슈머에게 "Rebalance 시작"을 알린다. 모든 컨슈머가 현재 보유한 파티션을 전부 해제하고 Join Group 요청을 다시 보낸다. 리더 컨슈머가 새 할당을 계산해 SyncGroup 요청을 보내고, GroupCoordinator가 할당 결과를 배포한 후에야 처리가 재개된다.
 
 이 과정에서 모든 파티션이 "해제 → 재할당" 사이클을 거친다. 파티션이 많고 컨슈머가 많을수록, 네트워크 레이턴시가 있을수록 수십 초~수 분의 완전한 처리 중단이 발생한다.
@@ -1056,8 +1052,7 @@ CooperativeStickyAssignor는 Incremental Cooperative Rebalancing을 사용한다
 
 ---
 
-**Q5. ISR shrink/expand 메커니즘과 unclean.leader.election의 트레이드오프를 설명하라.**
-
+### Q5. ISR shrink/expand 메커니즘과 unclean.leader.election의 트레이드오프를 설명하라.
 팔로워는 리더에게 Fetch 요청을 보내 메시지를 복제한다. 리더는 팔로워의 Fetch 요청에서 팔로워의 현재 LEO(Log End Offset)를 파악한다. 팔로워가 `replica.lag.time.max.ms`(기본 30초) 동안 Fetch 요청을 보내지 않거나(네트워크 단절, GC 일시 정지, 과부하), 복제가 현저히 뒤처지면 리더가 해당 팔로워를 ISR에서 제거한다(Shrink). ISR 변경은 ZooKeeper(또는 KRaft) 메타데이터에 기록된다.
 
 팔로워가 복구되어 다시 Fetch 요청을 보내고, LEO가 리더의 HW(High Watermark) 이상을 따라잡으면 ISR에 다시 추가된다(Expand). 이 사이클이 자동으로 반복된다.

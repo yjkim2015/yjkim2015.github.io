@@ -549,22 +549,17 @@ if (Object.prototype.hasOwnProperty.call(obj, 'method')) {
 
 ## 면접 포인트
 
-**Q1. `__proto__`와 `prototype`의 차이를 설명하세요.**
-
+### Q1. `__proto__`와 `prototype`의 차이를 설명하세요.
 `prototype`은 함수 객체에만 있는 프로퍼티로, `new`로 인스턴스를 만들 때 그 인스턴스의 `[[Prototype]]`에 연결됩니다. `__proto__`는 모든 객체가 가진 내부 슬롯 `[[Prototype]]`에 접근하는 접근자 프로퍼티입니다. `person.__proto__ === Person.prototype`이 성립합니다. 실무에서는 `__proto__` 대신 `Object.getPrototypeOf(obj)`를 사용합니다.
 
-**Q2. ES6 클래스와 프로토타입 기반 생성자 함수의 실질적 차이는?**
-
+### Q2. ES6 클래스와 프로토타입 기반 생성자 함수의 실질적 차이는?
 기능적으로는 동일하지만 세 가지 차이가 있습니다. (1) 클래스는 호이스팅되지 않습니다 (TDZ 적용). (2) 클래스 내부는 항상 strict mode입니다. (3) 클래스는 `new` 없이 호출하면 TypeError가 발생하지만 생성자 함수는 일반 함수로 실행됩니다. `extends`와 `super`는 프로토타입 체인 연결을 자동으로 처리합니다.
 
-**Q3. `Object.create(null)`을 언제 사용하나요?**
-
+### Q3. `Object.create(null)`을 언제 사용하나요?
 프로토타입이 전혀 없는 순수 딕셔너리가 필요할 때 사용합니다. 일반 `{}`는 `Object.prototype`을 상속받아 `toString`, `hasOwnProperty` 등이 키로 충돌할 수 있습니다. `Object.create(null)`로 만든 객체는 `[[Prototype]]`이 `null`이라 충돌이 없어, 외부 입력을 키로 사용하는 안전한 맵에 활용합니다.
 
-**Q4. 프로토타입 체인에서 프로퍼티 탐색이 멈추는 조건은?**
-
+### Q4. 프로토타입 체인에서 프로퍼티 탐색이 멈추는 조건은?
 두 가지입니다. (1) 체인 중 어딘가에서 프로퍼티를 찾으면 즉시 반환합니다 (섀도잉). (2) 체인 끝인 `Object.prototype`의 `[[Prototype]]`은 `null`이며, 여기서도 못 찾으면 `undefined`를 반환합니다. 하위 객체에 같은 이름 프로퍼티를 정의하면 상위를 가리는 섀도잉이 발생합니다.
 
-**Q5. 프로토타입 오염(Prototype Pollution) 공격이란?**
-
+### Q5. 프로토타입 오염(Prototype Pollution) 공격이란?
 공격자가 `__proto__`나 `constructor.prototype`을 키로 가진 악의적인 데이터를 주입해 `Object.prototype`을 오염시키는 공격입니다. 이후 모든 객체에서 오염된 프로퍼티가 노출됩니다. 방어 방법: `JSON.parse` 결과에서 `__proto__` 키 제거, `Object.create(null)` 사용, `Object.freeze(Object.prototype)`으로 수정 차단입니다.

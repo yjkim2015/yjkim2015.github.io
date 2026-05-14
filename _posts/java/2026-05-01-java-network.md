@@ -888,17 +888,17 @@ graph LR
 ---
 ## 면접 포인트
 
-**Q1. TCP의 3-way handshake가 성능에 미치는 영향과 대응 방법은?**
+### Q1. TCP의 3-way handshake가 성능에 미치는 영향과 대응 방법은?
 TCP 연결 수립에 1 RTT(Round-Trip Time)가 필요합니다. 서울↔서버 RTT 1ms라면 매 요청마다 연결 수립에 1ms 추가. 초당 1만 건 요청 시 새 연결만으로 1만 RTT. 대응: Connection Pool로 연결을 재사용합니다(HTTP/1.1 Keep-Alive, JDBC 커넥션 풀). HTTP/2는 단일 연결에서 멀티플렉싱으로 여러 요청을 처리해 연결 수립 오버헤드를 극적으로 줄입니다. gRPC는 HTTP/2 기반이므로 마이크로서비스 간 통신에 적합합니다.
 
-**Q2. NIO Selector 기반 서버가 스레드 기반 서버보다 높은 동시성을 처리하는 이유는?**
+### Q2. NIO Selector 기반 서버가 스레드 기반 서버보다 높은 동시성을 처리하는 이유는?
 스레드 기반: 클라이언트 1개 = 스레드 1개. 1만 동시 연결 = 1만 스레드. 스레드당 1MB 스택 = 10GB 메모리. 대부분 스레드가 I/O 대기 중 블로킹. Selector 기반: Selector가 모든 채널의 이벤트를 모니터링. 이벤트가 발생한 채널만 처리. 수 개의 스레드로 수만 동시 연결 처리. Netty가 이 방식을 활용해 단일 서버에서 100만 동시 연결을 처리합니다. 단, 이벤트 핸들러 내 블로킹 작업은 별도 스레드풀로 위임해야 합니다.
 
-**Q3. HTTP/1.1의 Head-of-Line Blocking 문제와 HTTP/2의 해결 방식은?**
+### Q3. HTTP/1.1의 Head-of-Line Blocking 문제와 HTTP/2의 해결 방식은?
 HTTP/1.1은 요청-응답이 순차적입니다. 첫 번째 요청이 느리면 이후 요청이 대기합니다(HOL Blocking). 브라우저가 6개 병렬 연결을 열어 우회하지만 근본 해결이 아닙니다. HTTP/2는 단일 연결에서 스트림 ID로 다중화합니다. 느린 요청과 빠른 요청이 독립적으로 처리됩니다. 스트림 우선순위 설정으로 CSS/JS를 이미지보다 먼저 처리할 수 있습니다. Spring Boot + Tomcat에서 `server.http2.enabled=true` 설정으로 활성화합니다.
 
-**Q4. SO_REUSEADDR, TCP_NODELAY 소켓 옵션의 실무 의미는?**
+### Q4. SO_REUSEADDR, TCP_NODELAY 소켓 옵션의 실무 의미는?
 `SO_REUSEADDR`: 서버 재시작 시 TIME_WAIT 상태의 포트를 즉시 재사용합니다. 없으면 서버 재시작 후 2분간 포트 바인딩 실패. 서버 소켓에 항상 설정합니다. `TCP_NODELAY`: Nagle 알고리즘 비활성화. Nagle은 작은 패킷을 버퍼링해 큰 패킷으로 합쳐 전송합니다. 레이턴시보다 처리량을 최적화합니다. 실시간 게임, 채팅처럼 지연 민감 애플리케이션은 `TCP_NODELAY=true`로 즉시 전송합니다. JDBC 커넥션도 기본적으로 `TCP_NODELAY=true`를 사용합니다.
 
-**Q5. 타임아웃 설정 3가지(Connection, Read, Write)의 차이는?**
+### Q5. 타임아웃 설정 3가지(Connection, Read, Write)의 차이는?
 `Connection Timeout`: 서버에 TCP 연결 수립까지 대기 시간. 서버가 없거나 방화벽에 막히면 이 타임아웃이 발생. 권장: 1~3초. `Read Timeout (Socket Timeout)`: 연결 후 서버로부터 응답 데이터를 받기까지 대기 시간. 서버가 처리 중 멈추면 이 타임아웃이 발생. 서비스 특성에 따라 5~30초. `Write Timeout`: 서버에 요청 데이터를 보내기까지 대기 시간. 대용량 업로드 시 중요. 실무에서 타임아웃 미설정은 스레드 풀 고갈로 이어집니다. 외부 API 호출 시 반드시 세 가지 타임아웃을 모두 설정합니다.

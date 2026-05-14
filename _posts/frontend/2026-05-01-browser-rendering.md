@@ -555,22 +555,17 @@ el.addEventListener('animationend', () => { el.style.willChange = 'auto'; });
 
 ## 면접 포인트
 
-**Q1. Reflow와 Repaint의 차이, 어떤 상황에 각각 발생하는가?**
-
+### Q1. Reflow와 Repaint의 차이, 어떤 상황에 각각 발생하는가?
 Reflow(Layout)는 요소의 위치·크기가 바뀌어 레이아웃 전체를 재계산하는 단계다. `width`, `height`, `margin`, `padding`, `font-size` 변경과 `offsetWidth` 같은 레이아웃 값 읽기가 트리거한다. Repaint는 레이아웃 변경 없이 색상·배경·그림자만 바뀔 때 픽셀만 다시 칠한다. Reflow가 일어나면 항상 Repaint도 따라오지만, Repaint만 단독으로 발생하는 경우는 Reflow보다 비용이 낮다.
 
-**Q2. async와 defer의 차이를 설명하라.**
-
+### Q2. async와 defer의 차이를 설명하라.
 `async`는 스크립트 다운로드를 병렬로 진행하고 완료되는 즉시 파싱을 중단하고 실행한다. 순서가 보장되지 않아 독립적인 분석 스크립트에 적합하다. `defer`는 다운로드를 병렬로 진행하되 HTML 파싱이 완전히 끝난 후 선언 순서대로 실행한다. 일반 앱 스크립트에 권장된다.
 
-**Q3. transform이 left/top보다 빠른 이유는?**
-
+### Q3. transform이 left/top보다 빠른 이유는?
 `left`/`top` 변경은 Reflow → Repaint → Composite 전 단계를 유발한다. `transform`은 요소를 별도 GPU 레이어로 승격시켜 Composite 단계만 실행한다. CPU 대신 GPU가 처리하므로 메인 스레드가 블로킹되지 않아 60fps를 유지할 수 있다.
 
-**Q4. 이벤트 버블링과 이벤트 위임을 연결해 설명하라.**
-
+### Q4. 이벤트 버블링과 이벤트 위임을 연결해 설명하라.
 이벤트는 타깃에서 발생한 뒤 부모로 버블링(전파)된다. 이벤트 위임은 자식 요소마다 리스너를 등록하는 대신 부모에 하나만 등록하고, `e.target`으로 실제 클릭된 요소를 구별하는 패턴이다. 리스너 수가 줄어 메모리가 절약되고, 동적으로 추가된 자식 요소에도 자동 적용된다.
 
-**Q5. Critical Rendering Path 최적화 핵심 전략 3가지는?**
-
+### Q5. Critical Rendering Path 최적화 핵심 전략 3가지는?
 첫째, render-blocking JS에 `defer`를 적용해 HTML 파싱 중단을 방지한다. 둘째, 첫 화면에 필요한 Critical CSS를 `<style>` 태그로 인라인화하고 나머지는 비동기 로드한다. 셋째, 읽기(`offsetWidth`)를 쓰기(`style.width`) 앞에 일괄 배치해 Layout Thrashing을 방지한다.

@@ -431,8 +431,8 @@ NoSQL은 RDBMS의 대체가 아니라 특정 문제에 최적화된 도구다. "
 
 ## 면접 포인트 (보강)
 
-**Q4. CAP 정리에서 Kafka/Redis/MongoDB는 어디에 위치하는가?**
+### Q4. CAP 정리에서 Kafka/Redis/MongoDB는 어디에 위치하는가?
 네트워크 파티션은 분산 시스템에서 항상 발생하므로 CP 또는 AP를 선택해야 한다. Redis Cluster: CP(파티션 시 일부 슬롯 unavailable). MongoDB(기본): CP(Primary 없으면 쓰기 불가). Cassandra: AP(모든 노드에 쓰기 가능, 최종 일관성). Kafka: CP(ISR 과반수 없으면 쓰기 거부).
 
-**Q5. BASE와 ACID의 차이를 실무 예시로 설명하면?**
+### Q5. BASE와 ACID의 차이를 실무 예시로 설명하면?
 ACID(PostgreSQL): 계좌 이체 — A계좌 -1만원, B계좌 +1만원이 둘 다 성공하거나 둘 다 실패. BASE(Cassandra): SNS 팔로워 수 — 여러 노드에 복제 중 일시적으로 숫자가 다를 수 있지만 결국 일치. "내 팔로워가 1,234명인지 1,235명인지 1초간 다를 수 있다"는 것을 허용하는 서비스라면 BASE가 충분하다.

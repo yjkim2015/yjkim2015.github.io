@@ -307,17 +307,17 @@ spring:
 
 ## 면접 포인트
 
-**Q1. Spring Cloud Config의 설정 파일 우선순위는?**
+### Q1. Spring Cloud Config의 설정 파일 우선순위는?
 > 높음 → 낮음: `application-{profile}.yml` (Config Server) > `application.yml` (Config Server) > `application-{profile}.yml` (로컬) > `application.yml` (로컬). Config Server의 설정이 로컬을 오버라이드한다.
 
-**Q2. `@RefreshScope`의 동작 원리는?**
+### Q2. `@RefreshScope`의 동작 원리는?
 > `@RefreshScope` 빈은 Spring의 커스텀 스코프로 등록된다. `/actuator/refresh` 호출 시 해당 스코프의 캐시가 무효화되고, 다음 빈 접근 시 새 프로퍼티 값으로 재생성된다. `@ConfigurationProperties`는 `@RefreshScope` 없이도 갱신되지만 바인딩 빈 자체는 재생성된다.
 
-**Q3. Config Server의 Git 백엔드에서 설정 파일 이름 규칙은?**
+### Q3. Config Server의 Git 백엔드에서 설정 파일 이름 규칙은?
 > `{application}-{profile}.yml` 형식이다. 예: `order-service-prod.yml`. `application.yml`은 모든 서비스의 공통 설정이고, `{application}.yml`은 특정 서비스 전용이다. Config Server는 공통 + 서비스별 설정을 병합해 반환한다.
 
-**Q4. Config Server에서 민감 정보를 어떻게 암호화하는가?**
+### Q4. Config Server에서 민감 정보를 어떻게 암호화하는가?
 > `encrypt.key`(대칭) 또는 키 페어(비대칭)를 Config Server에 설정하고, `POST /encrypt` 엔드포인트로 값을 암호화한다. Git에는 `password: '{cipher}암호화된값'`으로 저장한다. 클라이언트 수신 시 자동 복호화된다.
 
-**Q5. Config Server 없이 서비스가 시작될 수 있게 하려면?**
+### Q5. Config Server 없이 서비스가 시작될 수 있게 하려면?
 > `spring.cloud.config.fail-fast=false`로 설정하면 Config Server 연결 실패 시 로컬 설정으로 폴백한다. 운영 환경에서는 `fail-fast=true`로 설정해 잘못된 설정으로 서비스가 시작되는 것을 방지하는 것이 권장된다.

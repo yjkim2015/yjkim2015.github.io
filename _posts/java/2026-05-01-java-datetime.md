@@ -694,19 +694,19 @@ graph LR
 ---
 ## 면접 포인트
 
-**Q1. LocalDateTime과 ZonedDateTime의 차이와 선택 기준은?**
+### Q1. LocalDateTime과 ZonedDateTime의 차이와 선택 기준은?
 `LocalDateTime`은 시간대 정보가 없는 "벽시계 시간"입니다. `2026-05-07T10:00:00`이 서울인지 뉴욕인지 알 수 없습니다. 단일 시간대 국내 서비스(KST 고정)라면 LocalDateTime으로 충분합니다. 글로벌 서비스나 사용자 시간대가 다양하면 `ZonedDateTime`을 사용합니다. DB 저장 시 UTC `Instant`로 변환 후 저장하고, 표시 시 사용자 시간대로 변환하는 패턴이 표준입니다.
 
-**Q2. DB에 시간을 저장할 때 어떤 타입을 사용하는가?**
+### Q2. DB에 시간을 저장할 때 어떤 타입을 사용하는가?
 UTC Instant를 Unix timestamp(long, 초 단위)로 저장하거나, DB의 `TIMESTAMP WITH TIME ZONE` 컬럼을 사용합니다. MySQL의 `DATETIME`은 시간대를 저장하지 않으므로, 서버 시간대가 바뀌면 저장된 모든 시간이 잘못 해석됩니다. JPA에서 `Instant` 타입은 `@Column`에 `columnDefinition = "TIMESTAMP"`를 사용하고 UTC로 저장됩니다. 한국 서비스라도 서버 시간대 설정 실수를 방지하기 위해 UTC 저장을 권장합니다.
 
-**Q3. DST(일광절약시간)가 Java 시간 처리에 미치는 영향은?**
+### Q3. DST(일광절약시간)가 Java 시간 처리에 미치는 영향은?
 미국, 유럽 서비스에서 DST 전환 시 `LocalDateTime`으로 계산하면 오류가 발생합니다. 예: 미국에서 3월 둘째 일요일 2시는 존재하지 않습니다(2시 → 3시로 건너뜀). `ZonedDateTime.of(2026, 3, 8, 2, 30, 0, 0, ZoneId.of("America/New_York"))`는 3시 30분으로 자동 조정됩니다. DST가 있는 지역 사용자를 대상으로 "오전 2시에 알림"을 스케줄링한다면 반드시 ZonedDateTime을 사용해야 합니다.
 
-**Q4. Period와 Duration을 혼용하면 어떤 문제가 생기는가?**
+### Q4. Period와 Duration을 혼용하면 어떤 문제가 생기는가?
 `Period.ofDays(1)`과 `Duration.ofDays(1)`은 DST 전환이 있는 날 다른 결과를 냅니다. DST로 23시간짜리 하루에 Duration.ofDays(1)(= 86400초)을 더하면 내일 오전 1시가 됩니다. Period.ofDays(1)을 더하면 내일 같은 시각을 반환합니다. "다음 날 같은 시각"은 Period, "정확히 24시간 후"는 Duration을 사용합니다. 날짜 단위 계산은 Period, 시간/초 단위 계산은 Duration이 원칙입니다.
 
-**Q5. java.util.Date를 레거시 코드에서 java.time으로 마이그레이션하는 방법은?**
+### Q5. java.util.Date를 레거시 코드에서 java.time으로 마이그레이션하는 방법은?
 ```java
 // Date → Instant
 Instant instant = legacyDate.toInstant();

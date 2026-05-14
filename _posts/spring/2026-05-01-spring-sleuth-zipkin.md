@@ -247,17 +247,17 @@ gantt
 
 ## 면접 포인트
 
-**Q1. TraceId와 SpanId의 차이는?**
+### Q1. TraceId와 SpanId의 차이는?
 > TraceId: 전체 요청 흐름(여러 서비스)을 관통하는 고유 식별자. 서비스 A→B→C로 전파되어도 동일하다. SpanId: 단일 작업 단위의 식별자. 서비스마다, 메서드마다 새 SpanId가 생성된다. ParentSpanId로 트리 구조를 형성해 전체 호출 그래프를 만든다.
 
-**Q2. B3 Propagation이란?**
+### Q2. B3 Propagation이란?
 > Zipkin이 정의한 HTTP 헤더 기반 컨텍스트 전파 형식이다. `X-B3-TraceId`, `X-B3-SpanId`, `X-B3-ParentSpanId`, `X-B3-Sampled` 헤더로 서비스 간에 추적 컨텍스트를 전달한다. W3C `traceparent` 헤더가 최신 표준이며 OpenTelemetry가 채택하고 있다.
 
-**Q3. Zipkin과 Jaeger의 차이는?**
+### Q3. Zipkin과 Jaeger의 차이는?
 > Zipkin은 Twitter가 만든 분산 추적 시스템으로 Brave 라이브러리와 통합이 좋다. Jaeger는 Uber가 만들어 CNCF에 기증한 시스템으로 OpenTelemetry와 통합이 좋고 UI가 더 풍부하다. 둘 다 Prometheus+Grafana Tempo로 대체되는 추세다.
 
-**Q4. Micrometer Tracing의 Sampling 전략은?**
+### Q4. Micrometer Tracing의 Sampling 전략은?
 > `AlwaysSampler`: 모든 요청 추적(개발용). `NeverSampler`: 추적 비활성화. `RateLimitingSampler`: 초당 N개 추적(운영 권장). `ProbabilityBasedSampler`: N% 확률 샘플링. `application.properties`에서 `management.tracing.sampling.probability=0.1`로 간단히 설정한다.
 
-**Q5. Spring Boot 3.x에서 분산 추적을 설정하는 최소 구성은?**
+### Q5. Spring Boot 3.x에서 분산 추적을 설정하는 최소 구성은?
 > `micrometer-tracing-bridge-brave` + `zipkin-reporter-brave` 의존성 추가, `management.zipkin.tracing.endpoint=http://zipkin:9411/api/v2/spans`, `management.tracing.sampling.probability=0.1` 설정. Actuator의 `tracing` 엔드포인트로 현재 추적 상태를 확인할 수 있다.
