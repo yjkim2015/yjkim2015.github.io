@@ -601,10 +601,6 @@ public Connection acquire() throws InterruptedException {
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. Tomcat NIO도 비블로킹인데, Netty와 뭐가 다른가?
 
 Tomcat은 NIO를 사용하지만 **요청당 Worker 스레드 하나를 할당하는 모델을 유지한다**. Poller(NIO Selector)가 읽기 가능한 소켓을 감지해 Worker에 넘기는 것뿐이다. Worker 스레드가 실제로 DB 쿼리나 외부 API를 호출하면 그 스레드는 블로킹 상태로 대기한다.
@@ -766,5 +762,3 @@ Tomcat과 Netty는 각각 다른 문제를 해결하기 위해 설계됐다. Tom
 Java 21 Virtual Thread의 등장으로 많은 경우 WebFlux 대신 Virtual Thread + Tomcat이 현실적인 선택이 됐다. 기존 코드를 바꾸지 않고, 리액티브 코드의 복잡성 없이, I/O 바운드 성능을 크게 향상시킬 수 있다.
 
 기술 선택의 기준은 단순하다. **팀이 유지보수할 수 있는 코드**, **실제 트래픽 패턴에 맞는 모델**, **장애 발생 시 디버깅 가능한 구조**. 최신 기술보다 이 세 가지 기준이 더 중요하다.
-
-</details>

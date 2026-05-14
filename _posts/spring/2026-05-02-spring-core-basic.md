@@ -1375,10 +1375,6 @@ Optional<User> findById(Long id);
 
 ## 13. 면접 포인트 5개 — 심층 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### 면접 포인트 1: BeanFactory와 ApplicationContext의 차이는?
 
 > **표면 답변:** ApplicationContext는 BeanFactory를 포함하며 i18n, 이벤트, 환경 변수 기능을 추가로 제공한다.
@@ -1751,5 +1747,3 @@ graph LR
 | @Profile @Conditional | ProfileCondition.matches() 평가 | 환경별 빈 분리 불가 |
 
 Spring IoC 컨테이너의 본질은 **BeanDefinition이라는 메타데이터에서 시작하여 BeanPostProcessor 체인을 거쳐 완성된 AOP 프록시를 싱글톤 레지스트리에 보관하는 파이프라인**이다. "프레임워크가 내 코드를 호출한다"는 제어 역전이 그 근간이며, 이것이 느슨한 결합·테스트 용이성·유지보수성을 동시에 달성하게 해주는 원리다.
-
-</details>

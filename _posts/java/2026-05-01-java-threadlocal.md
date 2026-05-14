@@ -798,10 +798,6 @@ class GoodService {
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. ThreadLocal의 메모리 누수 원인을 설명하세요.**
 
 `ThreadLocalMap.Entry`의 키는 `WeakReference<ThreadLocal<?>>`입니다. 외부에서 ThreadLocal 변수를 null로 해도 키의 WeakReference가 GC에 의해 수거됩니다. 그러나 Entry의 value는 강참조로 남아 있습니다. 스레드 풀의 스레드는 JVM 종료까지 살아있으므로, 스레드가 살아있는 한 값이 계속 메모리를 점유합니다. 해결책은 반드시 `finally`에서 `remove()`를 호출하는 것입니다.
@@ -854,5 +850,3 @@ Virtual Thread는 수백만 개가 동시에 존재할 수 있습니다. 각 Vir
 
 **Q5. MDC(Mapped Diagnostic Context)와 ThreadLocal의 관계는?**
 SLF4J의 MDC는 내부적으로 ThreadLocal을 사용합니다. `MDC.put("traceId", "abc123")`으로 저장하면 같은 스레드의 모든 로그에 `traceId=abc123`이 자동 포함됩니다. 분산 추적에서 요청 ID를 MDC에 저장하면 해당 요청의 전체 로그를 추적 ID로 필터링할 수 있습니다. 단, 비동기 처리(`@Async`, `CompletableFuture`)에서는 다른 스레드로 MDC 컨텍스트가 전달되지 않습니다. `MDCAdapter`를 구현하거나 작업 제출 시 MDC 스냅샷을 명시적으로 복사해야 합니다.
-
-</details>

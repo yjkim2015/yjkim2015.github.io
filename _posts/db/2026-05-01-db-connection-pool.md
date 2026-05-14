@@ -1579,10 +1579,6 @@ NLB 특성:
 
 ## 13. 면접 포인트 5선
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. HikariCP가 DBCP2보다 빠른 이유를 내부 구조로 설명하라
 
 ```
@@ -1796,5 +1792,3 @@ OSIV
 ---
 
 커넥션 풀은 "알아서 동작하는 것"이 아니다. 잘못 설정된 `open-in-view`, 한 곳의 `conn.close()` 누락, 과도한 `maximumPoolSize`, `max-lifetime`과 `wait_timeout`의 불일치 — 이 넷 중 하나만으로도 트래픽이 조금만 몰리면 전체 시스템이 멈춘다. 원리를 이해하면 숫자의 의미가 보이고, 장애 발생 전에 경보가 들린다.
-
-</details>

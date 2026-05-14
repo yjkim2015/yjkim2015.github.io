@@ -722,10 +722,6 @@ class PureOrderDomainTest {
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. 헥사고날 아키텍처의 핵심 개념인 Port와 Adapter를 설명하라.**
 > Port는 도메인이 외부 세계와 소통하는 인터페이스다. Inbound Port(Driving): 외부에서 도메인으로 들어오는 계약(UseCase 인터페이스). Outbound Port(Driven): 도메인이 외부에 요구하는 계약(Repository, MessagePublisher 인터페이스). Adapter는 Port의 구현체로 실제 기술을 연결한다(REST Controller, JPA Repository 구현).
 
@@ -740,5 +736,3 @@ class PureOrderDomainTest {
 
 **Q5. Spring에서 헥사고날을 구현할 때 패키지 구조는?**
 > `domain/` (순수 Java: Entity, ValueObject, DomainService, Repository 인터페이스), `application/` (UseCase 인터페이스 + 구현체, Port 인터페이스), `adapter/in/web/` (REST Controller), `adapter/out/persistence/` (JPA Repository 구현체). `domain/`과 `application/`은 Spring 의존성 없이 순수 Java 모듈로 분리할 수 있다.
-
-</details>

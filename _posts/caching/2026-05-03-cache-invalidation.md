@@ -1415,10 +1415,6 @@ public void periodicL1Flush() {
 
 ## 면접 포인트 5개 — 깊은 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1: "캐시 무효화가 왜 어렵다고 하나요? Phil Karlton 인용 이후로 실제로 무엇이 문제인가요?"
 
 **핵심 WHY:** 어려운 이유는 세 가지다.
@@ -1482,5 +1478,3 @@ graph LR
     L2 -->|"Miss 후"| Herd["Stampede 방어"]
     Herd -->|"PER/Lock"| Reload["캐시 재적재"]
 ```
-
-</details>

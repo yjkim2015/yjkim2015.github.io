@@ -1276,10 +1276,6 @@ double avgAge = employees.stream()
 
 ## 12. 면접 포인트 5개: 극한 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. Stream의 지연 평가가 왜 필요한가? 즉시 평가 방식의 문제점은?
 
 즉시 평가 방식이라면 `filter(p1).map(f).filter(p2)`가 실행될 때 먼저 모든 원소에 `p1`을 적용한 중간 컬렉션을 만들고, 그 컬렉션 전체에 `f`를 적용한 중간 컬렉션을 만들고, 다시 `p2`를 적용합니다. 3단계 파이프라인에서 원본 크기에 비례하는 중간 컬렉션이 2개 생성됩니다.
@@ -1617,5 +1613,3 @@ Stream API 핵심 원리:
 - [JEP 473: Stream Gatherers (JDK 22)](https://openjdk.org/jeps/473)
 - [Spliterator 공식 문서](https://docs.oracle.com/en/java/docs/api/java.base/java/util/Spliterator.html)
 - [ForkJoinPool.commonPool() 동작 원리](https://docs.oracle.com/en/java/docs/api/java.base/java/util/concurrent/ForkJoinPool.html)
-
-</details>

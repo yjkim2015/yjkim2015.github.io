@@ -553,10 +553,6 @@ ordinal로 2차원 배열을 만들어 상태 전이 테이블을 구성하면, 
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 1. **Q: raw type과 `List<Object>`의 차이는?**
    - A: `List<Object>`는 "모든 타입을 담겠다"는 **의도적 선언**이며 타입 안전합니다. `List`(raw type)는 타입 검사를 **완전히 포기**한 것으로, 제네릭 이전 코드와의 호환성을 위해서만 존재합니다.
 
@@ -769,5 +765,3 @@ enum의 이점:
 열거형(Enum)을 정수 상수 대신 사용하는 이유는 타입 안전성과 가독성 때문이다. `int DIRECTION_NORTH = 0` 대신 `Direction.NORTH`를 쓰면 잘못된 정수 값 전달이 컴파일 오류로 잡힌다. Enum에 메서드와 필드를 추가할 수 있어 관련 로직을 응집할 수도 있다.
 
 한정적 와일드카드(`<? extends T>`, `<? super T>`)는 PECS(Producer-Extends, Consumer-Super) 원칙으로 API 유연성을 높인다. 읽기 전용 컬렉션에는 `extends`, 쓰기 전용에는 `super`를 써서 더 넓은 타입을 수용할 수 있다.
-
-</details>

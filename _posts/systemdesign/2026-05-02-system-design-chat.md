@@ -1310,10 +1310,6 @@ public class HeartbeatHandler implements ApplicationListener<SessionConnectedEve
 
 ## 12. 면접 포인트 5개 — 깊이 있는 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. 왜 Cassandra인가? HBase나 MongoDB 대신
 
 **얕은 답**: "대용량 데이터를 저장할 수 있어서요"
@@ -1540,5 +1536,3 @@ public class ConversationService {
 - [Snowflake ID — Twitter Engineering Blog](https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake)
 - [Signal Protocol — Double Ratchet Algorithm](https://signal.org/docs/specifications/doubleratchet/)
 - [카카오 데이터센터 화재 사후 분석](https://kakaoenterprise.github.io/2023/01/12/kakao-incident-postmortem.html)
-
-</details>

@@ -370,10 +370,6 @@ treeSet.size(); // 1 (compareTo로 비교 → 값이 같으므로 같은 객체)
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 1. **Q: equals와 == 의 차이는?**
    - A: `==`는 **참조 비교**(같은 메모리 주소인지), `equals`는 **논리적 동치성 비교**(같은 값인지)입니다. 기본형은 `==`으로, 참조형은 `equals`로 비교합니다.
 
@@ -594,5 +590,3 @@ equals를 재정의하면서 hashCode를 재정의하지 않으면 HashMap에서
 Comparable을 구현하면 TreeSet, TreeMap에 자동으로 정렬되고, Collections.sort()를 매개변수 없이 사용할 수 있다. 정렬 가능한 값 클래스(금액, 날짜, 점수)는 Comparable 구현이 자연스럽다.
 
 toString을 재정의하지 않으면 로그에 `Order@1a2b3c`만 출력돼 디버깅에 아무 도움이 되지 않는다. 객체의 핵심 필드를 포함한 toString은 운영 비용을 크게 줄인다.
-
-</details>

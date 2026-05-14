@@ -539,10 +539,6 @@ int max = IntStream.of(arr).max().getAsInt();
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. Integer 캐시(-128~127)의 원리와 실무적 위험성을 설명하세요.**
 
 JVM은 시작 시 -128~127 범위의 Integer 객체를 미리 생성해 배열에 캐싱합니다. `Integer.valueOf(n)`은 이 범위라면 캐시에서 반환하므로 `==` 비교가 true가 됩니다. 실무 위험성은 테스트에서 소량의 수를 사용해 `==`가 통과했다가 운영에서 큰 값으로 실패하는 버그입니다. 해결책은 래퍼 클래스는 항상 `equals()`로 비교하는 것입니다.
@@ -604,5 +600,3 @@ int value = map.get("nonExistent");  // NPE!
 
 **Q5. Optional과 래퍼 클래스 중 null 표현에 무엇을 사용하는가?**
 래퍼 클래스의 null: 값의 부재를 나타내지만 NPE 위험이 있습니다. 메서드 반환 타입으로 `Integer`를 사용하면 호출자가 null 체크를 잊기 쉽습니다. `Optional<Integer>`: null이 아닌 "값이 없을 수 있음"을 명시적으로 표현합니다. 호출자가 `.orElse()`, `.ifPresent()` 등으로 처리를 강제받습니다. 단, Optional은 직렬화되지 않으므로 DTO 필드로는 부적합합니다. 메서드 반환 타입으로는 Optional, 필드와 파라미터에는 기본형 또는 null 허용 주석(`@Nullable`)을 사용합니다.
-
-</details>

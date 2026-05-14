@@ -1147,10 +1147,6 @@ Consumer(read_committed)는 LSO까지만 읽을 수 있음:
 
 ## 12. 면접 포인트 5선
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. Kafka가 초고속인 이유를 OS 레벨에서 설명하라
 
 단순히 "순차 쓰기"라고 답하면 탈락이다. 세 가지 레이어로 설명해야 한다.
@@ -1483,5 +1479,3 @@ min.insync.replicas=2
 unclean.leader.election.enable=false
 log.cleaner.dedupe.buffer.size=268435456  # 256MB (대용량 컴팩션 토픽)
 ```
-
-</details>

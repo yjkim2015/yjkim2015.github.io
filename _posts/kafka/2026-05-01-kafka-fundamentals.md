@@ -1006,10 +1006,6 @@ log.dirs=/var/kafka/data
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. Kafka가 수백만 TPS를 달성하는 이유를 OS 레벨에서 설명하라.**
 
 네 가지 메커니즘이 결합된다.
@@ -1071,5 +1067,3 @@ CooperativeStickyAssignor는 Incremental Cooperative Rebalancing을 사용한다
 `unclean.leader.election.enable=true`로 설정하면 ISR 밖의 팔로워도 리더가 될 수 있다. 리더의 복제되지 않은 메시지가 유실될 수 있지만, 파티션이 available 상태를 유지한다. 내구성보다 가용성을 우선한다.
 
 실무 권장: 금융, 주문 데이터는 `unclean.leader.election.enable=false`(내구성 우선). 로그 수집, 지표 데이터처럼 일부 유실을 허용하는 경우 `true` 고려 가능.
-
-</details>

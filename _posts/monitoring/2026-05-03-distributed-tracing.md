@@ -550,10 +550,6 @@ Trace와 Log가 연결되지 않으면 관측성의 절반을 잃는 것이다. 
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. "분산 트레이싱에서 Context Propagation이란 무엇이며, 왜 중요한가?"
 
 **모범 답변:** Context Propagation은 Trace ID와 Span ID를 서비스 간 호출 시 HTTP 헤더(또는 메시지 헤더)에 담아 전달하는 메커니즘이다. 이것이 없으면 각 서비스의 Span이 독립적으로 존재하여 하나의 요청을 관통하는 전체 그림을 볼 수 없다. W3C Trace Context가 표준이며, `traceparent` 헤더에 Trace ID, Span ID, 샘플링 플래그를 담는다.
@@ -589,5 +585,3 @@ Trace와 Log가 연결되지 않으면 관측성의 절반을 잃는 것이다. 
 | Tail-based Sampling | 완성 후 조건 결정, 에러 보존하지만 메모리 부담 |
 | Jaeger | 인덱싱 기반, 풍부한 검색 |
 | Tempo | 오브젝트 스토리지, 저비용, Trace ID 직접 조회 |
-
-</details>

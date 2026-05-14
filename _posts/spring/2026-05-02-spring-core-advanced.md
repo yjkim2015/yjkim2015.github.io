@@ -1621,10 +1621,6 @@ public class PaymentServiceV2 {
 
 ## 14. 면접 포인트 5개 — 깊이 있는 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### 면접 포인트 1: BeanPostProcessor와 BeanFactoryPostProcessor의 차이
 
 > **Q: BPP와 BFPP의 차이를 설명하고, 각각 어떤 상황에서 사용하는지 말해주세요.**
@@ -1784,5 +1780,3 @@ public class ContainerLifecycleObserver
 7. **SpEL #{...}과 ${...} 혼동:** `#{}` 안에서 `${}` 플레이스홀더를 혼용하면 예상치 못한 결과가 나온다. 프로퍼티 값을 SpEL로 참조하려면 `#{'${db.url}'}` 형식을 쓴다.
 
 8. **@EventListener 트랜잭션 안에서 즉시 조회:** 커밋 전에 이벤트 리스너가 실행되어 DB에서 아직 안 보이는 데이터를 조회한다. `@TransactionalEventListener(phase = AFTER_COMMIT)` 사용.
-
-</details>

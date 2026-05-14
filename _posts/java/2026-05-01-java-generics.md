@@ -1595,10 +1595,6 @@ Status status = findByName(Status.class, "active"); // Status.ACTIVE
 
 ## 면접 포인트 5개
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. 타입 소거가 필요한 이유와 그로 인한 구체적 제약은?
 
 **핵심 WHY**: Java 5는 기존 수백만 줄의 Java 코드와 바이너리 호환성을 유지하면서 제네릭을 도입해야 했습니다. C#처럼 런타임에 타입 정보를 유지하는 Reified 제네릭을 도입하면 JVM을 전면 교체해야 하고, 기존 `.class` 파일과 호환되지 않습니다. 그래서 컴파일러만 수정하고(타입 검사 추가), 런타임 JVM은 그대로 두는 타입 소거를 선택했습니다.
@@ -1720,5 +1716,3 @@ List<? extends Number> list = new ArrayList<Integer>(); // 실제는 List<Intege
 - **unchecked 경고는 타입 안전성의 구멍** — @SuppressWarnings 전 반드시 안전성 직접 증명
 - **브리지 메서드는 JVM의 다형성 보존 장치** — 소거와 OOP 계약의 충돌을 컴파일러가 자동 해결
 - **TypeToken은 제네릭 타입 정보 보존의 유일한 우회책** — Jackson, Guava, Spring 모두 이 원리 사용
-
-</details>

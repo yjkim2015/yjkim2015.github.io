@@ -1503,10 +1503,6 @@ public class TieredRateLimiter {
 
 ## 11. 면접 포인트 5개 — 극한 시나리오
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### 면접 포인트 1: Token Bucket vs Sliding Window — 내부 구조 차이
 
 **Q: Token Bucket과 Sliding Window Counter의 차이를 내부 구조 수준에서 설명하라.**
@@ -1643,5 +1639,3 @@ graph LR
 - `Retry-After` 헤더 필수 — Retry Storm 방지
 - Hot Key는 샤딩으로 Redis 클러스터 균형 유지
 - Micrometer 게이지로 남은 토큰 수 실시간 모니터링, 거부율 30% 초과 시 알람
-
-</details>

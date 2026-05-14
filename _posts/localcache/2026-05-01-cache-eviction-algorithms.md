@@ -978,10 +978,6 @@ public class CacheWarmup implements ApplicationRunner {
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 #### Q. LRU와 LFU의 차이점과 각각 적합한 상황은?
 
 ```
@@ -1043,5 +1039,3 @@ volatile-ttl: TTL 짧은 키부터 제거
    30분~1시간 후 히트율 재측정
    목표: 80% 이상 (서비스 특성에 따라 다름)
 ```
-
-</details>

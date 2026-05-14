@@ -690,10 +690,6 @@ userFlow
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 #### Q. 코루틴의 suspend 함수란 무엇인가요?
 
 ```kotlin
@@ -748,5 +744,3 @@ val orders = orderDeferred.await()
 
 GlobalScope는 이 원칙을 위반 → 사용 지양
 ```
-
-</details>

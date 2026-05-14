@@ -873,10 +873,6 @@ Spring Boot 3.x 신규 프로젝트라면 **동기는 RestClient, 비동기는 W
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. RestTemplate이 deprecated 예정인 이유와 대안은?**
 > RestTemplate은 블로킹 I/O 기반으로 논블로킹 WebFlux 환경과 통합이 어렵다. Spring 6.1에서 동기 방식의 새 API인 `RestClient`가 도입됐다. 기존 코드에서는 `RestTemplate`을 유지하되, 신규 개발은 `RestClient` 또는 `WebClient`를 사용한다.
 
@@ -891,5 +887,3 @@ Spring Boot 3.x 신규 프로젝트라면 **동기는 RestClient, 비동기는 W
 
 **Q5. RestClient의 기본 사용 패턴과 에러 처리는?**
 > `RestClient.create(baseUrl).get().uri("/orders/{id}", id).retrieve().body(Order.class)`로 간결하게 사용한다. 에러 처리는 `.onStatus(HttpStatusCode::is4xxClientError, (req, res) -> { throw new ClientException(...); })`로 상태 코드별로 처리한다. `RestClient.Builder`를 통해 기본 헤더, 인터셉터, 타임아웃을 전역 설정한다.
-
-</details>

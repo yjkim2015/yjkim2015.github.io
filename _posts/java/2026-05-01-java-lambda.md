@@ -1132,10 +1132,6 @@ List<Invoice> invoices2 = orders.stream()
 
 ## 15. 면접 포인트 5개 — 깊은 WHY 분석
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1: 람다와 익명 클래스의 근본적인 차이는 무엇인가?
 
 **표면적 차이:** 문법의 간결함, this의 의미, 스코프.
@@ -1410,5 +1406,3 @@ graph LR
 Java 람다는 문법 설탕이 아닙니다. `invokedynamic`이라는 JVM 명령어 확장 위에, `LambdaMetafactory`라는 런타임 코드 생성기가, `ConstantCallSite` 캐싱으로 성능을 보장하는 정교한 시스템입니다. 이 구조를 이해하면 "왜 비캡처링 람다가 싱글톤으로 최적화되는지", "왜 effectively final이 필요한지", "왜 익명 클래스와 this가 다른지"를 논리적으로 설명할 수 있습니다.
 
 면접에서 람다를 설명할 때 "편한 문법"으로 끝내지 말고, `invokedynamic → LambdaMetafactory → CallSite → 비캡처링 싱글톤 최적화`의 흐름으로 답변하면 시니어 수준의 이해를 보여줄 수 있습니다.
-
-</details>

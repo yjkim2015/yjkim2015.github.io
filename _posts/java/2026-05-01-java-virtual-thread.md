@@ -1944,10 +1944,6 @@ public class VirtualThreadInterruptDemo {
 
 ## 면접 포인트 5가지
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. Virtual Thread가 Platform Thread보다 훨씬 많이 만들 수 있는 근본 이유는?
 
 **핵심 WHY**: 플랫폼 스레드의 실행 상태는 OS 커널이 관리하는 자료구조(thread control block)와 전용 스택 메모리에 저장됩니다. 이는 OS 리소스이며 개수에 하드 제한이 있습니다. Linux에서 `cat /proc/sys/kernel/threads-max`로 확인하면 보통 수만 개입니다. JVM의 `-Xss512k` 옵션은 각 스레드에 최소 512KB 가상 메모리를 예약합니다. 10만 스레드 = 50GB 가상 메모리 예약.
@@ -2045,5 +2041,3 @@ Spring 적용:
 ---
 
 *참고: Java 21 공식 문서, JEP 444 (Virtual Threads), JEP 453 (Structured Concurrency), JEP 446 (Scoped Values), Project Loom wiki*
-
-</details>

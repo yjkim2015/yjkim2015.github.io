@@ -1281,10 +1281,6 @@ static {
 
 ## 12. 면접 포인트 5가지 — 깊은 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### 면접 포인트 1: Redis MULTI/EXEC 내부 동작을 설명하라
 
 **답변**:
@@ -1466,5 +1462,3 @@ graph LR
 | 재고 차감 (단순 조건) | Lua Script | 읽기-조건-쓰기 단일 원자 단위 |
 | 계좌 이전 (롤백 필요) | RDBMS 트랜잭션 | Redis는 롤백 미지원 |
 | 클러스터 트랜잭션 | Hash Tag + MULTI/EXEC 또는 Lua | 같은 슬롯 강제 |
-
-</details>

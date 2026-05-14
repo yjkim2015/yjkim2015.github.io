@@ -796,10 +796,6 @@ graph LR
 ---
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. Checked 예외와 Unchecked 예외를 언제 선택하는가?**
 Checked 예외: 호출자가 복구 가능한 상황. 파일 없음(`FileNotFoundException`), 네트워크 연결 실패 등. 컴파일러가 처리를 강제합니다. Unchecked 예외: 프로그래밍 오류(NullPointerException, IllegalArgumentException)나 복구 불가 상황. Spring, JPA 등 현대 프레임워크는 대부분 RuntimeException을 사용합니다. 실무 권장: 비즈니스 로직 예외는 커스텀 RuntimeException, 외부 시스템 연동 실패는 Checked 예외(호출자가 Fallback을 처리하도록 강제)로 구분합니다.
 
@@ -827,5 +823,3 @@ finally에서 `close()`를 직접 호출할 때 close 자체가 예외를 던지
 
 **Q5. NullPointerException을 방지하는 실무 전략은?**
 ① `Objects.requireNonNull(param, "파라미터명은 null일 수 없습니다")` — 진입점에서 명시적 검증. ② `Optional<T>` — null 반환 대신 Optional.empty() 반환, 호출자가 명시적으로 처리. ③ `@NonNull`/`@NotNull` 어노테이션 + IDE 정적 분석. ④ 컬렉션 반환 시 null 대신 빈 컬렉션(`Collections.emptyList()`) 반환. Java 14+ NullPointerException은 어떤 변수가 null인지 메시지에 명시("Cannot invoke ... because 'xxx' is null")되어 디버깅이 쉬워졌습니다.
-
-</details>

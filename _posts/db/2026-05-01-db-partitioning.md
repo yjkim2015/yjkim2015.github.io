@@ -729,10 +729,6 @@ MySQL에서 UNIQUE 인덱스는 파티션 키를 포함해야 한다. 파티션 
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. 파티셔닝과 샤딩의 차이는?**
 파티셔닝은 단일 DB 서버 내에서 테이블을 물리적으로 나누는 것이다. 샤딩은 여러 DB 서버에 데이터를 분산한다. 파티셔닝은 DB가 내부적으로 관리하지만, 샤딩은 애플리케이션이나 미들웨어가 어느 서버에 쿼리를 보낼지 결정해야 한다.
 
@@ -747,5 +743,3 @@ WHERE 절의 파티션 키 조건을 분석해 관련 파티션만 스캔하는 
 
 **Q5. 온라인 파티션 추가/삭제가 가능한가?**
 MySQL InnoDB: `ALTER TABLE ... ADD PARTITION`은 잠금 없이 가능하다. `DROP PARTITION`도 DDL이지만 빠르다. PostgreSQL: 선언적 파티셔닝(10+)에서 `ATTACH/DETACH PARTITION`이 온라인으로 가능하다. 단, 기존 테이블을 파티션 테이블로 전환하는 것은 대용량에서 pt-online-schema-change 등 툴링이 필요하다.
-
-</details>

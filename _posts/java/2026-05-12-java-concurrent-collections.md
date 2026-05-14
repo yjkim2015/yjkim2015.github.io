@@ -1149,10 +1149,6 @@ Executors.newSingleThreadExecutor().submit(() -> {
 
 ## 10. 면접 포인트 5개 — 깊은 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### 면접 포인트 1 — ConcurrentHashMap이 null을 허용하지 않는 이유
 
 단순히 "설계 결정"이라고 답하면 안 된다. 구체적인 동시성 이유가 있다.
@@ -1405,5 +1401,3 @@ public class MetricsAggregator {
 ---
 
 동시성 자료구조의 선택은 단순히 "스레드 안전한가"를 넘어선다. 읽기와 쓰기의 비율, 블로킹 허용 여부, 정렬 필요성, 메모리 제약, GC 압력, 배압 요구사항까지 고려해야 한다. `ConcurrentHashMap`의 `size()`가 근사값이라는 사실, `computeIfAbsent` 람다 안에서 같은 맵을 수정하면 데드락이 생긴다는 사실, `LinkedBlockingQueue`의 기본 용량이 `Integer.MAX_VALUE`라는 사실 — 이 세 가지를 모르면 운영 환경에서 반드시 사고를 낸다. 내부 메커니즘을 이해한 개발자는 자료구조를 도구로 사용하고, 모르는 개발자는 자료구조에 지배당한다.
-
-</details>

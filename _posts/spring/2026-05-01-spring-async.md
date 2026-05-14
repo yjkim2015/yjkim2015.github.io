@@ -1104,10 +1104,6 @@ java -Djdk.tracePinnedThreads=full -jar app.jar
 
 ## 13. 면접 포인트 5가지
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. @Async 내부 동작을 설명하라 — 왜 프록시인가
 
 > `@EnableAsync`를 선언하면 Spring은 `AsyncAnnotationBeanPostProcessor`를 등록한다. 이 BeanPostProcessor가 컨텍스트 초기화 시 `@Async` 메서드를 가진 빈을 AOP 프록시로 감싼다. 프록시 내부의 `AsyncExecutionInterceptor`가 메서드 호출을 가로채 `TaskExecutor`에 `Callable`로 제출한다. 호출자 스레드는 제출 즉시 반환된다.
@@ -1178,5 +1174,3 @@ java -Djdk.tracePinnedThreads=full -jar app.jar
 | WebFlux Reactive | X | 가능 | 높음 | 전체 스택 논블로킹 필요 시 |
 
 **결론:** 기존 MVC 스택에서 이메일, 알림, 통계 등 일부 작업을 비동기화할 때는 `@Async` + `ThreadPoolTaskExecutor`가 가장 낮은 비용으로 빠르게 적용할 수 있다. 결과를 조합해야 하거나 실패를 추적해야 하면 `CompletableFuture`를 반환 타입으로 사용한다. Java 21 + Spring Boot 3.2 이상이라면 Virtual Thread 활성화로 복잡한 Executor 튜닝 없이 I/O 처리량을 크게 높일 수 있다.
-
-</details>

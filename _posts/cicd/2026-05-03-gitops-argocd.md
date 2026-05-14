@@ -560,10 +560,6 @@ metadata:
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1: GitOps가 기존 CI/CD와 다른 점은?
 
 핵심 차이는 **배포 방향**이다. 기존 CI/CD는 Push 모델로 CI 서버가 클러스터에 명령을 보낸다. GitOps는 Pull 모델로 클러스터 내부 에이전트가 Git을 감시한다. 이로 인해 (1) CI 서버에 클러스터 접근 권한을 줄 필요가 없어 보안이 강화되고, (2) 배포 후에도 지속적으로 상태를 감시하여 Drift를 감지하고, (3) 모든 변경이 Git PR로 이루어져 감사 추적이 가능하다.
@@ -600,5 +596,3 @@ metadata:
 | ApplicationSet | 템플릿으로 Application 대량 자동 생성 |
 | Sync Wave | 리소스 배포 순서 제어 |
 | Health Check | 리소스의 실제 동작 상태 판단 (Healthy/Degraded 등) |
-
-</details>

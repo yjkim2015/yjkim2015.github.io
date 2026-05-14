@@ -1406,10 +1406,6 @@ public class AllocationProfiler {
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. G1 GC와 ZGC의 구체적인 차이와 선택 기준은 무엇인가요?**
 
 G1은 힙을 Region으로 나눠 가비지 밀도 높은 Region을 우선 수집합니다. STW 중에 객체를 이동(Evacuation)하므로 힙이 클수록 STW가 길어집니다. `MaxGCPauseMillis`는 목표일 뿐 보장이 아닙니다. Mixed GC에서 수십~수백 ms STW가 발생합니다.
@@ -1487,5 +1483,3 @@ public class GCTuningChecklist {
      */
 }
 ```
-
-</details>

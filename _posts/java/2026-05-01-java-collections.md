@@ -1094,10 +1094,6 @@ List<String> sharedConfig = List.of("host1", "host2", "host3");
 
 ## 14. 면접 포인트 5개 — 깊은 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. HashMap의 로드 팩터가 0.75인 이유는 무엇인가?
 
 > **표면 답변**: 시간-공간 트레이드오프의 균형점이다.
@@ -1437,5 +1433,3 @@ Set<String>   set  = new HashSet<>();    // 중복 제거
 ConcurrentHashMap<K, V> safeMap = new ConcurrentHashMap<>();
 // 나중에 Collections.synchronizedMap()으로 래핑하는 것은 임시방편
 ```
-
-</details>

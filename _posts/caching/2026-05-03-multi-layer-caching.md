@@ -1422,10 +1422,6 @@ public class ProductCacheDto {
 
 ## 면접 포인트 5개 — 깊은 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1: "L1과 L2 캐시를 왜 분리하나요? Redis만 쓰면 안 되나요?"
 
 **표면 답변:** L1은 네트워크가 없어서 빠릅니다.
@@ -1686,5 +1682,3 @@ graph LR
 | maximumSize 10~20% 힙 | GC Stop-the-World 방지 |
 
 멀티 레이어 캐싱은 단순히 "빠르게 하기" 위한 기술이 아니다. **상위 계층에서 최대한 흡수해서 하위 계층을 보호하는 방어 아키텍처**다. 각 계층의 내부 동작(W-TinyLFU, Count-Min Sketch, 직렬화 비용, Pub/Sub at-most-once)을 이해해야 올바른 설계 결정을 내릴 수 있다. Hit Rate 80% 이상, DB TPS 1% 이하를 항상 목표로 삼고 모니터링으로 지속 검증한다.
-
-</details>

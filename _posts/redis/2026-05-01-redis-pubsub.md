@@ -1021,10 +1021,6 @@ public class PubSubMonitor {
 
 ## 12. 면접 포인트 5가지
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. Redis Pub/Sub이 Fire-and-Forget인 이유는 무엇인가?
 
 **표면 답변**: 메시지를 저장하지 않아서 구독자가 없으면 유실된다.
@@ -1313,5 +1309,3 @@ if (receiverCount == 0) {
 | Keyspace Notification | Pub/Sub 위에 구현, 지연 삭제로 이벤트 지연 가능 |
 | Streams와 차이 | Pub/Sub = 즉각 브로드캐스트 휘발, Streams = 영속 ACK 재처리 |
 | 선택 기준 | 유실 허용 실시간 브로드캐스트 → Pub/Sub, 유실 불가 → Streams/Kafka |
-
-</details>

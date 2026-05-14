@@ -1442,10 +1442,6 @@ public Mono<String> processWithTrace(String requestId) {
 
 ## 15. 면접 포인트 5개 — WHY 중심 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. Reactive Streams의 배압(Backpressure) 프로토콜을 설명하고, 왜 필요한지 말씀해주세요.
 
 > **WHY**: 생산자(Publisher)가 소비자(Subscriber)보다 빠르면 중간 버퍼가 무한정 증가해 OOM이 발생한다. 전통적인 Iterator는 소비자가 `next()`를 호출해 속도를 제어하지만, 비동기 환경에서는 생산자와 소비자가 다른 스레드에 있어 이 메커니즘이 동작하지 않는다.
@@ -1692,5 +1688,3 @@ Spring WebFlux는 "I/O 대기 중 스레드를 놀리지 않는다"는 단순한
 | Go goroutine | M:N | ~수백만 | 자유롭게 | 중간 |
 
 WebFlux가 빛나는 순간: 마이크로서비스 게이트웨이(수십 개 upstream 동시 호출), 실시간 대시보드(SSE), 카프카 이벤트 파이프라인, 전체 리액티브 스택. 팀 역량과 요구사항이 맞지 않으면 복잡도만 올라가고 이득은 사라진다.
-
-</details>

@@ -601,10 +601,6 @@ kubectl config set-context --current --namespace=staging
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. Pod와 Container의 차이는?**
 
 Pod는 하나 이상의 컨테이너를 감싸는 K8s의 최소 배포 단위다. 같은 Pod 내 컨테이너는 네트워크 네임스페이스(IP, 포트)와 볼륨을 공유한다. 사이드카 패턴(로그 수집, 프록시)이 이 구조를 활용한다. 실제 운영에서는 대부분 컨테이너 1개 = Pod 1개지만, Envoy 사이드카(Istio), Fluentd 로그 수집기는 메인 앱과 같은 Pod에 배치된다.
@@ -644,5 +640,3 @@ Pod는 하나 이상의 컨테이너를 감싸는 K8s의 최소 배포 단위다
 | 수동 로드밸런싱 | 새 인스턴스 추가 시 수동 등록 | Service가 Pod 등록/해제 자동화 |
 
 트래픽 급증 시 HPA가 CPU 메트릭 기반으로 Pod를 자동 증가시키고, 장애 Pod는 Kubelet이 감지해 자동으로 재시작한다. Rolling Update로 무중단 배포가 가능하고, Rollback도 명령 한 줄로 처리된다.
-
-</details>

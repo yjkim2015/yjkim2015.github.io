@@ -521,10 +521,6 @@ WHERE customer_id = NEW.id;
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. 3NF와 BCNF의 차이는?**
 3NF는 이행적 함수 종속(A→B→C에서 A→C)을 제거한다. BCNF는 모든 결정자가 후보 키여야 한다는 더 강한 조건이다. 복합 키가 있는 테이블에서 3NF를 만족해도 BCNF를 위반할 수 있다. 실무에서는 3NF까지가 일반적인 목표이고, BCNF는 이상 현상이 측정될 때 적용한다.
 
@@ -539,5 +535,3 @@ WHERE customer_id = NEW.id;
 
 **Q5. 다대다 관계를 어떻게 처리하는가?**
 중간 연결 테이블(junction table)을 생성한다. `students ↔ courses` → `enrollments(student_id, course_id, enrolled_at, grade)`. 연결 테이블에 속성(등록일, 성적)이 추가되면 독립적인 의미를 가진 엔티티가 된다. 복합 기본 키 vs 대리 키 선택은 팀 컨벤션과 ORM 호환성을 고려한다.
-
-</details>

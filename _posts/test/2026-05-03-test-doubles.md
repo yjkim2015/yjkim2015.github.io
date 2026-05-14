@@ -717,10 +717,6 @@ class JpaOrderRepositoryTest extends OrderRepositoryContract {
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1: Mock과 Stub의 차이를 설명해주세요
 
 Stub은 **상태 검증**이다. 미리 정해진 값을 반환하고, 테스트는 그 반환값을 받아 만들어진 결과가 올바른지 확인한다. Mock은 **행위 검증**이다. 특정 메서드가 특정 인자로 몇 번 호출되었는지를 검증한다. Stub은 "무엇을 반환하는가", Mock은 "어떻게 호출되었는가"에 초점을 맞춘다.
@@ -753,5 +749,3 @@ Solitary Test는 테스트 대상만 실제이고 모든 의존성은 Mock이다
 | Fake 적합 | 저장/조회 패턴, 복잡한 상호작용, 리팩토링 내성 필요 |
 | Mock 남용 방지 | Sociable Test + Fake로 구현 결합 제거 |
 | 가독성 패턴 | Test Data Builder(핵심만 명시) + Fixture(공통 데이터 추출) |
-
-</details>

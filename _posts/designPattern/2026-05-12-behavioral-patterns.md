@@ -915,10 +915,6 @@ orderService.applyDiscount(price -> price * 0.8);
 
 ## 면접 포인트 5가지
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. Strategy와 Template Method의 차이는?
 
 두 패턴 모두 알고리즘의 일부를 교체 가능하게 만들지만, 방식이 다릅니다. **Strategy는 구성(Composition)** 을 사용해 런타임에 알고리즘 전체를 교체할 수 있고, **Template Method는 상속(Inheritance)** 을 사용해 컴파일 타임에 알고리즘의 특정 단계만 오버라이드합니다. GoF는 "상속보다 구성을 선호하라"는 원칙을 내세우며, 현대 Java 코드에서는 Strategy가 더 많이 쓰입니다.
@@ -972,5 +968,3 @@ graph LR
 ---
 
 행동 패턴을 자유자재로 쓰려면 "어떤 것이 변하는가"에 집중하세요. **변하는 알고리즘 → Strategy**, **변하는 단계 → Template Method**, **변하는 상태 → State**, **요청 자체를 객체로 → Command**, **변화를 여러 곳에 전파 → Observer**. 이 다섯 가지 질문이 패턴 선택의 나침반입니다.
-
-</details>

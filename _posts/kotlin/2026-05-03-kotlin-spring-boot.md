@@ -565,10 +565,6 @@ suspend fun fetchWithRetry(id: Long): User? =
 
 ## 면접 포인트 총정리
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. `data class`와 일반 `class`의 차이는?**
 
 `data class`는 주 생성자의 모든 프로퍼티를 기반으로 `equals()`, `hashCode()`, `toString()`, `copy()`, `componentN()`을 자동 생성한다. 불변 DTO에 적합하지만, JPA Entity처럼 동일성 개념이 DB 식별자 기반인 경우에는 직접 구현이 더 안전하다.
@@ -596,5 +592,3 @@ Kotlin의 `object`, `companion object`, `final` 함수, `suspend` 함수를 mock
 Kotlin + Spring Boot 전환의 핵심은 세 가지다. 첫째, `data class`와 null 안전성으로 **런타임 오류를 컴파일 타임으로 당긴다**. 둘째, `all-open`/`no-arg` 플러그인으로 **Spring의 리플렉션 기반 동작을 그대로 유지**한다. 셋째, 코루틴으로 **WebFlux의 비동기 처리를 동기 코드처럼 쉽게** 쓴다.
 
 마이그레이션은 `DTO → Service → Controller → Entity` 순서로 점진적으로 진행하면 리스크를 최소화할 수 있다. 기존 Java 코드와 100% 호환되므로 파일 단위로 전환해도 빌드가 깨지지 않는다.
-
-</details>

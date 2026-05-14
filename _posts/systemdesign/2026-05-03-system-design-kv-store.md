@@ -841,10 +841,6 @@ class RackAwareRing:
 
 ## 15. 면접 포인트 5개
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **1️⃣ "Consistent Hashing이 왜 필요한가?"**
 
 단순 `hash(key) % N` 대신 Consistent Hashing을 쓰면 노드 추가/삭제 시 이동하는 키가 `1/N`으로 줄어든다. 100개 노드에서 1개 추가 시 전체 키의 1%만 이동. 서비스 중단 없는 스케일 아웃의 핵심.
@@ -1151,5 +1147,3 @@ B-Tree는 디스크의 특정 위치를 찾아 in-place 업데이트합니다(Ra
 
 **Q5. 분산 KV Store에서 트랜잭션(Multi-key ACID)을 어떻게 구현하는가?**
 단순 KV Store는 단일 키 원자성만 보장합니다. Multi-key 트랜잭션이 필요하면 ① 2PC(Two-Phase Commit): 코디네이터가 모든 참여 노드와 준비/커밋 단계 수행. 블로킹 문제. ② Optimistic Locking + Retry: 읽기 시 버전 기록 후 쓰기 시 버전 검증. 충돌 빈도가 낮을 때 효율적. ③ 같은 파티션에 관련 키를 모아 단일 파티션 트랜잭션으로 처리. DynamoDB TransactWrite가 이 방식.
-
-</details>

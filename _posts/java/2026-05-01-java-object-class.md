@@ -699,10 +699,6 @@ graph LR
 ---
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. equals()와 hashCode()를 함께 오버라이딩해야 하는 이유는?**
 HashMap/HashSet의 동작 원리 때문입니다. HashMap은 키를 버킷에 배치할 때 `hashCode()`로 버킷 인덱스를 계산하고, 같은 버킷 내 기존 키와 비교할 때 `equals()`를 사용합니다. `equals()`만 오버라이딩하면 논리적으로 같은 두 객체가 다른 hashCode를 가져 다른 버킷에 배치됩니다. `map.put(key1, value); map.get(key2)`에서 key1.equals(key2)가 true여도 null을 반환합니다. Java 규약: equals()가 true이면 hashCode()는 같아야 합니다.
 
@@ -736,5 +732,3 @@ A. finalize()는 GC가 호출 시점을 보장하지 않아 자원 해제가 언
 
 **Q5. Object.wait()와 Thread.sleep()의 차이점은?**
 A. sleep()은 단순히 현재 스레드를 지정 시간 동안 일시 정지하며 락을 해제하지 않는다. wait()는 synchronized 블록 안에서만 호출 가능하며, 호출 시 락을 해제하고 다른 스레드가 notify()를 호출할 때까지 대기한다. 스레드 간 협력에는 wait/notify, 단순 지연에는 sleep을 사용한다.
-
-</details>

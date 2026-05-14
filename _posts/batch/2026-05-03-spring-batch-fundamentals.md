@@ -326,10 +326,6 @@ chunk-size=10,000이면 한 트랜잭션에서 10,000건을 처리합니다. 실
 
 ## 12. 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. "Spring Batch에서 Job, JobInstance, JobExecution의 차이를 설명하세요."
 
 **모범 답변:** Job은 배치 작업의 정의(설계도)이고, JobInstance는 Job + 특정 파라미터의 논리적 실행 단위입니다. JobExecution은 JobInstance의 물리적 실행 시도입니다. 하나의 JobInstance에 대해 실패 후 재실행하면 여러 JobExecution이 생길 수 있지만, 성공한 JobInstance는 재실행이 불가능합니다.
@@ -483,5 +479,3 @@ public class BatchController {
 
 **장애 2: 배치 실패 후 재실행 시 전체 재처리**
 100만 건 중 50만 건 처리 후 서버 재시작. 직접 구현에서는 어디까지 처리됐는지 기록이 없어 처음부터 재처리합니다. 이미 정산된 50만 건이 다시 정산됩니다. Spring Batch `JobRepository`의 `StepExecution`은 마지막 커밋된 청크의 위치를 기록해 정확히 50만 1건부터 재시작합니다.
-
-</details>

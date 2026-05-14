@@ -1279,10 +1279,6 @@ public class OrderMetrics {
 
 ## 11. 면접 포인트 5가지
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 면접관이 반드시 물어보는 5가지와 모범 답변 구조입니다.
 
 ### 포인트 1: "재고 초과 판매를 어떻게 방지하나?"
@@ -1447,5 +1443,3 @@ public class OrderMetrics {
 | Redis 선점 + MySQL 확정 | 속도(Redis)와 내구성(MySQL)을 역할로 분리하기 위해 |
 
 면접에서 이 표의 오른쪽 열을 자신의 말로 설명할 수 있으면, 그것이 시니어 답변입니다.
-
-</details>

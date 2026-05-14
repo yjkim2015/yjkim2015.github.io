@@ -1355,10 +1355,6 @@ graph LR
 
 ## 17. 면접 포인트 5개 — 깊은 WHY 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. OAuth2 Authorization Code Flow에서 state 파라미터의 역할은 무엇이며, 왜 CSRF를 막는가?**
 
 > 클라이언트가 인가 요청 시 생성한 무작위 값을 세션에 저장하고 Authorization Server에 보낸다. AS가 콜백 URL로 같은 값을 돌려주면 클라이언트가 세션 값과 비교한다. 공격자가 피해자 브라우저에서 콜백 URL을 강제로 호출해도 세션의 state와 공격자가 제어하는 state가 일치하지 않아 거부된다. 세션-파라미터 바인딩으로 요청의 연속성을 증명하는 메커니즘이다.
@@ -1378,5 +1374,3 @@ graph LR
 **Q5. CORS에서 preflight 캐시(Access-Control-Max-Age)의 의미와, allowedOrigins("*")와 allowCredentials(true)를 함께 쓸 수 없는 이유는?**
 
 > `Access-Control-Max-Age`는 브라우저가 preflight `OPTIONS` 요청 결과를 캐시하는 시간(초)이다. 캐시가 없으면 `Content-Type: application/json`을 쓰는 모든 POST 요청마다 실제 요청 전에 `OPTIONS` 요청이 선행되어 네트워크 왕복 횟수가 2배가 된다. W3C CORS 스펙이 와일드카드 출처(`*`)와 자격증명(`allowCredentials: true`)의 조합을 명시적으로 금지하는 이유는, 모든 출처에서 쿠키·Authorization 헤더를 포함한 요청을 허용하면 임의의 사이트가 인증된 API를 호출할 수 있어 CSRF 방어가 사실상 무력화되기 때문이다. 특정 출처 목록이나 패턴을 명시해야 한다. Spring은 `allowedOriginPatterns()`로 이를 지원하며 설정 시점에 유효성을 검사한다.
-
-</details>

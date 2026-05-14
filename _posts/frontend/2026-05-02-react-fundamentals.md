@@ -591,10 +591,6 @@ const UserContext = createContext(null);
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. Virtual DOM이 항상 실제 DOM보다 빠른가요?**
 
 아닙니다. Virtual DOM은 DOM 조작을 배치로 묶고 최소한의 실제 DOM 변경만 수행해 일반적인 경우에 효율적입니다. 하지만 단순한 단일 업데이트에서는 직접 DOM 조작이 더 빠릅니다. Virtual DOM의 장점은 속도보다 **예측 가능성**입니다. 선언적으로 상태를 바꾸면 React가 최적의 DOM 업데이트를 결정합니다. Svelte처럼 컴파일 타임 최적화 방식이 Virtual DOM보다 빠를 수 있지만, React의 성숙한 생태계가 실용적 선택입니다.
@@ -614,5 +610,3 @@ React는 상태 변경을 참조 비교(`===`)로 감지합니다. 배열을 직
 **Q5. React 18의 Concurrent Mode가 해결하는 문제는?**
 
 기존 React는 한 번 시작한 렌더링을 중단할 수 없어(동기 렌더링) 무거운 업데이트가 UI를 블로킹했습니다. Concurrent Mode에서는 렌더링을 중단/재개할 수 있습니다. `startTransition`으로 긴급하지 않은 업데이트를 낮은 우선순위로 표시하면 타이핑 같은 긴급 업데이트가 먼저 처리됩니다. `Suspense`와 결합해 데이터 로딩 중 fallback UI를 선언적으로 처리합니다.
-
-</details>

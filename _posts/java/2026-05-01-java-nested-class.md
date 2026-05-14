@@ -661,10 +661,6 @@ public class Outer {
 
 ## 11. 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1: Static 중첩 클래스와 멤버 내부 클래스의 차이는?
 
 **A:** 핵심 차이는 외부 클래스 인스턴스에 대한 참조 보유 여부입니다. Static 중첩 클래스는 외부 참조가 없어 `new Outer.StaticNested()`로 독립 생성 가능하고, 외부의 static 멤버만 접근합니다. 멤버 내부 클래스는 컴파일러가 `this$0` 필드를 자동 추가하여 외부 인스턴스를 강참조하므로 `outer.new Inner()`로만 생성 가능하고, 외부의 모든 멤버에 접근합니다. 이 차이 때문에 멤버 내부 클래스는 메모리 누수 위험이 있습니다.
@@ -742,5 +738,3 @@ public class HttpRequest {
 // 사용: new HttpRequest.Builder().url("...").timeout(10).build()
 ```
 Builder가 외부 클래스 인스턴스 없이 독립적으로 사용되어야 하므로 static. 외부 클래스의 private 생성자에 접근 가능. Lombok의 `@Builder`도 동일한 패턴으로 코드를 생성합니다.
-
-</details>

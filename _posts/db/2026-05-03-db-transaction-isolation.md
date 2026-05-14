@@ -1393,10 +1393,6 @@ int incrementIfUnderLimit(@Param("id") Long id, @Param("limit") int limit);
 
 ## 11. 면접 포인트 5가지 — WHY 기반 심층 답변
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. MySQL InnoDB REPEATABLE READ에서 Phantom Read가 발생하는 경우와 발생하지 않는 경우를 구분하고, 그 이유를 설명하라.
 
 **답변:**
@@ -1489,5 +1485,3 @@ graph LR
 ---
 
 격리 수준은 **"얼마나 많은 이상 현상을 허용하고 대신 동시성을 얻을 것인가"** 의 트레이드오프다. MySQL InnoDB의 REPEATABLE READ는 MVCC와 Next-Key Lock의 조합으로 대부분의 OLTP 워크로드에서 최적의 균형을 제공한다. 그러나 재고 차감, 쿠폰 발급 같은 "읽고 나서 쓰는" 패턴에서는 MVCC만으로는 안전하지 않다는 사실을 반드시 기억해야 한다. 격리 수준 설정보다 쿼리 설계와 락 전략이 더 중요하다.
-
-</details>

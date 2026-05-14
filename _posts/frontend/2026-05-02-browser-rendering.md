@@ -480,10 +480,6 @@ element.addEventListener('animationend', () => {
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. Reflow와 Repaint의 차이는? 어떻게 최소화하는가?**
 
 Reflow(Layout)는 요소의 크기/위치를 재계산하는 과정이다. `width`, `height`, `margin`, `offsetTop` 같은 기하학적 속성 변경 시 발생하며, 부모-자식 관계로 전파된다. Repaint는 색상, 배경색, 그림자 등 시각적 속성만 변경될 때 발생하며 Reflow보다 비용이 낮다. 최소화 방법: DOM 변경을 batch 처리(DocumentFragment), 읽기/쓰기 분리, `transform`/`opacity` 전용 애니메이션.
@@ -503,5 +499,3 @@ Reflow(Layout)는 요소의 크기/위치를 재계산하는 과정이다. `widt
 **Q5. requestAnimationFrame을 사용해야 하는 이유는?**
 
 `setTimeout(fn, 0)`으로 애니메이션을 처리하면 브라우저 렌더링 주기(16.7ms)와 어긋나 프레임 드롭이 발생한다. `requestAnimationFrame`은 브라우저가 다음 프레임을 그리기 직전에 콜백을 실행하므로 렌더링 주기와 동기화된다. 탭이 비활성화되면 자동으로 일시 정지되어 배터리/CPU를 절약한다.
-
-</details>

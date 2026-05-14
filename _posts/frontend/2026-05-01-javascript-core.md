@@ -660,9 +660,6 @@ if (value == null) { ... }  // null || undefined 둘 다 처리
 
 ## 추가 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
 **Q1. 이벤트 루프에서 마이크로태스크와 태스크 큐의 차이는?**
 
 콜 스택이 비었을 때 이벤트 루프는 마이크로태스크 큐를 완전히 소진한 뒤 태스크 큐에서 하나를 꺼낸다. `Promise.then`, `queueMicrotask`, `MutationObserver`는 마이크로태스크다. `setTimeout`, `setInterval`, DOM 이벤트는 태스크다. 마이크로태스크가 무한히 추가되면 태스크(렌더링 포함)가 영원히 실행되지 않는다.
@@ -682,5 +679,3 @@ if (value == null) { ... }  // null || undefined 둘 다 처리
 **Q5. 호이스팅이 실제로 문제가 되는 시나리오는?**
 
 `var`로 선언된 변수를 선언 전에 읽으면 `undefined`가 반환되어 조용히 버그가 발생한다. 조건문 안에 `var`를 쓰면 함수 전체 스코프로 올라가 의도치 않은 참조가 생긴다. `let`/`const`는 TDZ 덕분에 선언 전 접근 시 즉시 `ReferenceError`로 명시적 실패를 유도해 더 안전하다.
-
-</details>

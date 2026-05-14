@@ -549,10 +549,6 @@ if (Object.prototype.hasOwnProperty.call(obj, 'method')) {
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. `__proto__`와 `prototype`의 차이를 설명하세요.**
 
 `prototype`은 함수 객체에만 있는 프로퍼티로, `new`로 인스턴스를 만들 때 그 인스턴스의 `[[Prototype]]`에 연결됩니다. `__proto__`는 모든 객체가 가진 내부 슬롯 `[[Prototype]]`에 접근하는 접근자 프로퍼티입니다. `person.__proto__ === Person.prototype`이 성립합니다. 실무에서는 `__proto__` 대신 `Object.getPrototypeOf(obj)`를 사용합니다.
@@ -572,5 +568,3 @@ if (Object.prototype.hasOwnProperty.call(obj, 'method')) {
 **Q5. 프로토타입 오염(Prototype Pollution) 공격이란?**
 
 공격자가 `__proto__`나 `constructor.prototype`을 키로 가진 악의적인 데이터를 주입해 `Object.prototype`을 오염시키는 공격입니다. 이후 모든 객체에서 오염된 프로퍼티가 노출됩니다. 방어 방법: `JSON.parse` 결과에서 `__proto__` 키 제거, `Object.create(null)` 사용, `Object.freeze(Object.prototype)`으로 수정 차단입니다.
-
-</details>

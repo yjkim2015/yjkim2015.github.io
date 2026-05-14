@@ -633,10 +633,6 @@ UserService proxied = (UserService) factory.getProxy();
 
 ## 면접 포인트
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 **Q1. SOLID 원칙 중 Spring이 직접적으로 구현하는 원칙은?**
 > DIP(의존성 역전 원칙): `@Autowired`로 구체 클래스 대신 인터페이스에 의존. Spring이 구현체를 주입한다. OCP(개방-폐쇄 원칙): `@Conditional`과 인터페이스 교체로 기존 코드 수정 없이 기능 확장. SRP는 개발자가 클래스 설계 시 직접 지켜야 한다.
 
@@ -651,5 +647,3 @@ UserService proxied = (UserService) factory.getProxy();
 
 **Q5. 관심사의 분리(SoC)가 실무에서 중요한 이유는?**
 > DB 로직, 비즈니스 로직, HTTP 처리가 하나의 클래스에 있으면, DB를 교체하거나 HTTP 프레임워크를 변경할 때 비즈니스 로직도 함께 수정해야 한다. 관심사를 Repository(DB), Service(비즈니스), Controller(HTTP)로 분리하면 각 레이어를 독립적으로 변경하고 테스트할 수 있다.
-
-</details>

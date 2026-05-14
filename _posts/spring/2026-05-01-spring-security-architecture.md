@@ -1569,10 +1569,6 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
 ## 12. 면접 포인트 5개 (심층 WHY 포함)
 
-<details>
-<summary>펼쳐보기</summary>
-
-
 ### Q1. DelegatingFilterProxy가 왜 필요한가?
 
 > **표면 답변**: Servlet 컨테이너와 Spring ApplicationContext를 연결하는 브릿지다.
@@ -1778,5 +1774,3 @@ public SecurityFilterChain userChain(HttpSecurity http) throws Exception {
 | `CsrfFilter` | CSRF 방어 | 세션 기반 서비스에서 브라우저 자동 쿠키 악용 차단 |
 | `CorsFilter` | CORS 처리 | Preflight OPTIONS를 인증 필터 전에 처리 |
 | `JwtDecoder` | JWT 서명 검증 | Authorization Server 공개키로 위변조 탐지 |
-
-</details>
