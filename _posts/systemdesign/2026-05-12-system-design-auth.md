@@ -564,6 +564,10 @@ class TokenAnomalyDetector:
 
 ## 9. 면접 포인트 5가지
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1️⃣ JWT를 무효화하는 방법은?
 
 JWT는 Stateless라 기본적으로 만료 전 무효화가 불가합니다. 세 가지 방법이 있습니다.
@@ -719,3 +723,5 @@ payload = jwt.decode(
     options={"verify_exp": True}
 )
 ```
+
+</details>

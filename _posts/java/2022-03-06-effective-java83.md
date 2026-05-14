@@ -104,16 +104,13 @@ private FieldType getField() {
 
 ```mermaid
 graph LR
-    A["지연 초기화 방법 선택"] --> B{"어떤 필드인가?"}
-    B --> C["정적 필드"]
-    B --> D["인스턴스 필드"]
-    C --> E["지연 초기화 홀더 클래스"]
-    D --> F{"반복 초기화"}
-    F --> G["불가"]
-    F --> H["가능"]
-    style E fill:#51cf66,color:#fff
-    style G fill:#f39c12,color:#fff
-    style H fill:#868e96,color:#fff
+    A["지연 초기화 방법"] --> B{"필드 종류"}
+    B -->|"정적"| C["홀더 클래스 관용구"]
+    B -->|"인스턴스"| D{"반복 초기화 허용?"}
+    D -->|"불가"| E["volatile + 이중검사"]
+    D -->|"가능"| F["단일검사 관용구"]
+    style C fill:#51cf66,color:#fff
+    style E fill:#f39c12,color:#fff
 ```
 
 ---

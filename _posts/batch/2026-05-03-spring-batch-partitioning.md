@@ -295,7 +295,7 @@ Master가 파티션 정보만 **메시지 큐(Kafka, RabbitMQ)를 통해 원격 
 
 ```mermaid
 graph LR
-    MQ["MessageChannel(Kafka)"]
+    MQ["Kafka Channel"]
     W1["Worker1"]
     W2["Worker2"]
     W3["Worker3"]
@@ -625,6 +625,10 @@ graph LR
 
 ## 12. 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. "Partitioning과 Multi-threaded Step의 차이를 설명하세요."
 
 **모범 답변:** Multi-threaded Step은 하나의 Step에서 여러 스레드가 같은 Reader를 공유하여 동시에 chunk를 처리합니다. Reader가 thread-safe해야 하고, 재시작이 제한됩니다. Partitioning은 데이터를 범위로 분할하여 각 파티션이 독립적인 Reader/Processor/Writer를 가지고 처리합니다. 스레드 안전성 걱정이 없고, 파티션 단위로 재시작이 가능하며, Remote Partitioning으로 확장할 수 있어 대용량 처리에 더 적합합니다.
@@ -793,3 +797,5 @@ public JdbcPagingItemReader<Member> partitionedReader(
 | 여러 Job 분리 실행 | 실행 조율, 실패 시 재시작 복잡 | 단일 Job 안에서 파티션별 독립 재시작 |
 
 ID 범위를 파티션으로 나누면(1~100만, 100만~200만 등) 각 Worker Step이 독립적으로 처리하고, 특정 파티션 실패 시 해당 파티션만 재실행한다. 원격 파티셔닝으로 여러 서버에 분산하면 처리량을 더 확장할 수 있다.
+
+</details>

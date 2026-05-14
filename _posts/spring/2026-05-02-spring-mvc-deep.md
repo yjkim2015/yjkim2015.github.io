@@ -355,7 +355,7 @@ public class OrderController {
 
 ```mermaid
 graph LR
-    A[DispatcherServlet] --> B[HandlerAdapter interface]
+    A[DispatcherServlet] --> B["HandlerAdapter int"]
     B --> C[RequestMappingHA]
     B --> D[HttpRequestHA]
     B --> E[SimpleControllerHA]
@@ -476,7 +476,7 @@ public class HandlerMethodReturnValueHandlerComposite {
 
 ```mermaid
 graph LR
-    A[RequestBody param] --> B[RequestResponseBodyMP]
+    A[RequestBody param] --> B[RequestResponseBod]
     B --> C[MessageConverters]
     C --> D[MappingJackson2HC]
     D --> E[ObjectMapper]
@@ -1162,7 +1162,7 @@ graph LR
     A[요청] --> B[Accept header]
     A --> C[URL suffix]
     A --> D[Query parameter]
-    B --> E[ContentNegotiationMgr]
+    B --> E[ContentNegoMgr]
     C --> E
     D --> E
 ```
@@ -1642,6 +1642,10 @@ public class Application {
 
 ## 17. 면접 포인트 5개 — WHY 기반 심층 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. DispatcherServlet이 단일 Front Controller인 이유는 무엇이고, 스레드 안전성은 어떻게 보장하는가?
 
 **핵심 WHY:** URL마다 서블릿을 두면 공통 관심사(인증, 인코딩, 로깅)가 모든 서블릿에 중복된다. 단일 진입점으로 공통 처리를 중앙화하고 각 컨트롤러는 비즈니스 로직에만 집중한다.
@@ -1756,3 +1760,5 @@ graph LR
 | `Filter` | 매 요청 | 서블릿 레벨 처리 | 예외 → `@ExceptionHandler` 미작동 |
 | `@ExceptionHandler` | 예외 발생 시 | 전역 예외 처리 | 필터 예외는 처리 불가 |
 | `ViewResolver` | `@ResponseBody` 없을 때 | 뷰 이름 → View 객체 | REST API에서는 미사용 |
+
+</details>

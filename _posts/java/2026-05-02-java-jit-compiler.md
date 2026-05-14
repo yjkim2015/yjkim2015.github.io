@@ -884,6 +884,10 @@ java -XX:ReservedCodeCacheSize=512m \   # 기본 240MB → 512MB
 
 ## 10. 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1: "JIT 컴파일러가 무엇인지 설명해 주세요"
 
 ```
@@ -993,3 +997,5 @@ JIT는 Speculative Optimization으로 "이 코드는 항상 이 경로를 따른
 
 **Q5. 프로파일링 기반 최적화(PGO)란 무엇인가?**
 JIT는 런타임에 수집한 프로파일(어떤 코드가 자주 실행되는가, 어떤 타입이 주로 사용되는가)을 기반으로 최적화합니다. 이를 Profile-Guided Optimization(PGO)이라 합니다. 실제 운영 트래픽에서 "90%의 경우 `OrderStatus.PENDING`이 사용된다"는 프로파일이 쌓이면 JIT가 이 경로를 최적화합니다. JFR(Java Flight Recorder)으로 수집한 프로파일을 GraalVM AOT 컴파일에 제공하면 Native Image에서도 PGO 효과를 얻을 수 있습니다.
+
+</details>

@@ -19,7 +19,7 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    A["SecurityContextHolder"] --> B["ThreadLocal 전략"]
+    A["SCHolder"] --> B["ThreadLocal 전략"]
     A --> C["Inheritable 전략"]
     A --> D["Global 전략"]
     B & C & D --> F["SecurityContext"]

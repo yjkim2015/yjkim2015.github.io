@@ -317,7 +317,7 @@ console.log('script end');
 ```mermaid
 graph LR
     A["script 실행"] --> B["마이크로태스크 처리"]
-    B --> C["promise1 → async end → promise2"]
+    B --> C["p1→async end→p2"]
     C --> D["태스크 큐: setTimeout"]
     A -->|"등록"| MT["Promise.then/await"]
     A -->|"등록"| TQ["setTimeout"]
@@ -579,6 +579,10 @@ function animate() {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. 마이크로태스크와 태스크(매크로태스크)의 차이를 설명하고, 실행 순서를 코드로 보여주세요.**
 
 마이크로태스크(Promise `.then`, `queueMicrotask`, `MutationObserver`)는 현재 태스크가 끝나면 즉시, 다음 태스크 전에 모두 실행됩니다. 태스크(setTimeout, setInterval, I/O)는 매번 이벤트 루프 한 사이클에 하나씩 실행됩니다.
@@ -606,3 +610,5 @@ Node.js는 libuv 기반으로 6단계 페이즈(timers → I/O → idle → poll
 **Q5. 이벤트 루프를 이용해 무거운 작업을 UI 블로킹 없이 처리하는 방법은?**
 
 세 가지 접근법이 있습니다. (1) **청크 분할 + setTimeout**: 작업을 작은 단위로 나눠 매 청크 후 `setTimeout(fn, 0)`으로 이벤트 루프에 제어권 반환. (2) **Web Worker**: CPU 집중 작업을 별도 스레드로 완전히 분리. (3) **`scheduler.postTask`(현대 브라우저)**: 우선순위 기반 태스크 스케줄링으로 중요한 UI 작업에 높은 우선순위 부여.
+
+</details>

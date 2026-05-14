@@ -420,6 +420,10 @@ public NutritionFacts build() {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 1. **Q: 정적 팩터리 메서드의 단점은?**
    - A: 상속하려면 `public`/`protected` 생성자가 필요하므로, 정적 팩터리만 제공하면 하위 클래스를 만들 수 없습니다. 또한 API 문서에서 생성자처럼 명확히 드러나지 않아 찾기 어렵습니다.
 
@@ -635,3 +639,5 @@ Lombok @Builder 주의점:
 빌더 패턴은 생성자 매개변수가 4개 이상이거나 선택적 매개변수가 많을 때 가독성을 크게 높인다. `new Order(1L, null, null, "KRW", 5)`처럼 의미 불명의 인수 나열 대신 `Order.builder().orderId(1L).currency("KRW").quantity(5).build()`로 명확하게 표현할 수 있다.
 
 의존성 주입으로 자원을 직접 명시하면 테스트에서 Mock 구현체를 주입할 수 있다. 클래스 내부에서 `new` 로 구현체를 직접 생성하면 테스트 시 실제 DB나 외부 API를 호출하게 된다.
+
+</details>

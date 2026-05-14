@@ -54,9 +54,9 @@ Hit Rate = Cache Hit 수 / 전체 요청 수
 
 ```mermaid
 graph LR
-    A1["A (가장 오래됨)"] --> B1["B"] --> C1["C (최근)"]
-    B2["B (가장 오래됨)"] --> C2["C"] --> D2["D (최근)"]
-    C1 -->|"D 추가 → A 제거"| B2
+    A1["A(oldest)"] --> B1["B"] --> C1["C(newest)"]
+    B2["B(oldest)"] --> C2["C"] --> D2["D(newest)"]
+    C1 -->|"D 추가"| B2
 ```
 
 ### Java 구현 (LinkedList 기반)
@@ -978,6 +978,10 @@ public class CacheWarmup implements ApplicationRunner {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 #### Q. LRU와 LFU의 차이점과 각각 적합한 상황은?
 
 ```
@@ -1039,3 +1043,5 @@ volatile-ttl: TTL 짧은 키부터 제거
    30분~1시간 후 히트율 재측정
    목표: 80% 이상 (서비스 특성에 따라 다름)
 ```
+
+</details>

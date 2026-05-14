@@ -572,6 +572,10 @@ fun handle(result: Result) = when (result) {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 #### Q. Kotlin의 Null Safety는 어떻게 동작하나요?
 
 ```kotlin
@@ -630,3 +634,5 @@ class Order private constructor(val id: Long) {
 // 2. @JvmStatic 없으면 Java에서 Order.Companion.create()로 호출
 // 3. companion object에 이름 부여 가능: companion object Factory { }
 ```
+
+</details>

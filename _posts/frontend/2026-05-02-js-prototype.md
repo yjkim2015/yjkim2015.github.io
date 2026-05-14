@@ -70,16 +70,15 @@ console.log(dog.type); // '동물' — 프로토타입에서 찾음
 
 ```mermaid
 flowchart LR
-    A["dog.speak() 호출"] --> B{"dog에<br>speak가 있나?"}
-    B -->|"예"| C["dog.speak() 실행"]
-    B -->|"아니오"| D{"Animal.prototype에<br>speak가 있나?"}
-    D -->|"예"| E["Animal.prototype.s"]
-    D -->|"아니오"| F{"Object.prototype에<br>speak가 있나?"}
-    F -->|"예"| G["Object.prototype.s"]
-    F -->|"아니오"| H["null — undefined 반"]
+    A["dog.speak() 호출"] --> B{"dog에 있나?"}
+    B -->|"예"| C["실행"]
+    B -->|"아니오"| D{"Animal.prototype?"}
+    D -->|"예"| C
+    D -->|"아니오"| F{"Object.prototype?"}
+    F -->|"예"| C
+    F -->|"아니오"| G["undefined 반환"]
     style C fill:#2ecc71,color:#fff
-    style E fill:#3498db,color:#fff
-    style H fill:#e74c3c,color:#fff
+    style G fill:#e74c3c,color:#fff
 ```
 
 ```javascript
@@ -282,13 +281,11 @@ console.log(buddy instanceof Animal);          // true
 ### 프로토타입 체인 시각화
 
 ```mermaid
-graph BT
-    BUDDY["buddy"]
-    GR["GoldenRetriever.pr"]
-    DOG["Dog.prototype"]
-    OBJ["Object.prototype"]
-    NULL[null]
-    BUDDY -->|__proto__| GR -->|__proto__| DOG -->|__proto__| OBJ -->|__proto__| NULL
+graph LR
+    BUDDY["buddy"] -->|"__proto__"| GR["GoldenRetriever"]
+    GR -->|"__proto__"| DOG["Dog.prototype"]
+    DOG -->|"__proto__"| OBJ["Object.prototype"]
+    OBJ -->|"__proto__"| NULL["null"]
     style BUDDY fill:#e74c3c,color:#fff
 ```
 
@@ -552,6 +549,10 @@ if (Object.prototype.hasOwnProperty.call(obj, 'method')) {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. `__proto__`와 `prototype`의 차이를 설명하세요.**
 
 `prototype`은 함수 객체에만 있는 프로퍼티로, `new`로 인스턴스를 만들 때 그 인스턴스의 `[[Prototype]]`에 연결됩니다. `__proto__`는 모든 객체가 가진 내부 슬롯 `[[Prototype]]`에 접근하는 접근자 프로퍼티입니다. `person.__proto__ === Person.prototype`이 성립합니다. 실무에서는 `__proto__` 대신 `Object.getPrototypeOf(obj)`를 사용합니다.
@@ -571,3 +572,5 @@ if (Object.prototype.hasOwnProperty.call(obj, 'method')) {
 **Q5. 프로토타입 오염(Prototype Pollution) 공격이란?**
 
 공격자가 `__proto__`나 `constructor.prototype`을 키로 가진 악의적인 데이터를 주입해 `Object.prototype`을 오염시키는 공격입니다. 이후 모든 객체에서 오염된 프로퍼티가 노출됩니다. 방어 방법: `JSON.parse` 결과에서 `__proto__` 키 제거, `Object.create(null)` 사용, `Object.freeze(Object.prototype)`으로 수정 차단입니다.
+
+</details>

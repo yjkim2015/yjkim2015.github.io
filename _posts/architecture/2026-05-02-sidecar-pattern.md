@@ -94,12 +94,12 @@ graph LR
 
 ```mermaid
 graph LR
-    Client --> EnvoyA["Envoy A:15001"]
-    EnvoyA -- mTLS --> EnvoyB["Envoy B:15001"]
-    EnvoyB --> AppB["App B:8080"]
-    AppA["App A:8080"] -- outbound --> EnvoyA
-    CP["Istiod(Control Pla"] -. xDS 설정푸시 .-> EnvoyA
-    CP -. xDS 설정푸시 .-> EnvoyB
+    Client --> EA["Envoy A"]
+    EA -- mTLS --> EB["Envoy B"]
+    EB --> AppB["App B"]
+    AppA["App A"] --> EA
+    CP["Istiod"] -. xDS .-> EA
+    CP -. xDS .-> EB
 ```
 
 이 구조의 핵심은 Control Plane(Istiod)이 모든 Envoy 사이드카에 xDS 프로토콜로 라우팅 정책과 보안 정책을 동적으로 푸시한다는 점입니다. 수백 개의 서비스가 있어도 정책 변경은 Control Plane에서 한 번만 하면 됩니다.
@@ -832,6 +832,10 @@ containers:
 
 ## 8. 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. 사이드카 패턴이 무엇인지 설명하고, 어떤 상황에서 사용하는지 말씀해 주세요.
 
 **핵심 답변 구조**: 정의 → 비유 → 사용 상황 → 장단점
@@ -922,3 +926,5 @@ graph LR
 ---
 
 사이드카 패턴은 MSA의 복잡성을 관리하는 핵심 인프라 패턴입니다. 오토바이와 사이드카처럼, 메인 서비스와 인프라 기능이 각자의 역할에 집중할 때 전체 시스템은 더 견고하고 유지보수하기 쉬워집니다. 처음에는 컨테이너 수가 늘어나는 것이 복잡해 보일 수 있지만, 수십 개의 서비스가 동일한 사이드카 패턴을 따를 때 생기는 일관성과 운영 효율성은 그 복잡성을 충분히 상쇄합니다.
+
+</details>

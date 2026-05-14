@@ -557,6 +557,10 @@ Weight Predicate를 사용한 카나리 배포 중 설정을 동적으로 변경
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. Spring Cloud Gateway와 Zuul의 차이는?**
 > Zuul 1.x는 서블릿 기반 동기/블로킹 모델이다. Spring Cloud Gateway는 Reactor Netty 기반 비동기/논블로킹으로 동일한 스레드 수로 훨씬 많은 요청을 처리할 수 있다. Zuul 2는 논블로킹이지만 Spring과의 통합이 부족해 신규 도입 시 Gateway가 표준이다.
 
@@ -571,3 +575,5 @@ Weight Predicate를 사용한 카나리 배포 중 설정을 동적으로 변경
 
 **Q5. Predicate와 Filter의 역할 구분은?**
 > `Predicate`는 요청이 Route에 매칭되는지 판단한다(경로, 헤더, 쿼리 파라미터, 시간대 등). `Filter`는 매칭된 요청/응답을 변환한다(헤더 추가/제거, 인증, Rate Limiting, 경로 재작성). Predicate는 라우팅 결정, Filter는 처리 로직이다.
+
+</details>

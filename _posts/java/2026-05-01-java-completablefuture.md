@@ -1771,6 +1771,10 @@ CompletableFuture<Object> any = CompletableFuture.anyOf(
 
 ## 15. 면접 포인트 5개
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Future의 get()은 왜 블로킹인가? CompletableFuture는 어떻게 이를 해결하는가?
 
 > **WHY**: `FutureTask.get()`은 내부적으로 `AbstractQueuedSynchronizer(AQS)`의 `acquire()` 메커니즘을 사용한다. 작업이 `NORMAL` 또는 `EXCEPTIONAL` 상태가 되기 전까지 호출 스레드를 `LockSupport.park()`으로 잠재운다. 작업 완료 시 `LockSupport.unpark(thread)`로 깨우지만, 그 동안 스레드 자체는 OS 스케줄러에서 제거된 상태다. 스레드 = 자원이므로 블로킹 스레드 수만큼 자원이 낭비된다.
@@ -1840,3 +1844,5 @@ CompletableFuture<Object> any = CompletableFuture.anyOf(
 셋째, 비동기 작업 체인의 끝에는 반드시 예외 처리를 붙인다. 처리되지 않은 예외는 조용히 삼켜진다.
 
 Java 21 이상에서는 Virtual Thread Executor를 CF에 조합하는 것이 현재 최선의 패턴이다.
+
+</details>

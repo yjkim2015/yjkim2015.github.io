@@ -1468,6 +1468,10 @@ public class PerformanceInterceptor implements HandlerInterceptor {
 
 ## 11. 면접 포인트 5개 — 깊은 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Interceptor와 Filter의 차이점을 설명하고, 각각 언제 사용하는지 말씀해주세요.
 
 **핵심 WHY:**
@@ -1842,3 +1846,5 @@ graph LR
 - `@Async`, `Callable`, `DeferredResult` 사용 시 `AsyncHandlerInterceptor` 구현
 - `afterConcurrentHandlingStarted`에서 요청 스레드 정리
 - 비동기 스레드에 컨텍스트 전달 시 `RequestContextHolder.setRequestAttributes(attrs, true)`
+
+</details>

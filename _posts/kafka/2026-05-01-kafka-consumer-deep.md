@@ -926,6 +926,10 @@ public class AdaptivePollRecordsConfig {
 
 ## 10. 면접 포인트 5가지
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Group Coordinator는 어떻게 선택되는가?
 
 **답:** `hash(groupId) % __consumer_offsets.numPartitions` 수식으로 파티션 번호를 결정하고, 그 파티션의 리더 브로커가 Coordinator가 된다. `__consumer_offsets`는 기본 50개 파티션이므로, 그룹 ID의 해시값을 50으로 나눈 나머지로 파티션을 결정한다.
@@ -1164,3 +1168,5 @@ Kafka Consumer의 복잡성은 분산 환경에서 **"누가 어떤 파티션을
 Group Coordinator 선택 수식에서 시작해, JoinGroup/SyncGroup 프로토콜로 파티션을 배분하고, Heartbeat Thread와 Poll Thread가 독립적으로 살아있음을 증명하며, `__consumer_offsets`의 Compacted Log에 처리 위치를 기록한다. 이 흐름 전체를 이해해야 Lag 급증, 반복 리밸런싱, 메시지 중복 같은 운영 문제의 근본 원인을 찾고 수정할 수 있다.
 
 CooperativeStickyAssignor + Static Membership + Manual Commit + DeadLetterPublishingRecoverer의 조합이 현재 시점에서 프로덕션 환경에 권장되는 기본 구성이다.
+
+</details>

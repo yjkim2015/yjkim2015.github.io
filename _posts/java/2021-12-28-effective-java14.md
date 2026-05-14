@@ -194,13 +194,12 @@ TreeSet<Student> set = new TreeSet<>(students);  // 자동 정렬 컬렉션
 
 ```mermaid
 graph LR
-    A["값 클래스를 만든다면"] --> B{"순서 비교가"}
-    B -->|"Yes (대부분)"| C["Comparable 구현"]
+    A["값 클래스"] --> B{"순서 비교 필요?"}
+    B -->|"Yes"| C["Comparable 구현"]
     B -->|"No"| D["구현 불필요"]
-    C --> E["compareTo 구현 방법"]
-    E --> F["단순: 핵심 필드부터"]
-    E --> G["복잡: Comparator 체이닝"]
-    E --> H["절대 금지: 값의 차"]
+    C --> F["단순: 핵심 필드부터"]
+    C --> G["복잡: Comparator 체이닝"]
+    C --> H["절대 금지: 값의 차"]
     style F fill:#51cf66,color:#fff
     style G fill:#51cf66,color:#fff
     style H fill:#ff6b6b,color:#fff

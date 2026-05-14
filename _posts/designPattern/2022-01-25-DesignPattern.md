@@ -122,7 +122,7 @@ graph LR
     A --> C["src/"]
     C --> E["Main.java"]
     C --> F["service/"]
-    F --> G["UserService/OrderService"]
+    F --> G["UserService/Order"]
 ```
 
 ```java

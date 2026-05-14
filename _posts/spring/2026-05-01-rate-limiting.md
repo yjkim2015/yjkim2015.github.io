@@ -475,10 +475,10 @@ Bucket4j의 Redisson 프록시는 내부적으로 다음 Lua 스크립트 패턴
 
 ```mermaid
 graph LR
-    REQ["tryConsume(1)"] --> GET["Redis GET bucket_state"]
-    GET --> CAS{"버킷 상태\n변경됨?"}
-    CAS -->|"No 변경"| UPD["EVAL Lua: SET 새 상태"]
-    CAS -->|"Yes 변경"| GET
+    REQ["tryConsume(1)"] --> GET["Redis GET 버킷상태"]
+    GET --> CAS{"상태 변경됨?"}
+    CAS -->|"No"| UPD["Lua EVAL: SET"]
+    CAS -->|"Yes"| GET
     UPD --> DONE["결과 반환"]
 ```
 
@@ -1503,6 +1503,10 @@ public class TieredRateLimiter {
 
 ## 11. 면접 포인트 5개 — 극한 시나리오
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1: Token Bucket vs Sliding Window — 내부 구조 차이
 
 **Q: Token Bucket과 Sliding Window Counter의 차이를 내부 구조 수준에서 설명하라.**
@@ -1615,12 +1619,11 @@ public class HybridRateLimiter {
 ```mermaid
 graph LR
     ENV{"환경"} --> SJ{"단일 JVM?"}
-    SJ -->|"간단"| GV["Guava RateLimiter"]
+    SJ -->|"간단"| GV["Guava"]
     SJ -->|"정교"| R4J["Resilience4j"]
-    ENV --> DS{"분산 환경?"}
+    ENV --> DS{"분산?"}
     DS -->|"범용"| B4R["Bucket4j+Redis"]
     DS -->|"Gateway"| SCG["Spring Cloud GW"]
-    DS -->|"인프라"| NX["Nginx limit_req"]
 ```
 
 **알고리즘 선택 기준 요약**
@@ -1640,3 +1643,5 @@ graph LR
 - `Retry-After` 헤더 필수 — Retry Storm 방지
 - Hot Key는 샤딩으로 Redis 클러스터 균형 유지
 - Micrometer 게이지로 남은 토큰 수 실시간 모니터링, 거부율 30% 초과 시 알람
+
+</details>

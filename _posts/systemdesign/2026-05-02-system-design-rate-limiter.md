@@ -579,12 +579,11 @@ public class SlidingWindowCounterRateLimiter {
 ```mermaid
 graph LR
     A[알고리즘 선택] --> B{버스트 허용?}
-    B -->|필요| C{분산 정확도?}
-    B -->|불필요| D[Leaky Bucket]
-    C -->|높음| E[Token Bucket]
-    C -->|최고| F{메모리 여유?}
-    F -->|O1 선호| G[Sliding Counter]
-    F -->|무제한| H[Sliding Log]
+    B -->|불필요| C[Leaky Bucket]
+    B -->|필요| D{O1 메모리?}
+    D -->|예| E[Sliding Counter]
+    D -->|아니오| F[Sliding Log]
+    B -->|버스트+속도| G[Token Bucket]
 ```
 
 ---
@@ -1365,6 +1364,10 @@ public class RateLimiterResilienceConfig {
 
 ## 8. 면접 포인트 5가지 — WHY로 깊게 답하기
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1: Token Bucket vs Sliding Window Counter, 언제 무엇을 선택하는가?
 
 **표면 답변 (미드 레벨)**: "Token Bucket은 버스트를 허용하고 Sliding Window는 더 정확합니다."
@@ -1473,3 +1476,5 @@ graph LR
 | 장애 | fail-open + 로컬 폴백 | Rate Limiter 장애가 서비스 다운 유발 방지 |
 | 응답 | HTTP 429 + Retry-After | 클라이언트 즉시 재시도 방지 |
 | 차단 기준 | IP + 사용자 + API 키 복합 | 위협 유형별 독립 방어 |
+
+</details>

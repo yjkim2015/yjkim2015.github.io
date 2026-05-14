@@ -307,6 +307,10 @@ spring:
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. Spring Cloud Config의 설정 파일 우선순위는?**
 > 높음 → 낮음: `application-{profile}.yml` (Config Server) > `application.yml` (Config Server) > `application-{profile}.yml` (로컬) > `application.yml` (로컬). Config Server의 설정이 로컬을 오버라이드한다.
 
@@ -321,3 +325,5 @@ spring:
 
 **Q5. Config Server 없이 서비스가 시작될 수 있게 하려면?**
 > `spring.cloud.config.fail-fast=false`로 설정하면 Config Server 연결 실패 시 로컬 설정으로 폴백한다. 운영 환경에서는 `fail-fast=true`로 설정해 잘못된 설정으로 서비스가 시작되는 것을 방지하는 것이 권장된다.
+
+</details>

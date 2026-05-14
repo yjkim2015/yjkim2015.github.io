@@ -96,7 +96,7 @@ car.setPrice(1000);
 graph LR
     T1["스레드1"] -->|"new Car()"| C["불완전 객체"]
     T2["스레드2"] -->|"즉시 사용!"| C
-    C --> BUG["name=null, type=null 버그"]
+    C --> BUG["name=null, type=nu"]
     T1 -->|"setName/setType"| C
 ```
 

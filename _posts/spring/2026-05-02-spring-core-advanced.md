@@ -31,7 +31,7 @@ graph LR
     B --> C["BeanDefinition 확정"]
     C --> D["빈 인스턴스 생성"]
     D --> E["BPP 체인 실행"]
-    E --> F["ApplicationContext Ready"]
+    E --> F["AppContext Ready"]
 ```
 
 1. **BeanDefinition 로딩** — `@ComponentScan`, `@Configuration`, XML 등에서 빈 메타데이터를 읽어 `BeanDefinition` 객체로 등록한다. 실제 인스턴스는 아직 없다.
@@ -207,10 +207,10 @@ public interface BeanPostProcessor {
 
 ```mermaid
 graph LR
-    A["빈 인스턴스 생성"] --> B["AutowiredAnnotationBPP"]
-    B --> C["CommonAnnotationBPP"]
+    A["빈 인스턴스 생성"] --> B["AutowiredAnnoBPP"]
+    B --> C["CommonAnnoBPP"]
     C --> D["AsyncAnnotationBPP"]
-    D --> E["AbstractAutoProxyCreator"]
+    D --> E["AbstractAutoProxyC"]
     E --> F["컨테이너 등록"]
 ```
 
@@ -636,7 +636,7 @@ public class AuditEventListener implements SmartApplicationListener {
 
 ```mermaid
 graph LR
-    A["publishEvent 호출"] --> B["SimpleApplicationEventMulticaster"]
+    A["publishEvent 호출"] --> B["SimpleAppEventMult"]
     B --> C{"비동기 Executor?"}
     C -->|"없음"| D["동기 리스너 호출"]
     C -->|"있음"| E["스레드풀 비동기 호출"]
@@ -756,7 +756,7 @@ public class SpelExamples {
 
 ```mermaid
 graph LR
-    A["SpEL 문자열"] --> B["SpelExpressionParser"]
+    A["SpEL 문자열"] --> B["SpelExpressionPars"]
     B --> C["AST 생성"]
     C --> D["EvaluationContext"]
     D --> E["최종 값"]
@@ -871,7 +871,7 @@ public class AdminService {
 
 ```mermaid
 graph LR
-    A["getMessage 호출"] --> B["ResourceBundleMessageSource"]
+    A["getMessage 호출"] --> B["ResourceBundleMess"]
     B --> C{"로케일 파일 있음?"}
     C -->|"있음"| D["번역 반환"]
     C -->|"없음"| E["부모 체인 탐색"]
@@ -1621,6 +1621,10 @@ public class PaymentServiceV2 {
 
 ## 14. 면접 포인트 5개 — 깊이 있는 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1: BeanPostProcessor와 BeanFactoryPostProcessor의 차이
 
 > **Q: BPP와 BFPP의 차이를 설명하고, 각각 어떤 상황에서 사용하는지 말해주세요.**
@@ -1780,3 +1784,5 @@ public class ContainerLifecycleObserver
 7. **SpEL #{...}과 ${...} 혼동:** `#{}` 안에서 `${}` 플레이스홀더를 혼용하면 예상치 못한 결과가 나온다. 프로퍼티 값을 SpEL로 참조하려면 `#{'${db.url}'}` 형식을 쓴다.
 
 8. **@EventListener 트랜잭션 안에서 즉시 조회:** 커밋 전에 이벤트 리스너가 실행되어 DB에서 아직 안 보이는 데이터를 조회한다. `@TransactionalEventListener(phase = AFTER_COMMIT)` 사용.
+
+</details>

@@ -1847,6 +1847,10 @@ class MyIntegrationTest {
 
 ## 17. 면접 포인트 5가지 — 심층 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. @EnableAutoConfiguration이 DeferredImportSelector를 사용하는 이유는?
 
 > **표면 답변:** 자동 구성 후보를 나중에 처리하기 위해서.
@@ -1916,3 +1920,5 @@ class MyIntegrationTest {
 | 순수 Spring XML | 없음 (직접 관리) | 수동 오버라이드 | 제한적 | 높음 |
 
 **Spring Boot를 선택하는 이유:** 생태계 성숙도, 자동 구성 후보 142개+의 방대한 커버리지, `@ConditionalOnMissingBean` 패턴으로 "합리적인 기본값 + 필요시 오버라이드"를 우아하게 구현한 설계 철학. 내부 메커니즘을 이해하면 블랙박스가 아닌 완전히 예측 가능한 시스템이 된다.
+
+</details>

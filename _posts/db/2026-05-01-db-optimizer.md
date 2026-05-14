@@ -1687,6 +1687,10 @@ private User user;
 
 ## 면접 포인트 5개 (심층 WHY 답변)
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. 인덱스가 있는데 옵티마이저가 무시하는 이유는?
 
 **핵심 답변**: 옵티마이저는 "인덱스 사용 비용 < 풀스캔 비용"일 때만 인덱스를 선택한다.
@@ -1848,3 +1852,5 @@ FROM orders o WHERE o.status = 'fraud';
 - 집계 쿼리 → 사전 계산 Summary Table
 - 대용량 테이블 → Range/List Partitioning
 - 캐시 레이어(Redis) 도입으로 반복 쿼리 차단
+
+</details>

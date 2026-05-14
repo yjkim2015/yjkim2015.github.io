@@ -29,12 +29,12 @@ Spring Boot는 복잡한 스프링 설정을 자동화해서 빠르게 프로젝
 ### Spring Boot가 자동화하는 것
 
 <div class="mermaid">
-graph TD
+graph LR
     SB["Spring Boot"]
-    SB --> AC["Auto Configuration\n@SpringBootApplication이 붙으면\n클래스패스 기반으로 설정 자동화"]
-    SB --> SM["Starter 의존성\nspring-boot-starter-web 하나로\nSpring MVC + Tomcat + Jackson 모두 포함"]
-    SB --> ES["내장 서버\nTomcat이 내장되어\njar 파일 하나로 실행 가능"]
-    SB --> DP["기본값 자동 설정\napplication.yml로\n필요한 것만 오버라이드"]
+    SB --> AC["Auto Configuration"]
+    SB --> SM["Starter 의존성"]
+    SB --> ES["내장 서버(Tomcat)"]
+    SB --> DP["기본값 자동 설정"]
 </div>
 
 ---
@@ -183,14 +183,11 @@ java -jar build/libs/hello-spring-0.0.1-SNAPSHOT.jar
 ### @SpringBootApplication 자동 설정
 
 <div class="mermaid">
-graph TD
-    MAIN["1️⃣ main() 실행\nSpringApplication.run()"]
-    SCAN["2️⃣ @ComponentScan\n패키지 내 @Component, @Controller,\n@Service, @Repository 스캔"]
-    AUTO["3️⃣ @EnableAutoConfiguration\nspring.factories 파일 기반\n자동 설정 클래스 로드\n(DataSourceAutoConfiguration 등)"]
-    CTX["4️⃣ ApplicationContext 생성\n스프링 컨테이너 초기화\nBean 등록 완료"]
-    TOM["5️⃣ 내장 Tomcat 시작\nport 8080 열림"]
-
-    MAIN --> SCAN --> AUTO --> CTX --> TOM
+graph LR
+    MAIN["main() 실행"] --> SCAN["@ComponentScan\n패키지 스캔"]
+    SCAN --> AUTO["Auto Configuration\n자동 설정 로드"]
+    AUTO --> CTX["ApplicationContext\nBean 등록"]
+    CTX --> TOM["내장 Tomcat\nport 8080"]
 </div>
 
 ### application.yml 기본 설정

@@ -1463,6 +1463,10 @@ kafka-configs.sh --bootstrap-server kafka:9092 \
 
 ## 13. 면접 포인트 5개 — 깊은 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Kafka 브로커에서 num.network.threads와 num.io.threads를 왜 분리했는가?
 
 **단순 답변 (불합격):** "네트워크와 IO를 분리하면 효율적이다."
@@ -1540,3 +1544,5 @@ Kafka 브로커의 설계는 세 가지 원칙으로 수렴한다.
 **셋째, 단순한 구조로 확장성 확보.** 순차 append, 세그먼트 분할, 희소 인덱스 — 복잡한 자료구조 없이도 O(1) 삽입과 O(log n) 탐색을 달성한다.
 
 면접에서 "Kafka는 빠르다"는 말 대신 이 세 원칙을 이유와 함께 설명하면 시니어 레벨의 답변이 된다.
+
+</details>

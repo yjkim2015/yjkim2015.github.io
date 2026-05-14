@@ -67,9 +67,9 @@ public class Thread implements Runnable {
 ```mermaid
 graph LR
     GET["get() 호출"] --> MAP["ThreadLocalMap 접근"]
-    MAP --> ENTRY["getEntry(this)"]
-    ENTRY -->|"있음"| VALUE["값 반환"]
-    ENTRY -->|"없음"| INIT["setInitialValue()"] --> VALUE
+    MAP -->|"있음"| VALUE["값 반환"]
+    MAP -->|"없음"| INIT["setInitialValue()"]
+    INIT --> VALUE
 ```
 
 ```java
@@ -167,10 +167,8 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 
 ```mermaid
 graph LR
-    S1["A 삽입(hash→3): [_]["]
-    S2["B 삽입(hash→3, 충돌→Li"]
-    S3["A GC 수거 후: [_][_]["]
-    S1 --> S2 --> S3
+    S1["A 삽입(hash→3)"] --> S2["B 충돌→4번 슬롯"]
+    S2 --> S3["A GC 수거 후 stale en"]
 ```
 
 ---
@@ -187,10 +185,10 @@ graph LR
 
 ```mermaid
 graph LR
-    TL["ThreadLocal(강참조)"] -.->|"WeakRef key"| ENTRY["Entry"]
-    ENTRY --> VAL["value(강참조)"]
-    NULL["tl=null → GC 수거"] --> LEAK["key=null, value 잔존"]
-    REMOVE["remove() 호출"] --> CLEAN["Entry 완전 제거"]
+    TL["ThreadLocal"] -.->|"WeakRef"| ENTRY["Entry"]
+    ENTRY --> VAL["value 강참조"]
+    TL -->|"GC 후"| LEAK["key=null, value 잔존"]
+    LEAK -->|"remove()"| CLEAN["Entry 제거"]
 ```
 
 ### 메모리 누수 시나리오 (스레드 풀 + ThreadLocal)
@@ -800,6 +798,10 @@ class GoodService {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. ThreadLocal의 메모리 누수 원인을 설명하세요.**
 
 `ThreadLocalMap.Entry`의 키는 `WeakReference<ThreadLocal<?>>`입니다. 외부에서 ThreadLocal 변수를 null로 해도 키의 WeakReference가 GC에 의해 수거됩니다. 그러나 Entry의 value는 강참조로 남아 있습니다. 스레드 풀의 스레드는 JVM 종료까지 살아있으므로, 스레드가 살아있는 한 값이 계속 메모리를 점유합니다. 해결책은 반드시 `finally`에서 `remove()`를 호출하는 것입니다.
@@ -826,13 +828,11 @@ HTTP 요청-응답 주기 동안 인증된 사용자 정보(`Authentication`)를
 
 ```mermaid
 graph LR
-    TL["ThreadLocal 핵심 정리"]
-    TL --> STORAGE["저장: Thread.threadL"]
-    TL --> WEAKREF["키=WeakRef, value=강"]
-    WEAKREF --> LEAK["메모리 누수: 스레드 풀 재사용"]
-    LEAK --> FIX["해결: finally { remo"]
-    TL --> INHERIT["자식 전파: Inheritable"]
-    TL --> VTHREAD["Virtual Thread: Sc"]
+    TL["ThreadLocal"] --> STORAGE["Thread 내부 저장"]
+    TL --> WEAKREF["키=WeakRef"]
+    WEAKREF --> LEAK["누수 위험"]
+    LEAK --> FIX["finally remove()"]
+    TL --> INHERIT["Inheritable TL"]
 ```
 
 ThreadLocal은 올바르게 사용하면 동기화 없이 스레드 안전성을 확보하는 강력한 도구입니다. 핵심은 **사용 후 반드시 `remove()` 호출**하는 것입니다. 특히 스레드 풀 환경에서는 이를 소홀히 하면 값 오염과 메모리 누수라는 두 가지 위험이 동시에 발생합니다.
@@ -854,3 +854,5 @@ Virtual Thread는 수백만 개가 동시에 존재할 수 있습니다. 각 Vir
 
 **Q5. MDC(Mapped Diagnostic Context)와 ThreadLocal의 관계는?**
 SLF4J의 MDC는 내부적으로 ThreadLocal을 사용합니다. `MDC.put("traceId", "abc123")`으로 저장하면 같은 스레드의 모든 로그에 `traceId=abc123`이 자동 포함됩니다. 분산 추적에서 요청 ID를 MDC에 저장하면 해당 요청의 전체 로그를 추적 ID로 필터링할 수 있습니다. 단, 비동기 처리(`@Async`, `CompletableFuture`)에서는 다른 스레드로 MDC 컨텍스트가 전달되지 않습니다. `MDCAdapter`를 구현하거나 작업 제출 시 MDC 스냅샷을 명시적으로 복사해야 합니다.
+
+</details>

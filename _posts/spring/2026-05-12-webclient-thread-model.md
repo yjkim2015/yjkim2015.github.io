@@ -315,14 +315,11 @@ WebClient가 실제로 어떤 경로로 요청을 처리하는지 추적한다.
 
 ```mermaid
 graph LR
-    A[WebClient.get] --> B[ExchangeFunction]
-    B --> C[ReactorClientHttpConnector]
-    C --> D[Reactor Netty HttpClient]
-    D --> E[Netty Channel Pipeline]
-    E --> F[Netty EventLoop]
-    F --> G[Java NIO Selector]
-    G --> H[OS epoll / kqueue]
-    H --> I[TCP 소켓]
+    A["WebClient"] --> B["ExchangeFunction"]
+    B --> C["Reactor Netty"]
+    C --> D["Netty EventLoop"]
+    D --> E["Java NIO Selector"]
+    E --> F["OS epoll/kqueue"]
 ```
 
 각 레이어의 역할은 다음과 같다.
@@ -649,6 +646,10 @@ public Mono<FullProfile> getFullProfile(@PathVariable Long id) {
 
 ## 8. 면접 포인트 5개
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1 — 동기/비동기, 블로킹/논블로킹 차이를 스레드 관점에서 설명하라
 
 **모범 답안**: 동기/비동기는 호출자가 결과를 직접 받느냐(동기), 나중에 통보받느냐(비동기)의 차이다. 블로킹/논블로킹은 호출 후 스레드가 대기하느냐(블로킹), 즉시 반환되느냐(논블로킹)의 차이다. 두 개념은 독립적이므로 4가지 조합이 가능하다. 실무에서 중요한 것은 비동기 논블로킹으로, I/O 대기 중 스레드가 반환되어 다른 요청을 처리할 수 있다.
@@ -702,12 +703,12 @@ WebClient는 기본적으로 타임아웃이 없다. 외부 API가 응답하지 
 ```mermaid
 graph LR
     A[Spring 버전?] -->|5.x / 6.0| B[WebFlux 스택인가?]
-    A -->|6.1+ / Java 21+| C[RestClient + VirtualThread 고려]
+    A -->|6.1+ / Java 21+| C["RestClient + Virtu"]
     B -->|Yes| D[WebClient]
-    B -->|No, MVC| E[RestTemplate 유지 또는 RestClient]
+    B -->|No, MVC| E["RestTemplate 유 또 R"]
     C --> F{복잡한 스트리밍<br/>배압 필요?}
     F -->|Yes| D
-    F -->|No| G[RestClient + VirtualThread]
+    F -->|No| G["RestClient + Virtu"]
 ```
 
 **RestTemplate**: Spring MVC + Java 17 이하의 기존 코드베이스. 새 코드에는 쓰지 않는다.
@@ -717,3 +718,5 @@ graph LR
 **RestClient + Virtual Thread**: Spring 6.1+, Java 21+ 신규 프로젝트. 동기 코드 스타일로 논블로킹 효과를 얻고 싶을 때. 팀 학습 비용을 최소화하면서 성능을 확보할 수 있다.
 
 스레드 모델은 선택의 문제이기 전에 이해의 문제다. 왜 스레드가 블로킹되는지, 어떻게 해방되는지를 알면 장애 상황에서 원인을 정확히 찾을 수 있다. WebClient가 "빠르다"는 것보다, **스레드가 I/O를 기다리지 않도록 설계됐다**는 것을 이해하는 것이 진짜 지식이다.
+
+</details>

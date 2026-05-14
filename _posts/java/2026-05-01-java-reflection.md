@@ -23,9 +23,10 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    S1[".java"] -->|"컴파일"| B1[".class"] -->|"JVM 로딩"| E1["실행(타입 고정)"]
-    JVM["실행 중 JVM"] -->|"getClass()/forName"| META["Class 메타데이터"]
-    META -->|"invoke()/newInstan"| OP["동적 조회/호출"]
+    A[".java"] -->|"컴파일"| B[".class"]
+    B -->|"JVM 로딩"| C["실행(타입 고정)"]
+    B -->|"forName()"| D["Class 메타데이터"]
+    D -->|"invoke()"| E["동적 조회/호출"]
 ```
 
 ### 왜 필요한가?
@@ -552,13 +553,11 @@ public class Validator {
 
 ```mermaid
 graph LR
-    INVOKE["Method.invoke(obj,"]
-    CHECK["1. 접근 제어 검사"]
-    ARRAY["2. 가변인수 배열 생성"]
-    BOX["3. 오토박싱"]
-    DISPATCH["4. 동적 디스패치"]
-    WRAP["5. 예외 래핑"]
-    INVOKE --> CHECK --> ARRAY --> BOX --> DISPATCH --> WRAP
+    INVOKE["Method.invoke()"] --> CHECK["접근 제어 검사"]
+    CHECK --> ARRAY["가변인수 배열 생성"]
+    ARRAY --> BOX["오토박싱"]
+    BOX --> DISPATCH["동적 디스패치"]
+    DISPATCH --> WRAP["예외 래핑"]
 ```
 
 ```java
@@ -1027,14 +1026,12 @@ try {
 
 ```mermaid
 graph LR
-    REFLECT["java.lang.reflect"] --> CLASS["Class
-    REFLECT["java.lang.reflect"] --> lt;T
-    REFLECT["java.lang.reflect"] --> gt; (fo"]
-    CLASS --> FIELD["Field (get/set, se"]
-    CLASS --> METHOD["Method (invoke, se"]
-    CLASS --> CONSTRUCTOR["Constructor (newIn"]
-    CLASS --> PROXY["Proxy (newProxyIns"]
-    REFLECT --> INVOKE["java.lang.invoke ("]
+    REFLECT["java.lang.reflect"] --> CLASS["Class&lt;T&gt;"]
+    CLASS --> FIELD["Field"]
+    CLASS --> METHOD["Method"]
+    CLASS --> CTOR["Constructor"]
+    CLASS --> PROXY["Proxy"]
+    REFLECT --> INVOKE["java.lang.invoke"]
 ```
 
 ### 핵심 정리
@@ -1052,6 +1049,10 @@ graph LR
 
 ---
 ## 면접 포인트
+
+<details>
+<summary>펼쳐보기</summary>
+
 
 **Q1. 리플렉션의 성능 비용은 얼마나 되며 어떻게 완화하는가?**
 리플렉션 메서드 호출은 일반 호출보다 10~100배 느립니다. JIT 컴파일러가 리플렉션 호출을 인라이닝하지 못하기 때문입니다. JMH 벤치마크 기준 일반 메서드 호출 ~1ns, 리플렉션 호출 ~50~200ns. 완화 방법: ① `Method`, `Field` 객체를 캐싱(매번 `getDeclaredMethod()` 호출 금지) ② `setAccessible(true)`를 캐싱된 객체에 한 번만 호출 ③ 고성능이 필요하면 `MethodHandle`(Java 7+) 또는 `LambdaMetafactory`(JIT 최적화 가능)를 사용합니다.
@@ -1086,3 +1087,5 @@ A. 기능상 차이는 없지만, 리플렉션 생성은 컴파일 타임 타입
 
 **Q5. 어노테이션 프로세싱과 리플렉션의 차이점은?**
 A. 어노테이션 프로세싱은 컴파일 타임에 어노테이션을 분석해 코드나 설정을 생성한다. Lombok, MapStruct가 이 방식을 사용한다. 리플렉션은 런타임에 어노테이션 정보를 읽는다. 컴파일 타임 처리는 런타임 오버헤드가 없고, 런타임 리플렉션은 동적으로 동작하지만 성능 비용이 있다.
+
+</details>

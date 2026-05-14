@@ -1214,6 +1214,10 @@ public class SafeEventPublisher {
 
 ## 14. 면접 포인트 5가지
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1: RecordAccumulator가 없으면 어떻게 되는가?
 
 **질문:** RecordAccumulator를 제거하고 send() 호출 시 바로 네트워크 전송하면 안 되는가?
@@ -1441,3 +1445,5 @@ graph LR
 ```
 
 이 트레이드오프를 이해하지 못하면 "메시지가 가끔 유실된다", "처리량이 예상보다 낮다", "트랜잭션 후 Consumer가 빈 메시지를 본다" 같은 문제의 원인을 찾을 수 없다. 설정 하나하나의 WHY를 이해하는 것이 Senior Engineer와 그렇지 않은 사람의 차이다.
+
+</details>

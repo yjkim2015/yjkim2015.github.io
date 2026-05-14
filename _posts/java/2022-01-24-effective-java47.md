@@ -49,15 +49,13 @@ for (ProcessHandle p : iterableOf(ProcessHandle.allProcesses())) { ... }
 
 ```mermaid
 graph LR
-    A["원소 시퀀스 반환 타입 결정"] --> B{"사용 목적이"}
+    A["반환 타입 결정"] --> B{"사용 목적"}
     B -->|"스트림 전용"| C["Stream 반환"]
     B -->|"반복 전용"| D["Iterable 반환"]
-    B -->|"둘 다 / 공개 API"| E["Collection 반환"]
-    E --> F{"크기가 메모리에"}
-    F -->|"Yes"| G["ArrayList 등"]
-    F -->|"No (지수적 크기 등)"| H["전용 컬렉션"]
+    B -->|"둘 다/공개 API"| E["Collection 반환"]
+    E -->|"메모리 OK"| G["ArrayList 등"]
+    E -->|"지수적 크기"| H["전용 컬렉션"]
     style E fill:#51cf66,color:#fff
-    style G fill:#51cf66,color:#fff
 ```
 
 단, 컬렉션을 반환한다는 이유만으로 덩치 큰 시퀀스를 메모리에 올리면 안 됩니다.

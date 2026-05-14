@@ -64,7 +64,7 @@ System.out.println(s.getAddCount());  // 예상: 3, 실제: 6!
 
 ```mermaid
 graph LR
-    C["Client"] -->|"addAll([A,B,C])"| IHS["InstrumentedHashSet"]
+    C["Client"] -->|"addAll([A,B,C])"| IHS["InstrumentedHashSe"]
     IHS -->|"addCount+=3"| IHS
     IHS -->|"super.addAll()"| AC["AbstractCollection"]
     AC -->|"add(A),add(B),add(C)"| IHS
@@ -222,13 +222,12 @@ class Stack<E> extends Vector<E> { ... }
 
 ```mermaid
 graph LR
-    A["코드 재사용 방법 선택"] --> B{"is-a 관계인가?"}
-    B -->|"Yes + 상위 클래스가 잘 설계"| C["상속 사용 가능"]
-    B -->|"No 또는 has-a 관계"| D["컴포지션 + 전달(forwardi"]
-    D --> E["래퍼 클래스"]
-    E --> E1["어떤 구현체든 감쌀 수 있어 유연"]
-    E --> E2["상위 클래스 변경에 영향 없음"]
-    E --> E3["API 결함을 숨길 수 있음"]
+    A["코드 재사용"] --> B{"is-a 관계?"}
+    B -->|"Yes"| C["상속 사용 가능"]
+    B -->|"No/has-a"| D["컴포지션+전달"]
+    D --> E1["어떤 구현체든 감쌀 수 있음"]
+    D --> E2["상위 클래스 변경에 무관"]
+    D --> E3["API 결함 은닉 가능"]
     style D fill:#51cf66,color:#fff
     style C fill:#ffd43b
 ```

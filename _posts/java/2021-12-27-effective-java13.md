@@ -17,13 +17,12 @@ toc_label: 목차
 
 ```mermaid
 graph LR
-    A["Cloneable 인터페이스"] -->|"메서드 없음\n(마커 인터페이스)"| B["구현 여부만 표시"]
-    C["Object.clone()"] -->|"protected 메서드"| D["실제 복사 동작"]
-    B --> E["Cloneable 구현 시:"]
-    B --> F["미구현 시:"]
+    A["Cloneable 인터페이스"] -->|"마커 인터페이스"| B["구현 여부만 표시"]
+    C["Object.clone()"] -->|"protected"| D["실제 복사 동작"]
+    B -->|"구현 시"| D
+    B -->|"미구현 시"| E["CloneNotSupported"]
     style A fill:#ffd43b
     style C fill:#4a9eff,color:#fff
-    note["clone()이 Cloneable"]
 ```
 
 **이것은 인터페이스의 이례적인 사용입니다.** 일반적으로 인터페이스 구현은 "이 클래스가 해당 기능을 제공한다"는 선언인데, `Cloneable`은 **상위 클래스(`Object`)의 `protected` 메서드 동작 방식을 변경**합니다. 따라서 이 패턴은 절대 따라 하지 마세요.
@@ -187,12 +186,10 @@ public static Stack newInstance(Stack original) {
 
 ```mermaid
 graph LR
-    B["복사 생성자/팩토리"]
-    C["Cloneable/clone"]
-    B --> B1["생성자 정상 사용"]
+    B["복사 생성자/팩토리"] --> B1["생성자 정상 사용"]
     B --> B2["final 필드 OK"]
-    B --> B3["인터페이스 타입 가능"]
-    C --> C1["final 필드 불가"]
+    B --> B3["인터페이스 타입 변환"]
+    C["Cloneable/clone"] --> C1["final 필드 불가"]
     C --> C2["CloneNotSupported"]
     style B fill:#51cf66,color:#fff
     style C fill:#ff6b6b,color:#fff
@@ -225,15 +222,13 @@ Set<String> treeSet = new TreeSet<>(hashSet);  // 자동 정렬된 TreeSet으로
 
 ```mermaid
 graph LR
-    A["객체 복사 방법 선택"] --> B{"Cloneable 이미"}
+    A["객체 복사 방법 선택"] --> B{"Cloneable 구현됨?"}
     B -->|"Yes"| C["clone() 올바르게 구현"]
-    B -->|"No"| D["복사 생성자 또는 복사 팩토리 사"]
-    D --> D1["훨씬 안전하고 유연함"]
-    C --> E{"가변 필드 있음?"}
+    B -->|"No"| D["복사 생성자/팩토리"]
+    C --> E{"가변 필드?"}
     E -->|"Yes"| F["깊은 복사 필수"]
-    E -->|"No"| G["super.clone()으로 충분"]
+    E -->|"No"| G["super.clone() 충분"]
     style D fill:#51cf66,color:#fff
-    style D1 fill:#51cf66,color:#fff
 ```
 
 > 새로운 인터페이스를 만들 때는 절대 `Cloneable`을 확장하지 마세요. 새로운 클래스도 `Cloneable`을 구현하면 안 됩니다. 복제 기능은 **복사 생성자와 복사 팩토리**를 이용하는 게 최선입니다. 단, 배열의 `clone()`은 예외적으로 가장 깔끔한 방법입니다.

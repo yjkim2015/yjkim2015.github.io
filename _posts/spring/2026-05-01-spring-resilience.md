@@ -1666,6 +1666,10 @@ private ProductDto fallback(Long id, Throwable t) {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. Circuit Breaker의 HALF_OPEN 상태가 왜 필요한가? OPEN에서 바로 CLOSED로 가면 안 되는 이유는?**
 
 > OPEN 상태에서 `waitDurationInOpenState`가 경과한 뒤 바로 CLOSED로 전환하면, 아직 불안정할 수 있는 외부 서비스에 전체 트래픽이 한꺼번에 쏟아진다. 이것이 Second Wave 장애를 유발한다. 예를 들어 DB 서버가 30초 다운됐다가 재시작했는데 커넥션 풀 워밍업에 10초가 더 필요한 상황에서, 바로 CLOSED로 전환하면 대기 중이던 요청이 폭발해 또 다운된다. HALF_OPEN은 `permittedNumberOfCallsInHalfOpenState`(예: 5개)만 허용해 안전하게 타진한 후, 성공하면 CLOSED, 실패하면 OPEN으로 되돌아가 서비스가 완전히 회복됐음을 확인 후 전환한다. 이것이 두꺼비집 비유에서 "반만 켜보는" 단계다.
@@ -1703,3 +1707,5 @@ private ProductDto fallback(Long id, Throwable t) {
 | 연쇄 적용 | Decorator 순서 | Retry > CB > RL > BH |
 
 Resilience4j는 각 패턴이 독립적으로도 강력하지만, 올바른 순서로 조합했을 때 진정한 내결함성을 달성한다. 핵심은 "어떤 패턴을 쓰는가"가 아니라 "왜 이 순서로 감싸는가"를 이해하는 것이다.
+
+</details>

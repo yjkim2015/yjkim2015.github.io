@@ -133,9 +133,9 @@ flowchart LR
     Q1{"어떤 문제인가?"} --> C["객체 생성 방식 제어"]
     Q1 --> S["클래스/객체 조합 구조"]
     Q1 --> B["객체 간 통신/알고리즘"]
-    C --> C1["생성 패턴\n("Singleton, Factory")"]
-    S --> S1["구조 패턴\n("Adapter, Composite")"]
-    B --> B1["행동 패턴\n("Observer, Strategy")"]
+    C --> C1["생성 패턴"]
+    S --> S1["구조 패턴"]
+    B --> B1["행동 패턴"]
 ```
 
 ---

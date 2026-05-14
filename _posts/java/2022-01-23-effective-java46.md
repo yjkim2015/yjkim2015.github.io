@@ -44,11 +44,10 @@ try (Stream<String> words = new Scanner(file).tokens()) {
 
 ```mermaid
 graph LR
-    A["핵심 수집기 5종"] --> B["toList()"]
-    A --> C["toSet()"]
-    A --> D["toMap(keyMapper, v"]
-    A --> E["groupingBy(classif"]
-    A --> F["joining(delimiter)"]
+    A["핵심 수집기 5종"] --> B["toList / toSet"]
+    A --> C["toMap(key, value)"]
+    A --> D["groupingBy(분류함수)"]
+    A --> E["joining(구분문자)"]
     style A fill:#4a9eff,color:#fff
 ```
 

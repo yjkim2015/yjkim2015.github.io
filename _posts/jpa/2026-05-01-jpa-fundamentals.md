@@ -1358,6 +1358,10 @@ public void setQuestions(List<Question> newQuestions) {
 
 ## 13. 면접 포인트 5개
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. 영속성 컨텍스트에서 flush와 commit의 차이를 설명하고, flush가 자동으로 발생하는 시점 3가지를 말하시오.
 
 ```
@@ -1528,3 +1532,5 @@ N+1 방지:
 참조 - High-Performance Java Persistence (Vlad Mihalcea)
 참조 - Spring Data JPA Reference Documentation
 ```
+
+</details>

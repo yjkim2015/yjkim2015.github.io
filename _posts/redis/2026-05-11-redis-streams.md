@@ -642,6 +642,10 @@ used_memory > maxmemory × 0.9 → PagerDuty P0 (즉시 MAXLEN 강제 트리밍)
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1️⃣ "Kafka와의 가장 큰 차이?"
 
 저장 매체(메모리 vs 디스크)와 확장 단위입니다. Kafka는 파티션이라는 독립 확장 단위가 있어 클러스터 수평 확장이 자연스럽고, Exactly-once를 지원합니다. Streams는 단일 키가 단일 인스턴스에 바인딩되어 앱 레벨 샤딩이 필요하며, at-least-once만 보장합니다.
@@ -661,3 +665,5 @@ at-least-once 보장의 핵심입니다. 컨슈머가 메시지를 받고 죽으
 ### 면접 포인트 5️⃣ "Exactly-once 구현 가능?"
 
 Streams 자체는 at-least-once만 지원합니다. 처리한 Entry ID를 Redis Set에 저장하고 Lua Script로 중복 체크하면 앱 레벨 멱등을 구현할 수 있지만, 완전한 Exactly-once가 필요하면 Kafka Transactions API가 적합합니다.
+
+</details>

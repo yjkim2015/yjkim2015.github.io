@@ -41,10 +41,9 @@ graph LR
     A["인증 요청"] --> B["ProviderManager"]
     B --> C{"supports?"}
     C -->|true| D["authenticate()"]
-    D -->|성공| E["인증 성공"]
-    D -->|실패| H{"부모 PM?"}
-    H -->|Yes| I["부모 위임"]
-    H -->|No| J["인증 실패"]
+    C -->|false| E["인증 실패"]
+    D -->|성공| F["인증 성공"]
+    D -->|실패| E
 ```
 
 ## ProviderManager 구현 상세

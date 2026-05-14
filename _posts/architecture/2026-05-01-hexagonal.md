@@ -488,6 +488,10 @@ public class OrderService implements PlaceOrderUseCase {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 #### Q. 헥사고날 아키텍처에서 Port와 Adapter의 차이는?
 
 ```
@@ -699,3 +703,5 @@ com.example.order
 | 테스트 어려움 | DB 없이 단위 테스트 불가 | In-memory Adapter로 빠른 테스트 가능 |
 
 DB를 MySQL에서 PostgreSQL로, HTTP를 gRPC로 교체할 때 Adapter만 바꾸면 되고 도메인 로직은 그대로 유지된다. 테스트에서 DB Adapter를 메모리 구현체로 교체하면 빠른 단위 테스트가 가능하다.
+
+</details>

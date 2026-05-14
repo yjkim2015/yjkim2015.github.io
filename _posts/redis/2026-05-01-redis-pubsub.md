@@ -49,8 +49,8 @@ server.pubsub_patterns = [
 
 ```mermaid
 graph LR
-  PUB[PUBLISH 요청] --> DC[pubsub_channels\n딕셔너리 O1 조회]
-  PUB --> PL[pubsub_patterns\n리스트 ON 순회]
+  PUB[PUBLISH 요청] --> DC[pubsub_channels]
+  PUB --> PL[pubsub_patterns]
   DC --> W1[소켓 버퍼 쓰기]
   PL --> GM[glob 매칭]
   GM --> W2[매칭된 클라이언트\n소켓 버퍼 쓰기]
@@ -328,12 +328,12 @@ public class ChatListener implements MessageListener {
 
 ```mermaid
 graph LR
-  RC[Redis 서버] --> ST[구독 전용 스레드\n1개 블로킹 read]
+  RC[Redis 서버] --> ST["구독 전용 스레드"]
   ST --> Q[내부 태스크 큐]
   Q --> T1[워커 스레드 1]
   Q --> T2[워커 스레드 2]
   Q --> T3[워커 스레드 N]
-  T1 --> L[MessageListener\nonMessage]
+  T1 --> L[MessageListener]
   T2 --> L
   T3 --> L
 ```
@@ -433,7 +433,7 @@ graph LR
   PUB[Pub/Sub] --> BUF[소켓 버퍼에 직접 씀]
   BUF --> GONE[전달 즉시 소멸]
   STR[Streams] --> LOG[Radix Tree 로그 저장]
-  LOG --> CG[Consumer Group\n오프셋 추적]
+  LOG --> CG["Consumer Group"]
   CG --> ACK[ACK 후 PEL에서 제거]
 ```
 
@@ -1021,6 +1021,10 @@ public class PubSubMonitor {
 
 ## 12. 면접 포인트 5가지
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Redis Pub/Sub이 Fire-and-Forget인 이유는 무엇인가?
 
 **표면 답변**: 메시지를 저장하지 않아서 구독자가 없으면 유실된다.
@@ -1309,3 +1313,5 @@ if (receiverCount == 0) {
 | Keyspace Notification | Pub/Sub 위에 구현, 지연 삭제로 이벤트 지연 가능 |
 | Streams와 차이 | Pub/Sub = 즉각 브로드캐스트 휘발, Streams = 영속 ACK 재처리 |
 | 선택 기준 | 유실 허용 실시간 브로드캐스트 → Pub/Sub, 유실 불가 → Streams/Kafka |
+
+</details>

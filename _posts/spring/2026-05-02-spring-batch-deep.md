@@ -51,11 +51,11 @@ Spring Batch는 기동 시 메타 테이블을 자동으로 생성한다(`spring
 
 ```mermaid
 graph LR
-    JI[BATCH_JOB_INSTANCE] --> JE[BATCH_JOB_EXECUTION]
-    JE --> SE[BATCH_STEP_EXECUTION]
+    JI[BATCH_JOB_INSTANCE] --> JE[BATCH_JOB_EXECUTIO]
+    JE --> SE[BATCH_STEP_EXECUTI]
     JE --> JEC[JOB_EXEC_CONTEXT]
     SE --> SEC[STEP_EXEC_CONTEXT]
-    JI --> JP[JOB_EXECUTION_PARAMS]
+    JI --> JP[JOB_EXECUTION_PARA]
 ```
 
 **왜 JobInstance와 JobExecution을 분리하는가?**
@@ -1502,6 +1502,10 @@ public class BankSettlementJobConfig {
 
 ## 16. 면접 포인트 5개 — 심층 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Chunk 기반 처리에서 트랜잭션 경계는 어떻게 설정되며, Writer에서 예외 발생 시 어떻게 처리되는가?
 
 **핵심 답변**:
@@ -1691,3 +1695,5 @@ graph LR
 | Kafka Streams | O | O | Kafka UI | 실시간 스트리밍 처리 |
 
 **결론**: 수만~수억 건 규모의 정기 배치(정산, 통계, 마이그레이션, 알림)에는 Spring Batch가 사실상 표준이다. 선언적 Skip/Retry, JobRepository 기반 재시작, Partitioning 병렬 처리, Spring 생태계 통합, 풍부한 ItemReader/Writer 구현체가 운영 배치의 요구사항 대부분을 커버한다.
+
+</details>

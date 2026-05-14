@@ -710,6 +710,10 @@ public String callWithRetry(String prompt) {
 
 ## 면접 포인트 5개
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 #### Q1. LLM 애플리케이션에서 스트리밍 응답을 구현하는 이유는?
 
 ```
@@ -804,3 +808,5 @@ Content-Type: text/event-stream
 4. **스트리밍 응답 미구현으로 UX 저하** — LLM 전체 응답을 기다렸다가 한 번에 표시하면 10~30초 동안 빈 화면이 보인다. Server-Sent Events나 WebSocket으로 토큰 단위 스트리밍을 구현해야 한다.
 
 5. **프롬프트 인젝션 방어 누락** — 사용자 입력이 시스템 프롬프트를 오버라이딩할 수 있으면 악의적인 사용자가 안전 장치를 우회한다. 사용자 입력과 시스템 지시를 명확히 분리하고, 입력 값 샌드박싱과 출력 검증을 적용해야 한다.
+
+</details>

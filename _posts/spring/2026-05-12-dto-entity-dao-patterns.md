@@ -331,9 +331,9 @@ Spring Data JPA의 Repository 계층 구조는 다음과 같다.
 
 ```mermaid
 graph LR
-    JpaRepository["JpaRepository<br>flush/saveAndFlush"] -->|"extends"| PagingAndSortingRepository["PagingAndSortingRepository<br>findAll(Pageable)"]
-    PagingAndSortingRepository -->|"extends"| CrudRepository["CrudRepository<br>save/findById/delete"]
-    CrudRepository -->|"extends"| Repository["Repository<br>마커 인터페이스"]
+    JPA["JpaRepository"] -->|"extends"| PAG["PagingAndSorting"]
+    PAG -->|"extends"| CRUD["CrudRepository"]
+    CRUD -->|"extends"| REPO["Repository\n마커 인터페이스"]
 ```
 
 실무에서는 보통 `JpaRepository`를 상속한다. 기본 CRUD와 페이징이 모두 제공된다.
@@ -625,6 +625,10 @@ User 정보를 반환하는 API가 10개다. `UserService`, `AdminService`, `Rep
 
 ## 6. 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1️⃣ "DTO와 Entity를 왜 분리하는가?"
 
 단순히 "보안 때문에"라고 답하면 반쪽짜리 답변이다. 완전한 답변은 네 가지다.
@@ -672,19 +676,17 @@ Service 계층에서 담당한다. Controller는 HTTP 처리에 집중, Reposito
 
 ```mermaid
 graph LR
-    Client["클라이언트"] -->|"RequestDTO"| Controller["Controller<br>HTTP 처리"]
-    Controller -->|"RequestDTO"| Service["Service<br>비즈니스+변환"]
-    Service -->|"Entity 생성"| Entity["Entity<br>도메인 상태+로직"]
-    Service -->|"Entity 저장/조회"| Repo["Repository<br>영속성 추상화"]
-    Repo -->|"Entity"| DB["Database"]
-    DB -->|"Entity"| Repo
-    Repo -->|"Entity"| Service
+    Client["클라이언트"] -->|"RequestDTO"| Controller["Controller"]
+    Controller -->|"DTO"| Service["Service"]
+    Service -->|"Entity"| Repo["Repository"]
+    Repo -->|"CRUD"| DB["Database"]
+    Service -.->|"매핑"| Mapper["Mapper"]
     Service -->|"ResponseDTO"| Controller
     Controller -->|"ResponseDTO"| Client
-    Entity -.->|"@Embedded"| VO["VO<br>값 동등성"]
-    Service -.->|"매핑"| Mapper["Mapper<br>변환 전담"]
 ```
 
 Controller는 클라이언트와의 계약(HTTP)을 관리한다. Service는 비즈니스 결정과 변환을 책임진다. Repository는 도메인을 영속성 기술로부터 보호한다. Entity는 도메인의 상태와 규칙을 가진다. VO는 도메인 개념을 값으로 표현한다. DTO는 계층 간 데이터를 안전하게 이동시킨다.
 
 이 여섯 가지가 각자의 자리를 지킬 때, 코드는 변경에 강하고 테스트가 쉬우며 팀 전체가 읽기 쉬운 구조가 된다.
+
+</details>

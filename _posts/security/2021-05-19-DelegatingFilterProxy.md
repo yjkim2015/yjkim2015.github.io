@@ -20,7 +20,7 @@ toc_label: 목차
 ```mermaid
 graph LR
     A["HTTP 요청"] --> B["서블릿 필터 체인"]
-    B --> D["DelegatingFilterProxy"]
+    B --> D["DelegatingProxy"]
     D -->|빈 조회| E["Spring 컨테이너"]
     E --> F["FilterChainProxy"]
     F --> H["DispatcherServlet"]

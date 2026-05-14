@@ -1268,6 +1268,10 @@ public void reconcileInventory() {
 
 ## 면접 포인트 5가지 — 깊은 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Lua 스크립트가 원자적인 정확한 이유는?
 
 **얕은 답**: "Redis가 싱글 스레드라서요."
@@ -1364,3 +1368,5 @@ redis-cli SCRIPT FLUSH
 | math.random | 복제 불일치 유발 — redis.call('time') 사용 |
 | Redis Functions | 7.0+, 라이브러리 영속 저장, NOSCRIPT 문제 해결 |
 | 사용처 | 분산 락 해제, 재고 차감, Rate Limiting, CAS, 쿠폰 발급 |
+
+</details>

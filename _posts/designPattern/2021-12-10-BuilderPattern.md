@@ -221,11 +221,10 @@ public User build() {
 
 ```mermaid
 graph LR
-    C["클라이언트"] -->|"new Builder(필수값)"| B["User.Builder"]
-    C -->|".address().email().build()"| B
+    C["클라이언트"] -->|"Builder 생성"| B["User.Builder"]
     B -->|"유효성 검사"| B
-    B -->|"new User(this)"| U["User"]
-    U -->|"완성된 User"| C
+    B -->|"build()"| U["User"]
+    U -->|"완성된 객체"| C
 ```
 
 ---

@@ -54,13 +54,11 @@ for (Stamp stamp : stamps) {
 
 ```mermaid
 graph LR
-    A["Collection stamps"] --> B["stamps.add(new Coi"]
-    B --> C["경고만 출력"]
-    C --> D["런타임: ClassCastExce"]
-    E["Collection<Stamp>"] --> F["stamps.add(new Coi"]
-    F --> G["컴파일 오류!"]
-    style D fill:#ff6b6b,color:#fff
-    style G fill:#51cf66,color:#fff
+    A["로타입 Collection"] -->|"add(Coin)"| B["경고만 출력"]
+    B --> C["런타임 ClassCastExc"]
+    D["제네릭 Collection"] -->|"add(Coin)"| E["컴파일 오류!"]
+    style C fill:#ff6b6b,color:#fff
+    style E fill:#51cf66,color:#fff
 ```
 
 ---
@@ -190,9 +188,9 @@ if (o instanceof Set) {         // 로 타입으로 검사
 
 ```mermaid
 graph LR
-    A["List&lt;E&gt;"] --> B["List&lt;String&gt; 안전"]
+    A["List&lt;E&gt;"] --> B["List&lt;String&gt;"]
     A --> C["List 로타입 위험"]
-    A --> D["List&lt;?&gt; 와일드카드"]
+    A --> D["List&lt;?&gt; 와일드카"]
     style C fill:#ff6b6b,color:#fff
     style B fill:#51cf66,color:#fff
 ```

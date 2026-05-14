@@ -117,10 +117,9 @@ h ^ (h>>>16):
 
 ```mermaid
 graph LR
-    A["key.hashCode()"] --> B["h >>> 16<br/>상위→하위 이동"]
-    B --> C["h XOR 결과<br/>비트 혼합"]
-    C --> D["(n-1) & hash<br/>버킷 인덱스"]
-    D --> E["table[index]<br/>버킷 접근"]
+    A["hashCode()"] --> B["h>>>16 혼합"]
+    B --> C["(n-1) & hash"]
+    C --> D["버킷 접근"]
 ```
 
 ### 1.4 String.hashCode() 내부 — 왜 31을 곱하는가
@@ -1095,6 +1094,10 @@ public class Member {
 
 ## 8. 면접 포인트 5개 — 깊은 WHY 답변과 극한 시나리오
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1: "HashMap의 시간 복잡도를 설명하라"
 
 **얕은 답변**: "O(1) 평균, O(n) 최악."
@@ -1312,11 +1315,11 @@ void entityDisappearsFromSet() {
 
 ```mermaid
 graph LR
-    A["User 생성<br/>id=null"] --> B["HashSet.add()<br/>버킷[0]에 저장"]
-    B --> C["persist 호출<br/>id=1L 할당"]
-    C --> D["hashCode 변경<br/>0→1234567"]
-    D --> E["contains 호출<br/>버킷[X] 탐색"]
-    E --> F["버킷[0]에 있음<br/>→ false 반환"]
+    A["User(id=null) 생성"] --> B["HashSet.add버킷0 저장"]
+    B --> C["persist→id=1L 할당"]
+    C --> D["hashCode 변경"]
+    D --> E["contains 버킷X 탐색"]
+    E --> F["버킷0에 있음→false"]
 ```
 
 ---
@@ -1425,16 +1428,12 @@ public static <K, V> Map<String, Object> diagnoseHashMap(HashMap<K, V> map)
 
 ```mermaid
 graph LR
-    A["key.hashCode()"] --> B["h ^ (h>>>16)<br/>상위→하위 XOR"]
-    B --> C["(n-1) & hash<br/>비트 AND 인덱스"]
-    C --> D["table[i] 접근"]
-    D --> E{"노드 존재?"}
-    E -->|"없음"| F["새 Node 삽입"]
-    E -->|"있음"| G{"체인 타입?"}
-    G -->|"리스트 ≤8"| H["equals 순회"]
-    G -->|"RBT >8"| I["트리 탐색 log n"]
-    F --> J{"size > threshold?"}
-    J -->|"Yes"| K["resize 2배"]
+    A["hashCode()"] --> B["h^(h>>>16)"]
+    B --> C["버킷 결정"]
+    C --> D{"노드 존재?"}
+    D -->|"없음"| E["삽입"]
+    D -->|"있음"| F["equals 탐색"]
+    E -->|"threshold 초과"| G["resize 2배"]
 ```
 
 HashMap의 모든 설계 결정은 "왜"에서 출발합니다.
@@ -1449,3 +1448,5 @@ HashMap의 모든 설계 결정은 "왜"에서 출발합니다.
 - 꼬리 삽입 → 순서 보존으로 순환 참조 제거
 
 이 원리들이 연결되어 있다는 것을 이해하면, 면접에서 어떤 각도로 질문이 들어와도 핵심을 풀어낼 수 있습니다.
+
+</details>

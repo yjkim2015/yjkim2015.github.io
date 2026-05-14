@@ -147,7 +147,7 @@ graph LR
     A["참조 강도"] --> B["Strong: GC 수거 안 함"]
     A --> C["Soft: 메모리 부족 시"]
     A --> D["Weak: GC 즉시 수거"]
-    A --> E["Phantom: finalize 후"]
+    A --> E["Phantom: finalize "]
     style B fill:#4a9eff,color:#fff
     style D fill:#51cf66,color:#fff
 ```

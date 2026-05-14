@@ -414,6 +414,10 @@ public class OrderRequest {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. DispatcherServlet의 역할은?**
 > Spring MVC의 프론트 컨트롤러다. 모든 HTTP 요청을 받아 ① HandlerMapping으로 컨트롤러를 찾고, ② HandlerAdapter로 컨트롤러를 실행하고, ③ ViewResolver로 응답을 렌더링한다. 공통 관심사(인코딩, 예외 처리)를 한 곳에서 처리한다.
 
@@ -428,3 +432,5 @@ public class OrderRequest {
 
 **Q5. ArgumentResolver는 어떤 역할을 하는가?**
 > 컨트롤러 메서드의 파라미터를 HTTP 요청에서 추출해 바인딩하는 역할이다. `@RequestParam`, `@PathVariable`, `@RequestBody`, `@AuthenticationPrincipal` 등이 모두 `HandlerMethodArgumentResolver` 구현체다. 커스텀 ArgumentResolver를 구현해 `@CurrentUser` 같은 어노테이션을 만들 수 있다.
+
+</details>

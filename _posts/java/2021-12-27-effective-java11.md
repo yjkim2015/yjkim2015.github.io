@@ -195,8 +195,8 @@ System.out.println(p1.hashCode() == p2.hashCode());  // true
 ```mermaid
 graph LR
     A["equals 재정의"] -->|"반드시 함께"| B["hashCode 재정의"]
-    B --> C["HashMap/HashSet 정상 동작"]
-    D["equals 같은데 hashCode 다름"] --> E["치명적 버그!"]
+    B --> C["HashMap/HashSet 정상"]
+    D["equals 같데 hashCode"] --> E["치명적 버그!"]
     style D fill:#ff6b6b,color:#fff
     style C fill:#51cf66,color:#fff
 ```

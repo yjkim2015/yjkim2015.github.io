@@ -45,12 +45,11 @@ public enum Orange { NAVEL, TEMPLE, BLOOD }
 
 ```mermaid
 graph LR
-    A["열거 타입의 장점"] --> B["컴파일타임 타입 안전성"]
-    A --> C["각자의 이름공간"]
-    A --> D["상수 값 변경해도"]
-    A --> E["toString으로 의미 있는 출"]
-    A --> F["values()로 전체 순회 가능"]
-    A --> G["메서드와 필드 추가 가능"]
+    A["열거 타입 장점"] --> B["컴파일타임 타입 안전"]
+    A --> C["이름공간 분리"]
+    A --> D["상수 변경 영향 없음"]
+    A --> E["toString 가독성"]
+    A --> F["순회/메서드 추가"]
     style A fill:#51cf66,color:#fff
 ```
 

@@ -110,13 +110,10 @@ protected Object invokeWithinTransaction(Method method, Class<?> targetClass,
 
 ```mermaid
 graph LR
-    TI["TransactionInterceptor"] --> PTM["PlatformTxManager"]
-    PTM --> JPA["JpaTransactionManager"]
-    PTM --> DS["DataSourceTxManager"]
-    PTM --> JTA["JtaTransactionManager"]
-    JPA --> EM["EntityManager"]
-    DS --> JDBC["JDBC Connection"]
-    JTA --> XA["XA Resource"]
+    TI["TxInterceptor"] --> PTM["PlatformTxManager"]
+    PTM --> JPA["JpaTxManager"]
+    PTM --> DS["DataSourceTxMgr"]
+    PTM --> JTA["JtaTxManager"]
 ```
 
 ```java
@@ -1353,6 +1350,10 @@ public void reserveTicket(Long eventId, Long userId) {
 
 ## 11. 면접 포인트 5가지 — Deep WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. @Transactional은 어떻게 동작하는가? private 메서드에 붙이면 왜 안 되는가?
 
 **답변**:
@@ -1488,3 +1489,5 @@ class TransactionBehaviorTest {
 | HikariCP 연동 | TX 시작=커넥션 획득, TX 종료=커넥션 반환 |
 | XA 2PC | 잠금 기반 원자성, blocking, 마이크로서비스 부적합 |
 | Saga | 보상 트랜잭션, 최종 일관성, 마이크로서비스 표준 |
+
+</details>

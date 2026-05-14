@@ -68,11 +68,11 @@ graph LR
 
 ```mermaid
 graph LR
-    AR["Order (Aggregate Root)"]
+    AR["Order (Root)"]
     AR --> OI1["OrderItem 1"]
     AR --> OI2["OrderItem 2"]
     AR --> OA["OrderAddress"]
-    AR --> OP["Payment (Value Object)"]
+    AR --> OP["Payment (VO)"]
 ```
 
 **Aggregate**는 데이터 일관성을 함께 보장해야 하는 객체들의 묶음입니다. 그리고 **Aggregate Root**는 그 묶음의 유일한 진입점입니다.
@@ -186,7 +186,7 @@ graph LR
     CL["Client"] -->|"주문 생성"| OS["OrderService"]
     OS -->|"OrderPlaced 발행"| EP["EventPublisher"]
     EP -->|"구독"| IS["InventoryService"]
-    EP -->|"구독"| NS["NotificationService"]
+    EP -->|"구독"| NS["NotifyService"]
     IS -->|"재고 차감"| IS
     NS -->|"메일 발송"| NS
 ```
@@ -276,20 +276,12 @@ public class JpaOrderRepository implements OrderRepository {
 
 ```mermaid
 graph LR
-    REST["REST Controller (Inbound Adapter)"]
-    GRPC["gRPC Handler (Inbound Adapter)"]
-    MQ["Message Consumer (Inbound Adapter)"]
-
-    REST --> IP["Inbound Port (UseCase Interface)"]
-    GRPC --> IP
-    MQ --> IP
-
-    IP --> APP["Application Service (Domain Logic)"]
-    APP --> OP["Outbound Port (Repository/EventPublisher Interface)"]
-
-    OP --> JPA["JPA Adapter (Outbound Adapter)"]
-    OP --> KAFKA["Kafka Adapter (Outbound Adapter)"]
-    OP --> EXT["External API Adapter (Outbound Adapter)"]
+    REST["REST Adapter"] --> IP["Inbound Port"]
+    MQ["MQ Adapter"] --> IP
+    IP --> APP["App Service"]
+    APP --> OP["Outbound Port"]
+    OP --> JPA["JPA Adapter"]
+    OP --> KAFKA["Kafka Adapter"]
 ```
 
 레이어드 아키텍처에서 의존성은 위에서 아래로 흐릅니다. Presentation → Service → Repository → DB. 이 구조에서 DB는 맨 아래에 있지만 사실상 모든 레이어가 DB에 종속됩니다. MySQL을 PostgreSQL로 바꾸려면? Service 레이어의 네이티브 쿼리들, Repository 레이어의 JPA 설정들을 모두 손대야 합니다. DB가 아키텍처를 지배합니다.
@@ -450,13 +442,12 @@ public class OrderController {
 
 ```mermaid
 graph LR
-    CL["Client"] -->|"POST /api/orders"| CT["Controller"]
-    CT -->|"placeOrder(cmd)"| AS["AppService"]
-    AS -->|"findByIds"| PP["ProductQueryPort"]
-    AS -->|"Order.create"| DM["Order Aggregate"]
-    AS -->|"save(order)"| RP["OrderRepository"]
-    RP -->|"위임"| JA["JpaRepository"]
-    CT -->|"201 Created"| CL
+    CL["Client"] --> CT["Controller"]
+    CT --> AS["AppService"]
+    AS --> PP["ProductQueryPort"]
+    AS --> DM["Order Aggregate"]
+    AS --> RP["OrderRepository"]
+    CT --> CL
 ```
 
 ---
@@ -536,6 +527,10 @@ graph LR
 ---
 
 ## 14. 면접 포인트 5가지
+
+<details>
+<summary>펼쳐보기</summary>
+
 
 ### 면접 포인트 1: Bounded Context와 마이크로서비스의 관계
 
@@ -873,3 +868,5 @@ Application Service에 UseCase 인터페이스를 붙이고 Controller가 인터
 DDD와 헥사고날 아키텍처는 개별 기술이 아니라 **철학**입니다. DDD는 "코드가 비즈니스를 반영해야 한다"고 말하고, 헥사고날은 "비즈니스가 기술에 종속되면 안 된다"고 말합니다. 두 가지가 만나면 비즈니스 로직이 도메인 객체 안에 살고, 기술 세부사항은 교체 가능한 어댑터가 됩니다.
 
 복잡한 비즈니스 도메인, 팀이 성장하는 서비스, 장기 운영이 예상되는 시스템 — 이 세 조건이 맞을 때 DDD + 헥사고날의 투자 대비 효과가 극대화됩니다. 단순한 CRUD 서비스에 억지로 적용하면 오버엔지니어링입니다. 맥락을 읽는 것이 가장 중요합니다.
+
+</details>

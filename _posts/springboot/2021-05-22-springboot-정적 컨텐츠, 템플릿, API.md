@@ -17,14 +17,13 @@ Spring Boot에서 웹 요청에 응답하는 방식은 크게 세 가지다. 정
 ## 1단계: 세 가지 응답 방식 비교
 
 <div class="mermaid">
-graph TD
-    BR["브라우저 요청"]
-    BR --> DS["DispatcherServlet"]
-    DS --> Q1{"컨트롤러가\n처리 가능한가?"}
-    Q1 -->|"없음"| STATIC["정적 컨텐츠\nresources/static/\n파일을 그대로 반환"]
-    Q1 -->|"있음"| Q2{"@ResponseBody\n또는 @RestController?"}
-    Q2 -->|"없음"| MVC["MVC + 템플릿 엔진\nViewResolver → Thymeleaf\nHTML 동적 생성 후 반환"]
-    Q2 -->|"있음"| API["API 방식\nHttpMessageConverter\n객체 → JSON 변환 후 반환"]
+graph LR
+    BR["브라우저 요청"] --> DS["DispatcherServlet"]
+    DS --> Q1{"컨트롤러 있나?"}
+    Q1 -->|"없음"| STATIC["정적 컨텐츠 반환"]
+    Q1 -->|"있음"| Q2{"@ResponseBody?"}
+    Q2 -->|"없음"| MVC["MVC+Thymeleaf\nHTML 반환"]
+    Q2 -->|"있음"| API["HttpMsgConverter\nJSON 반환"]
 </div>
 
 ---
@@ -39,15 +38,13 @@ graph TD
 sequenceDiagram
     participant B as "브라우저"
     participant DS as "DispatcherServlet"
-    participant RC as "ResourceController (내장)"
     participant FS as "파일 시스템"
 
-    B->>DS: 1️⃣ GET /hello-static.html
-    DS->>DS: 2️⃣ 컨트롤러에서 /hello-static.html 매핑 찾기
-    DS-->>DS: 3️⃣ 매핑 없음
-    DS->>RC: 4️⃣ 정적 리소스 처리로 위임
-    RC->>FS: 5️⃣ resources/static/hello-static.html 찾기
-    FS-->>B: 6️⃣ 파일 내용 그대로 반환
+    B->>DS: GET /hello-static.html
+    DS->>DS: 컨트롤러 매핑 없음
+    Note over DS: ResourceController로 위임
+    DS->>FS: static/hello-static.html 찾기
+    FS-->>B: 파일 그대로 반환
 </div>
 
 ```
@@ -89,16 +86,12 @@ sequenceDiagram
     participant B as "브라우저"
     participant DS as "DispatcherServlet"
     participant C as "HelloController"
-    participant VR as "ViewResolver"
-    participant TH as "Thymeleaf"
 
-    B->>DS: 1️⃣ GET /hello-mvc?name=spring
-    DS->>C: 2️⃣ helloMvc(name="spring", model)
-    C->>C: 3️⃣ model.addAttribute("name", "spring")
-    C-->>DS: 4️⃣ return "hello-template"
-    DS->>VR: 5️⃣ "hello-template" 뷰 찾기
-    VR->>TH: 6️⃣ templates/hello-template.html + model 데이터
-    TH-->>B: 7️⃣ 완성된 HTML 반환
+    B->>DS: GET /hello-mvc?name=spring
+    DS->>C: helloMvc(name, model)
+    C-->>DS: return "hello-template"
+    Note over DS: ViewResolver → Thymeleaf 렌더링
+    DS-->>B: 완성된 HTML 반환
 </div>
 
 ### 컨트롤러
@@ -181,20 +174,12 @@ public class HelloController {
 ### @ResponseBody 동작 원리
 
 <div class="mermaid">
-graph TD
-    CTRL["컨트롤러\nreturn Hello 객체"]
-    CHECK{"반환 타입 확인"}
-    CONV["HttpMessageConverter"]
-    STR["StringHttpMessageConverter\n문자열 → text/plain"]
-    JSON["MappingJackson2HttpMessageConverter\n객체 → application/json (JSON 변환)"]
-    RESP["HTTP Response Body"]
-
-    CTRL --> CHECK
-    CHECK -->|"String"| STR
-    CHECK -->|"객체"| JSON
-    STR --> CONV
-    JSON --> CONV
-    CONV --> RESP
+graph LR
+    CTRL["컨트롤러 반환"] --> CHECK{"반환 타입"}
+    CHECK -->|"String"| STR["StringConverter\ntext/plain"]
+    CHECK -->|"객체"| JSON["JacksonConverter\napplication/json"]
+    STR --> RESP["HTTP Response Body"]
+    JSON --> RESP
 </div>
 
 **핵심 요약**: `@ResponseBody`가 있으면 ViewResolver를 거치지 않는다. 대신 `HttpMessageConverter`가 반환값을 HTTP 응답 Body로 직접 변환한다. 문자열은 그대로, 객체는 Jackson 라이브러리가 JSON으로 변환한다.

@@ -31,13 +31,11 @@ System.out.println(s3 == s4);  // true — 동일 객체!
 
 ```mermaid
 graph LR
-    A["String Pool"] --> B["'kimchi' 인스턴스 1개"]
+    A["String Pool"] --> B["'kimchi' 인스턴스"]
     B -->|"참조"| C["s3"]
     B -->|"참조"| D["s4"]
-    E["힙(Heap)"] --> F["new String('kimchi"]
-    E --> G["new String('kimchi"]
+    E["힙(Heap)"] --> F["new String 별도 객체"]
     style F fill:#ff6b6b,color:#fff
-    style G fill:#ff6b6b,color:#fff
 ```
 
 **만약 루프에서 `new String()`을 쓴다면?** 10만 번 반복하면 10만 개의 String 객체가 생성되고, GC 압력이 폭발적으로 증가합니다.
@@ -178,12 +176,12 @@ public class Period {
 
 ```mermaid
 graph LR
-    A["불필요한 객체 생성 패턴 3가지"] --> B["String 리터럴 대신"]
+    A["불필요 객체 생성 3가지"] --> B["String 리터럴 대신 new"]
     A --> C["비싼 객체 반복 생성"]
-    A --> D["박싱 타입으로 인한"]
-    B --> B1["해결: 리터럴 사용"]
-    C --> C1["해결: static final로\"]
-    D --> D1["해결: 기본 타입 우선 사용"]
+    A --> D["박싱 타입 오토박싱"]
+    B --> B1["리터럴 사용"]
+    C --> C1["static final 캐싱"]
+    D --> D1["기본 타입 우선"]
 ```
 
 **핵심 규칙:**

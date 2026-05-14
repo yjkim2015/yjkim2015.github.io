@@ -56,15 +56,12 @@ sequenceDiagram
     participant B as "브라우저"
     participant DS as "DispatcherServlet"
     participant C as "HelloController"
-    participant VR as "ViewResolver"
-    participant TH as "Thymeleaf (템플릿 엔진)"
 
-    B->>DS: 1️⃣ GET /hello
-    DS->>C: 2️⃣ @GetMapping("/hello") 메서드 호출
-    C-->>DS: 3️⃣ Model에 데이터 추가\nreturn "hello" (뷰 이름)
-    DS->>VR: 4️⃣ "hello" 뷰 찾기
-    VR->>TH: 5️⃣ resources/templates/hello.html 렌더링
-    TH-->>B: 6️⃣ 완성된 HTML 반환
+    B->>DS: GET /hello
+    DS->>C: @GetMapping 메서드 호출
+    C-->>DS: Model 데이터 + return "hello"
+    Note over DS: ViewResolver → Thymeleaf 렌더링
+    DS-->>B: 완성된 HTML 반환
 </div>
 
 ### 컨트롤러 작성

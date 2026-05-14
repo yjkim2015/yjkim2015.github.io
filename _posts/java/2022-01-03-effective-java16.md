@@ -81,12 +81,11 @@ class Point {
 
 ```mermaid
 graph LR
-    A["외부 코드"] -->|"point.getX()"| B["getter 메서드"]
-    A -->|"point.setX(5)"| C["setter 메서드"]
+    A["외부 코드"] -->|"getX()"| B["getter"]
+    A -->|"setX(5)"| C["setter"]
     B --> D["private double x"]
     C --> D
-    C --> E["검증 로직"]
-    C --> F["부수 작업"]
+    C --> E["검증/부수 작업"]
     style D fill:#4a9eff,color:#fff
 ```
 
@@ -151,13 +150,12 @@ public final class Time {
 
 ```mermaid
 graph LR
-    A["필드 공개 여부 결정"] --> B{"public 클래스인가?"}
-    B -->|"Yes"| C["반드시 private + 접근자"]
-    B -->|"No (package-privat"| D["필드 직접 공개 가능"]
-    C --> E["장점"]
-    E --> E1["내부 표현 변경 자유"]
-    E --> E2["불변식 보장"]
-    E --> E3["부수 작업 추가 가능"]
+    A["필드 공개 여부 결정"] --> B{"public 클래스?"}
+    B -->|"Yes"| C["private + 접근자 필수"]
+    B -->|"No"| D["필드 직접 공개 가능"]
+    C --> E1["내부 표현 변경 자유"]
+    C --> E2["불변식 보장"]
+    C --> E3["부수 작업 추가 가능"]
     style C fill:#51cf66,color:#fff
     style D fill:#ffd43b
 ```

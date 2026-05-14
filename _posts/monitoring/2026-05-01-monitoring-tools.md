@@ -591,6 +591,10 @@ log.info("로그인 시도: userId={}", userId);  // 비밀번호 절대 로깅 
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 #### Q. Prometheus의 Pull 방식과 Push 방식의 차이점은?
 
 ```
@@ -652,3 +656,5 @@ Traces: 어디서 느렸는가? (요청 흐름)
 
 세 요소는 서로 보완: Metrics로 이상 감지 → Logs로 원인 파악 → Traces로 위치 특정
 ```
+
+</details>

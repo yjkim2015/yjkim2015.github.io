@@ -21,8 +21,8 @@ Stream 파이프라인은 세 단계로 구성됩니다. **소스(Source)** 는 
 
 ```mermaid
 graph LR
-  A["Source<br/>(Collection/Array)"] --> B["filter / map / sorted"]
-  B --> C["Terminal Op<br/>(collect / count)"]
+  A["Source"] --> B["filter / map / sor"]
+  B --> C["Terminal Op"]
   C --> D["Result"]
 ```
 
@@ -150,7 +150,7 @@ public interface Spliterator<T> {
 
 ```mermaid
 graph LR
-  A["원본 Spliterator<br/>[0..1000]"] -->|"trySplit()"| B["절반<br/>[0..500]"]
+  A["원본 Spliterator"] -->|"trySplit()"| B["절반<br/>[0..500]"]
   A --> C["나머지<br/>[500..1000]"]
   B -->|"trySplit()"| D["[0..250]"]
   B --> E["[250..500]"]
@@ -355,13 +355,11 @@ Stream.iterate(1, n -> n + 1)
 
 ```mermaid
 graph LR
-  PS["parallelStream()"] --> FJP["ForkJoinPool<br/>.commonPool()"]
+  PS["parallelStream()"] --> FJP["ForkJoinPool commo"]
   FJP --> W1["Worker-1"]
   FJP --> W2["Worker-2"]
-  FJP --> W3["Worker-3"]
   W1 --> R["결과 병합"]
   W2 --> R
-  W3 --> R
 ```
 
 ```java
@@ -554,11 +552,11 @@ Collector<String, List<String>, List<String>> toListCollector = Collector.of(
 
 ```mermaid
 graph LR
-  S["[1..1000]"] --> C1["Chunk1<br/>[1..500]"]
-  S --> C2["Chunk2<br/>[501..1000]"]
-  C1 -->|"accumulate"| A1["ArrayList<br/>[1..500]"]
-  C2 -->|"accumulate"| A2["ArrayList<br/>[501..1000]"]
-  A1 -->|"combiner"| R["최종 ArrayList<br/>[1..1000]"]
+  S["스트림"] --> C1["Chunk1"]
+  S --> C2["Chunk2"]
+  C1 -->|"accumulate"| A1["부분 List1"]
+  C2 -->|"accumulate"| A2["부분 List2"]
+  A1 -->|"combiner"| R["최종 List"]
   A2 -->|"combiner"| R
 ```
 
@@ -1278,6 +1276,10 @@ double avgAge = employees.stream()
 
 ## 12. 면접 포인트 5개: 극한 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Stream의 지연 평가가 왜 필요한가? 즉시 평가 방식의 문제점은?
 
 즉시 평가 방식이라면 `filter(p1).map(f).filter(p2)`가 실행될 때 먼저 모든 원소에 `p1`을 적용한 중간 컬렉션을 만들고, 그 컬렉션 전체에 `f`를 적용한 중간 컬렉션을 만들고, 다시 `p2`를 적용합니다. 3단계 파이프라인에서 원본 크기에 비례하는 중간 컬렉션이 2개 생성됩니다.
@@ -1615,3 +1617,5 @@ Stream API 핵심 원리:
 - [JEP 473: Stream Gatherers (JDK 22)](https://openjdk.org/jeps/473)
 - [Spliterator 공식 문서](https://docs.oracle.com/en/java/docs/api/java.base/java/util/Spliterator.html)
 - [ForkJoinPool.commonPool() 동작 원리](https://docs.oracle.com/en/java/docs/api/java.base/java/util/concurrent/ForkJoinPool.html)
+
+</details>

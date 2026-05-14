@@ -723,13 +723,12 @@ public class IdempotentMessageSaver {
 
 ```mermaid
 graph LR
-    Client["모바일/웹"] -->|"WebSocket STOMP"| LB["L4 NLB"]
-    LB --> CS["채팅서버 1~1500"]
+    Client["모바일/웹"] --> LB["L4 NLB"]
+    LB --> CS["채팅서버"]
     CS -->|"발행"| Kafka["Kafka"]
-    Kafka -->|"소비"| Worker["저장/팬아웃 워커"]
+    Kafka --> Worker["저장/팬아웃"]
     Worker --> Cass["Cassandra"]
     CS --> Redis["Redis"]
-    CS -->|"오프라인"| Push["FCM/APNs"]
 ```
 
 **왜 L4 NLB인가 (L7 ALB가 아닌 이유):**
@@ -1311,6 +1310,10 @@ public class HeartbeatHandler implements ApplicationListener<SessionConnectedEve
 
 ## 12. 면접 포인트 5개 — 깊이 있는 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. 왜 Cassandra인가? HBase나 MongoDB 대신
 
 **얕은 답**: "대용량 데이터를 저장할 수 있어서요"
@@ -1537,3 +1540,5 @@ public class ConversationService {
 - [Snowflake ID — Twitter Engineering Blog](https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake)
 - [Signal Protocol — Double Ratchet Algorithm](https://signal.org/docs/specifications/doubleratchet/)
 - [카카오 데이터센터 화재 사후 분석](https://kakaoenterprise.github.io/2023/01/12/kakao-incident-postmortem.html)
+
+</details>

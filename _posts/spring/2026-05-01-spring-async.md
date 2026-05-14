@@ -75,7 +75,7 @@ public class AsyncExecutionInterceptor implements MethodInterceptor {
 ```mermaid
 graph LR
     Caller["호출자"] --> Proxy["@Async 프록시"]
-    Proxy --> Interceptor["AsyncExecution\nInterceptor"]
+    Proxy --> Interceptor["AsyncExecution"]
     Interceptor --> Executor["TaskExecutor"]
     Executor --> RealMethod["실제 메서드\n(풀 스레드)"]
     Proxy -.->|"즉시 반환"| Caller
@@ -130,13 +130,13 @@ public class AsyncConfig implements AsyncConfigurer {
 
 ```mermaid
 graph LR
-    REQ["요청 도착"] --> C1{"core\n미만?"}
-    C1 -->|YES| NEW["새 스레드\n즉시 실행"]
+    REQ["요청"] --> C1{"core 미만?"}
+    C1 -->|YES| NEW["신규 스레드"]
     C1 -->|NO| C2{"큐 여유?"}
     C2 -->|YES| QUEUE["큐 대기"]
-    C2 -->|NO| C3{"max\n미만?"}
-    C3 -->|YES| EXTRA["임시 스레드\n추가"]
-    C3 -->|NO| REJ["거절 정책\n실행"]
+    C2 -->|NO| C3{"max 미만?"}
+    C3 -->|YES| NEW
+    C3 -->|NO| REJ["거절"]
 ```
 
 **함정:** Java의 `ThreadPoolExecutor` 구현은 큐를 먼저 채우고, 큐가 꽉 찬 뒤에야 `maxPoolSize`까지 스레드를 추가한다. 따라서 `queueCapacity=500`으로 크게 잡으면 트래픽 급증 시 스레드가 늘어나지 않고 큐만 쌓인다. 처리 속도가 급감해도 알아채기 어렵다.
@@ -532,10 +532,10 @@ public class AsyncConfig implements AsyncConfigurer {
 
 ```mermaid
 graph LR
-    MT["메인 스레드\nMDC: traceId=abc"] --> DEC["TaskDecorator\ncopy MDC"]
-    DEC --> AT["비동기 스레드\nMDC: traceId=abc"]
+    MT["메인 스레드"] --> DEC["TaskDecorator"]
+    DEC --> AT["비동기 스레드"]
     AT --> LOG["로그 출력\n[traceId=abc]"]
-    AT --> CLR["finally: MDC.clear()"]
+    AT --> CLR["MDC.clear()"]
 ```
 
 ---
@@ -845,9 +845,9 @@ public CompletableFuture<Void> goodExample() {
 
 ```mermaid
 graph LR
-    VT1["Virtual Thread 1\n(블로킹 I/O)"] --> CT["캐리어 스레드\n(OS Thread)"]
-    VT2["Virtual Thread 2\n(실행 중)"] --> CT
-    VT3["Virtual Thread 3\n(대기)"] --> CT
+    VT1["Virtual Thread 1"] --> CT["캐리어 스레드\n(OS Thread)"]
+    VT2["Virtual Thread 2"] --> CT
+    VT3["Virtual Thread 3"] --> CT
     CT --> OS["OS 스케줄러"]
 ```
 
@@ -1104,6 +1104,10 @@ java -Djdk.tracePinnedThreads=full -jar app.jar
 
 ## 13. 면접 포인트 5가지
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. @Async 내부 동작을 설명하라 — 왜 프록시인가
 
 > `@EnableAsync`를 선언하면 Spring은 `AsyncAnnotationBeanPostProcessor`를 등록한다. 이 BeanPostProcessor가 컨텍스트 초기화 시 `@Async` 메서드를 가진 빈을 AOP 프록시로 감싼다. 프록시 내부의 `AsyncExecutionInterceptor`가 메서드 호출을 가로채 `TaskExecutor`에 `Callable`로 제출한다. 호출자 스레드는 제출 즉시 반환된다.
@@ -1174,3 +1178,5 @@ java -Djdk.tracePinnedThreads=full -jar app.jar
 | WebFlux Reactive | X | 가능 | 높음 | 전체 스택 논블로킹 필요 시 |
 
 **결론:** 기존 MVC 스택에서 이메일, 알림, 통계 등 일부 작업을 비동기화할 때는 `@Async` + `ThreadPoolTaskExecutor`가 가장 낮은 비용으로 빠르게 적용할 수 있다. 결과를 조합해야 하거나 실패를 추적해야 하면 `CompletableFuture`를 반환 타입으로 사용한다. Java 21 + Spring Boot 3.2 이상이라면 Virtual Thread 활성화로 복잡한 Executor 튜닝 없이 I/O 처리량을 크게 높일 수 있다.
+
+</details>

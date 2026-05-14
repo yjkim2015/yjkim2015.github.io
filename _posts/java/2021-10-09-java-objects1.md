@@ -120,7 +120,7 @@ public class DataFlowController {
 ```mermaid
 graph LR
     A1["FileReader"] & A2["Encryptor"] & A3["FileWriter"]
-    B1["DataManager (모든 책임)"]
+    B1["DataManager"]
     style B1 fill:#ff6b6b,color:#fff
 ```
 

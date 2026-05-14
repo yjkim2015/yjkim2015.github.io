@@ -84,14 +84,12 @@ opt.ifPresent(n -> System.out.println("안녕하세요, " + n));
 
 ```mermaid
 graph LR
-    A["Optional<T> 처리"] --> B["orElse(기본값)"]
-    A --> C["orElseGet(Supplier"]
-    A --> D["orElseThrow(Suppli"]
-    A --> E["get()"]
-    A --> F["ifPresent(Consumer"]
+    A["Optional 처리"] --> B["orElse(기본값)"]
+    A --> C["orElseGet"]
+    A --> D["orElseThrow()"]
+    A --> E["ifPresent"]
     style C fill:#51cf66,color:#fff
     style D fill:#f39c12,color:#fff
-    style E fill:#ff6b6b,color:#fff
     style B fill:#868e96,color:#fff
 ```
 
@@ -163,13 +161,11 @@ OptionalDouble average = OptionalDouble.of(3.14);
 
 ```mermaid
 graph LR
-    A["Optional 사용 판단"] --> B{"반환 타입인가?"}
-    B -- 예 --> C{"기본형인가?"}
-    C -- 예 --> D["OptionalInt / Long"]
-    C -- 아니오 --> E{"컨테이너 타입인가?"}
-    E -- 예 --> F["빈 컨테이너 반환"]
-    E -- 아니오 --> G["Optional<T> 적합"]
-    B -- 아니오 --> H["필드·매개변수·컬렉션 원소"]
+    A["Optional 사용 판단"] --> B{"반환 타입?"}
+    B -->|"기본형"| D["OptionalInt/Long"]
+    B -->|"컨테이너"| F["빈 컨테이너 반환"]
+    B -->|"일반 타입"| G["Optional&lt;T&gt; "]
+    B -->|"비반환(필드 등)"| H["사용 금지"]
     style D fill:#51cf66,color:#fff
     style G fill:#51cf66,color:#fff
     style F fill:#f39c12,color:#fff

@@ -57,9 +57,9 @@ Spring은 `spring-context` 모듈에 **캐시 추상화 레이어**를 제공한
 ```mermaid
 graph LR
     CM["CacheManager"] --> C["Cache"]
-    C --> CG["get(key)"]
-    C --> CP["put(key,val)"]
-    C --> CE["evict(key)"]
+    C --> CG["get"]
+    C --> CP["put"]
+    C --> CE["evict"]
 ```
 
 - `CacheManager`: 캐시 저장소의 팩토리이자 레지스트리. `getCache(name)`으로 특정 캐시를 가져온다.
@@ -448,8 +448,8 @@ Caffeine의 놀라운 점은 읽기 시 **락을 거의 사용하지 않는다**
 
 ```mermaid
 graph LR
-    R1["Thread 1 Read"] --> RB["RingBuffer stripe 1"]
-    R2["Thread 2 Read"] --> RB2["RingBuffer stripe 2"]
+    R1["Thread 1 Read"] --> RB["RingBuffer stripe "]
+    R2["Thread 2 Read"] --> RB2["RingBuffer stripe "]
     RB --> MAINT["Maintenance Task"]
     RB2 --> MAINT
 ```
@@ -1514,6 +1514,10 @@ public class LockingCacheLoader {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. W-TinyLFU가 LRU보다 히트율이 높은 이유를 Count-Min Sketch까지 설명하라.
 
 **LRU의 문제**: 최근성만 본다. 배치 스캔이나 크롤러의 일회성 접근이 기존 Hot 데이터를 밀어낸다.
@@ -1581,3 +1585,5 @@ TTL: expireAfterWrite=10m, refreshAfterWrite=9m으로 설정
 ```
 
 `refreshAfterWrite`가 Stampede를 막는 핵심: 캐시가 "만료"되는 것이 아니라 "갱신 대상"이 되므로, 기존 값을 계속 반환하면서 단 한 번의 백그라운드 로딩만 발생한다. 수천 개의 요청이 동시에 DB로 가는 상황 자체가 발생하지 않는다.
+
+</details>

@@ -247,6 +247,10 @@ gantt
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. TraceId와 SpanId의 차이는?**
 > TraceId: 전체 요청 흐름(여러 서비스)을 관통하는 고유 식별자. 서비스 A→B→C로 전파되어도 동일하다. SpanId: 단일 작업 단위의 식별자. 서비스마다, 메서드마다 새 SpanId가 생성된다. ParentSpanId로 트리 구조를 형성해 전체 호출 그래프를 만든다.
 
@@ -261,3 +265,5 @@ gantt
 
 **Q5. Spring Boot 3.x에서 분산 추적을 설정하는 최소 구성은?**
 > `micrometer-tracing-bridge-brave` + `zipkin-reporter-brave` 의존성 추가, `management.zipkin.tracing.endpoint=http://zipkin:9411/api/v2/spans`, `management.tracing.sampling.probability=0.1` 설정. Actuator의 `tracing` 엔드포인트로 현재 추적 상태를 확인할 수 있다.
+
+</details>

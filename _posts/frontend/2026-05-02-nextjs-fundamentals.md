@@ -51,7 +51,7 @@ graph LR
     PR --> PB["blog/[id].js"]
     AR["app/ (권장)"] --> AI["page.tsx"]
     AR --> AB["blog/[id]/page.tsx"]
-    AR --> ARO["layout/loading/error"]
+    AR --> ARO["layout/error.tsx"]
 ```
 
 App Router의 가장 큰 변화는 **서버 컴포넌트**입니다. 모든 컴포넌트가 기본적으로 서버에서만 실행됩니다. 클라이언트에서 실행이 필요한 컴포넌트만 `'use client'`를 선언합니다.
@@ -644,6 +644,10 @@ const url = process.env.DATABASE_URL; // 서버: OK, 클라이언트: undefined
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. SSR, SSG, ISR, CSR의 차이와 각각 언제 사용하나요?**
 
 SSR(서버사이드 렌더링)은 매 요청마다 서버에서 HTML을 생성합니다. 개인화된 데이터(대시보드, 마이페이지)에 적합합니다. SSG(정적 생성)는 빌드 시 HTML을 미리 생성합니다. 거의 바뀌지 않는 콘텐츠(블로그, 문서)에 최적입니다. ISR(증분 정적 재생성)은 SSG + 주기적 재생성으로 성능과 신선도를 균형합니다. CSR은 클라이언트에서 데이터를 가져오며 SEO가 불필요한 경우에 사용합니다.
@@ -663,3 +667,5 @@ App Router에서는 `metadata` 객체 또는 `generateMetadata` 함수로 동적
 **Q5. Server Actions란 무엇이며 기존 API Route와 어떻게 다른가요?**
 
 Server Actions는 클라이언트 컴포넌트에서 서버 함수를 직접 호출하는 방식입니다. `'use server'` 지시어를 붙인 함수는 자동으로 API 엔드포인트로 변환됩니다. 폼 제출이나 데이터 변경에서 별도 API Route 없이 서버 로직을 실행할 수 있어 코드가 간결해집니다. 단, 내부적으로 POST 요청을 생성하므로 CSRF 방어가 Next.js에 의해 자동 처리됩니다.
+
+</details>

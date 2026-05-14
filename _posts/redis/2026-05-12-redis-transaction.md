@@ -236,13 +236,12 @@ C1이 EXEC를 호출하면 Redis는 **더티 플래그를 확인**합니다. `di
 
 ```mermaid
 graph LR
-    A[WATCH key] --> B[더티 플래그 false]
-    B --> C[다른 클라이언트 수정]
-    C --> D[더티 플래그 true]
-    D --> E[EXEC 호출]
-    E --> F{dirty 확인}
-    F -->|true| G[nil 반환]
-    F -->|false| H[정상 실행]
+    A[WATCH key] --> B[타 클라이언트 수정]
+    B --> C[dirty=true]
+    A --> D[EXEC 호출]
+    D --> E{dirty?}
+    E -->|true| F[nil 반환]
+    E -->|false| G[정상 실행]
 ```
 
 ### WATCH가 반드시 MULTI 앞에 있어야 하는 이유
@@ -420,16 +419,12 @@ public class DiscardExampleService {
 
 ```mermaid
 graph LR
-    A[MULTI 선언] --> B[명령 큐잉]
-    B --> C{큐잉 시 문법 오류?}
-    C -->|Yes| D[EXECABORT 상태]
-    C -->|No| E[QUEUED 응답]
-    D --> F[EXEC → 전체 취소]
-    E --> G[EXEC 실행]
-    G --> H{실행 중 타입 오류?}
-    H -->|Yes| I[해당 명령 오류 반환]
-    H -->|No| J[정상 결과 반환]
-    I --> K[나머지 명령 계속]
+    A[MULTI] --> B{문법 오류?}
+    B -->|Yes| C[EXECABORT·전체취소]
+    B -->|No| D[EXEC 실행]
+    D --> E{타입 오류?}
+    E -->|Yes| F[해당 명령 오류]
+    E -->|No| G[정상 결과]
 ```
 
 ### Spring에서 실행 오류 처리
@@ -1286,6 +1281,10 @@ static {
 
 ## 12. 면접 포인트 5가지 — 깊은 WHY 답변
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### 면접 포인트 1: Redis MULTI/EXEC 내부 동작을 설명하라
 
 **답변**:
@@ -1467,3 +1466,5 @@ graph LR
 | 재고 차감 (단순 조건) | Lua Script | 읽기-조건-쓰기 단일 원자 단위 |
 | 계좌 이전 (롤백 필요) | RDBMS 트랜잭션 | Redis는 롤백 미지원 |
 | 클러스터 트랜잭션 | Hash Tag + MULTI/EXEC 또는 Lua | 같은 슬롯 강제 |
+
+</details>

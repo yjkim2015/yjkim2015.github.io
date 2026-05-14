@@ -1441,6 +1441,10 @@ plugins {
 
 ## 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Spring AOP는 내부적으로 어떻게 동작하는가?
 
 핵심 메커니즘은 세 단계다. 첫째, `@EnableAspectJAutoProxy`가 `AnnotationAwareAspectJAutoProxyCreator`라는 `BeanPostProcessor`를 등록한다. 둘째, 이 `BeanPostProcessor`는 컨테이너의 모든 Bean이 생성될 때 `postProcessAfterInitialization()`을 호출하고, 해당 Bean에 적용 가능한 Advisor(Pointcut + Advice 묶음) 목록을 조회한다. 셋째, Advisor가 하나라도 있으면 `ProxyFactory`를 통해 프록시 객체를 생성하고, 원래 Bean 대신 프록시를 컨테이너에 등록한다. 클라이언트가 Bean을 주입받으면 실제로는 이 프록시를 받는다.
@@ -1498,3 +1502,5 @@ Pointcut 매칭은 정적 매칭과 동적 매칭 두 단계로 이루어진다.
 | CGLIB | 바이트코드 서브클래스 프록시 | 인터페이스 불필요, 더 빠른 호출 |
 | Self-Invocation | this 호출로 프록시 우회 | 프록시는 외부에서만 개입 가능 |
 | BeanPostProcessor | Bean 생성 후 프록시로 교체 | Spring IoC와 AOP를 투명하게 결합 |
+
+</details>

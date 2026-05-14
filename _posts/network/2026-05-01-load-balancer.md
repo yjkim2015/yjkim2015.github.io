@@ -1624,6 +1624,10 @@ public class ZeroDowntimeDeployer {
 
 ## 면접 포인트 5개 — 심층 WHY 분석
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. L4와 L7의 내부 처리 방식이 근본적으로 다른 이유는?
 
 **핵심 차이: 프록시 vs NAT**
@@ -1789,3 +1793,5 @@ resource "aws_lb_target_group" "api" {
   }
 }
 ```
+
+</details>

@@ -43,7 +43,7 @@ Posting List는 각 Term이 출현하는 **문서 ID의 정렬된 배열**이다
 
 ```mermaid
 graph LR
-    TERM["Term Dictionary(FST)"] --> PL["Posting List"]
+    TERM["Term Dictionary"] --> PL["Posting List"]
     PL --> SKIP["Skip List 계층"]
     PL --> FOR["FOR 압축 저장"]
     SKIP --> INTER["AND 교집합 O(logN)"]
@@ -1093,6 +1093,10 @@ public class AutocompleteService {
 
 ## 11. 면접 포인트 5개 — WHY까지 설명
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. "Elasticsearch가 밀리초 단위로 전문 검색하는 원리는?"
 
 **표면 답변(탈락 수준):** 역인덱스를 사용하기 때문입니다.
@@ -1347,9 +1351,9 @@ public class ReindexService {
 graph LR
     CL["Cluster"] --> MASTER["Master Node"]
     CL --> DATA["Data Node"]
-    DATA --> IDX["Index(Alias)"]
-    IDX --> SHARD["Shard(Lucene)"]
-    SHARD --> SEG["Segment(불변)"]
+    DATA --> IDX["Index"]
+    IDX --> SHARD["Shard"]
+    SHARD --> SEG["Segment"]
 ```
 
 | 레이어 | 핵심 원칙 | WHY |
@@ -1387,3 +1391,5 @@ graph LR
 ---
 
 **최종 원칙:** Elasticsearch는 **검색·분석 전용 뷰**다. 원본 데이터는 RDBMS나 NoSQL에 저장하고, Elasticsearch는 검색 인덱스로만 사용한다. 매핑은 반드시 명시적으로, 한국어 서비스라면 Nori는 선택이 아닌 필수다. Alias 없이 인덱스 직접 접근은 무중단 운영을 포기하는 것이다.
+
+</details>

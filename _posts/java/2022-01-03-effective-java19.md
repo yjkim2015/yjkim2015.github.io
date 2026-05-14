@@ -227,11 +227,11 @@ public class Base {
 
 ```mermaid
 graph LR
-    A["상속용 클래스를 만들어야 한다면"] --> B["자기 사용 패턴 모두 @implS"]
-    A --> C["필요한 hook은 protecte"]
-    A --> D["생성자에서 재정의 가능 메서드"]
-    A --> E["clone/readObject에서"]
-    F["상속할 이유가 없다면"] --> G["final 클래스 또는"]
+    A["상속용 클래스"] --> B["자기 사용 @implSpec 문화"]
+    A --> C["hook은 protected 노출"]
+    A --> D["생성자에서 재정의 메서드 금지"]
+    A --> E["clone/readObject 금"]
+    F["상속 불필요"] --> G["final 또 생성자 privat"]
     style D fill:#ff6b6b,color:#fff
     style E fill:#ff6b6b,color:#fff
     style G fill:#51cf66,color:#fff

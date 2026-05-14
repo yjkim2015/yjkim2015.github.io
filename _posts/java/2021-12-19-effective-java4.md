@@ -154,7 +154,7 @@ public class DateUtils {
 ```mermaid
 graph LR
     A["유틸리티 클래스"] --> B["private 생성자"]
-    B --> C["AssertionError throw"]
+    B --> C["AssertionError thr"]
     B --> D["상속도 불가 (부수 효과)"]
     A --> E["abstract는 불충분"]
 ```

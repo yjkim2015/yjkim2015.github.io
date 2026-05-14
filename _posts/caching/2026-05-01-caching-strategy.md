@@ -1430,6 +1430,10 @@ public class ResilientProductService {
 
 ## 14. 면접 포인트
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 **Q1. Cache-Aside와 Read-Through의 차이를 내부 동작 수준에서 설명하고, 각각 언제 선택하는가?**
 
 Cache-Aside는 **애플리케이션 코드**가 캐시 미스 감지, DB 조회, 캐시 저장을 직접 처리한다. Read-Through는 이 로직이 **캐시 레이어**(Spring의 `CacheInterceptor`)에 위임된다. 실제 Spring에서 `@Cacheable`은 Read-Through다 — AOP 프록시가 메서드 호출을 가로채 캐시 조회 → 미스면 실제 메서드 실행 → 결과 저장의 흐름을 처리한다.
@@ -1467,3 +1471,5 @@ CAP 정리에 따르면 분산 시스템에서 Consistency(일관성), Availabil
 Redis Cluster는 기본적으로 AP를 선택한다. 즉, 네트워크 파티션이 발생해도 요청을 처리(A)하되, 파티션 양쪽에 다른 값이 쓰일 수 있음(C 포기)을 허용한다. 구체적으로 Split-Brain 시나리오에서: Primary-Replica 간 네트워크 분리 → Primary에 새 값 쓰기 → Replica에 전파 안 됨 → Replica가 Primary로 승격(Failover) → 두 Primary 공존 → 각각 다른 값 → 네트워크 복구 후 한 쪽 값 유실.
 
 이 근본적 한계 때문에 Redis는 "캐시"로 사용해야 하며, DB는 항상 Source of Truth여야 한다. 정확성이 중요한 재고, 결제 판단은 캐시가 아닌 DB 트랜잭션(+ 비관적/낙관적 락)에서 처리해야 한다.
+
+</details>

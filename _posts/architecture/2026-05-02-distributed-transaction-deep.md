@@ -1822,13 +1822,12 @@ public class SagaRecoveryScheduler {
 
 ```mermaid
 graph LR
-    Q1["서비스 경계 내?"] -->|"예"| Q2["트래픽 낮음?"]
+    Q1["서비스 경계 내?"] -->|"예"| TWO["2PC"]
     Q1 -->|"아니오"| Q3["강한 격리 필요?"]
-    Q2 -->|"예"| TWO["2PC"]
     Q3 -->|"예"| TCC["TCC"]
     Q3 -->|"아니오"| Q4["흐름 복잡?"]
-    Q4 -->|"예"| ORCH["Orchestration"]
-    Q4 -->|"아니오"| CHOR["Choreography"]
+    Q4 -->|"예"| ORCH["Orchestration Saga"]
+    Q4 -->|"아니오"| CHOR["Choreography Saga"]
 ```
 
 | 패턴 | 일관성 모델 | 가용성 | 성능 | 적합 시나리오 |
@@ -1842,6 +1841,10 @@ graph LR
 ---
 
 ## 면접 포인트 — 시니어 레벨 심층 답변
+
+<details>
+<summary>펼쳐보기</summary>
+
 
 ### Q1. CAP 정리에서 P를 포기할 수 없는 이유는?
 
@@ -1902,3 +1905,5 @@ ZooKeeper Ephemeral 노드는 이 문제를 해결합니다. 클라이언트 세
 2PC는 이 문제를 중앙 코디네이터로 해결하려 했지만 블로킹 문제와 단일 장애점이 MSA에서 치명적입니다. Saga는 강한 일관성을 포기하고 최종 일관성과 보상 트랜잭션으로 실용적인 해법을 제시합니다. TCC는 비즈니스 레벨에서 예약 패턴으로 부분 격리를 더합니다. Outbox는 이벤트 유실이라는 이중 쓰기 문제를 DB 원자성으로 해결합니다.
 
 실무에서 이 패턴들은 단독으로 쓰이지 않습니다. "Orchestration Saga + Outbox + 멱등 컨슈머 + 분산 락"이 하나의 조합으로 작동합니다. 각 패턴이 어떤 실패 시나리오를 방어하는지 이해하면, 어떤 조합이 필요한지 스스로 설계할 수 있습니다.
+
+</details>

@@ -39,10 +39,10 @@ public double calculateDiscount(String type, double price) {
 
 ```mermaid
 graph LR
-    Context["Context\n- strategy: DiscountStrategy\n+ executeDiscount()"] -->|uses| Strategy["&lt;&lt;interface&gt;&gt;\nDiscountStrategy\n+ calculate(price)"]
-    Strategy --> VIP["VipDiscount\n+ calculate(price)"]
-    Strategy --> Coupon["CouponDiscount\n+ calculate(price)"]
-    Strategy --> Event["EventDiscount\n+ calculate(price)"]
+    Context["Context"] -->|uses| Strategy["DiscountStrategy"]
+    Strategy --> VIP["VipDiscount"]
+    Strategy --> Coupon["CouponDiscount"]
+    Strategy --> Event["EventDiscount"]
 ```
 
 ### Java 코드 — Spring 실전 예시
@@ -169,7 +169,7 @@ public class SeasonDiscount implements DiscountStrategy {
 
 ```mermaid
 graph LR
-    Subject["OrderSubject\n+ subscribe(observer)\n+ notify()"] -->|notifies| Observer["&lt;&lt;interface&gt;&gt;\nOrderObserver\n+ onOrderComplete(Order)"]
+    Subject["OrderSubject"] -->|notifies| Observer["OrderObserver"]
     Observer --> Email["EmailNotifier"]
     Observer --> SMS["SmsNotifier"]
     Observer --> Inventory["InventoryUpdater"]
@@ -321,8 +321,8 @@ public void handleOrderCompleted(OrderCompletedEvent event) {
 
 ```mermaid
 graph LR
-    Abstract["BeverageMaker\n+ makeBeverage() final\n# brew() abstract\n# addCondiments() abstract\n# hook()"] --> Coffee["CoffeeMaker\n# brew()\n# addCondiments()"]
-    Abstract --> Tea["TeaMaker\n# brew()\n# addCondiments()"]
+    Abstract["BeverageMaker"] --> Coffee["CoffeeMaker"]
+    Abstract --> Tea["TeaMaker"]
 ```
 
 ### Java 코드 — Spring Batch ItemProcessor 실전 예시
@@ -444,10 +444,10 @@ Command 패턴은 **요청 자체를 객체로 캡슐화**합니다. 이를 통�
 
 ```mermaid
 graph LR
-    Invoker["Invoker\n(RemoteControl)\n+ executeCommand()"] -->|holds| Command["&lt;&lt;interface&gt;&gt;\nCommand\n+ execute()\n+ undo()"]
-    Command --> VolumeUp["VolumeUpCommand\n- tv: TV\n- prevVolume: int\n+ execute()\n+ undo()"]
-    Command --> PowerOff["PowerOffCommand\n+ execute()\n+ undo()"]
-    VolumeUp -->|calls| Receiver["Receiver\n(TV)\n+ increaseVolume()\n+ decreaseVolume()"]
+    Invoker["Invoker"] -->|holds| Command["Command"]
+    Command --> VolumeUp["VolumeUpCommand"]
+    Command --> PowerOff["PowerOffCommand"]
+    VolumeUp -->|calls| Receiver["Receiver (TV)"]
 ```
 
 ### Java 코드 — Spring에서 Undo/Redo 구현
@@ -634,11 +634,11 @@ State 패턴은 **각 상태를 별도 클래스로 분리**하고, 상태 전�
 
 ```mermaid
 graph LR
-    Context["Order\n- state: OrderState\n+ pay()\n+ ship()\n+ deliver()\n+ cancel()"] -->|has| State["&lt;&lt;interface&gt;&gt;\nOrderState\n+ pay(Order)\n+ ship(Order)\n+ deliver(Order)\n+ cancel(Order)"]
-    State --> Pending["PendingState\n(결제 대기)"]
-    State --> Paid["PaidState\n(결제 완료)"]
-    State --> Shipped["ShippedState\n(배송 중)"]
-    State --> Delivered["DeliveredState\n(배송 완료)"]
+    Context["Order"] -->|has| State["OrderState"]
+    State --> Pending["PendingState"]
+    State --> Paid["PaidState"]
+    State --> Shipped["ShippedState"]
+    State --> Delivered["DeliveredState"]
 ```
 
 ### Java 코드 — 주문 상태 머신 실전 예시
@@ -915,6 +915,10 @@ orderService.applyDiscount(price -> price * 0.8);
 
 ## 면접 포인트 5가지
 
+<details>
+<summary>펼쳐보기</summary>
+
+
 ### Q1. Strategy와 Template Method의 차이는?
 
 두 패턴 모두 알고리즘의 일부를 교체 가능하게 만들지만, 방식이 다릅니다. **Strategy는 구성(Composition)** 을 사용해 런타임에 알고리즘 전체를 교체할 수 있고, **Template Method는 상속(Inheritance)** 을 사용해 컴파일 타임에 알고리즘의 특정 단계만 오버라이드합니다. GoF는 "상속보다 구성을 선호하라"는 원칙을 내세우며, 현대 Java 코드에서는 Strategy가 더 많이 쓰입니다.
@@ -968,3 +972,5 @@ graph LR
 ---
 
 행동 패턴을 자유자재로 쓰려면 "어떤 것이 변하는가"에 집중하세요. **변하는 알고리즘 → Strategy**, **변하는 단계 → Template Method**, **변하는 상태 → State**, **요청 자체를 객체로 → Command**, **변화를 여러 곳에 전파 → Observer**. 이 다섯 가지 질문이 패턴 선택의 나침반입니다.
+
+</details>

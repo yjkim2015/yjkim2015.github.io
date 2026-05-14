@@ -101,14 +101,12 @@ boolean hasBold = styles.contains(Style.BOLD);  // 가독성 명확
 
 ```mermaid
 graph LR
-    A["비교"] --> B["비트 필드"]
-    A --> C["EnumSet"]
-    B --> D["출력: 숫자 3"]
-    C --> E["출력: BOLD ITALIC"]
-    B --> F["타입: int"]
-    C --> G["타입: Set<Style>"]
-    style C fill:#51cf66,color:#fff
-    style B fill:#ff6b6b,color:#fff
+    A["비트 필드"] --> B["출력: 숫자 3"]
+    A --> C["타입: int"]
+    D["EnumSet"] --> E["출력: BOLD ITALIC"]
+    D --> F["타입: Set of Style"]
+    style A fill:#ff6b6b,color:#fff
+    style D fill:#51cf66,color:#fff
 ```
 
 ---

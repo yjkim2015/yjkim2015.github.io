@@ -93,8 +93,8 @@ offset 300번 메시지를 찾을 때의 과정:
 ```mermaid
 graph LR
     REQ["offset=300 요청"] --> BSEARCH["이진탐색 .index"]
-    BSEARCH --> FOUND["entry: offset=256, pos=8210"]
-    FOUND --> SCAN[".log pos=8210부터 순차 스캔"]
+    BSEARCH --> FOUND["entry: offset=256,"]
+    FOUND --> SCAN[".log pos=8210 순차 스"]
     SCAN --> MSG["offset=300 레코드 발견"]
 ```
 
@@ -190,7 +190,7 @@ read(fd, buf, len):
 
 ```mermaid
 graph LR
-    JVM["JVM 힙 방식"] --> GC["GC 발생 → Stop-the-World"]
+    JVM["JVM 힙 방식"] --> GC["GC 발생 → Stop-the-W"]
     GC --> LAT["수십ms 지연"]
     OS["OS Page Cache"] --> NOGC["GC 없음"]
     NOGC --> FAST["마이크로초 응답"]
@@ -669,10 +669,10 @@ public ProducerFactory<String, OrderEvent> durableProducerFactory() {
 ```mermaid
 graph LR
     CLIENT["Client"] --> ACCEPT["Acceptor Thread"]
-    ACCEPT --> PROC["Processor Thread N개"]
-    PROC --> RCHAN["RequestChannel(Queue)"]
-    RCHAN --> KAPI["KafkaRequestHandler"]
-    KAPI --> PURG["Purgatory(지연 요청)"]
+    ACCEPT --> PROC["Processor N개"]
+    PROC --> RCHAN["Request Queue"]
+    RCHAN --> KAPI["Request Handler"]
+    KAPI --> PURG["Purgatory(지연)"]
 ```
 
 ### Acceptor와 Processor 분리
@@ -851,7 +851,7 @@ compression.type=producer  # 기본값, Producer 압축 그대로 유지
 
 ```mermaid
 graph LR
-    APP["KafkaTemplate.send()"] --> ACC["RecordAccumulator"]
+    APP["KafkaTemplate.send"] --> ACC["RecordAccumulator"]
     ACC -->|"ready batches"| SENDER["Sender Thread"]
     SENDER --> NC["NetworkClient"]
     NC --> BROKER["Broker"]
@@ -935,7 +935,7 @@ Sticky (현재 기본):
 ```mermaid
 graph LR
     EAGER["Eager: 전체 파티션 반납"] --> REASSIGN["전체 재할당"]
-    COOP["Cooperative: 이동 파티션만 반납"] --> PARTIAL["부분 재할당"]
+    COOP["Cooperative: 동 파티션"] --> PARTIAL["부분 재할당"]
 ```
 
 **Eager Rebalancing (stop-the-world):**
@@ -1051,8 +1051,8 @@ public class KafkaConsumerConfig {
 
 ```mermaid
 graph LR
-    PROD["Producer"] --> TXCOORD["Transaction Coordinator"]
-    TXCOORD --> TXLOG["__transaction_state"]
+    PROD["Producer"] --> TXCOORD["Tx Coordinator"]
+    TXCOORD --> TXLOG["__transaction_stat"]
     TXCOORD --> PARTLEADER["Partition Leader들"]
 ```
 
@@ -1146,6 +1146,10 @@ Consumer(read_committed)는 LSO까지만 읽을 수 있음:
 ---
 
 ## 12. 면접 포인트 5선
+
+<details>
+<summary>펼쳐보기</summary>
+
 
 ### Q1. Kafka가 초고속인 이유를 OS 레벨에서 설명하라
 
@@ -1479,3 +1483,5 @@ min.insync.replicas=2
 unclean.leader.election.enable=false
 log.cleaner.dedupe.buffer.size=268435456  # 256MB (대용량 컴팩션 토픽)
 ```
+
+</details>

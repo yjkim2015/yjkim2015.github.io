@@ -249,12 +249,11 @@ class Teenager {
 
 ```mermaid
 graph LR
-    A["자원 회수가 필요한 클래스"] --> B{"AutoCloseable"}
-    B -->|"Yes (대부분)"| C["AutoCloseable 구현"]
-    B -->|"네이티브 피어"| D["cleaner를 안전망으로만"]
-    C --> C1["즉시·확실하게 자원 회수"]
-    C --> C2["예외 안전 보장"]
-    D --> D1["언제 실행될지 보장 없음"]
+    A["자원 회수 필요한 클래스"] --> B{"네이티브 피어?"}
+    B -->|"No (대부분)"| C["AutoCloseable 구현"]
+    B -->|"Yes"| D["cleaner 안전망으로만"]
+    C --> C1["즉시·확실한 자원 회수"]
+    D --> D1["실행 시점 보장 없음"]
     style C fill:#51cf66,color:#fff
     style D fill:#ffd43b
 ```
