@@ -73,6 +73,19 @@
   update();
 })();
 
+// 테이블을 wrapper div로 감싸기 (모바일 가로 스크롤 지원)
+(function() {
+  var tables = document.querySelectorAll('.page__content table');
+  for (var i = 0; i < tables.length; i++) {
+    var table = tables[i];
+    if (table.parentElement.classList.contains('table-wrapper')) continue;
+    var wrapper = document.createElement('div');
+    wrapper.className = 'table-wrapper';
+    table.parentNode.insertBefore(wrapper, table);
+    wrapper.appendChild(table);
+  }
+})();
+
 // 극한 시나리오 이후의 모든 h2를 접기/펼치기로 변환 + 광고
 (function() {
   var content = document.querySelector('.page__content');

@@ -650,7 +650,6 @@ code.highlighter-rouge {
    ============================================ */
 .page__content table {
   width: auto;
-  min-width: 40%;
   max-width: 100%;
   margin: 2em 0;
   border-collapse: separate;
@@ -660,6 +659,7 @@ code.highlighter-rouge {
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
   border: 1px solid #e0e0e0;
+  display: table;
 
   thead tr { background: #1a8917; }
 
@@ -1571,11 +1571,13 @@ nav.pagination,
 .sidebar-ad--left { margin-right: 2em; }
 .sidebar-ad--right { margin-left: 2em; }
 
-/* 테이블 반응형 — 모바일 가로 스크롤 + 줄바꿈 허용 */
-.page__content table {
-  display: block;
+/* 테이블 반응형 — 내용 맞춤 + 모바일 가로 스크롤 */
+.page__content .table-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  margin: 2em 0;
+}
+.page__content table {
   white-space: normal;
   word-break: keep-all;
 }
