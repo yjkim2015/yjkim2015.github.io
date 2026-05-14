@@ -47,11 +47,11 @@
       secondaryColor:'#e1f5fe',secondaryBorderColor:'#039be5',secondaryTextColor:'#01579b',
       tertiaryColor:'#fff3e0',tertiaryBorderColor:'#fb8c00',tertiaryTextColor:'#e65100',
       lineColor:'#546e7a',mainBkg:'#f1f8e9',nodeBorder:'#7cb342',
-      fontSize:'12px',fontFamily:'Pretendard,-apple-system,sans-serif',
+      fontSize:'14px',fontFamily:'Pretendard,-apple-system,sans-serif',
       actorBkg:'#e8f5e9',actorBorder:'#43a047',actorTextColor:'#1b5e20',
       noteBkgColor:'#fff9c4',noteBorderColor:'#f9a825',noteTextColor:'#5d4037'
     },
-    flowchart:{curve:'basis',htmlLabels:true,useMaxWidth:false,nodeSpacing:30,rankSpacing:40,padding:15},
+    flowchart:{curve:'basis',htmlLabels:true,useMaxWidth:false,nodeSpacing:40,rankSpacing:50,padding:15},
     sequence:{mirrorActors:true,useMaxWidth:false}
   });
   mermaid.run();
@@ -179,8 +179,22 @@
 
       var body = document.createElement('div');
       body.className = 'interview-point-body';
+
+      // in-article 광고 (펼칠 때 1회 로드)
+      var adDiv = document.createElement('div');
+      adDiv.style.cssText = 'text-align:center;margin-bottom:1.5em;';
+      adDiv.innerHTML = '<ins class="adsbygoogle" style="display:block; text-align:center;" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843"></ins>';
+      body.appendChild(adDiv);
+
       siblings.forEach(function(el) { body.appendChild(el); });
       details.appendChild(body);
+
+      details.addEventListener('toggle', function() {
+        if (details.open && !adDiv.dataset.loaded) {
+          adDiv.dataset.loaded = '1';
+          (adsbygoogle = window.adsbygoogle || []).push({});
+        }
+      });
 
       h3.parentNode.replaceChild(details, h3);
     });
