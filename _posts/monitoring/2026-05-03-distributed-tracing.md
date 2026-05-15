@@ -552,23 +552,23 @@ Trace와 Log가 연결되지 않으면 관측성의 절반을 잃는 것이다. 
 
 ## 면접 포인트
 
-### Q1. "분산 트레이싱에서 Context Propagation이란 무엇이며, 왜 중요한가?"
+### Q. "분산 트레이싱에서 Context Propagation이란 무엇이며, 왜 중요한가?"
 
 **모범 답변:** Context Propagation은 Trace ID와 Span ID를 서비스 간 호출 시 HTTP 헤더(또는 메시지 헤더)에 담아 전달하는 메커니즘이다. 이것이 없으면 각 서비스의 Span이 독립적으로 존재하여 하나의 요청을 관통하는 전체 그림을 볼 수 없다. W3C Trace Context가 표준이며, `traceparent` 헤더에 Trace ID, Span ID, 샘플링 플래그를 담는다.
 
-### Q2. "Head-based vs Tail-based Sampling의 차이와 트레이드오프는?"
+### Q. "Head-based vs Tail-based Sampling의 차이와 트레이드오프는?"
 
 **모범 답변:** Head-based는 요청 진입 시 확률적으로 결정하여 구현이 단순하지만, 에러 요청도 버릴 수 있다. Tail-based는 Trace 완성 후 조건(에러, 지연)으로 결정하여 중요한 Trace를 보존하지만, Collector가 모든 Span을 버퍼링해야 하므로 메모리 부담이 크다. 실무에서는 10K TPS 이상이면 Tail-based를 쓰되, Collector를 Trace ID 기반으로 로드밸런싱해야 한다.
 
-### Q3. "OpenTelemetry Collector의 역할은 무엇인가?"
+### Q. "OpenTelemetry Collector의 역할은 무엇인가?"
 
 **모범 답변:** Collector는 애플리케이션과 트레이싱 백엔드 사이의 중간 계층이다. 수신(Receivers) → 처리(Processors) → 전송(Exporters) 파이프라인을 구성한다. 백엔드가 바뀌어도 애플리케이션 코드를 수정할 필요가 없고, 배치 처리, 샘플링, 필터링 등의 전처리를 수행할 수 있다.
 
-### Q4. "Jaeger와 Tempo의 차이점은?"
+### Q. "Jaeger와 Tempo의 차이점은?"
 
 **모범 답변:** Jaeger는 Elasticsearch/Cassandra에 인덱싱하여 서비스명, 태그 등으로 검색이 가능하지만 인덱스 운영 비용이 높다. Tempo는 S3 같은 오브젝트 스토리지에 인덱스 없이 저장하여 비용이 낮지만, Trace ID로만 직접 조회한다. Grafana의 Exemplar 기능으로 Metrics/Logs에서 Trace ID를 얻으면 Tempo만으로 충분하다.
 
-### Q5. "Spring Boot 3에서 분산 트레이싱을 설정하는 방법은?"
+### Q. "Spring Boot 3에서 분산 트레이싱을 설정하는 방법은?"
 
 **모범 답변:** Spring Boot 3는 Micrometer Tracing을 사용하며, `micrometer-tracing-bridge-otel` 의존성으로 OTel SDK와 연결한다. `application.yml`에서 샘플링 비율, 전파 방식, OTLP 엔드포인트를 설정한다. `@Observed` 어노테이션으로 커스텀 Span을 생성하고, `RestClient`, `WebClient` 등 Spring 빈을 통한 HTTP 호출은 자동으로 Context가 전파된다.
 

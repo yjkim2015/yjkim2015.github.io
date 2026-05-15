@@ -1093,7 +1093,7 @@ public class AutocompleteService {
 
 ## 11. 면접 포인트 5개 — WHY까지 설명
 
-### Q1. "Elasticsearch가 밀리초 단위로 전문 검색하는 원리는?"
+### Q. "Elasticsearch가 밀리초 단위로 전문 검색하는 원리는?"
 
 **표면 답변(탈락 수준):** 역인덱스를 사용하기 때문입니다.
 
@@ -1109,13 +1109,13 @@ public class AutocompleteService {
 
 여기에 Lucene 세그먼트의 불변성으로 락 없는 동시 읽기가 가능하다는 점까지 언급하면 최상급 답변이다.
 
-### Q2. "왜 Primary Shard 수를 변경할 수 없나요?"
+### Q. "왜 Primary Shard 수를 변경할 수 없나요?"
 
 **WHY:** 샤드 라우팅 공식 `hash(_id) % number_of_primary_shards` 때문이다. Shard 5개일 때 `hash("doc1") % 5 = 2`이면 Shard 2에 저장된다. 이 상태에서 Shard를 10개로 늘리면 같은 계산이 `hash("doc1") % 10 = 7`로 달라진다. 기존 문서를 찾으러 Shard 7을 보면 없고, 실제로는 Shard 2에 있다. 모든 문서의 라우팅이 깨진다. 따라서 Shard 수 변경은 새 인덱스를 만들고 전체 Reindex하는 수밖에 없다.
 
 **해결책:** 처음 설계 시 여유 있게 Shard 수를 잡거나, `_split` API(Shard 수를 배수로만 증가)를 사용하거나, ILM으로 인덱스를 주기적으로 새로 만들어 롤오버한다.
 
-### Q3. "Refresh와 Flush의 차이, NRT 검색이 왜 1초 딜레이가 있나요?"
+### Q. "Refresh와 Flush의 차이, NRT 검색이 왜 1초 딜레이가 있나요?"
 
 **WHY:** Elasticsearch의 쓰기 경로를 이해해야 한다.
 
@@ -1127,13 +1127,13 @@ public class AutocompleteService {
 
 1초 딜레이의 이유: Refresh마다 새 세그먼트가 생긴다. 너무 자주 Refresh하면 작은 세그먼트가 폭발적으로 늘어나 검색 성능이 저하된다. 1초는 검색 신선도와 세그먼트 오버헤드의 균형점이다.
 
-### Q4. "BM25가 TF-IDF보다 나은 이유는?"
+### Q. "BM25가 TF-IDF보다 나은 이유는?"
 
 **TF-IDF 문제:** TF(단어 빈도)가 선형 증가한다. "이어폰"이 100번 나온 문서가 1번 나온 문서보다 100배 관련성이 높다고 계산한다. 하지만 실제로 관련성은 그렇게 선형적이지 않다. 또한 긴 문서는 자연히 TF가 높아 유리해지는 길이 편향이 있다.
 
 **BM25 해결:** TF 포화 함수를 도입한다. TF가 아무리 커도 점수 증가가 `k1+1` 이상을 넘지 않는다(수익 체감). 또한 `avgDocLen` 대비 현재 문서 길이로 TF를 정규화하여 길이 편향을 보정한다. `k1`(포화 속도)과 `b`(길이 정규화 강도)를 도메인에 맞게 튜닝할 수 있다. 학술 논문 검색에는 `b=0.75`가 적합하지만, 상품명처럼 짧은 텍스트는 `b=0.3`으로 낮추는 것이 효과적이다.
 
-### Q5. "Elasticsearch에서 데이터 일관성은 어떻게 보장하나요? RDBMS와 다른 점은?"
+### Q. "Elasticsearch에서 데이터 일관성은 어떻게 보장하나요? RDBMS와 다른 점은?"
 
 **핵심 차이:** Elasticsearch는 **AP(Availability + Partition Tolerance)** 시스템이다. RDBMS의 **ACID** 트랜잭션을 보장하지 않는다.
 

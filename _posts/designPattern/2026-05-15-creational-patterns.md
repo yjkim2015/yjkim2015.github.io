@@ -660,22 +660,47 @@ public static Builder copyOf(OrderSnapshot source) {
 
 ## 면접 포인트
 
-### Singleton이 안티패턴으로 불리는 이유는?
+### Q. Singleton이 안티패턴으로 불리는 이유는?
+
+<details>
+<summary>답변 보기</summary>
 
 전역 상태를 공유하기 때문이다. 테스트에서 Singleton의 상태가 테스트 간에 누적되어 격리성을 깨뜨린다. 의존성이 숨겨져서(생성자에 드러나지 않음) 코드 이해와 리팩토링이 어렵다. 그러나 진정한 전역 단일 자원(설정, 로거, 연결 풀)은 Singleton이 적합하다. Spring DI를 쓰면 빈의 생명주기를 컨테이너가 관리하므로 직접 Singleton을 구현하는 경우는 드물다.
 
-### Factory Method와 Abstract Factory의 선택 기준은?
+</details>
+
+### Q. Factory Method와 Abstract Factory의 선택 기준은?
+
+<details>
+<summary>답변 보기</summary>
 
 단일 제품 하나를 만드는 방법을 서브클래스에 위임하고 싶으면 Factory Method, 연관된 여러 제품을 일관된 스타일로 만들어야 하면 Abstract Factory를 쓴다. Factory Method는 상속 기반이고, Abstract Factory는 컴포지션 기반이다. Abstract Factory는 "스타일 일관성"이 중요한 UI 컴포넌트, 데이터베이스 드라이버 세트, 테마 패키지 등에 적합하다.
 
-### Builder의 `build()` 메서드에서 유효성 검증을 해야 하는가?
+</details>
+
+### Q. Builder의 `build()` 메서드에서 유효성 검증을 해야 하는가?
+
+<details>
+<summary>답변 보기</summary>
 
 해야 한다. Builder는 불완전한 상태의 객체가 외부로 나가는 것을 막는 마지막 관문이다. 필수 필드 누락, 상호 의존적 필드의 논리적 일관성(`startDate < endDate`), 범위 초과 등을 `build()`에서 검증한다. 검증 실패 시 `IllegalStateException`을 던진다. 최종 객체는 항상 유효한 상태여야 한다.
 
-### `clone()`을 쓰지 말라는 이유는?
+</details>
+
+### Q. `clone()`을 쓰지 말라는 이유는?
+
+<details>
+<summary>답변 보기</summary>
 
 `Cloneable` 인터페이스는 설계가 잘못됐다. `clone()` 메서드가 `Cloneable`에 선언되지 않고 `Object`에 선언되어 있다. `Cloneable`을 구현해도 `clone()`은 기본적으로 `protected`이므로 외부에서 호출하려면 오버라이드가 필요하다. 얕은 복사가 기본이라 참조 타입 처리를 개발자가 직접 해야 한다. 복사 생성자나 정적 팩토리 메서드 `copy()`가 더 명확하고 안전하다.
 
-### double-checked locking에서 `volatile`이 왜 필요한가?
+</details>
+
+### Q. double-checked locking에서 `volatile`이 왜 필요한가?
+
+<details>
+<summary>답변 보기</summary>
 
 `volatile` 없이는 CPU나 JIT 컴파일러가 명령어를 재정렬(reordering)할 수 있다. `instance = new Singleton()` 은 내부적으로 세 단계다: (1) 메모리 할당, (2) 생성자 호출, (3) 참조 할당. 재정렬이 일어나면 (3)이 (2)보다 먼저 실행될 수 있다. 다른 스레드가 1차 검사에서 `instance != null`을 보고 아직 초기화되지 않은 인스턴스를 반환받는다. `volatile`은 해당 변수의 쓰기/읽기에 happens-before 관계를 보장해서 이 문제를 막는다.
+
+</details>

@@ -87,13 +87,6 @@ println(mutableList.javaClass) // class java.util.ArrayList
 
 Kotlin의 `kotlin.collections.List`는 `java.util.List`를 **래핑하지 않는다**. 대신 Kotlin 타입 시스템이 `kotlin.collections.List`에 변경 메서드를 노출하지 않도록 타입 매핑을 정의한다. 런타임 객체는 같지만, 컴파일러가 허용하는 메서드 집합이 다르다.
 
-```
-graph LR
-    K_LIST["kotlin.collections.List"] -->|타입 매핑| J_LIST["java.util.List"]
-    K_MLIST["MutableList"] -->|타입 매핑| J_LIST
-    J_LIST -->|런타임| ARRAYLIST["ArrayList"]
-```
-
 ```mermaid
 graph LR
     K_LIST["kotlin.collections.List"] -->|타입 매핑| J_LIST["java.util.List"]
@@ -311,6 +304,19 @@ val complex = people.sortedWith(
 ---
 
 ## 4. Sequence vs Collection — 즉시 평가 vs 지연 평가
+
+### 평가 방식 비교
+
+```mermaid
+graph LR
+    A["Collection 연산"] --> B["filter 결과 리스트"]
+    B --> C["map 결과 리스트"]
+    C --> D["take(5)"]
+    E["Sequence 연산"] --> F["원소 하나씩 파이프"]
+    F --> G["5개 모이면 즉시 종료"]
+```
+
+비유: 뷔페(Collection)와 코스 요리(Sequence)의 차이다. 뷔페는 모든 음식을 미리 접시에 다 담아 테이블에 올려놓는다. 코스 요리는 손님이 먹을 준비가 됐을 때 그 요리만 나온다. 손님이 5번째 코스에서 배가 불러 그만 먹겠다고 하면, 6번째 코스는 아예 만들지도 않는다. **Sequence의 `take(5)`가 바로 이것이다.** 50만 개 중간 리스트를 만들지 않고 5개만 처리하고 멈춘다.
 
 ### 즉시 평가의 문제
 
@@ -797,31 +803,31 @@ val filtered = mutableList
 
 ## 면접 포인트
 
-### Kotlin의 List와 MutableList의 차이는 무엇인가? 런타임에서도 구분되는가?
+### Q. Kotlin의 List와 MutableList의 차이는 무엇인가? 런타임에서도 구분되는가?
 
 `kotlin.collections.List`는 읽기 전용 인터페이스이고, `MutableList`는 변경 메서드를 포함한 인터페이스다. 그러나 **런타임에는 동일한 `java.util.ArrayList` 인스턴스**일 수 있다. Kotlin의 불변성은 컴파일 타임 타입 검사에서만 보장된다. Java 코드와 상호운용할 때 Java 측에서 `List`를 수정할 수 있으므로, 진정한 불변성이 필요하면 `Collections.unmodifiableList()` 또는 `List.copyOf()`(Java 10+)를 사용해야 한다.
 
-### Sequence와 Collection 연산의 성능 차이는 어떤 경우에 두드러지는가?
+### Q. Sequence와 Collection 연산의 성능 차이는 어떤 경우에 두드러지는가?
 
 두 가지 조건이 갖춰질 때 차이가 크다. 첫째, 원소 수가 많아서 중간 리스트 생성 비용이 클 때. 둘째, `take`나 `first` 같은 short-circuit 연산이 체인 끝에 있을 때. 반대로 원소 수가 적거나 체인이 단순하면 Sequence 객체 생성 오버헤드 때문에 Collection 연산이 더 빠를 수 있다. 판단 기준은 항상 프로파일링이다.
 
-### flatMap과 map + flatten의 차이는?
+### Q. flatMap과 map + flatten의 차이는?
 
 기능적으로 동일하다. `flatMap { f(it) }`는 `map { f(it) }.flatten()`과 같은 결과를 낸다. 다만 `flatMap`은 중간 컬렉션(변환된 리스트들의 리스트)을 만들지 않으므로 약간 더 효율적이다. Sequence에서는 이 차이가 더 크다. 가독성 측면에서도 `flatMap`이 "변환 + 펼치기"를 단일 의도로 표현하므로 선호된다.
 
-### groupBy와 associate의 차이는?
+### Q. groupBy와 associate의 차이는?
 
 `groupBy`는 하나의 키에 여러 원소가 매핑되는 `Map<K, List<V>>`를 반환한다. `associateBy`는 각 키에 단일 원소가 매핑되는 `Map<K, V>`를 반환하며, 키 충돌 시 마지막 원소가 남는다. 즉, `groupBy`는 "같은 키를 가진 원소들을 모아라", `associateBy`는 "원소를 키로 인덱싱하라"는 의도다. 중복 키가 있는 데이터에 `associateBy`를 쓰면 데이터 손실이 생긴다.
 
-### Sequence는 재사용이 가능한가?
+### Q. Sequence는 재사용이 가능한가?
 
 소스에 따라 다르다. `sequenceOf()`나 컬렉션의 `asSequence()`는 매번 새로운 Iterator를 생성하므로 여러 번 소비할 수 있다. 그러나 `sequence { }` 블록이나 `generateSequence`로 만든 상태 기반 Sequence는 재사용 시 비결정적 동작을 할 수 있다. Java Stream과 달리 Kotlin Sequence는 "이미 소비된 Sequence"에 대한 예외를 던지지 않지만, 결과가 달라질 수 있다. 안전하게 재사용하려면 최종 연산 후 새로운 Sequence를 생성해야 한다.
 
-### windowed와 chunked의 차이는?
+### Q. windowed와 chunked의 차이는?
 
 `chunked(n)`은 겹치지 않는 고정 크기 덩어리를 만든다. `windowed(size, step)`은 슬라이딩 윈도우로, `step < size`이면 윈도우가 겹친다. 이동 평균, 패턴 탐지처럼 인접한 원소들의 관계를 분석할 때는 `windowed`, 배치 처리나 페이지네이션처럼 데이터를 독립적인 덩어리로 나눌 때는 `chunked`를 사용한다.
 
-### 컬렉션의 fold와 reduce의 차이는?
+### Q. 컬렉션의 fold와 reduce의 차이는?
 
 `reduce`는 첫 번째 원소를 누산기의 초깃값으로 사용하므로 빈 컬렉션에서 `UnsupportedOperationException`을 던진다. `fold`는 초깃값을 명시적으로 지정하므로 빈 컬렉션에도 안전하고, 반환 타입이 원소 타입과 달라도 된다. 예를 들어 `List<String>`을 `fold("", String::plus)`로 하나의 String으로 합치는 것은 가능하지만, `reduce`로는 타입이 같아야 한다. 실무에서는 `fold`가 안전하고 유연하므로 선호된다.
 

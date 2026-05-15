@@ -875,22 +875,47 @@ public long getSize(Set<FileSystemNode> visited) {
 
 ## 면접 포인트
 
-### Adapter와 Decorator, Proxy의 차이는?
+### Q. Adapter와 Decorator, Proxy의 차이는?
+
+<details>
+<summary>답변 보기</summary>
 
 세 패턴 모두 객체를 감싸지만 의도가 다르다. Adapter는 인터페이스를 변환한다. 클라이언트가 기대하는 인터페이스와 실제 객체의 인터페이스가 다를 때 쓴다. Decorator는 같은 인터페이스를 유지하면서 기능을 추가한다. Proxy도 같은 인터페이스를 유지하지만 기능 추가보다는 접근 제어, 지연 초기화, 원격 접근 등에 집중한다.
 
-### Facade와 Mediator의 차이는?
+</details>
+
+### Q. Facade와 Mediator의 차이는?
+
+<details>
+<summary>답변 보기</summary>
 
 Facade는 단방향이다. 클라이언트 → Facade → 서브시스템으로 흐르고, 서브시스템끼리는 직접 통신하지 않는다. Mediator는 컴포넌트들이 서로 직접 참조하지 않고 Mediator를 통해 상호작용하도록 중재한다. 양방향 통신이 핵심이다. Facade는 외부에 단순한 인터페이스를 제공하고, Mediator는 내부 컴포넌트 간의 결합도를 낮춘다.
 
-### Composite 패턴에서 자식 관리 메서드를 인터페이스에 두어야 하는가?
+</details>
+
+### Q. Composite 패턴에서 자식 관리 메서드를 인터페이스에 두어야 하는가?
+
+<details>
+<summary>답변 보기</summary>
 
 GoF는 투명성(transparency)과 안전성(safety) 사이의 트레이드오프를 제시한다. 인터페이스에 `add()`, `remove()`를 두면 클라이언트가 Leaf/Composite를 구별하지 않아도 된다(투명성). 하지만 Leaf에서 이 메서드는 의미가 없으므로 `UnsupportedOperationException`을 던져야 한다. 반대로 Composite 클래스에만 두면 타입 안전하지만 클라이언트가 캐스팅해야 한다. 실무에서는 보통 자식 관리 메서드를 인터페이스에서 제외하고 Composite 타입에만 두는 안전성 방식을 택한다.
 
-### Flyweight의 내재 상태와 외재 상태를 어떻게 구분하는가?
+</details>
+
+### Q. Flyweight의 내재 상태와 외재 상태를 어떻게 구분하는가?
+
+<details>
+<summary>답변 보기</summary>
 
 내재 상태(intrinsic state)는 객체 자체의 본질적 속성으로, 어떤 컨텍스트에서든 변하지 않는다. 외재 상태(extrinsic state)는 사용 컨텍스트에 따라 달라진다. 나무의 예: 나무 종류, 텍스처, 색상은 내재 상태(공유 가능), 화면에서의 x/y 위치는 외재 상태(각 나무마다 다름). 분류 기준은 "이 상태가 이 객체를 사용하는 위치/방식과 무관하게 항상 같은가?"이다. 그렇다면 내재 상태다.
 
-### Spring @Transactional이 동작하지 않는 상황은?
+</details>
+
+### Q. Spring @Transactional이 동작하지 않는 상황은?
+
+<details>
+<summary>답변 보기</summary>
 
 가장 흔한 원인은 self-invocation이다. 같은 클래스 내부에서 `@Transactional` 메서드를 `this`로 호출하면 Spring AOP 프록시를 우회한다. 두 번째는 `private` 메서드다. Spring AOP(CGLIB)는 `private` 메서드를 오버라이드할 수 없으므로 프록시가 생성되지 않는다. 세 번째는 `final` 메서드나 `final` 클래스다. 네 번째는 `@Transactional`을 인터페이스가 아닌 구현 클래스에만 붙이고 JDK 동적 프록시를 쓰는 경우다. JDK 동적 프록시는 인터페이스 기준이므로 구현 클래스 어노테이션을 인식하지 못한다.
+
+</details>

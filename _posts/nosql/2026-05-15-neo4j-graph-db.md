@@ -241,6 +241,8 @@ PROFILE MATCH (u:User {id: 1})-[:FOLLOWS]->(f:User) RETURN f
 
 ## 5. 실전 사용 사례
 
+**비유**: 그래프 DB는 거미줄 지도와 같다. RDB가 "모든 사람의 이름을 엑셀 표에 정리하고 관계는 별도 표에 기록"한다면, 그래프 DB는 "사람들을 점으로 그리고 관계를 선으로 연결한 지도"다. 6단계 친구를 찾을 때 RDB는 표를 6번 조인해야 하지만, 그래프 DB는 지도에서 선을 6번 따라가기만 하면 된다. **데이터가 많아져도 선 따라가기 비용은 변하지 않는다.**
+
 ### 5-1. 소셜 네트워크
 
 ```cypher
@@ -327,6 +329,18 @@ RETURN [node IN nodes(path) | node.name] AS concept_path
 ## 6. 그래프 알고리즘
 
 Neo4j Graph Data Science(GDS) 라이브러리는 수십 가지 그래프 알고리즘을 제공한다.
+
+**비유**: 그래프 알고리즘은 지도 위에서 길을 찾는 다양한 방법이다. PageRank는 "어느 교차로가 가장 많은 차가 지나가는가"를 계산하고, Dijkstra는 "A에서 B까지 가장 빠른 경로"를 찾고, 커뮤니티 탐지는 "같은 동네 사람들을 자동으로 묶어주는" 알고리즘이다.
+
+```mermaid
+graph LR
+    A[중심성] --> B[PageRank]
+    A --> C[Betweenness]
+    D[경로] --> E[Dijkstra]
+    D --> F[shortestPath]
+    G[커뮤니티] --> H[Louvain]
+    G --> I[LabelProp]
+```
 
 ### 6-1. 중심성 알고리즘
 
@@ -566,6 +580,17 @@ public class GraphService {
 
 ## 9. 데이터 모델링 가이드
 
+**비유**: 그래프 모델링은 도시 지도 설계와 같다. 건물(노드)과 도로(관계)를 어떻게 배치하느냐에 따라 길 찾기 효율이 완전히 달라진다. 건물 안의 방 번호(프로퍼티)는 지도에 그릴 필요가 없지만, 건물 자체(노드)는 지도 위의 점으로 표시해야 다른 건물과 연결할 수 있다.
+
+```mermaid
+graph LR
+    User -->|LIVES_IN| City
+    User -->|PURCHASED| Product
+    Product -->|IN_CATEGORY| Category
+    Order -->|CONTAINS| Product
+    Order -->|PLACED_BY| User
+```
+
 ### 9-1. 노드로 만들 것인가, 프로퍼티로 만들 것인가
 
 | 기준 | 노드 | 프로퍼티 |
@@ -716,26 +741,56 @@ WHERE score > 0.1  -- 의미 있는 결과만 처리
 
 ## 11. 면접 포인트
 
-### Index-Free Adjacency가 무엇이며 왜 그래프 탐색에 유리한가?
+### Q. Index-Free Adjacency가 무엇이며 왜 그래프 탐색에 유리한가?
+
+<details>
+<summary>답변 보기</summary>
 
 Index-Free Adjacency는 각 노드가 연결된 관계에 대한 포인터를 직접 보유하는 저장 방식이다. RDB에서 JOIN은 인덱스를 통해 매칭되는 레코드를 찾지만, 데이터 규모가 커질수록 인덱스 탐색 비용이 증가한다. 그래프 DB에서는 포인터를 따라가기만 하므로 관계 탐색이 O(1)이다. 4단계, 6단계 관계를 탐색해도 전체 데이터를 스캔하지 않기 때문에 RDB 대비 수천 배 이상의 성능 차이가 발생한다.
 
-### Cypher의 MATCH 절과 SQL의 SELECT/JOIN 절의 차이를 설명해보라.
+</details>
+
+### Q. Cypher의 MATCH 절과 SQL의 SELECT/JOIN 절의 차이를 설명해보라.
+
+<details>
+<summary>답변 보기</summary>
 
 SQL은 테이블을 기준으로 어떤 테이블에서 어떤 조건으로 조인할지 명시한다. Cypher의 MATCH는 그래프 패턴을 직접 표현한다. `(a)-[:FOLLOWS]->(b)` 라는 표현 자체가 "a가 b를 팔로우하는 관계"를 나타낸다. SQL에서 동일한 의미를 표현하려면 `JOIN follows ON a.id = follows.from_user_id JOIN users b ON follows.to_user_id = b.id`로 쓴다. Cypher는 쿼리가 도메인 모델에 가깝고 가변 길이 경로(`*1..6`)를 자연스럽게 표현할 수 있다는 점에서 다르다.
 
-### 슈퍼노드 문제가 발생하는 원인과 해결 방법은?
+</details>
+
+### Q. 슈퍼노드 문제가 발생하는 원인과 해결 방법은?
+
+<details>
+<summary>답변 보기</summary>
 
 팔로워가 수천만 명 이상인 노드는 수천만 개의 관계 포인터를 보유한다. 이 노드를 조회하거나 이 노드를 경유하는 패턴을 탐색하면 수천만 개의 관계를 메모리에 로드해야 하므로 쿼리가 느려지거나 OOM이 발생한다. 해결책은 LIMIT으로 반환 수를 제한하거나, 슈퍼노드를 버킷 노드로 분할해서 관계 수를 줄이거나, 슈퍼노드를 경유하지 않는 쿼리 패턴을 설계하는 것이다.
 
-### 그래프 DB와 RDB 중 어떤 상황에서 무엇을 선택해야 하나?
+</details>
+
+### Q. 그래프 DB와 RDB 중 어떤 상황에서 무엇을 선택해야 하나?
+
+<details>
+<summary>답변 보기</summary>
 
 관계 탐색이 핵심이고 깊이 우선 또는 경로 탐색이 빈번하다면 그래프 DB가 유리하다. 소셜 네트워크, 추천, 사기 탐지, 지식 그래프가 대표적이다. 반면 집계 분석(SUM, GROUP BY), 전체 테이블 스캔, 복잡한 조건 필터링 중심의 OLAP 쿼리는 RDB 또는 컬럼형 DB가 더 적합하다. 실무에서는 두 DB를 함께 사용하기도 한다. 사용자 기본 정보는 RDB에, 친구 관계 그래프는 Neo4j에 저장하는 방식이다.
 
-### PageRank 알고리즘의 직관적 의미를 설명해보라.
+</details>
+
+### Q. PageRank 알고리즘의 직관적 의미를 설명해보라.
+
+<details>
+<summary>답변 보기</summary>
 
 PageRank는 "중요한 노드에서 링크(관계)를 받은 노드가 더 중요하다"는 반복 계산이다. 웹 페이지의 경우 많은 페이지에서 링크를 받을수록 중요하고, 그 링크를 보낸 페이지 자체가 중요할수록 가중치가 높아진다. 소셜 네트워크에서는 팔로워가 많고, 그 팔로워들도 영향력 있는 유저일수록 PageRank가 높다. GDS 라이브러리를 통해 그래프 DB에서 직접 실행할 수 있다.
 
-### Neo4j의 Causal Cluster에서 Primary와 Secondary의 역할 분리는?
+</details>
+
+### Q. Neo4j의 Causal Cluster에서 Primary와 Secondary의 역할 분리는?
+
+<details>
+<summary>답변 보기</summary>
 
 Primary 멤버는 Raft 합의 알고리즘을 사용해서 쓰기 일관성을 보장한다. 과반수의 Primary가 동의해야 쓰기가 커밋된다. Secondary 멤버는 Primary에서 비동기로 복제받아 읽기 전용으로 서비스한다. 읽기 트래픽을 Secondary로 분산하여 수평 확장이 가능하다. 그래프 탐색이 읽기 heavy한 특성을 가지므로, Secondary를 여러 대 두고 읽기 부하를 분산하는 것이 일반적인 운영 패턴이다.
+
+</details>

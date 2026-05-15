@@ -139,6 +139,17 @@ public class QMember extends EntityPathBase<Member> {
 
 ## 3. JPAQueryFactory 기본 사용
 
+### QueryDSL 쿼리 생성 흐름
+
+```mermaid
+graph LR
+    A[Q클래스 선택] --> B[JPAQueryFactory]
+    B --> C["selectFrom / select"]
+    C --> D["where 조건"]
+    D --> E["orderBy / offset / limit"]
+    E --> F["fetch / fetchOne"]
+```
+
 ### 3-1. 기본 조회
 
 ```java
@@ -308,6 +319,8 @@ private BooleanExpression isVip() {
 
 ## 5. Projection — 원하는 컬럼만 조회
 
+비유: 회사 전체 직원 명부(엔티티)를 복사해서 가져오는 대신, 이름과 부서만 적은 쪽지(DTO)를 건네받는 것이다. **전달되는 데이터 양이 줄어들고, 불필요한 컬럼이 네트워크와 메모리를 낭비하지 않는다.** 특히 연관관계가 많은 엔티티일수록 Projection의 효과가 크다.
+
 엔티티 전체를 조회하면 불필요한 컬럼까지 SELECT한다. Projection을 사용하면 필요한 컬럼만 추출할 수 있다.
 
 ### 5-1. Tuple
@@ -409,6 +422,8 @@ List<MemberDto> result = queryFactory
 ---
 
 ## 6. 페이징과 정렬
+
+비유: 두꺼운 책에서 원하는 장(chapter)을 찾는 방법은 두 가지다. 처음부터 페이지를 세며 넘기거나(OFFSET), 책갈피를 꽂아두고 그 위치부터 읽는 것(커서). **OFFSET이 클수록 DB는 버려야 할 행을 더 많이 읽는다.** 100만 번째 페이지라면 100만 행을 읽고 버린 뒤 10행만 반환한다.
 
 ### 6-1. 기본 페이징
 
@@ -527,6 +542,8 @@ public List<Tuple> findWithRank() {
 ---
 
 ## 8. 벌크 연산
+
+**벌크 연산이 필요한 이유**: JPA의 기본 방식은 엔티티를 하나씩 로딩해 변경 감지(dirty checking)로 UPDATE를 실행한다. 10만 명의 나이를 일괄 증가시키려면 10만 번의 SELECT + 10만 번의 UPDATE가 필요하다. 벌크 연산은 SQL 한 방으로 처리한다. 단, **영속성 컨텍스트를 거치지 않기 때문에** 실행 후 1차 캐시와 DB가 불일치 상태가 된다. 이것이 `entityManager.clear()`가 필수인 이유다.
 
 ### 8-1. 일괄 수정/삭제
 

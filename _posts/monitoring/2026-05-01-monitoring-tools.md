@@ -591,7 +591,7 @@ log.info("로그인 시도: userId={}", userId);  // 비밀번호 절대 로깅 
 
 ## 면접 포인트
 
-#### Q. Prometheus의 Pull 방식과 Push 방식의 차이점은?
+### Q. Prometheus의 Pull 방식과 Push 방식의 차이점은?
 
 ```
 Pull 방식 (Prometheus):
@@ -606,7 +606,7 @@ Push 방식 (Datadog, Graphite):
   단점: 에이전트 장애 시 메트릭 유실, 중앙 서버 부하 집중
 ```
 
-#### Q. PromQL에서 rate()와 irate()의 차이는?
+### Q. PromQL에서 rate()와 irate()의 차이는?
 
 ```
 rate(metric[5m]):
@@ -622,7 +622,7 @@ irate(metric[5m]):
 실무 권장: 알림 규칙은 rate(), 실시간 대시보드는 irate()
 ```
 
-#### Q. Grafana 대시보드에서 P95 응답시간은 어떻게 구하는가?
+### Q. Grafana 대시보드에서 P95 응답시간은 어떻게 구하는가?
 
 ```promql
 histogram_quantile(0.95,
@@ -635,7 +635,7 @@ histogram_quantile(0.95,
       0.95 = P95, 0.99 = P99, 0.5 = P50(중앙값)
 ```
 
-#### Q. 로그, 메트릭, 트레이스를 언제 각각 써야 하는가?
+### Q. 로그, 메트릭, 트레이스를 언제 각각 써야 하는가?
 
 ```
 Metrics: 지금 시스템이 어떤 상태인가? (정량적)
