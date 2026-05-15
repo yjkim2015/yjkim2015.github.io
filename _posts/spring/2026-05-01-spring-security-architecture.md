@@ -1774,3 +1774,27 @@ public SecurityFilterChain userChain(HttpSecurity http) throws Exception {
 | `CsrfFilter` | CSRF 방어 | 세션 기반 서비스에서 브라우저 자동 쿠키 악용 차단 |
 | `CorsFilter` | CORS 처리 | Preflight OPTIONS를 인증 필터 전에 처리 |
 | `JwtDecoder` | JWT 서명 검증 | Authorization Server 공개키로 위변조 탐지 |
+
+---
+
+## 면접 포인트
+
+### Q. DelegatingFilterProxy가 필요한 이유는?
+
+Tomcat(서블릿 컨테이너)은 Spring ApplicationContext를 모른다. 서블릿 필터는 Tomcat이 직접 관리하므로 Spring 빈을 주입받을 수 없다. `DelegatingFilterProxy`는 Tomcat에 등록되지만 실제 처리는 Spring 빈인 `FilterChainProxy`에 위임한다. 마치 외부 경비원(Tomcat)이 방문객을 내부 보안팀(Spring)에게 인계하는 구조다. 이 덕분에 `FilterChainProxy`와 모든 Security 필터는 Spring 빈으로 관리되어 `@Autowired`, AOP, 트랜잭션 등을 자유롭게 사용할 수 있다.
+
+### Q. SecurityContextHolder의 전략을 변경하는 이유는?
+
+기본 전략 `MODE_THREADLOCAL`은 요청 스레드 하나에 인증 정보를 저장한다. `@Async`로 별도 스레드에서 실행하면 부모 스레드의 `SecurityContext`가 전달되지 않아 인증이 사라진다. `MODE_INHERITABLETHREADLOCAL`로 변경하면 자식 스레드에도 복사된다. 단, 스레드 풀 재사용 시 이전 요청의 인증 정보가 남아있을 수 있으므로 `TaskDecorator`로 컨텍스트를 명시적으로 복사·초기화하는 방식이 더 안전하다. Spring Security 6의 `SecurityContextHolderFilter`는 매 요청 후 컨텍스트를 자동으로 정리한다.
+
+### Q. UsernamePasswordAuthenticationFilter와 BasicAuthenticationFilter의 차이는?
+
+`UsernamePasswordAuthenticationFilter`는 폼 로그인(`POST /login`)을 처리하며 세션에 인증 정보를 저장한다. 인증 성공 시 `HttpSession`에 `SecurityContext`를 저장하고, 이후 요청은 `SecurityContextPersistenceFilter`(또는 `SecurityContextHolderFilter`)가 세션에서 복원한다. `BasicAuthenticationFilter`는 매 요청의 `Authorization: Basic` 헤더를 파싱해 인증한다. 세션을 사용하지 않는 Stateless 방식이다. REST API에서 Basic Auth를 쓰면 매 요청마다 자격증명이 헤더에 포함되므로 반드시 HTTPS를 사용해야 한다.
+
+### Q. ExceptionTranslationFilter의 역할과 위치가 중요한 이유는?
+
+`ExceptionTranslationFilter`는 `AuthorizationFilter`(인가)와 `AuthenticationEntryPoint`(인증 유도) 사이의 번역기다. 인가 실패(`AccessDeniedException`)를 잡아 익명 사용자면 로그인 페이지로 리다이렉트하고, 이미 인증된 사용자면 403 응답을 반환한다. 인증 미완료(`AuthenticationException`)는 `AuthenticationEntryPoint`로 전달해 401 또는 로그인 유도 응답을 만든다. 이 필터보다 앞에 있는 필터(예: `UsernamePasswordAuthenticationFilter`)에서 발생한 예외는 처리하지 못하므로, 필터 순서가 보안 동작에 직접 영향을 준다.
+
+### Q. @PreAuthorize와 URL 패턴 보안의 차이와 병행 사용 이유는?
+
+URL 패턴 보안(`http.authorizeHttpRequests()`)은 요청 경로 기반으로 접근을 통제한다. URL 변경 시 보안 설정도 함께 수정해야 하며, 같은 서비스 메서드를 다른 URL로 접근하면 우회 가능하다. `@PreAuthorize`는 메서드에 직접 선언되어 URL과 무관하게 동작한다. 서비스 레이어에 선언하면 REST API, 스케줄러, 이벤트 핸들러 등 모든 호출 경로에 동일한 보안 정책이 적용된다. 두 방법을 병행하면 외부 경계(URL)와 내부 핵심(메서드) 두 겹의 방어선을 구성할 수 있다.

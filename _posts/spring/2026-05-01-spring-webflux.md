@@ -1688,3 +1688,27 @@ Spring WebFlux는 "I/O 대기 중 스레드를 놀리지 않는다"는 단순한
 | Go goroutine | M:N | ~수백만 | 자유롭게 | 중간 |
 
 WebFlux가 빛나는 순간: 마이크로서비스 게이트웨이(수십 개 upstream 동시 호출), 실시간 대시보드(SSE), 카프카 이벤트 파이프라인, 전체 리액티브 스택. 팀 역량과 요구사항이 맞지 않으면 복잡도만 올라가고 이득은 사라진다.
+
+---
+
+## 면접 포인트
+
+### Q. Spring MVC와 WebFlux의 스레드 모델 차이를 설명하라.
+
+MVC는 요청당 스레드(Thread-per-Request) 모델이다. 200개 동시 요청이 오면 200개 스레드가 필요하다. I/O 대기 중에도 스레드가 점유되므로, DB 응답을 기다리는 동안 스레드는 놀고 있다. WebFlux는 소수의 EventLoop 스레드(CPU 코어 수)가 모든 요청을 처리한다. I/O 요청을 보내고 응답이 올 때까지 다른 요청을 처리하다가 응답 도착 이벤트에 반응한다. 마치 MVC는 손님마다 웨이터를 한 명씩 배정하는 레스토랑이고, WebFlux는 한 명의 웨이터가 여러 테이블을 오가며 서빙하는 구조다. EventLoop 스레드를 블로킹하면 전체 처리가 멈추는 것이 가장 큰 위험이다.
+
+### Q. Reactor의 Mono와 Flux의 차이는 무엇이며 왜 두 타입이 필요한가?
+
+`Mono`는 0~1개 값을 비동기로 생산하고, `Flux`는 0~N개 값을 스트림으로 생산한다. 단일 사용자 조회(`findById`)는 `Mono<User>`, 전체 목록 조회는 `Flux<User>`가 의미적으로 정확하다. 컴파일 타임에 반환 개수의 의미를 타입으로 표현할 수 있어, API 사용자가 `.block()` 없이도 결과가 단건임을 알 수 있다. 두 타입 모두 `Publisher<T>`를 구현하므로 Reactive Streams 표준을 따른다. 구독(`.subscribe()`)이 시작되기 전까지 아무 작업도 수행하지 않는 지연 실행(Cold Publisher) 특성을 가진다.
+
+### Q. 배압(Backpressure)이 필요한 이유와 WebFlux에서의 구현 방식은?
+
+생산자가 소비자보다 훨씬 빠르게 데이터를 만들면 소비자의 메모리가 쌓인 데이터로 넘쳐 OOM이 발생한다. 배압은 소비자가 처리 가능한 만큼만 데이터를 요청하는 흐름 제어 메커니즘이다. Reactive Streams 표준의 `Subscription.request(n)`이 이를 구현한다. WebFlux에서는 `onBackpressureBuffer()`, `onBackpressureDrop()`, `onBackpressureLatest()` 연산자로 전략을 선택한다. Kafka 리액티브 컨슈머에서 처리 속도보다 메시지 수신이 빠를 때 배압 없이 구현하면 컨슈머 메모리가 급격히 증가한다.
+
+### Q. subscribeOn과 publishOn의 차이는?
+
+`subscribeOn`은 구독(데이터 생산)이 실행될 스케줄러를 지정한다. 파이프라인 어디에 위치해도 가장 위 소스의 실행 스레드를 변경한다. 블로킹 I/O 소스를 `Schedulers.boundedElastic()`에서 실행할 때 사용한다. `publishOn`은 이후 연산자들이 실행될 스케줄러를 변경한다. 파이프라인 중간에 위치해 특정 연산자 이후의 처리 스레드를 전환한다. CPU 집약적 변환 작업을 병렬 스케줄러로 보낼 때 사용한다. EventLoop 스레드에서 블로킹 작업을 해야 할 때는 반드시 `subscribeOn(Schedulers.boundedElastic())`으로 격리해야 한다.
+
+### Q. WebFlux에서 Reactor Context가 ThreadLocal을 대체하는 이유는?
+
+ThreadLocal은 스레드에 데이터를 바인딩한다. WebFlux는 하나의 요청이 여러 스레드에서 처리되고, 스레드 하나가 여러 요청을 처리한다. ThreadLocal에 인증 정보를 저장하면 다른 요청의 데이터가 섞이거나 값이 사라진다. Reactor Context는 스레드가 아닌 리액티브 파이프라인(구독 체인)에 데이터를 바인딩한다. `contextWrite()`로 값을 저장하고 `Mono.deferContextual()`로 읽는다. Spring Security WebFlux는 `SecurityContext`를 Reactor Context에 저장해 비동기 처리 중에도 인증 정보가 유지되도록 한다.

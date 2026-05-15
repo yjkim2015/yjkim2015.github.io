@@ -1174,3 +1174,27 @@ java -Djdk.tracePinnedThreads=full -jar app.jar
 | WebFlux Reactive | X | 가능 | 높음 | 전체 스택 논블로킹 필요 시 |
 
 **결론:** 기존 MVC 스택에서 이메일, 알림, 통계 등 일부 작업을 비동기화할 때는 `@Async` + `ThreadPoolTaskExecutor`가 가장 낮은 비용으로 빠르게 적용할 수 있다. 결과를 조합해야 하거나 실패를 추적해야 하면 `CompletableFuture`를 반환 타입으로 사용한다. Java 21 + Spring Boot 3.2 이상이라면 Virtual Thread 활성화로 복잡한 Executor 튜닝 없이 I/O 처리량을 크게 높일 수 있다.
+
+---
+
+## 면접 포인트
+
+### Q. @Async가 같은 클래스 내부 호출에서 동작하지 않는 이유는?
+
+`@Async`는 Spring AOP 프록시를 통해 동작한다. 외부에서 `asyncService.send()`를 호출하면 프록시가 가로채 별도 스레드로 실행한다. 하지만 `this.send()`처럼 같은 클래스 내부에서 호출하면 프록시를 거치지 않고 원본 객체 메서드를 직접 호출한다. 마치 경비원(프록시)이 지키는 정문을 내부 직원이 뒷문으로 통과하는 것과 같다. 해결책은 비동기 메서드를 별도 빈으로 분리해 외부 호출 경로를 강제하는 것이다.
+
+### Q. void 반환 @Async 메서드에서 예외가 조용히 사라지는 이유와 해결책은?
+
+`void` 반환 비동기 메서드의 예외는 호출자 스레드가 아닌 Executor 스레드에서 발생한다. 호출자는 이미 반환됐으므로 예외를 받을 방법이 없다. `CompletableFuture`를 반환하면 `.exceptionally()`나 `.get()`으로 예외를 받을 수 있다. `void` 반환이 반드시 필요하다면 `AsyncUncaughtExceptionHandler`를 등록해 Executor가 예외를 잡아 처리하도록 해야 한다. 등록하지 않으면 예외는 로그조차 남기지 않고 소멸한다.
+
+### Q. ThreadPoolTaskExecutor의 corePoolSize, maxPoolSize, queueCapacity 관계를 설명하라.
+
+스레드 수는 `corePoolSize`까지 즉시 생성된다. 이후 요청은 `queueCapacity` 크기의 큐에 쌓인다. 큐도 가득 차면 그때 `maxPoolSize`까지 스레드를 추가 생성한다. 큐가 크면 `maxPoolSize`가 사실상 작동하지 않는다. CPU 바운드 작업은 `corePoolSize = CPU 코어 수`, I/O 바운드는 `대기 비율에 따라 2~8배`로 설정한다. `RejectedExecutionHandler`를 `CallerRunsPolicy`로 설정하면 큐와 스레드 모두 가득 찼을 때 호출자 스레드가 직접 실행해 자연스러운 배압을 만든다.
+
+### Q. @Transactional과 @Async를 함께 쓰면 트랜잭션이 전파되는가?
+
+전파되지 않는다. `@Async`는 별도 스레드에서 실행되고, Spring 트랜잭션은 `ThreadLocal`에 바인딩된다. 호출자 스레드의 트랜잭션은 다른 스레드로 전달되지 않으므로, 비동기 메서드는 항상 새 트랜잭션(또는 트랜잭션 없음)으로 동작한다. 트랜잭션 커밋 후 비동기 처리가 필요하다면 `@TransactionalEventListener(phase = AFTER_COMMIT)`을 사용해 커밋 완료 이벤트에 반응하는 방식을 쓴다.
+
+### Q. Virtual Thread 환경에서 @Async가 여전히 필요한가?
+
+Java 21 + Spring Boot 3.2에서 `spring.threads.virtual.enabled=true`를 설정하면 모든 MVC 요청 스레드가 Virtual Thread로 바뀐다. 이 경우 I/O 대기 중 스레드가 블로킹돼도 캐리어 스레드를 점유하지 않으므로, 단순 I/O 병렬화를 위한 `@Async`는 필요성이 줄어든다. 단, CPU 집약적 작업 분리, 트랜잭션 경계 분리, 실패 격리 목적의 `@Async`는 Virtual Thread 환경에서도 유효하다. `synchronized` 블록이 있는 레거시 라이브러리는 Virtual Thread를 캐리어 스레드에 핀닝시키므로 반드시 확인이 필요하다.

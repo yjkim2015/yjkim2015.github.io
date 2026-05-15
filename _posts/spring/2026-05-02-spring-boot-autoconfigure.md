@@ -1916,3 +1916,27 @@ class MyIntegrationTest {
 | 순수 Spring XML | 없음 (직접 관리) | 수동 오버라이드 | 제한적 | 높음 |
 
 **Spring Boot를 선택하는 이유:** 생태계 성숙도, 자동 구성 후보 142개+의 방대한 커버리지, `@ConditionalOnMissingBean` 패턴으로 "합리적인 기본값 + 필요시 오버라이드"를 우아하게 구현한 설계 철학. 내부 메커니즘을 이해하면 블랙박스가 아닌 완전히 예측 가능한 시스템이 된다.
+
+---
+
+## 면접 포인트
+
+### Q. @ConditionalOnMissingBean이 사용자 빈을 항상 우선하는 원리는?
+
+`@EnableAutoConfiguration`은 `DeferredImportSelector`를 사용해 자동 구성 클래스를 등록한다. "Deferred(지연)"의 의미는 모든 `@Configuration` 클래스 처리가 끝난 후 마지막에 실행된다는 것이다. 사용자가 `@Bean ObjectMapper customMapper()`를 등록하면 이미 BeanFactory에 `ObjectMapper` 타입 빈이 존재한다. 이후 실행된 `JacksonAutoConfiguration`의 `@ConditionalOnMissingBean(ObjectMapper.class)`는 이미 빈이 있으므로 false로 평가되어 자동 구성 빈을 등록하지 않는다. 마치 맛집 자리를 미리 예약한 손님(사용자 빈)이 있으면 기본 배정(자동 구성)을 하지 않는 구조다.
+
+### Q. Spring Boot 3.x에서 spring.factories가 AutoConfiguration.imports로 바뀐 이유는?
+
+`spring.factories`는 여러 종류의 확장 포인트(자동 구성, 리스너, 초기화기 등)를 하나의 파일에 담았다. Boot 3.x는 자동 구성만 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`로 분리했다. 이유는 두 가지다. 첫째, GraalVM 네이티브 이미지 지원을 위한 AOT(Ahead-of-Time) 처리 시 자동 구성 후보만 별도로 파악하기 쉽다. 둘째, 파일 분리로 역할이 명확해지고 클래스패스 스캔 없이 명시적 등록이 가능해진다. Spring Boot 2.x에서 작성한 `spring.factories` 자동 구성은 3.x에서도 동작하지만 경고가 발생한다.
+
+### Q. @SpringBootApplication은 왜 최상위 패키지에 위치해야 하는가?
+
+`@SpringBootApplication`에 포함된 `@ComponentScan`은 기본적으로 해당 클래스가 위치한 패키지와 모든 하위 패키지를 스캔한다. `com.example.app.Application`에 위치하면 `com.example.app.*` 전체가 스캔 대상이 된다. 이 클래스를 `com.example.app.config` 패키지 안에 두면 `com.example.app.service`, `com.example.app.repository` 등이 스캔 범위 밖이 되어 빈으로 등록되지 않는다. 최상위 패키지에 두어야 프로젝트 전체가 스캔된다. `scanBasePackages`로 명시하면 위치에 제약이 없지만, 이 관례를 따르면 별도 설정 없이 동작한다.
+
+### Q. Actuator의 /actuator/conditions 엔드포인트가 트러블슈팅에 유용한 이유는?
+
+자동 구성은 수십 개의 `@Conditional` 어노테이션이 얽혀 동작한다. 특정 빈이 왜 등록되었거나 안 되었는지 코드만 보고 추적하기 어렵다. `/actuator/conditions`는 모든 자동 구성 클래스의 조건 평가 결과를 JSON으로 반환한다. `positiveMatches`에는 조건이 충족되어 등록된 구성, `negativeMatches`에는 어떤 조건이 실패해서 등록되지 않았는지, `exclusions`에는 명시적으로 제외된 구성이 나온다. "Jackson이 왜 내 ObjectMapper를 무시하나" 같은 문제를 `/actuator/conditions` 하나로 즉시 진단할 수 있다.
+
+### Q. 자동 구성 클래스의 @AutoConfiguration(after=) 순서 제어가 필요한 이유는?
+
+자동 구성 간 의존 관계가 있을 때 순서가 중요하다. `DataSourceAutoConfiguration`이 먼저 실행되어 `DataSource` 빈이 등록된 후에야 `JdbcTemplateAutoConfiguration`이 `@ConditionalOnBean(DataSource.class)`를 true로 평가할 수 있다. `@AutoConfiguration(after = DataSourceAutoConfiguration.class)`로 순서를 명시하지 않으면 평가 순서가 보장되지 않아 `DataSource` 빈이 아직 없을 때 조건이 false로 평가될 수 있다. `@AutoConfigureAfter`(구버전)와 `@AutoConfiguration(after=)`(신버전)이 같은 역할을 한다.

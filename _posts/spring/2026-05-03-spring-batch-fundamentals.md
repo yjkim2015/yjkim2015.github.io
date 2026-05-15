@@ -477,5 +477,29 @@ public class BatchController {
 **장애 1: 배치 중복 실행으로 정산 금액 2배 계산**
 스케줄러가 2개 서버에서 동시에 실행됩니다. 동시 실행 방지 없이 직접 구현한 배치가 두 서버 모두에서 전체 주문을 처리합니다. 100만 건이 200만 건으로 정산됩니다. Spring Batch는 동일 `JobInstance`(같은 날짜 파라미터) 재실행을 `JobRepository`에서 막아 이 문제를 원천 차단합니다.
 
+---
+
+## 면접 포인트
+
+### Q. Job과 JobInstance의 차이는?
+
+`Job`은 배치 처리 정의(코드)다. `JobInstance`는 `Job` + `JobParameters`의 조합으로, 특정 실행 단위를 나타낸다. `dailySettlementJob`을 `date=2024-01-01` 파라미터로 실행하면 하나의 `JobInstance`가 생성된다. 같은 날 다시 실행하면 이미 완료된 `JobInstance`가 있으므로 `JobRepository`가 재실행을 막는다. 새 파라미터(`date=2024-01-02`)로 실행하면 새 `JobInstance`가 생성된다. `JobExecution`은 `JobInstance`의 실행 시도다. 실패 후 재시작하면 같은 `JobInstance`에 새 `JobExecution`이 추가된다.
+
+### Q. JobRepository가 없으면 어떤 문제가 발생하는가?
+
+`JobRepository` 없이 직접 구현한 배치는 실행 상태를 저장하지 않는다. 100만 건 처리 중 서버 재시작 시 어디까지 처리했는지 알 수 없어 처음부터 재처리한다. 이미 처리된 50만 건이 다시 처리되어 중복 정산, 중복 발송이 발생한다. 동시 실행 방지 로직을 직접 구현해야 하며, 실패 이력, 처리 건수, 소요 시간 추적도 불가하다. `JobRepository`는 이 모든 것을 `BATCH_JOB_INSTANCE`, `BATCH_JOB_EXECUTION`, `BATCH_STEP_EXECUTION` 테이블로 자동 관리한다.
+
+### Q. Step이 Job과 분리된 독립 단위인 이유는?
+
+대형 배치를 하나의 Step으로 구현하면 중간 실패 시 처음부터 재실행해야 한다. Step 단위로 분리하면 완료된 Step은 재시작 시 건너뛰고 실패한 Step부터 재실행한다. `STEP1(데이터 추출)` → `STEP2(변환)` → `STEP3(적재)` 구조에서 STEP3 실패 시 STEP1, STEP2는 재실행하지 않는다. 또한 Step 단위로 트랜잭션이 관리되어 실패 범위가 Step 내로 한정된다. `@JobScope`, `@StepScope`로 Step별로 빈 인스턴스를 분리해 Step 간 상태 격리도 보장한다.
+
+### Q. JobParameters를 매번 다르게 설정해야 하는 이유는?
+
+Spring Batch는 동일한 `Job` + `JobParameters` 조합을 `COMPLETED` 상태로 기록한 `JobInstance`가 있으면 재실행을 거부한다. 매일 실행하는 배치는 `date=오늘날짜`를 파라미터로 넣어 매번 새 `JobInstance`를 생성한다. 개발 중 테스트 재실행이 필요하면 `run.id=${random.uuid}` 같은 유니크 파라미터를 추가하거나, `JobInstanceAlreadyCompleteException`을 허용하는 `AllowStartIfComplete` 옵션을 Step에 설정한다. 파라미터 없이 실행하면 처음 한 번만 성공하고 이후 실행은 모두 실패한다.
+
+### Q. TaskletStep과 ChunkOrientedStep을 언제 구분하여 사용하는가?
+
+`TaskletStep`은 단일 작업 단위를 `Tasklet.execute()` 하나로 표현한다. 파일 이동, 테이블 truncate, 외부 API 한 번 호출처럼 반복 처리가 필요 없는 작업에 적합하다. `Tasklet`은 `RepeatStatus.FINISHED`를 반환할 때까지 반복 호출되므로 폴링 패턴도 구현 가능하다. `ChunkOrientedStep`은 Read → Process → Write를 청크 단위로 반복하는 구조다. 수만 건 이상의 데이터를 안전하게 처리해야 할 때 사용한다. 실무에서는 전처리(파일 검증, 디렉토리 정리)는 `TaskletStep`, 데이터 처리는 `ChunkOrientedStep`으로 조합한다.
+
 **장애 2: 배치 실패 후 재실행 시 전체 재처리**
 100만 건 중 50만 건 처리 후 서버 재시작. 직접 구현에서는 어디까지 처리됐는지 기록이 없어 처음부터 재처리합니다. 이미 정산된 50만 건이 다시 정산됩니다. Spring Batch `JobRepository`의 `StepExecution`은 마지막 커밋된 청크의 위치를 기록해 정확히 50만 1건부터 재시작합니다.

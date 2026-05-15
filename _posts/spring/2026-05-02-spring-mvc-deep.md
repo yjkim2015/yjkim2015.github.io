@@ -1759,3 +1759,27 @@ graph LR
 | `Filter` | 매 요청 | 서블릿 레벨 처리 | 예외 → `@ExceptionHandler` 미작동 |
 | `@ExceptionHandler` | 예외 발생 시 | 전역 예외 처리 | 필터 예외는 처리 불가 |
 | `ViewResolver` | `@ResponseBody` 없을 때 | 뷰 이름 → View 객체 | REST API에서는 미사용 |
+
+---
+
+## 면접 포인트
+
+### Q. DispatcherServlet이 단일 인스턴스인데 멀티스레드에 안전한 이유는?
+
+`DispatcherServlet`은 상태(인스턴스 변수에 요청별 데이터)를 갖지 않는다. `HandlerMapping`, `HandlerAdapter` 등 내부 컴포넌트는 초기화 시 한 번만 설정되고 이후 읽기 전용으로 동작한다. 각 요청은 `HttpServletRequest`/`HttpServletResponse` 객체를 인자로 받아 처리하고, 요청별 상태는 이 객체에 담긴다. 마치 은행 창구 직원(DispatcherServlet) 한 명이 번갈아 손님을 응대할 때, 각 손님의 서류(Request/Response)가 별도로 존재하는 것과 같다. `HandlerMapping`의 URL→Handler 캐시는 `ConcurrentHashMap`으로 스레드 안전하게 관리된다.
+
+### Q. @RequestBody가 JSON을 Java 객체로 변환하는 내부 과정은?
+
+`RequestMappingHandlerAdapter`가 `@RequestBody` 파라미터를 발견하면 `HttpMessageConverter` 목록을 순회한다. 요청의 `Content-Type: application/json`과 파라미터 타입을 보고 `MappingJackson2HttpMessageConverter`가 선택된다. `ObjectMapper.readValue(inputStream, targetType)`으로 JSON을 역직렬화한다. `@Valid`가 함께 있으면 변환 후 `Validator`가 제약 조건을 검사한다. 역방향(`@ResponseBody`)은 반환 객체를 `ObjectMapper.writeValue()`로 직렬화해 응답 스트림에 쓴다. `Content-Type` 협상 실패 시 `HttpMediaTypeNotSupportedException`(415)이 발생한다.
+
+### Q. @ExceptionHandler가 Filter에서 발생한 예외를 처리하지 못하는 이유는?
+
+`@ExceptionHandler`(또는 `@ControllerAdvice`)는 `DispatcherServlet` 내부에서 발생한 예외를 처리한다. Filter는 `DispatcherServlet` 앞단의 서블릿 컨테이너 레벨에서 실행된다. Filter에서 예외가 발생하면 `DispatcherServlet`이 실행되기 전이므로 `@ExceptionHandler`가 개입할 수 없다. 해결책은 두 가지다. 첫째, Filter 내부에서 직접 `response.setStatus()`와 `response.getWriter().write()`로 에러 응답을 작성한다. 둘째, 에러 처리용 `ForwardingFilter`를 앞에 두고 예외를 잡아 `/error` 경로로 포워딩한 뒤 Spring의 `BasicErrorController`가 처리하도록 한다.
+
+### Q. ArgumentResolver 캐싱이 성능에 미치는 영향은?
+
+`RequestMappingHandlerAdapter`는 `HandlerMethod`별로 `InvocableHandlerMethod`를 캐싱한다. 각 파라미터에 어떤 `HandlerMethodArgumentResolver`가 처리할지를 `supportsParameter()` 호출 결과로 미리 결정해 캐싱한다. 첫 번째 요청에서만 모든 Resolver를 순회하고, 이후 요청은 캐시를 바로 사용한다. `HandlerMethodArgumentResolver` 구현 시 `supportsParameter()`를 빠르게 만들어야 한다(`instanceof` 체크 → 어노테이션 presence 체크 순). Resolver가 많을수록 첫 요청의 오버헤드가 커지므로, 커스텀 Resolver는 항상 `@Order`나 등록 순서를 고려해야 한다.
+
+### Q. Content Negotiation이 동작하는 순서는?
+
+클라이언트가 `Accept: application/xml, application/json;q=0.9`를 보내면, `ContentNegotiationManager`가 우선순위 순으로 처리 가능한 `HttpMessageConverter`를 찾는다. 첫째로 Accept 헤더를 기준으로 `application/xml`을 처리할 수 있는 Converter(Jackson XML, JAXB)를 탐색한다. 없으면 `q=0.9`인 `application/json`으로 넘어간다. URL 확장자(`.xml`, `.json`)나 요청 파라미터(`?format=json`) 기반 협상도 설정 가능하다. 단, URL 확장자 협상은 Spring 5.3+에서 보안 이슈로 기본 비활성화됐다. 협상 결과가 없으면 `HttpMediaTypeNotAcceptableException`(406)이 발생한다.

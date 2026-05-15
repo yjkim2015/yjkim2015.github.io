@@ -1374,6 +1374,8 @@ graph LR
 
 ---
 
+## 면접 포인트
+
 ## 17. 면접 포인트 5개 — 깊은 WHY 답변
 
 ### Q1. OAuth2 Authorization Code Flow에서 state 파라미터의 역할은 무엇이며, 왜 CSRF를 막는가?

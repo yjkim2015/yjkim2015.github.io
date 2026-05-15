@@ -54,7 +54,9 @@ graph LR
     BEAN -->|"반환"| APP
 ```
 
-컴포넌트 스캔은 `ClassPathBeanDefinitionScanner`가 지정된 베이스 패키지 하위의 모든 `.class` 파일을 읽어 `@Component` 어노테이션(또는 이를 메타 어노테이션으로 가진 어노테이션)이 붙은 클래스를 `BeanDefinition`으로 등록합니다. 이후 `BeanFactory`가 실제 인스턴스를 생성합니다.
+컴포넌트 스캔은 `ClassPathBeanDefinitionScanner`가 지정된 베이스 패키지 하위의 모든 `.class` 파일을 읽어 `@Component` 어노테이션(또는 이를 메타 어노테이션으로 가진 어노테이션)이 붙은 클래스를 `BeanDefinition`으로 등록합니다.
+
+> **비유:** 마치 공장 채용 담당자(ClassPathScanner)가 공장 건물(패키지) 전체를 돌아다니며 "직원 배지(@Component)"를 달고 있는 사람을 모두 명단(BeanDefinition)에 올리는 것과 같다. 배지 없이 일하던 계약직(빈 등록 안 된 클래스)은 명단에 없어 호출되지 않는다. 이후 `BeanFactory`가 실제 인스턴스를 생성합니다.
 
 `@SpringBootApplication` 하나에 `@ComponentScan`이 포함되어 있습니다. 기본 스캔 패키지는 `@SpringBootApplication`이 붙은 클래스의 패키지입니다. 따라서 **메인 클래스는 항상 최상위 패키지에 위치해야 합니다.** 하위 패키지가 아닌 곳에 있으면 컴포넌트가 스캔되지 않습니다.
 
@@ -165,6 +167,8 @@ graph LR
 
 `@Transactional`은 AOP(Aspect-Oriented Programming)로 동작합니다. Spring이 `@Transactional`이 붙은 클래스를 감지하면, 실제 클래스의 **프록시 객체**를 만들어 빈으로 등록합니다. 클라이언트는 프록시와 대화합니다. 프록시가 트랜잭션을 시작하고, 실제 객체에 위임하고, 완료 후 커밋 또는 롤백합니다.
 
+> **비유:** 마치 은행 창구 직원(프록시) 앞에서 업무를 처리할 때, 고객은 창구 직원과 대화하지만 실제 돈 이동은 백오피스(실제 서비스)에서 이뤄지는 것과 같다. 창구 직원이 "이 거래를 트랜잭션으로 묶겠다"고 결정하고, 문제가 생기면 "이 거래 전부 취소"를 처리한다.
+
 ### 왜 같은 클래스 내부 호출에서 @Transactional이 안 먹히는가
 
 ```java
@@ -243,6 +247,8 @@ public List<Order> findOrders(CustomerId customerId) {
 ---
 
 ## 4. @Async — 왜 반환값이 void나 Future여야 하는가
+
+> **비유:** `@Async`는 레스토랑에서 주문을 받은 직원이 주방에 쪽지를 붙여두고 다른 손님을 응대하러 가는 것과 같다. 주방이 요리를 완성하는 것(비동기 처리)을 기다리지 않고 호출자는 즉시 다음 일을 한다. `void` 반환은 "요리가 나왔는지 나중에 확인 안 해도 된다"는 의미이고, `CompletableFuture` 반환은 "진동벨(Future)을 줄 테니 완료되면 알려준다"는 의미다.
 
 ```java
 @Configuration

@@ -1621,6 +1621,8 @@ public class PaymentServiceV2 {
 
 ## 14. 면접 포인트 5개 — 깊이 있는 WHY 답변
 
+## 면접 포인트
+
 ### 면접 포인트 1: BeanPostProcessor와 BeanFactoryPostProcessor의 차이
 
 > **Q: BPP와 BFPP의 차이를 설명하고, 각각 어떤 상황에서 사용하는지 말해주세요.**

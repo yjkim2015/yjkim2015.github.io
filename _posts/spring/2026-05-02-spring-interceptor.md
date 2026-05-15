@@ -1844,3 +1844,27 @@ graph LR
 - `@Async`, `Callable`, `DeferredResult` 사용 시 `AsyncHandlerInterceptor` 구현
 - `afterConcurrentHandlingStarted`에서 요청 스레드 정리
 - 비동기 스레드에 컨텍스트 전달 시 `RequestContextHolder.setRequestAttributes(attrs, true)`
+
+---
+
+## 면접 포인트
+
+### Q. Filter와 Interceptor의 가장 중요한 차이는?
+
+Filter는 서블릿 컨테이너(Tomcat) 레벨에서 동작하고, Interceptor는 Spring DispatcherServlet 레벨에서 동작한다. Filter는 Spring 빈에 접근할 수 없고, 예외 발생 시 `@ExceptionHandler`가 처리하지 못한다. Interceptor는 Spring 빈을 주입받을 수 있고, `HandlerMethod`를 통해 어떤 컨트롤러·메서드가 처리할지 알 수 있다. 마치 Filter는 건물 입구 경비원(Tomcat이 관리)이고 Interceptor는 사무실 내부 접수대(Spring이 관리)인 것과 같다. 인증·인가처럼 Spring 빈(UserDetailsService 등)이 필요한 로직은 Filter가 아닌 Interceptor 또는 Spring Security 필터 체인에서 처리해야 한다.
+
+### Q. preHandle이 false를 반환하면 이후 어떤 일이 일어나는가?
+
+`preHandle()`이 `false`를 반환하면 DispatcherServlet은 해당 요청 처리를 즉시 중단한다. 컨트롤러 메서드가 호출되지 않고, 이후 인터셉터의 `preHandle()`도 실행되지 않는다. 중요한 점은 `false`를 반환한 인터셉터보다 앞에서 `true`를 반환한 인터셉터들의 `afterCompletion()`은 역순으로 실행된다는 것이다. Rate Limiting 인터셉터에서 `false` 반환 시 직접 응답을 작성해야 한다(`response.setStatus(429)`). `false` 반환만 하고 응답을 작성하지 않으면 클라이언트는 빈 200 응답을 받는다.
+
+### Q. Interceptor에서 인스턴스 변수를 사용하면 안 되는 이유는?
+
+Spring은 인터셉터를 싱글톤 빈으로 등록한다. 하나의 인터셉터 인스턴스가 수백 개의 동시 요청을 처리한다. 인스턴스 변수에 요청별 데이터를 저장하면 다른 스레드의 요청 데이터가 덮어쓰거나 섞인다. 마치 사무실 공용 화이트보드에 각자의 메모를 적으면 누군가 다른 사람의 메모를 지우는 것과 같다. 요청별 데이터는 반드시 `preHandle()`의 `HttpServletRequest` 속성(`request.setAttribute()`)이나 `ThreadLocal`에 저장해야 한다. `ThreadLocal` 사용 시 `afterCompletion()`에서 반드시 `remove()`해야 메모리 누수와 스레드 재사용 시 오염을 방지할 수 있다.
+
+### Q. HandlerInterceptor와 AOP의 선택 기준은?
+
+URL 패턴 기반으로 HTTP 요청/응답을 다루고 Spring 빈이 필요하면 Interceptor를 선택한다. 로그인 확인, Rate Limiting, 요청 로깅이 대표적이다. 특정 어노테이션이나 클래스·메서드 단위로 적용하고 HTTP와 무관한 비즈니스 로직에 횡단 관심사를 적용할 때는 AOP가 적합하다. 실행 시간 측정, 캐싱, 감사(Audit) 로그가 대표적이다. AOP는 모든 빈 메서드에 적용 가능하지만, HTTP 요청 컨텍스트(헤더, 세션, IP)에 접근하려면 `RequestContextHolder`를 통해야 해서 불편하다. 이 경우 Interceptor가 더 자연스럽다.
+
+### Q. afterCompletion이 postHandle과 달리 예외 상황에서도 실행되는 이유는?
+
+`postHandle()`은 컨트롤러가 정상적으로 실행됐을 때만 호출된다. 예외가 발생하면 `postHandle()`은 건너뛰어 응답 헤더 추가나 모델 데이터 주입이 이뤄지지 않는다. `afterCompletion()`은 `preHandle()`이 `true`를 반환한 모든 경우에 예외 발생 여부와 무관하게 실행된다. 이는 리소스 해제를 보장하기 위해서다. MDC 정리, ThreadLocal 제거, 성능 로그 기록처럼 "반드시 실행돼야 하는 정리 작업"은 `afterCompletion()`에 두어야 한다. 예외 발생 시 `exception` 파라미터에 예외 객체가 전달된다.

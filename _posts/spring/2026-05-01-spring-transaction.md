@@ -1485,3 +1485,27 @@ class TransactionBehaviorTest {
 | HikariCP 연동 | TX 시작=커넥션 획득, TX 종료=커넥션 반환 |
 | XA 2PC | 잠금 기반 원자성, blocking, 마이크로서비스 부적합 |
 | Saga | 보상 트랜잭션, 최종 일관성, 마이크로서비스 표준 |
+
+---
+
+## 면접 포인트
+
+### Q. @Transactional이 같은 클래스 내부 호출에서 동작하지 않는 이유는?
+
+`@Transactional`은 Spring AOP 프록시로 동작한다. Spring은 `OrderService` 빈을 직접 반환하지 않고, `@Transactional`이 붙은 메서드 호출을 가로채는 CGLIB 프록시 객체를 반환한다. 외부에서 `orderService.placeOrder()`를 호출하면 프록시 → 트랜잭션 시작 → 실제 메서드 순으로 실행된다. 하지만 같은 클래스 내부의 `this.cancelOrder()`는 프록시를 거치지 않고 원본 객체를 직접 호출하므로 트랜잭션이 시작되지 않는다. 마치 건물 경비원(프록시)이 지키는 정문을 내부 직원이 뒷문으로 통과하는 것과 같다. 해결책은 자기 호출 메서드를 별도 빈으로 분리하는 것이다.
+
+### Q. PROPAGATION_REQUIRES_NEW와 PROPAGATION_NESTED의 차이는?
+
+`REQUIRES_NEW`는 기존 트랜잭션을 일시 중단하고 완전히 독립적인 새 커넥션을 획득한다. 내부 트랜잭션이 커밋되면 외부 트랜잭션의 롤백과 무관하게 커밋이 유지된다. 감사 로그처럼 반드시 별도로 저장해야 하는 경우에 사용한다. `NESTED`는 같은 커넥션에서 Savepoint를 생성한다. 내부 트랜잭션 롤백 시 Savepoint까지만 롤백하고, 외부 트랜잭션은 계속된다. 외부 트랜잭션 롤백 시 Savepoint도 함께 롤백된다. JDBC Savepoint를 지원하는 DB(대부분의 RDBMS)에서만 동작한다.
+
+### Q. readOnly=true가 성능에 미치는 영향은?
+
+`readOnly=true`는 여러 최적화를 활성화한다. Hibernate는 `FlushMode.MANUAL`로 전환해 더티 체킹(변경 감지)과 스냅샷 비교를 생략한다. 읽기 전용 트랜잭션에서 엔티티를 수천 개 조회해도 스냅샷 복사가 없으므로 메모리 사용량이 줄고 속도가 빨라진다. 일부 DB 드라이버는 읽기 전용 힌트를 DB에 전달해 복제본(Replica) 라우팅을 활성화한다. `@Transactional(readOnly=true)`를 조회 메서드 기본값으로 설정하고 변경 메서드만 `@Transactional`로 명시하는 패턴이 실무 표준이다.
+
+### Q. Checked Exception이 기본적으로 트랜잭션을 롤백하지 않는 이유는?
+
+EJB 시절의 설계 철학에서 비롯됐다. Checked Exception은 애플리케이션이 예상하고 처리할 수 있는 비즈니스 예외(잔액 부족, 재고 없음)를 나타낸다. 이런 상황에서도 부분 작업은 커밋해야 할 수 있다. 반면 `RuntimeException`은 예상치 못한 시스템 오류로, 커밋하면 데이터 정합성이 깨질 가능성이 높다. 실무에서는 비즈니스 예외도 `RuntimeException`을 상속하거나(`BusinessException extends RuntimeException`), `@Transactional(rollbackFor = Exception.class)`로 명시하는 방식을 더 많이 쓴다.
+
+### Q. HikariCP 커넥션이 트랜잭션 생명주기와 어떻게 연결되는가?
+
+`@Transactional` 메서드 진입 시 `TransactionSynchronizationManager`가 현재 스레드의 `ThreadLocal`에 DB 커넥션을 바인딩한다. 이 커넥션은 트랜잭션이 끝날 때까지 같은 스레드의 모든 DB 작업에 재사용된다. 트랜잭션 커밋 또는 롤백 후 커넥션이 HikariCP 풀에 반환된다. 트랜잭션 없이 JdbcTemplate을 쓰면 매 쿼리마다 풀에서 커넥션을 가져오고 반환한다. 커넥션 풀 크기가 작고 트랜잭션이 길면 `Connection pool exhausted` 에러가 발생하므로, 트랜잭션 범위를 최소화하는 것이 중요하다.
