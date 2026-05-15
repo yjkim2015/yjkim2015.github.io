@@ -128,11 +128,60 @@
     {% else %}
       "@type": "Person",
       "name": {{ site.social.name | default: site.name | jsonify }},
-      "url": {{ '/' | absolute_url |jsonify }}{% if site.social.links %},
+      "url": {{ '/' | absolute_url | jsonify }}{% if site.social.links %},
       "sameAs": {{ site.social.links | jsonify }}{% endif %}
     {% endif %}
   }
 </script>
+
+{% if page.date %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": {{ page.title | markdownify | strip_html | strip_newlines | truncate: 110 | jsonify }},
+    "description": {{ seo_description | truncate: 160 | jsonify }},
+    "url": {{ canonical_url | jsonify }},
+    "datePublished": "{{ page.date | date_to_xmlschema }}",
+    {% if page.last_modified_at %}"dateModified": "{{ page.last_modified_at | date_to_xmlschema }}",{% endif %}
+    "author": {
+      "@type": "Person",
+      "name": {{ site.author.name | jsonify }}
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": {{ site.title | jsonify }},
+      "logo": {
+        "@type": "ImageObject",
+        "url": "{{ '/assets/images/yoonjekim.jpg' | absolute_url }}"
+      }
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": {{ canonical_url | jsonify }}
+    }
+    {% if page.tags.size > 0 %},"keywords": {{ page.tags | join: ', ' | jsonify }}{% endif %}
+  }
+</script>
+{% endif %}
+
+{% if page.date and page.categories.size > 0 %}
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": {{ '/' | absolute_url | jsonify }} },
+      { "@type": "ListItem", "position": 2, "name": "{{ page.categories[0] }}", "item": "{{ site.url }}/categories/{{ page.categories[0] | downcase }}/" },
+      { "@type": "ListItem", "position": 3, "name": {{ page.title | markdownify | strip_html | strip_newlines | jsonify }} }
+    ]
+  }
+</script>
+{% endif %}
+
+{% if page.tags.size > 0 %}
+<meta name="keywords" content="{{ page.tags | join: ', ' }}">
+{% endif %}
 
 {% if site.google_site_verification %}
   <meta name="google-site-verification" content="{{ site.google_site_verification }}" />

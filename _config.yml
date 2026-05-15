@@ -18,9 +18,9 @@ minimal_mistakes_skin    : "air" # "air", "aqua", "contrast", "dark", "dirt", "n
 locale                   : "ko-KR"
 title                    : "YJ Kim Devlog"
 title_separator          : "-"
-subtitle                 : # site tagline
+subtitle                 : "Backend Engineer — Java · Spring · System Design"
 name                     : "YJ Kim"
-description              : "Java / Spring / Security 기록"
+description              : "Java, Spring Boot, JPA, Redis, Kafka, 시스템 디자인, 면접 준비까지 — 시니어 백엔드 개발자의 기술 블로그"
 url                      : "https://yjkim2015.github.io"
 baseurl                  : ""
 future                   : true
@@ -28,7 +28,7 @@ repository               : # GitHub username/repo-name e.g. "mmistakes/minimal-m
 teaser                   : # path of fallback teaser image, e.g. "/assets/images/500x300.png"
 logo                     : # path of logo image to display in the masthead, e.g. "/assets/images/88x88.png"
 masthead_title           : "YJ Kim Devlog"
-breadcrumbs              : false # true, false (default)
+breadcrumbs              : true # SEO: 구조화된 네비게이션
 words_per_minute         : 200
 comments:
   provider               : "disqus" # false (default), "disqus", "discourse", "facebook", "staticman", "staticman_v2", "utterances", "custom"
@@ -64,10 +64,10 @@ google:
   search_engine_id       : # YOUR_SEARCH_ENGINE_ID
   instant_search         : # false (default), true
 # SEO Related
-google_site_verification :
+google_site_verification : "XNxoP6yBf4GAAK97iiQhVReuV2P3Y06yQahFWjGLX8A"
 bing_site_verification   :
 yandex_site_verification :
-naver_site_verification  :
+naver_site_verification  : # https://searchadvisor.naver.com 에서 발급 후 입력
 
 # Social Sharing
 twitter:
