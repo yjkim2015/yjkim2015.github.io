@@ -1150,6 +1150,19 @@ groups:
 
 ## 7. 극한 시나리오 — 실제로 어떻게 무너지고 어떻게 버티는가
 
+> **비유**: Rate Limiter 장애 대응은 소방훈련과 같다. Redis 화재(장애) 시 로컬 소화기(로컬 버킷)로 버티고, 전소(완전 장애) 시에는 건물 대피(fail-open)로 서비스를 살린다.
+
+```mermaid
+graph LR
+    ATTACK["대용량 공격"] --> CDN["CDN L3/L4 차단"]
+    CDN -->|"통과한 트래픽"| GW["API Gateway IP 제한"]
+    GW -->|"통과한 트래픽"| APP["앱 레벨 사용자 제한"]
+    APP -->|"Redis 정상"| REDIS["Redis Lua 판정"]
+    APP -->|"Redis 장애"| LOCAL["로컬 버킷 폴백"]
+    REDIS -->|"허용"| SVC["서비스 처리"]
+    LOCAL -->|"허용"| SVC
+```
+
 ### 시나리오 1: DDoS 10M RPS 공격
 
 **상황**: 봇넷 1만 대가 각각 초당 1000건씩 총 초당 1000만 건을 API 서버로 보낸다.

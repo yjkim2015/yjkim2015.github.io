@@ -307,6 +307,18 @@ spec:
 
 ## Ingress — L7 외부 트래픽 라우팅
 
+> **비유**: Ingress는 건물 안내 데스크다. 외부에서 들어오는 방문객(요청)을 보고 "A팀을 찾으시면 3층, B팀은 5층"처럼 목적지 Service로 안내한다. 건물 입구(LoadBalancer)는 하나지만 내부 목적지는 여럿이다.
+
+```mermaid
+graph LR
+    EXT["외부 요청"] --> LB["LoadBalancer"]
+    LB --> ING["Ingress Controller"]
+    ING -->|"/api/*"| SVC1["API Service"]
+    ING -->|"/web/*"| SVC2["Web Service"]
+    SVC1 --> POD1["API Pod들"]
+    SVC2 --> POD2["Web Pod들"]
+```
+
 클러스터 외부에서 내부 Service로 URL 경로/호스트 기반 라우팅하는 규칙이다.
 
 ```yaml

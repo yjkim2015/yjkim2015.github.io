@@ -672,5 +672,5 @@ if (value == null) { ... }  // null || undefined 둘 다 처리
 ### Q4. 프로토타입 체인과 ES6 class의 관계는?
 `class` 문법은 프로토타입 기반 상속의 문법적 설탕이다. 내부적으로는 동일하게 `[[Prototype]]` 체인을 사용한다. `class A extends B`는 `A.prototype`의 `[[Prototype]]`을 `B.prototype`으로 설정한다. `typeof class`가 `"function"`인 것이 이를 증명한다.
 
-### Q5. 호이스팅이 실제로 문제가 되는 시나리오는?
+### Q. 호이스팅이 실제로 문제가 되는 시나리오는?
 `var`로 선언된 변수를 선언 전에 읽으면 `undefined`가 반환되어 조용히 버그가 발생한다. 조건문 안에 `var`를 쓰면 함수 전체 스코프로 올라가 의도치 않은 참조가 생긴다. `let`/`const`는 TDZ 덕분에 선언 전 접근 시 즉시 `ReferenceError`로 명시적 실패를 유도해 더 안전하다.

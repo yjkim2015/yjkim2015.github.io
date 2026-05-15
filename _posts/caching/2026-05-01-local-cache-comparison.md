@@ -1514,7 +1514,7 @@ public class LockingCacheLoader {
 
 ## 면접 포인트
 
-### Q1. W-TinyLFU가 LRU보다 히트율이 높은 이유를 Count-Min Sketch까지 설명하라.
+### Q. W-TinyLFU가 LRU보다 히트율이 높은 이유를 Count-Min Sketch까지 설명하라.
 
 **LRU의 문제**: 최근성만 본다. 배치 스캔이나 크롤러의 일회성 접근이 기존 Hot 데이터를 밀어낸다.
 
@@ -1526,7 +1526,7 @@ public class LockingCacheLoader {
 
 **결과**: Zipf 분포에서 LRU 대비 7~10% 높은 히트율.
 
-### Q2. Spring @Cacheable의 Self-Invocation 문제가 발생하는 근본 원인과 해결책을 설명하라.
+### Q. Spring @Cacheable의 Self-Invocation 문제가 발생하는 근본 원인과 해결책을 설명하라.
 
 **근본 원인**: Spring Cache는 **CGLIB 바이트코드 프록시**로 구현된다. 외부에서 `productService.findById()`를 호출하면 CGLIB 프록시의 메서드가 실행되고, 프록시가 CacheInterceptor를 거쳐 캐시 로직을 실행한다.
 
@@ -1537,7 +1537,7 @@ public class LockingCacheLoader {
 2. `ApplicationContext.getBean()`으로 프록시 빈 직접 조회
 3. `AopContext.currentProxy()`를 사용해 현재 프록시 참조 획득 (단, `exposeProxy=true` 설정 필요)
 
-### Q3. Ehcache Off-Heap이 GC에 영향을 주지 않는 메커니즘을 설명하라.
+### Q. Ehcache Off-Heap이 GC에 영향을 주지 않는 메커니즘을 설명하라.
 
 **GC가 Off-Heap을 모르는 이유**: JVM GC는 Heap 내의 객체 참조 그래프만 추적한다. `DirectByteBuffer`(Off-Heap 접근 객체)는 Heap에 존재하지만, 실제 데이터를 담은 네이티브 메모리는 GC 스캔 범위 밖이다.
 
@@ -1547,7 +1547,7 @@ public class LockingCacheLoader {
 
 **결과**: Heap에 있는 `DirectByteBuffer` 객체 자체는 GC가 관리하지만, 그 크기는 수십 바이트(포인터·크기 필드)뿐이다. 실제 데이터(수백 MB)는 GC 스캔 대상이 아니므로 GC 시간에 영향을 주지 않는다.
 
-### Q4. Caffeine의 읽기 버퍼(Striped Ring Buffer)가 고처리량을 달성하는 원리를 설명하라.
+### Q. Caffeine의 읽기 버퍼(Striped Ring Buffer)가 고처리량을 달성하는 원리를 설명하라.
 
 **문제**: W-TinyLFU는 읽기마다 FrequencySketch를 업데이트해야 한다. 업데이트에 락이 필요하면 읽기 처리량이 락 경합으로 제한된다.
 
@@ -1560,7 +1560,7 @@ public class LockingCacheLoader {
 
 **결과**: 읽기 경로에서 사실상 락이 없어 멀티코어 환경에서 ~22M ops/s 처리량 달성.
 
-### Q5. Cache Stampede를 Caffeine으로 방어하는 방법과 원리를 설명하라.
+### Q. Cache Stampede를 Caffeine으로 방어하는 방법과 원리를 설명하라.
 
 **Cache Stampede(Thundering Herd)**: TTL 만료 직후 수천 개의 동시 요청이 모두 Cache Miss → DB에 동일 쿼리 폭격 → DB 과부하.
 

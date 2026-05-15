@@ -1310,7 +1310,7 @@ public class HeartbeatHandler implements ApplicationListener<SessionConnectedEve
 
 ## 12. 면접 포인트 5개 — 깊이 있는 WHY 답변
 
-### Q1. 왜 Cassandra인가? HBase나 MongoDB 대신
+### Q. 왜 Cassandra인가? HBase나 MongoDB 대신
 
 **얕은 답**: "대용량 데이터를 저장할 수 있어서요"
 
@@ -1326,7 +1326,7 @@ public class HeartbeatHandler implements ApplicationListener<SessionConnectedEve
 
 **극한 시나리오 연결**: 새해 자정 피크에 쓰기 5배 폭증 시, Cassandra는 노드를 추가하면 Consistent Hashing으로 자동 리밸런싱됩니다. MySQL 샤딩 환경에서 샤드를 추가하려면 수동 마이그레이션과 수 시간 다운타임이 필요합니다. 이것이 처음부터 Cassandra를 선택해야 하는 이유입니다.
 
-### Q2. WebSocket 연결이 끊어졌을 때 재연결 전략은?
+### Q. WebSocket 연결이 끊어졌을 때 재연결 전략은?
 
 **얕은 답**: "재연결 로직을 구현합니다"
 
@@ -1350,7 +1350,7 @@ delay += (long)(delay * Math.random());
 
 **3. 좀비 연결 감지**: TCP 연결이 OS 레벨에서는 유지되지만 애플리케이션이 응답하지 않는 상태(좀비 연결)가 있습니다. 30초마다 STOMP PING을 보내고 PONG을 받지 못하면 연결을 강제 종료하고 재연결을 시작합니다. 서버 측도 35초 TTL로 Presence를 유지하므로 좀비 연결이 온라인으로 표시되는 것을 방지합니다.
 
-### Q3. 그룹 채팅 팬아웃을 10만 명 규모에서 어떻게 처리하는가?
+### Q. 그룹 채팅 팬아웃을 10만 명 규모에서 어떻게 처리하는가?
 
 **얕은 답**: "Read-time 팬아웃을 씁니다"
 
@@ -1364,7 +1364,7 @@ delay += (long)(delay * Math.random());
 
 **극한 케이스**: 유명인 라이브 방송 채팅방에 50만 명이 접속하면 STOMP 브로드캐스트 1건이 50만 WebSocket 프레임으로 복사됩니다. 단일 프로세스로 불가능합니다. Kafka 팬아웃 워커를 50대 서버로 분산하여 각각 1만 명씩 담당합니다.
 
-### Q4. 메시지 순서 역전 문제를 어떻게 해결하는가?
+### Q. 메시지 순서 역전 문제를 어떻게 해결하는가?
 
 **얕은 답**: "타임스탬프로 정렬합니다"
 
@@ -1378,7 +1378,7 @@ delay += (long)(delay * Math.random());
 
 **"거의" 단조 증가인 이유를 인정하기**: NTP 시계 동기화로 타임스탬프가 역행할 수 있습니다. Snowflake 구현에서 역행 5ms 이내면 대기, 이상이면 예외를 던집니다. 이 5ms 내에서는 타임스탬프가 같은 메시지가 발생할 수 있고 워커 ID로 의사 정렬됩니다. "전송 순서"와 "ID 순서"가 미묘하게 다를 수 있으며, 실제 채팅에서는 허용 가능한 수준입니다. 이 한계를 인정하는 것이 깊은 답변입니다.
 
-### Q5. 메시지 중복 전달을 어떻게 방지하는가?
+### Q. 메시지 중복 전달을 어떻게 방지하는가?
 
 **얕은 답**: "중복 체크 로직을 추가합니다"
 

@@ -828,23 +828,23 @@ node_modules
 
 ## 면접 포인트
 
-### Q1: GitHub Actions에서 Job과 Step의 차이는?
+### Q. GitHub Actions에서 Job과 Step의 차이는?
 
 Job은 독립된 Runner(VM)에서 실행되는 작업 단위다. Job 간에는 파일 시스템을 공유하지 않으며, outputs나 Artifact로만 데이터를 전달한다. Step은 하나의 Job 안에서 순차 실행되는 개별 명령이며, 같은 파일 시스템을 공유한다. 기본적으로 Job은 병렬 실행되고, Step은 순차 실행된다.
 
-### Q2: Matrix Strategy에서 `fail-fast: true`(기본값)의 장단점은?
+### Q. Matrix Strategy에서 `fail-fast: true`(기본값)의 장단점은?
 
 장점은 하나의 조합이 실패하면 나머지를 즉시 취소하여 Runner 비용을 절약한다. 단점은 어떤 조합이 성공하고 어떤 조합이 실패하는지 한 번에 파악할 수 없다. CI에서 "Java 11은 실패하지만 17/21은 성공"이라는 정보가 필요하면 `fail-fast: false`가 적합하다.
 
-### Q3: Reusable Workflow와 Composite Action의 선택 기준은?
+### Q. Reusable Workflow와 Composite Action의 선택 기준은?
 
 Reusable Workflow는 전체 CI/CD 파이프라인을 조직 전체에 표준화할 때 사용한다. 별도 Job(별도 Runner)으로 실행되므로, 환경 격리가 필요하거나 여러 Job을 포함할 때 적합하다. Composite Action은 "JDK 설정 + Gradle 빌드 + 리포트 업로드" 같은 Step 묶음을 재사용할 때 사용한다. 호출한 Job 안에서 인라인 실행되어 Runner를 추가 소비하지 않는다.
 
-### Q4: Self-hosted Runner를 안전하게 운영하려면?
+### Q. Self-hosted Runner를 안전하게 운영하려면?
 
 핵심은 3가지다. (1) Ephemeral 모드로 매 Job마다 깨끗한 환경을 보장한다. (2) 포크 PR에 대해 Workflow 실행 전 승인을 요구한다. (3) Runner 네트워크를 격리하여 빌드에 필요한 서비스만 접근 허용한다. 추가로 Kubernetes 위에서 Runner를 Pod로 실행하면 자동 스케일링과 격리를 동시에 달성할 수 있다.
 
-### Q5: Docker Layer 캐시를 최대화하는 Dockerfile 작성 원칙은?
+### Q. Docker Layer 캐시를 최대화하는 Dockerfile 작성 원칙은?
 
 변경 빈도가 낮은 레이어를 위에, 높은 레이어를 아래에 배치한다. 구체적으로 (1) 의존성 파일(build.gradle, package.json)만 먼저 복사하고 의존성 설치를 실행한 후, (2) 소스 코드를 복사한다. 이렇게 하면 소스만 변경된 경우 의존성 레이어는 캐시를 재사용한다. Multi-stage 빌드로 빌드 도구(JDK)와 런타임(JRE)을 분리하면 최종 이미지 크기도 줄일 수 있다.
 

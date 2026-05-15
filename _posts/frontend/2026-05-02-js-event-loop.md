@@ -579,7 +579,7 @@ function animate() {
 
 ## 면접 포인트
 
-### Q1. 마이크로태스크와 태스크(매크로태스크)의 차이를 설명하고, 실행 순서를 코드로 보여주세요.
+### Q. 마이크로태스크와 태스크(매크로태스크)의 차이를 설명하고, 실행 순서를 코드로 보여주세요.
 마이크로태스크(Promise `.then`, `queueMicrotask`, `MutationObserver`)는 현재 태스크가 끝나면 즉시, 다음 태스크 전에 모두 실행됩니다. 태스크(setTimeout, setInterval, I/O)는 매번 이벤트 루프 한 사이클에 하나씩 실행됩니다.
 
 ```javascript
@@ -590,14 +590,14 @@ console.log('4');
 // 출력: 1 → 4 → 3 → 2
 ```
 
-### Q2. `async/await`와 Promise `.then()`의 실행 순서가 다른 경우가 있나요?
+### Q. `async/await`와 Promise `.then()`의 실행 순서가 다른 경우가 있나요?
 `await`는 내부적으로 Promise `.then()`으로 변환되지만, 스펙 변경(V8 최적화)으로 `async/await`가 때로 `.then()` 체인보다 마이크로태스크를 하나 적게 소비합니다. 실무에서 순서 차이가 문제가 될 경우 `queueMicrotask`로 명시적으로 제어합니다.
 
-### Q3. Web Worker와 이벤트 루프의 관계는?
+### Q. Web Worker와 이벤트 루프의 관계는?
 Web Worker는 별도 스레드에서 자체 이벤트 루프를 가집니다. 메인 스레드와 `postMessage`/`onmessage`로 통신하며, 데이터는 구조적 복제(Structured Clone)로 전달됩니다. DOM에는 접근할 수 없고, CPU 집중 작업을 메인 스레드에서 분리하는 데 사용합니다.
 
-### Q4. Node.js 이벤트 루프와 브라우저 이벤트 루프의 차이는?
+### Q. Node.js 이벤트 루프와 브라우저 이벤트 루프의 차이는?
 Node.js는 libuv 기반으로 6단계 페이즈(timers → I/O → idle → poll → check → close)를 순환합니다. `process.nextTick`은 어느 페이즈든 현재 페이즈 직후 실행되는 특수 큐입니다. 브라우저에는 `process.nextTick`이 없고, Node.js에는 `requestAnimationFrame`이 없습니다.
 
-### Q5. 이벤트 루프를 이용해 무거운 작업을 UI 블로킹 없이 처리하는 방법은?
+### Q. 이벤트 루프를 이용해 무거운 작업을 UI 블로킹 없이 처리하는 방법은?
 세 가지 접근법이 있습니다. (1) **청크 분할 + setTimeout**: 작업을 작은 단위로 나눠 매 청크 후 `setTimeout(fn, 0)`으로 이벤트 루프에 제어권 반환. (2) **Web Worker**: CPU 집중 작업을 별도 스레드로 완전히 분리. (3) **`scheduler.postTask`(현대 브라우저)**: 우선순위 기반 태스크 스케줄링으로 중요한 UI 작업에 높은 우선순위 부여.

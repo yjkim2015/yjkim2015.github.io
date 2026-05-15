@@ -1432,33 +1432,33 @@ public class ResilientProductService {
 
 ## 14. 면접 포인트
 
-### Q1. Cache-Aside와 Read-Through의 차이를 내부 동작 수준에서 설명하고, 각각 언제 선택하는가?
+### Q. Cache-Aside와 Read-Through의 차이를 내부 동작 수준에서 설명하고, 각각 언제 선택하는가?
 Cache-Aside는 **애플리케이션 코드**가 캐시 미스 감지, DB 조회, 캐시 저장을 직접 처리한다. Read-Through는 이 로직이 **캐시 레이어**(Spring의 `CacheInterceptor`)에 위임된다. 실제 Spring에서 `@Cacheable`은 Read-Through다 — AOP 프록시가 메서드 호출을 가로채 캐시 조회 → 미스면 실제 메서드 실행 → 결과 저장의 흐름을 처리한다.
 
 Cache-Aside를 선택하는 경우: 캐시 미스 처리를 세밀하게 제어해야 할 때(뮤텍스 락, 지터 TTL), 여러 데이터 소스(DB + 외부 API)를 조합해 캐시를 구성할 때, 캐시 장애 시 Fallback 로직이 복잡할 때.
 
 Read-Through(`@Cacheable`)를 선택하는 경우: 단순한 "DB 조회 결과를 캐싱"이 전부일 때, 비즈니스 코드에서 캐시 로직을 분리하고 싶을 때.
 
-### Q2. Cache Stampede 방어 방법을 아는 대로 설명하고, XFetch 알고리즘의 수학적 원리를 설명하라.
+### Q. Cache Stampede 방어 방법을 아는 대로 설명하고, XFetch 알고리즘의 수학적 원리를 설명하라.
 방어 방법: ① TTL 지터(만료 시점 분산) ② 뮤텍스 락(Redis SETNX로 한 서버만 DB 조회) ③ 논리적 만료(TTL 제거, stale 즉시 반환 + 비동기 갱신) ④ XFetch(확률적 조기 갱신) ⑤ Refresh-Ahead(TTL 80% 시점 미리 갱신).
 
 XFetch 원리: `early = now - (delta * beta * ln(random())) >= expiry`. delta는 DB 조회 소요 시간, beta는 갱신 강도, `ln(random())`은 항상 음수. TTL이 많이 남으면 `now < expiry`이므로 조기 갱신 안 됨. TTL이 거의 없으면 방정식을 만족할 확률이 높아짐. DB 조회가 느린 키는 delta가 크므로 더 일찍 갱신 시작. 여러 서버는 각자 다른 `random()` 값을 사용해 동시에 갱신 조건을 만족할 확률이 낮음 — 이것이 Thundering Herd를 수학적으로 분산시키는 핵심이다.
 
-### Q3. Double Delete 패턴에서 왜 sleep이 필요하고, 더 나은 대안은 무엇인가?
+### Q. Double Delete 패턴에서 왜 sleep이 필요하고, 더 나은 대안은 무엇인가?
 Double Delete에서 첫 번째 삭제(DB 업데이트 전)와 두 번째 삭제(커밋 후)를 사용하는 이유는 캐시 무효화와 DB 변경 사이에 발생하는 Race Condition을 커버하기 위해서다. 구체적으로: Thread B가 1차 삭제와 DB 업데이트 사이에 구 값을 DB에서 읽어 캐시에 저장할 수 있다. 2차 삭제가 그것을 제거한다.
 
 sleep이 필요한 이유: DB에 Read Replica가 있을 때, 커밋 직후에도 Replica에 변경이 전파되지 않을 수 있다(Replica Lag). sleep으로 Replica 동기화를 기다려야 Thread B가 Replica에서 구 값을 읽어 재캐싱하는 것을 막을 수 있다.
 
 더 나은 대안: Debezium 같은 CDC(Change Data Capture)로 MySQL Binlog를 구독하면, Binlog 이벤트 도착 = Replica 동기화 완료이므로 sleep 없이 정확한 타이밍에 캐시를 무효화할 수 있다. 또한 `@TransactionalEventListener(phase = AFTER_COMMIT)`으로 트랜잭션 커밋 후에만 무효화 이벤트를 발행하면 롤백 시 캐시 삭제 방지도 된다.
 
-### Q4. Spring `@Cacheable`이 동작하지 않는 경우를 설명하고, 이유를 AOP 관점에서 설명하라.
+### Q. Spring `@Cacheable`이 동작하지 않는 경우를 설명하고, 이유를 AOP 관점에서 설명하라.
 대표적인 케이스: 같은 클래스 내 자기 호출(self-invocation). `@Cacheable`은 Spring AOP의 CGLIB 프록시로 구현된다. 빈을 주입받아 사용하면 실제로는 프록시 객체가 주입되고, 메서드 호출이 프록시를 통과해 캐시 어드바이스(`CacheInterceptor`)가 실행된다. 그러나 같은 클래스 내에서 `this.method()`를 호출하면 프록시를 거치지 않고 실제 객체 메서드가 직접 호출된다 → `CacheInterceptor` 실행 안 됨 → 캐시 작동 안 함.
 
 해결: ① 해당 메서드를 별도 빈(클래스)으로 분리 ② `@Lazy`로 자기 자신의 프록시를 주입받아 `self.method()` 호출.
 
 다른 케이스: `@Cacheable` 메서드가 `private`이면 CGLIB 프록시가 오버라이드할 수 없어 동작 안 함. `condition`/`unless` SpEL에서 반환값 타입 불일치. `CacheManager` 빈이 없어 `NoSuchBeanDefinitionException`.
 
-### Q5. Redis Cluster에서 캐시 일관성을 완벽하게 보장할 수 없는 이유를 CAP 정리와 연결해 설명하라.
+### Q. Redis Cluster에서 캐시 일관성을 완벽하게 보장할 수 없는 이유를 CAP 정리와 연결해 설명하라.
 CAP 정리에 따르면 분산 시스템에서 Consistency(일관성), Availability(가용성), Partition Tolerance(네트워크 분리 허용) 세 가지를 동시에 만족하는 것은 불가능하다. 네트워크 파티션(P)은 현실에서 발생하므로, C와 A 중 하나를 선택해야 한다.
 
 Redis Cluster는 기본적으로 AP를 선택한다. 즉, 네트워크 파티션이 발생해도 요청을 처리(A)하되, 파티션 양쪽에 다른 값이 쓰일 수 있음(C 포기)을 허용한다. 구체적으로 Split-Brain 시나리오에서: Primary-Replica 간 네트워크 분리 → Primary에 새 값 쓰기 → Replica에 전파 안 됨 → Replica가 Primary로 승격(Failover) → 두 Primary 공존 → 각각 다른 값 → 네트워크 복구 후 한 쪽 값 유실.

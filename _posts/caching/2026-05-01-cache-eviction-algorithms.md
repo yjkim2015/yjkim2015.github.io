@@ -622,6 +622,19 @@ Caffeine.newBuilder()
 
 ## 각 알고리즘별 히트율 비교
 
+> **비유**: 알고리즘 선택은 서점 진열 전략과 같다. 베스트셀러를 앞에 두는 전략(LFU)이 있고, 최근 화제작을 앞에 두는 전략(LRU)이 있고, 진열 공간이 꽉 차면 입고 순서대로 빼는 전략(FIFO)도 있다. 방문객 패턴에 따라 최적 전략이 다르다.
+
+```mermaid
+graph LR
+    PAT["접근 패턴"] --> RECENCY["최근성 중요"]
+    PAT --> FREQ["빈도 중요"]
+    PAT --> MIXED["혼합 패턴"]
+    RECENCY --> LRU["LRU"]
+    FREQ --> LFU["LFU"]
+    MIXED --> WTLFU["W-TinyLFU"]
+    WTLFU -->|"최고 히트율"| CAFFEINE["Caffeine 캐시"]
+```
+
 ### 실험 조건
 
 - Zipf 분포 (현실적인 핫스팟 접근 패턴, α=1.0)
@@ -978,7 +991,7 @@ public class CacheWarmup implements ApplicationRunner {
 
 ## 면접 포인트
 
-#### Q. LRU와 LFU의 차이점과 각각 적합한 상황은?
+### Q. LRU와 LFU의 차이점과 각각 적합한 상황은?
 
 ```
 LRU (Least Recently Used):
@@ -1000,7 +1013,7 @@ W-TinyLFU (Caffeine 기본):
   실무에서 대부분의 경우 최선
 ```
 
-#### Q. Redis의 maxmemory-policy 종류와 차이는?
+### Q. Redis의 maxmemory-policy 종류와 차이는?
 
 ```
 noeviction: 메모리 꽉 차면 에러 (캐시 용도 부적합)
@@ -1021,7 +1034,7 @@ volatile-ttl: TTL 짧은 키부터 제거
   캐시 + 영구 데이터 혼합 → volatile-lru (영구 데이터는 TTL 없이)
 ```
 
-#### Q. 캐시 히트율이 낮을 때 진단 방법은?
+### Q. 캐시 히트율이 낮을 때 진단 방법은?
 
 ```
 1. 히트율 측정

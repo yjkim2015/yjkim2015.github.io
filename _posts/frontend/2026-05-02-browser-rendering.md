@@ -482,17 +482,17 @@ element.addEventListener('animationend', () => {
 
 ## 면접 포인트
 
-### Q1. Reflow와 Repaint의 차이는? 어떻게 최소화하는가?
+### Q. Reflow와 Repaint의 차이는? 어떻게 최소화하는가?
 Reflow(Layout)는 요소의 크기/위치를 재계산하는 과정이다. `width`, `height`, `margin`, `offsetTop` 같은 기하학적 속성 변경 시 발생하며, 부모-자식 관계로 전파된다. Repaint는 색상, 배경색, 그림자 등 시각적 속성만 변경될 때 발생하며 Reflow보다 비용이 낮다. 최소화 방법: DOM 변경을 batch 처리(DocumentFragment), 읽기/쓰기 분리, `transform`/`opacity` 전용 애니메이션.
 
-### Q2. async와 defer의 차이는?
+### Q. async와 defer의 차이는?
 둘 다 HTML 파싱을 블로킹하지 않고 스크립트를 병렬 다운로드한다. `async`는 다운로드 완료 즉시 실행하므로 실행 순서가 보장되지 않는다. `defer`는 HTML 파싱 완료 후, DOMContentLoaded 이벤트 직전에 선언 순서대로 실행된다. 독립적인 서드파티 스크립트(광고, 분석)는 `async`, 의존성이 있는 앱 스크립트는 `defer`.
 
-### Q3. transform이 left/top보다 빠른 이유는?
+### Q. transform이 left/top보다 빠른 이유는?
 `left`/`top` 변경 시 브라우저는 레이아웃(Reflow) → 페인트(Repaint) → 컴포지트 전 과정을 거친다. `transform`은 이미 분리된 컴포지트 레이어에서 GPU가 직접 처리하므로 메인 스레드와 레이아웃 재계산을 건너뛴다. 60fps 애니메이션을 유지하려면 메인 스레드 작업이 16ms 이내여야 하는데, `transform`은 이 제약에서 자유롭다.
 
-### Q4. Critical Rendering Path 최적화 방법 3가지는?
+### Q. Critical Rendering Path 최적화 방법 3가지는?
 (1) 렌더링 블로킹 CSS를 인라인 처리하거나 `<link rel="preload">`로 우선 로드한다. (2) `<script>`를 `</body>` 직전으로 이동하거나 `defer` 사용해 파싱 블로킹을 제거한다. (3) 초기 뷰포트에 필요한 크리티컬 CSS만 인라인으로 포함하고, 나머지는 비동기 로드한다.
 
-### Q5. requestAnimationFrame을 사용해야 하는 이유는?
+### Q. requestAnimationFrame을 사용해야 하는 이유는?
 `setTimeout(fn, 0)`으로 애니메이션을 처리하면 브라우저 렌더링 주기(16.7ms)와 어긋나 프레임 드롭이 발생한다. `requestAnimationFrame`은 브라우저가 다음 프레임을 그리기 직전에 콜백을 실행하므로 렌더링 주기와 동기화된다. 탭이 비활성화되면 자동으로 일시 정지되어 배터리/CPU를 절약한다.

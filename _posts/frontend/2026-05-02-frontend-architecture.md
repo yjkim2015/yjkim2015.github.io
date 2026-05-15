@@ -570,14 +570,14 @@ const setFilter = (val) => setSearchParams({ filter: val })
 
 ## 면접 포인트
 
-### Q1. Container-Presentation 패턴이 테스트에 유리한 이유는?
+### Q. Container-Presentation 패턴이 테스트에 유리한 이유는?
 Presentation 컴포넌트는 props만 받아 렌더링하는 순수 함수다. 네트워크, 전역 상태에 의존하지 않으므로 단위 테스트가 단순해진다. Container는 데이터 로직을 담당하며 Mock 훅으로 격리 테스트한다. 이 분리가 없으면 컴포넌트 테스트에 항상 API Mock 설정이 필요해진다.
 
-### Q2. 상태를 어디에 둘지 결정하는 기준은?
+### Q. 상태를 어디에 둘지 결정하는 기준은?
 4단계로 분류한다. (1) 컴포넌트 내부 UI 상태(모달 열림/닫힘) → `useState`. (2) 부모-자식 간 공유 → props 또는 context. (3) 서버에서 가져온 데이터 → React Query/SWR(서버 상태). (4) 여러 feature에서 공유하는 클라이언트 상태(장바구니, 인증) → Zustand/Jotai. Redux는 복잡한 상태 트랜지션과 미들웨어가 필요할 때만 도입한다.
 
-### Q3. Atomic Design의 `organisms`와 `templates`의 구분 기준은?
+### Q. Atomic Design의 `organisms`와 `templates`의 구분 기준은?
 `molecules`는 2개 이상의 atom 조합(검색 입력창+버튼). `organisms`는 독립적인 비즈니스 의미가 있는 섹션(헤더 네비게이션, 상품 카드 리스트). `templates`는 organisms의 레이아웃 배치(페이지 골격). `pages`는 실제 데이터가 들어간 templates. 실무에서는 molecules/organisms 경계가 모호해지므로 팀 내 명확한 기준을 사전에 합의해야 한다.
 
-### Q4. 모노레포에서 패키지 경계를 어떻게 설계하는가?
+### Q. 모노레포에서 패키지 경계를 어떻게 설계하는가?
 `packages/ui` (디자인 시스템), `packages/api-client` (API 호출 레이어), `packages/utils` (순수 유틸), `apps/web` (Next.js 앱), `apps/mobile` (RN 앱)으로 분리하는 것이 기본이다. 핵심 원칙은 의존성 방향: `apps`는 `packages`를 참조하지만 `packages`는 서로 또는 `apps`를 참조하지 않아야 한다. Turborepo의 `lint-staged`와 workspace 의존성 그래프로 이 경계를 강제한다.

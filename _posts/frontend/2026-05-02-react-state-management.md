@@ -566,17 +566,17 @@ const mutation = useMutation({
 
 ## 면접 포인트
 
-### Q1. 서버 상태와 클라이언트 상태를 분리해야 하는 이유는?
+### Q. 서버 상태와 클라이언트 상태를 분리해야 하는 이유는?
 서버 상태는 원본이 서버에 있고 여러 클라이언트가 공유하며 언제든 변경될 수 있습니다. 캐싱, 재요청, 동기화, 로딩/에러 처리가 필요합니다. 클라이언트 상태는 오직 UI에만 존재하며 서버와 무관합니다 (모달 열림 여부, 테마 등). 이 둘을 같은 스토어에 섞으면 캐시 무효화 로직이 복잡해지고 UI 상태와 서버 데이터가 뒤엉킵니다. React Query가 서버 상태 전용 레이어를 담당하면 전역 스토어는 순수한 UI 상태만 관리합니다.
 
-### Q2. Zustand가 Redux보다 간단한 이유는?
+### Q. Zustand가 Redux보다 간단한 이유는?
 Redux는 Action → Reducer → Store의 단방향 흐름을 강제하고, 미들웨어(Thunk/Saga)로 비동기를 처리합니다. Boilerplate(액션 타입 상수, 액션 생성자, 리듀서)가 많습니다. Zustand는 스토어를 단순한 객체와 함수로 정의하고, 비동기도 함수 안에서 직접 처리합니다. Redux의 구조적 강제가 필요 없는 중소규모 프로젝트에서 Zustand가 훨씬 실용적입니다.
 
-### Q3. React Query의 staleTime과 gcTime(cacheTime)의 차이는?
+### Q. React Query의 staleTime과 gcTime(cacheTime)의 차이는?
 `staleTime`은 데이터를 "신선"으로 간주하는 시간입니다. 이 시간 내에는 동일 쿼리가 재마운트되어도 서버 요청을 보내지 않습니다. `gcTime`(구 `cacheTime`)은 쿼리가 더 이상 사용되지 않을 때 캐시를 메모리에서 제거하는 시간입니다. 기본값: `staleTime=0`(즉시 stale), `gcTime=5분`. 변경이 드문 데이터는 `staleTime`을 늘려 불필요한 요청을 줄입니다.
 
-### Q4. 상태를 어느 레벨에 두어야 하는지 결정하는 기준은?
+### Q. 상태를 어느 레벨에 두어야 하는지 결정하는 기준은?
 "이 상태를 필요로 하는 컴포넌트의 공통 최상위 조상이 어디인가"입니다. 단일 컴포넌트만 필요하면 그 컴포넌트 내 `useState`. 형제 컴포넌트 간 공유라면 공통 부모로 lift up. 여러 페이지에서 필요하면 전역 스토어(Zustand/Context). 서버에서 오는 데이터라면 React Query. "모든 것을 전역"과 "모든 것을 로컬" 양 극단을 피하고 최소 필요 범위를 선택합니다.
 
-### Q5. React Query의 `invalidateQueries`와 `setQueryData`의 차이와 사용 시점은?
+### Q. React Query의 `invalidateQueries`와 `setQueryData`의 차이와 사용 시점은?
 `invalidateQueries`는 캐시를 무효화해 다음 사용 시 서버에서 재요청합니다. 데이터 변경 후 최신 서버 상태가 필요할 때 사용합니다. `setQueryData`는 서버 요청 없이 캐시를 직접 업데이트합니다. Optimistic update에서 즉시 UI를 업데이트하거나, 이미 가진 데이터로 캐시를 채울 때 사용합니다. 일반적으로 mutation 성공 후 `invalidateQueries`를 쓰고, 빠른 UX가 필요하면 `onMutate`에서 `setQueryData`로 낙관적 업데이트를 조합합니다.

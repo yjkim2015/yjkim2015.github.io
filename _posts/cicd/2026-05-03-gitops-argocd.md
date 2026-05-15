@@ -560,23 +560,23 @@ metadata:
 
 ## 면접 포인트
 
-### Q1: GitOps가 기존 CI/CD와 다른 점은?
+### Q. GitOps가 기존 CI/CD와 다른 점은?
 
 핵심 차이는 **배포 방향**이다. 기존 CI/CD는 Push 모델로 CI 서버가 클러스터에 명령을 보낸다. GitOps는 Pull 모델로 클러스터 내부 에이전트가 Git을 감시한다. 이로 인해 (1) CI 서버에 클러스터 접근 권한을 줄 필요가 없어 보안이 강화되고, (2) 배포 후에도 지속적으로 상태를 감시하여 Drift를 감지하고, (3) 모든 변경이 Git PR로 이루어져 감사 추적이 가능하다.
 
-### Q2: ArgoCD에서 selfHeal과 prune의 차이는?
+### Q. ArgoCD에서 selfHeal과 prune의 차이는?
 
 `selfHeal`은 **외부 변경으로부터 보호**한다. 누군가 `kubectl`로 직접 클러스터 상태를 변경하면 Git 상태로 되돌린다. `prune`은 **삭제 동기화**다. Git에서 리소스 파일을 삭제하면 클러스터에서도 해당 리소스를 삭제한다. prune이 꺼져 있으면 Git에서 파일을 지워도 클러스터에 고아 리소스가 남는다.
 
-### Q3: 프로덕션에서 긴급 롤백 순서는?
+### Q. 프로덕션에서 긴급 롤백 순서는?
 
 1️⃣ Auto Sync 비활성화 → 2️⃣ ArgoCD CLI로 즉시 롤백(`argocd app rollback`) → 3️⃣ 서비스 정상화 확인 → 4️⃣ Git에서 `git revert`로 원인 커밋 되돌리기 → 5️⃣ Git 상태와 클러스터 상태 일치 확인 후 Auto Sync 재활성화. 핵심은 "먼저 복구, 나중에 정리"이며, Git과 클러스터의 최종 상태는 반드시 일치해야 한다.
 
-### Q4: Helm과 Kustomize 중 어떤 것을 선택해야 하는가?
+### Q. Helm과 Kustomize 중 어떤 것을 선택해야 하는가?
 
 외부에 배포 가능한 패키지(차트)로 공유해야 한다면 Helm이다. 사내에서 환경별 설정만 분리하면 된다면 Kustomize가 간단하다. 실무에서는 둘을 함께 사용하기도 한다 — 외부 Helm 차트를 가져오되, Kustomize로 조직에 맞게 패치하는 방식이다.
 
-### Q5: ArgoCD의 Application Controller가 죽으면 운영 중인 서비스에 영향이 있는가?
+### Q. ArgoCD의 Application Controller가 죽으면 운영 중인 서비스에 영향이 있는가?
 
 없다. ArgoCD는 배포 도구일 뿐, 런타임에 트래픽을 처리하지 않는다. Controller가 죽어도 이미 배포된 Pod는 Kubernetes가 독립적으로 관리한다. 다만 새로운 배포, 롤백, Drift 감지가 불가능해진다. ArgoCD 자체의 고가용성을 위해 Controller를 2개 이상 실행하고, Redis를 HA 모드로 구성하는 것이 권장된다.
 
