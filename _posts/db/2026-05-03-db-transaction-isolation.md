@@ -1484,4 +1484,26 @@ graph LR
 
 ---
 
+## 면접 포인트
+
+### Q1. Dirty Read, Non-Repeatable Read, Phantom Read의 차이와 각각을 막는 격리 수준은?
+
+Dirty Read는 아직 커밋되지 않은 데이터를 읽는 현상이다. READ COMMITTED 이상에서 방지된다. Non-Repeatable Read는 같은 트랜잭션 내에서 같은 행을 두 번 읽었을 때 값이 달라지는 현상이다. 다른 트랜잭션이 중간에 UPDATE하고 커밋한 경우다. REPEATABLE READ 이상에서 방지된다. Phantom Read는 같은 트랜잭션 내에서 같은 범위 쿼리를 두 번 실행했을 때 결과 행 수가 달라지는 현상이다. 다른 트랜잭션이 중간에 INSERT/DELETE한 경우다. MySQL REPEATABLE READ는 Gap Lock으로 방지하고, SERIALIZABLE도 방지한다.
+
+### Q2. MySQL REPEATABLE READ에서 일반 SELECT와 SELECT FOR UPDATE의 읽기 방식이 다른 이유는?
+
+MySQL REPEATABLE READ의 일반 SELECT는 트랜잭션 시작 시 생성된 Read View 기준 스냅샷을 읽는다(Consistent Non-Locking Read). 중간에 다른 트랜잭션이 커밋해도 같은 값을 읽는다. SELECT FOR UPDATE는 최신 커밋 데이터를 읽고 X Lock을 건다(Locking Read). 스냅샷이 아닌 현재 행 상태를 읽는 이유는 "잠금이 현재 데이터에 대한 권리를 주장하는 것"이기 때문이다. 이 차이 때문에 "일반 SELECT로 읽은 값이 FOR UPDATE 결과와 다를 수 있다"는 함정이 생긴다. 재고 차감 등 읽고 쓰는 패턴은 반드시 FOR UPDATE를 사용해야 한다.
+
+### Q3. Lost Update 문제가 REPEATABLE READ에서도 발생하는 이유와 해결 방법은?
+
+두 트랜잭션이 같은 행을 읽고(스냅샷 읽기) 각각 값을 계산해 UPDATE하면, 나중에 커밋한 쪽의 변경이 앞서 커밋한 쪽의 변경을 덮어쓴다. REPEATABLE READ의 스냅샷 읽기는 읽기 일관성만 보장하고 쓰기 충돌은 막지 않는다. 해결책은 세 가지다. ① `SELECT FOR UPDATE`로 읽기 시 X Lock 획득(비관적 락) ② `UPDATE SET stock = stock - 1 WHERE stock >= 1`처럼 원자적 UPDATE ③ JPA `@Version`으로 버전 번호를 확인하는 낙관적 락. 고TPS 환경에서는 ②번 원자적 UPDATE가 락 없이 가장 빠르다.
+
+### Q4. 트랜잭션 격리 수준을 전역이 아닌 쿼리 단위로 설정해야 하는 이유는?
+
+SERIALIZABLE을 전역 적용하면 모든 SELECT에 암묵적 Shared Lock이 걸린다. 플래시 세일처럼 동시 접근이 많은 상황에서는 SELECT끼리 대기 큐가 형성되고 서비스 장애로 이어진다. 실무에서 대부분의 읽기는 READ COMMITTED로 충분하고, 재고 차감 같은 쓰기 충돌 가능 지점만 REPEATABLE READ + FOR UPDATE를 적용하면 된다. Spring에서는 `@Transactional(isolation = Isolation.REPEATABLE_READ)`를 해당 메서드에만 적용한다. 격리 수준을 높일수록 동시성이 낮아지므로 실제 비즈니스 요건에 맞는 최소 수준을 선택하는 것이 원칙이다.
+
+### Q5. `@Transactional(isolation=SERIALIZABLE)`을 내부 메서드에 적용했는데 적용되지 않는 이유와 해결책은?
+
+두 가지 문제가 복합된다. 첫째, `propagation = REQUIRED`(기본값)에서 내부 메서드는 이미 시작된 외부 트랜잭션에 참여한다. 이미 READ_COMMITTED Connection이 열린 상태에서 격리 수준을 변경할 수 없다. Spring은 경고 로그만 출력하고 외부 격리 수준을 그대로 사용한다. 둘째, JDBC 스펙상 트랜잭션이 시작된 Connection의 격리 수준을 중간에 변경하는 것은 드라이버마다 다르게 동작하며 대부분 무시하거나 예외를 던진다. 해결책은 `propagation = REQUIRES_NEW`로 새 Connection을 열어야 `isolation = SERIALIZABLE`이 적용된다. 단, 외부 트랜잭션과 독립적으로 커밋/롤백되므로 데이터 정합성 설계에 주의가 필요하다.
+
 격리 수준은 **"얼마나 많은 이상 현상을 허용하고 대신 동시성을 얻을 것인가"** 의 트레이드오프다. MySQL InnoDB의 REPEATABLE READ는 MVCC와 Next-Key Lock의 조합으로 대부분의 OLTP 워크로드에서 최적의 균형을 제공한다. 그러나 재고 차감, 쿠폰 발급 같은 "읽고 나서 쓰는" 패턴에서는 MVCC만으로는 안전하지 않다는 사실을 반드시 기억해야 한다. 격리 수준 설정보다 쿼리 설계와 락 전략이 더 중요하다.

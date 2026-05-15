@@ -1308,4 +1308,28 @@ if (receiverCount == 0) {
 | 클러스터 주의 | Redis 6 이하는 단일 노드 범위, 7.0+ Sharded Pub/Sub으로 해결 |
 | Keyspace Notification | Pub/Sub 위에 구현, 지연 삭제로 이벤트 지연 가능 |
 | Streams와 차이 | Pub/Sub = 즉각 브로드캐스트 휘발, Streams = 영속 ACK 재처리 |
+
+---
+
+## 면접 포인트
+
+### Q1. Redis Pub/Sub이 At-most-once 전달만 보장하는 구조적 이유는?
+
+Redis Pub/Sub은 메시지를 디스크에 저장하지 않는다. PUBLISH 시점에 구독 중인 클라이언트의 출력 버퍼에 직접 복사해 전달한다. 구독자가 없으면 메시지는 즉시 소멸한다. 구독자가 크래시 상태이거나 처리 속도가 느려 출력 버퍼(`client-output-buffer-limit`)가 초과되면 연결이 강제 종료되고 메시지는 유실된다. ACK 메커니즘이 없으므로 발행자는 전달 여부를 알 수 없다. 이 구조적 한계 때문에 "유실 불허" 메시징에는 Redis Streams 또는 Kafka를 사용한다.
+
+### Q2. SUBSCRIBE와 PSUBSCRIBE의 내부 구현 차이와 PSUBSCRIBE의 성능 비용은?
+
+SUBSCRIBE는 채널 이름을 키, 구독자 목록을 값으로 하는 `pubsub_channels` 딕셔너리에 등록한다. 특정 채널 조회가 O(1)이다. PSUBSCRIBE는 패턴을 `pubsub_patterns` 연결 리스트에 추가한다. PUBLISH 시 모든 패턴을 순회하며 glob 매칭을 수행하므로 O(N) 비용이다. 패턴 수가 많아지면 초당 수천 건의 PUBLISH에서 CPU 병목이 발생한다. 실무에서는 패턴 수를 최소화하고, 가능하면 명시적 채널명을 사용한다.
+
+### Q3. Redis Cluster 환경에서 Pub/Sub이 단일 노드 범위로 제한되는 이유와 해결책은?
+
+Redis 6.x 이하에서 Pub/Sub 메시지는 발행된 노드에서만 전파된다. 구독자가 다른 노드에 연결되어 있으면 메시지를 받지 못한다. Redis의 클러스터 프로토콜은 데이터 슬롯 기반 라우팅이며, Pub/Sub 채널은 슬롯에 속하지 않기 때문이다. Redis 7.0부터 Sharded Pub/Sub이 도입되어 채널이 슬롯에 해시되고 해당 슬롯의 노드로 자동 라우팅된다. 6.x 환경에서 클러스터 전체 브로드캐스트가 필요하면 모든 노드에 직접 PUBLISH하거나, 단일 노드 Redis를 Pub/Sub 전용으로 분리하는 방법을 사용한다.
+
+### Q4. Redis Pub/Sub과 Redis Streams의 사용 기준을 어떻게 나누는가?
+
+Redis Pub/Sub은 메시지 영속성이 불필요하고 구독자가 항상 온라인 상태인 실시간 브로드캐스트에 적합하다. 채팅 알림, 라이브 피드, 실시간 이벤트 전파가 해당한다. Redis Streams는 메시지를 디스크에 저장하고 소비자 그룹으로 분산 처리하며 ACK 기반 재처리가 가능하다. 서버 재시작 후에도 미처리 메시지를 다시 받아야 하는 경우, 여러 워커가 나눠 처리하는 경우, 처리 이력이 필요한 경우에 Streams를 사용한다. Kafka가 과한 규모지만 Pub/Sub보다 강한 보장이 필요할 때 Streams가 중간 선택지다.
+
+### Q5. Spring에서 Redis Pub/Sub 구독자가 예외를 던지면 어떻게 되는가? 안전하게 처리하는 방법은?
+
+`MessageListenerAdapter`의 기본 `ErrorHandler`는 예외를 로그로 출력하고 계속 실행한다. 하지만 구독자 스레드 자체가 비정상 종료되면 재구독이 자동으로 이루어지지 않아 이후 메시지를 전혀 받지 못한다. 안전한 처리를 위해 세 가지를 설정한다. ① `MessageListenerContainer`에 `ErrorHandler`를 등록해 예외를 잡고 알림을 발송한다 ② 구독 처리 메서드 내부에서 try-catch로 모든 예외를 처리해 스레드가 종료되지 않게 한다 ③ `RedisConnectionFactory`에 재연결 정책을 설정해 연결 끊김 시 자동 복구되도록 한다.
 | 선택 기준 | 유실 허용 실시간 브로드캐스트 → Pub/Sub, 유실 불가 → Streams/Kafka |

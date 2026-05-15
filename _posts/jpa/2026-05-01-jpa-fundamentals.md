@@ -1531,4 +1531,28 @@ N+1 방지:
 참조 - 자바 ORM 표준 JPA 프로그래밍 (김영한)
 참조 - High-Performance Java Persistence (Vlad Mihalcea)
 참조 - Spring Data JPA Reference Documentation
+
+---
+
+## 면접 포인트
+
+### Q1. JPA 1차 캐시가 트랜잭션 범위로 제한되는 이유는? 실무에서 이로 인해 생기는 문제와 해결책은?
+
+1차 캐시는 영속성 컨텍스트 안에 Map 형태로 존재한다. 트랜잭션이 끝나면 영속성 컨텍스트가 닫히고 1차 캐시도 사라진다. 트랜잭션마다 새 영속성 컨텍스트가 만들어지므로 이전 트랜잭션의 캐시를 재사용할 수 없다. 이 때문에 동일 엔티티를 트랜잭션마다 DB에서 다시 읽는다. 실무 문제: 배치 처리에서 1만 건을 루프로 조회·수정할 때 영속성 컨텍스트에 엔티티가 누적되어 메모리가 고갈된다. 해결: 일정 건수마다 `em.flush()` + `em.clear()`로 1차 캐시를 비운다. 또는 Spring Batch의 청크 기반 트랜잭션을 활용한다.
+
+### Q2. 변경 감지(Dirty Checking)는 어떤 원리로 동작하는가? 성능에 미치는 영향은?
+
+영속성 컨텍스트는 엔티티를 처음 로딩할 때 스냅샷을 보관한다. 트랜잭션 커밋 또는 `flush()` 시점에 현재 엔티티 상태와 스냅샷을 비교한다. 변경된 필드가 있으면 UPDATE SQL을 생성해 쓰기 지연 저장소에 등록한다. 개발자가 명시적으로 `save()`를 호출하지 않아도 변경이 자동 반영된다. 성능 영향: 영속 상태 엔티티가 많을수록 flush 시 비교 비용이 증가한다. 읽기 전용 조회에서는 `@Transactional(readOnly = true)`로 스냅샷 생성 자체를 생략해 메모리와 CPU를 아낄 수 있다. Hibernate는 readOnly 트랜잭션에서 dirty checking을 건너뛴다.
+
+### Q3. `@OneToMany` 매핑에서 `CascadeType.ALL`과 `orphanRemoval=true`를 함께 쓸 때 주의할 점은?
+
+`CascadeType.ALL`은 부모 엔티티에 대한 모든 영속성 작업(persist, merge, remove 등)을 자식에게 전파한다. `orphanRemoval=true`는 부모 컬렉션에서 제거된 자식을 자동으로 DB에서 삭제한다. 둘을 함께 사용하면 부모를 삭제하거나 컬렉션에서 자식을 제거할 때 자동으로 자식이 삭제된다. 주의점: 자식 엔티티가 여러 부모에서 참조되는 경우 한 부모에서 제거하면 의도치 않게 DB에서 삭제된다. 따라서 `orphanRemoval=true`는 자식의 생명주기가 완전히 부모에게 종속된 경우(예: 주문-주문항목)에만 사용한다. 공유되는 엔티티에는 절대 사용하지 않는다.
+
+### Q4. JPA `@Version`을 이용한 낙관적 락의 동작 원리와 충돌 시 처리 방법은?
+
+`@Version` 어노테이션이 붙은 필드(Long 또는 Integer)는 엔티티가 수정될 때마다 자동으로 1 증가한다. UPDATE SQL에 `WHERE version = :expectedVersion` 조건이 추가된다. 다른 트랜잭션이 먼저 수정해 버전이 올라갔다면 UPDATE 조건이 틀려 0건 업데이트가 발생하고 `OptimisticLockingFailureException`이 발생한다. 충돌 처리: Spring Retry `@Retryable`로 `OptimisticLockingFailureException`을 잡아 재시도한다. 재시도 로직은 반드시 멱등(idempotent)해야 한다. 충돌이 잦은 환경에서는 재시도 비용이 높아지므로 비관적 락(`@Lock(PESSIMISTIC_WRITE)`)으로 전환을 검토한다.
+
+### Q5. JPQL과 네이티브 쿼리의 차이는? 각각을 선택하는 기준은?
+
+JPQL은 엔티티 객체를 대상으로 하는 객체지향 쿼리다. 테이블명 대신 엔티티명, 컬럼명 대신 필드명을 사용한다. Hibernate가 실제 DB 방언(dialect)에 맞는 SQL로 변환해 DB 벤더 독립성을 유지한다. 네이티브 쿼리는 실제 SQL을 직접 작성한다. DB 고유 기능(힌트, 파티션, 특수 함수)을 사용할 때, 복잡한 집계나 윈도우 함수가 필요할 때, 성능 최적화를 위해 실행 계획을 직접 제어할 때 사용한다. 실무 기준: CRUD와 단순 조회는 JPQL 또는 Spring Data JPA 메서드 쿼리, 복잡한 조회·집계·통계는 QueryDSL이나 네이티브 쿼리를 사용한다. 엔티티 영속화가 필요 없는 읽기 전용 조회는 DTO 프로젝션으로 처리해 불필요한 엔티티 로딩을 피한다.
 ```

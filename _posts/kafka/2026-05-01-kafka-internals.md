@@ -1478,4 +1478,28 @@ log.flush.interval.messages=9223372036854775807  # OS에 위임
 min.insync.replicas=2
 unclean.leader.election.enable=false
 log.cleaner.dedupe.buffer.size=268435456  # 256MB (대용량 컴팩션 토픽)
+
+---
+
+## 면접 포인트
+
+### Q1. Kafka가 ZooKeeper 없이 KRaft 모드로 동작할 수 있는 원리는?
+
+ZooKeeper는 브로커 메타데이터(토픽, 파티션, ISR, 리더 선출)를 외부에서 관리했다. 컨트롤러 브로커는 ZooKeeper에서 메타데이터를 읽어 클러스터를 조율했다. ZooKeeper 의존성은 운영 복잡도를 높이고, ZooKeeper-Kafka 간 메타데이터 동기화 지연이 장애 복구를 느리게 했다. KRaft는 Raft 합의 알고리즘을 Kafka 자체에 내장한다. Controller 쿼럼(홀수 개 브로커)이 Raft 로그로 메타데이터 변경을 합의한다. 메타데이터 토픽(`__cluster_metadata`)을 일반 파티션처럼 복제한다. 외부 시스템 없이 Kafka 자체가 자신의 진실의 원천이 된다. 장애 복구 시간도 수십 초에서 수 초로 단축된다.
+
+### Q2. ISR(In-Sync Replica)에서 브로커가 제거되는 조건은? `unclean.leader.election`의 트레이드오프는?
+
+팔로워 브로커가 `replica.lag.time.max.ms`(기본 30초) 동안 리더를 따라잡지 못하면 ISR에서 제거된다. 네트워크 지연, 디스크 I/O 포화, GC 과다로 복제가 느려질 때 발생한다. ISR에서 모든 팔로워가 제거되고 리더만 남은 상태에서 리더가 장애를 일으키면, 복제가 완료되지 않은 팔로워만 남는다. `unclean.leader.election.enable=false`(권장)이면 ISR 외 브로커를 리더로 선출하지 않아 가용성을 희생하지만 데이터 손실을 방지한다. `true`이면 가용성을 살리지만 복제되지 않은 메시지가 유실된다. 금융/결제 시스템은 반드시 `false`로 설정해야 한다.
+
+### Q3. Log Compaction의 동작 원리와 `__consumer_offsets` 토픽에 적용되는 이유는?
+
+Log Compaction은 같은 키의 이전 메시지를 제거하고 가장 최신 값만 보존한다. 각 키에 대한 최신 상태를 영속적으로 유지하는 "이벤트 소싱 스냅샷"이다. Log Cleaner 스레드가 더티 세그먼트를 읽고 키별 최신 오프셋 맵을 만든 후, 오래된 오프셋의 메시지를 제거하며 새 세그먼트로 재기록한다. `__consumer_offsets`는 컨슈머 그룹의 오프셋 커밋 기록이다. 같은 (그룹, 토픽, 파티션) 키로 계속 커밋이 누적되는데, Compaction으로 최신 오프셋만 보존하면 스토리지가 폭증하지 않는다. 재시작 후 컨슈머가 마지막 커밋 오프셋부터 이어서 처리할 수 있는 것도 Compaction이 최신값을 보존하기 때문이다.
+
+### Q4. Kafka 트랜잭션 프로듀서가 exactly-once를 보장하는 원리는?
+
+세 레이어가 협력한다. 첫째, 멱등 프로듀서(`enable.idempotence=true`)는 (ProducerID, Partition, SequenceNumber) 조합으로 브로커 레벨 중복을 제거한다. 재전송으로 인한 중복을 막는다. 둘째, 트랜잭션 코디네이터가 transactional.id로 트랜잭션 상태를 관리한다. `beginTransaction()` → 여러 파티션에 쓰기 → `commitTransaction()`이 원자적으로 처리된다. 중간에 실패하면 트랜잭션 로그로 자동 롤백된다. 셋째, 컨슈머는 `isolation.level=read_committed`로 커밋된 트랜잭션의 메시지만 읽는다. 세 레이어가 없으면 재시도 → 중복 → 컨슈머가 중복 처리의 연쇄가 발생한다.
+
+### Q5. `linger.ms`와 `batch.size`의 상호작용이 처리량과 지연에 미치는 영향은?
+
+프로듀서는 같은 파티션으로 보낼 메시지를 배치로 묶어 전송한다. `linger.ms=0`(기본)이면 메시지가 생기는 즉시 전송해 지연은 최소지만 배치 효율이 낮다. `linger.ms=20`이면 최대 20ms 대기하며 메시지를 모아 배치 크기를 키운다. 네트워크 왕복 횟수가 줄고 압축 효율이 높아져 처리량이 증가한다. `batch.size`(기본 16KB)는 배치의 최대 크기다. `linger.ms` 이전에 `batch.size`가 채워지면 즉시 전송한다. 고처리량 환경: `linger.ms=20`, `batch.size=131072`(128KB), `compression.type=lz4` 또는 `zstd` 조합이 표준이다. 실시간성이 중요하면 `linger.ms=0~5`를 유지한다.
 ```

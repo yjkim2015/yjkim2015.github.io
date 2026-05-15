@@ -1163,4 +1163,28 @@ Kafka Consumer의 복잡성은 분산 환경에서 **"누가 어떤 파티션을
 
 Group Coordinator 선택 수식에서 시작해, JoinGroup/SyncGroup 프로토콜로 파티션을 배분하고, Heartbeat Thread와 Poll Thread가 독립적으로 살아있음을 증명하며, `__consumer_offsets`의 Compacted Log에 처리 위치를 기록한다. 이 흐름 전체를 이해해야 Lag 급증, 반복 리밸런싱, 메시지 중복 같은 운영 문제의 근본 원인을 찾고 수정할 수 있다.
 
+---
+
+## 면접 포인트
+
+### Q1. Consumer Group의 Rebalancing이 발생하는 조건과 Cooperative Sticky Rebalancing이 개선하는 점은?
+
+리밸런싱은 ① 컨슈머 그룹 멤버 추가/제거 ② `session.timeout.ms` 초과로 Heartbeat 미수신 ③ `max.poll.interval.ms` 초과로 poll 미호출 시 발생한다. 전통적 Eager Rebalancing은 모든 컨슈머가 파티션을 반납하고 재배정받는다. 이 Stop-the-World 기간 동안 전체 그룹이 처리를 멈춘다. Cooperative Sticky Rebalancing은 변경이 필요한 파티션만 반납하고 나머지는 계속 처리한다. 파티션 배정도 이전 배정을 최대한 유지해 캐시 효율을 높인다. 대규모 컨슈머 그룹에서 리밸런싱 영향을 수 초에서 수십 ms로 줄인다.
+
+### Q2. `enable.auto.commit=true`가 위험한 이유와 수동 커밋의 올바른 타이밍은?
+
+자동 커밋은 `auto.commit.interval.ms`(기본 5초) 주기로 현재까지 poll된 최대 오프셋을 커밋한다. poll로 메시지를 받았지만 처리가 완료되기 전에 커밋이 실행되면, 크래시 후 재시작 시 처리되지 않은 메시지를 건너뛴다(메시지 손실). 수동 커밋은 `commitSync()` 또는 `commitAsync()`를 처리 완료 후 호출한다. 올바른 패턴: poll → 처리 → commitSync() 순서. 배치 처리라면 배치 전체 완료 후 한 번만 커밋한다. `commitSync()`는 실패 시 재시도하지만 처리량을 낮출 수 있어 고처리량 환경에서는 `commitAsync()` + `commitSync()` 조합을 사용한다.
+
+### Q3. Consumer Lag이 급증했을 때 원인을 분석하는 순서는?
+
+1단계: `kafka-consumer-groups.sh --describe`로 파티션별 LAG, CONSUMER-ID, HOST를 확인한다. 특정 파티션만 Lag이 크면 해당 파티션을 처리하는 컨슈머 문제다. 전체 파티션이 동시에 Lag이 늘면 Producer 처리량 증가 또는 컨슈머 전체 처리 속도 저하다. 2단계: 컨슈머 CPU/메모리, GC 로그, 외부 의존성(DB, HTTP) 응답 시간을 확인한다. 3단계: `max.poll.records`를 줄여 한 번에 처리하는 메시지 수를 제한하거나, 파티션 수와 컨슈머 수를 늘려 병렬 처리를 확장한다. 파티션 수보다 컨슈머 수가 많으면 여분 컨슈머는 놀게 되므로 파티션 수를 먼저 늘린다.
+
+### Q4. 오프셋 커밋과 메시지 처리의 원자성을 보장하는 방법은?
+
+일반적으로 오프셋은 Kafka `__consumer_offsets`에 저장되고 비즈니스 결과는 DB에 저장된다. 둘 사이의 원자성이 없으므로 ① DB 저장 성공 + 오프셋 커밋 실패 → 재처리 시 중복 ② 오프셋 커밋 성공 + DB 저장 실패 → 메시지 손실이 발생한다. 완전한 원자성을 위해 오프셋을 DB에 함께 저장하는 방법을 사용한다. `consumer_offsets` 테이블에 (topic, partition, offset)을 비즈니스 데이터와 같은 트랜잭션으로 저장한다. 재시작 시 DB에서 오프셋을 읽어 `consumer.seek()`로 정확한 위치부터 재처리한다. 이 패턴이 exactly-once 처리의 실용적 구현이다.
+
+### Q5. `max.poll.interval.ms` 초과로 리밸런싱이 반복 발생할 때 원인과 해결 방법은?
+
+`max.poll.interval.ms`(기본 5분)는 연속된 poll 호출 사이의 최대 허용 시간이다. 이 시간 안에 poll을 호출하지 않으면 Coordinator는 컨슈머가 죽었다고 판단하고 리밸런싱을 시작한다. 원인은 주로 poll로 받은 메시지 배치의 처리 시간이 `max.poll.interval.ms`를 초과하는 경우다. 외부 API 호출, 무거운 DB 쿼리, 배치 처리가 오래 걸릴 때 발생한다. 해결책: ① `max.poll.records`를 줄여 한 번에 처리하는 양을 축소 ② `max.poll.interval.ms`를 실제 처리 시간에 맞게 증가 ③ 처리 로직을 비동기로 분리해 poll 루프가 빠르게 돌게 한다. Heartbeat는 별도 스레드로 동작하므로 처리 지연이 있어도 session timeout과는 독립적이다.
+
 CooperativeStickyAssignor + Static Membership + Manual Commit + DeadLetterPublishingRecoverer의 조합이 현재 시점에서 프로덕션 환경에 권장되는 기본 구성이다.
