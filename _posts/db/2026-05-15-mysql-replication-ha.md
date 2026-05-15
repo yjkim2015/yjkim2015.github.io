@@ -199,7 +199,9 @@ GTID의 핵심 규칙: **한 번 실행된 GTID는 다시 실행하지 않는다
 
 ## 읽기 분산: Read Replica 운용
 
-Primary 한 대가 모든 읽기/쓰기를 처리하는 것은 비효율적이다. 보통 쓰기는 Primary, 읽기는 Replica로 라우팅한다.
+**읽기 트래픽을 Replica로 분산하는 이유**는 대부분의 서비스가 쓰기보다 읽기가 압도적으로 많기 때문이다. 쇼핑몰에서 상품을 보는 사람(읽기)은 실제로 구매하는 사람(쓰기)보다 수십 배 많다. Primary 한 대가 모든 SELECT를 처리하면 CPU와 I/O가 포화된다. Replica를 추가하는 것은 도서관에 사서를 더 고용하는 것과 같다. 책을 새로 들이는 작업(쓰기)은 관장(Primary)이 담당하고, 책을 찾아주는 일(읽기)은 여러 사서(Replica)가 분담한다.
+
+보통 쓰기는 Primary, 읽기는 Replica로 라우팅한다.
 
 ```mermaid
 graph LR
@@ -461,22 +463,37 @@ FROM performance_schema.replication_group_member_stats;
 
 ## 면접 포인트
 
-### 비동기, 반동기, 그룹 복제의 차이를 설명하라
+<details>
+<summary>Q. 비동기, 반동기, 그룹 복제의 차이를 설명하라</summary>
 
 비동기는 Primary가 binlog 기록 즉시 응답하며 성능이 가장 좋지만 데이터 소실 가능성이 있다. 반동기는 최소 한 Replica의 수신 확인 후 응답하므로 소실 위험이 줄지만 Replica 네트워크 지연이 Primary 응답 시간에 영향을 준다. 그룹 복제는 Paxos 합의로 모든 노드가 트랜잭션 순서에 동의하며 멀티 마스터를 지원하지만 복잡도가 높다.
 
-### GTID가 왜 필요한가
+</details>
+
+<details>
+<summary>Q. GTID가 왜 필요한가</summary>
 
 전통적인 binlog 파일+오프셋 기반 복제에서는 페일오버 시 새 Primary의 파일명/오프셋을 수동 계산해야 했다. GTID는 트랜잭션마다 전역 유일 ID를 부여해, Replica가 어느 Primary를 바라보든 이미 실행한 트랜잭션을 자동으로 건너뛰고 누락된 트랜잭션만 적용한다.
 
-### Split-Brain을 어떻게 방지하는가
+</details>
+
+<details>
+<summary>Q. Split-Brain을 어떻게 방지하는가</summary>
 
 Quorum 기반 시스템(Group Replication, Galera)에서는 과반수 멤버가 없는 파티션은 쓰기를 거부한다. 3노드 클러스터에서 1노드가 분리되면 분리된 노드는 OFFLINE 상태로 전환된다. STONITH, VIP 이전, Fencing 같은 추가 메커니즘으로 구 Primary가 쓰기를 받는 상황을 물리적으로 차단한다.
 
-### 복제 지연이 크게 발생했을 때 어떻게 처리하는가
+</details>
+
+<details>
+<summary>Q. 복제 지연이 크게 발생했을 때 어떻게 처리하는가</summary>
 
 즉각적으로는 대량 배치 작업을 Primary에서 일시 중단하거나 속도를 제한한다. 구조적으로는 병렬 복제(`slave_parallel_workers`, `LOGICAL_CLOCK`)를 활성화하고, Primary의 그룹 커밋 설정을 조정해 병렬 적용 가능한 트랜잭션 수를 늘린다. 근본 원인이 단일 대형 트랜잭션이라면 배치를 소규모로 분할해 재설계한다.
 
-### ProxySQL과 MySQL Router의 차이는 무엇인가
+</details>
+
+<details>
+<summary>Q. ProxySQL과 MySQL Router의 차이는 무엇인가</summary>
 
 ProxySQL은 독립 프록시로 쿼리 캐싱, 쿼리 재작성, 연결 풀링, 세밀한 라우팅 규칙을 지원하며 InnoDB Cluster 외부 환경에서도 사용된다. MySQL Router는 InnoDB Cluster의 공식 컴포넌트로 클러스터 메타데이터를 기반으로 Primary/Secondary를 자동 감지해 라우팅한다. 복잡한 라우팅 정책이 필요하면 ProxySQL, InnoDB Cluster를 표준 스택으로 사용한다면 MySQL Router가 자연스럽다.
+
+</details>

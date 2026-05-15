@@ -174,7 +174,9 @@ ALTER TABLE users DROP COLUMN user_name;
 
 ## pt-online-schema-change: 대용량 테이블 DDL
 
-Percona Toolkit의 `pt-online-schema-change`(pt-osc)는 테이블 잠금 없이 대용량 테이블의 DDL을 수행한다. 동작 원리는 다음과 같다.
+일반 `ALTER TABLE`이 위험한 이유는 **테이블 전체를 잠그기** 때문이다. 1억 건 테이블에 컬럼 하나를 추가하면 MySQL은 내부적으로 새 테이블을 만들어 데이터를 복사한다. 이 복사가 끝날 때까지 해당 테이블의 모든 쓰기가 대기한다. 복사 속도가 초당 100만 건이라도 1억 건이면 100초, 즉 약 1분 40초의 다운타임이 발생한다.
+
+Percona Toolkit의 `pt-online-schema-change`(pt-osc)는 이 문제를 **달리는 기차 위에서 선로를 교체하는 방식**으로 해결한다. 기차를 멈추지 않고도 선로(스키마)를 바꾼다. 동작 원리는 다음과 같다.
 
 ```mermaid
 graph LR
@@ -610,22 +612,37 @@ spec:
 
 ## 면접 포인트
 
-### Flyway와 Liquibase의 차이는 무엇인가
+<details>
+<summary>Q. Flyway와 Liquibase의 차이는 무엇인가</summary>
 
 Flyway는 SQL/Java 파일을 버전 번호 순서로 실행하며 단순하고 빠르게 도입할 수 있다. Liquibase는 XML/YAML/JSON 형식의 changeset을 id+author로 관리하며, DB 종류에 따라 다른 SQL을 생성하는 추상화 레이어를 제공한다. 멀티 DB 지원이 필요하거나 롤백 블록을 선언적으로 관리하고 싶다면 Liquibase, 단순성이 중요하다면 Flyway를 선택한다.
 
-### Expand-Contract 패턴이 왜 필요한가
+</details>
+
+<details>
+<summary>Q. Expand-Contract 패턴이 왜 필요한가</summary>
 
 컬럼 이름 변경이나 타입 변경을 한 번에 하면 배포 순간 구 버전 코드와 신 버전 코드가 동시에 동작하는 Rolling Update 기간에 에러가 발생한다. Expand-Contract는 이 전환 기간에 두 버전이 모두 동작하도록 단계를 나눠 각 단계에서 롤백이 안전하도록 보장한다.
 
-### pt-osc와 gh-ost의 동작 방식 차이는 무엇인가
+</details>
+
+<details>
+<summary>Q. pt-osc와 gh-ost의 동작 방식 차이는 무엇인가</summary>
 
 pt-osc는 트리거를 원본 테이블에 설치해 새 테이블과 동기화한다. 이미 트리거가 있는 테이블에서 제약이 있다. gh-ost는 MySQL binlog를 직접 읽어 변경 이벤트를 새 테이블에 적용한다. 트리거가 없으므로 운영 테이블에 추가 부하를 주지 않고, 실행 중 소켓을 통해 속도 조절이 가능하다.
 
-### 이중 쓰기 패턴에서 두 DB 간 데이터 불일치를 어떻게 다루는가
+</details>
+
+<details>
+<summary>Q. 이중 쓰기 패턴에서 두 DB 간 데이터 불일치를 어떻게 다루는가</summary>
 
 쓰기 실패 시 Primary(기존 DB)의 결과를 기준으로 응답하고, Secondary(신규 DB) 실패는 로그만 남겨 운영을 계속한다. 불일치가 누적되면 체크섬 비교 스크립트나 pt-table-checksum으로 범위를 파악하고 Primary 기준으로 덮어쓴다. CDC 방식에서는 동일 레코드의 이벤트가 순서 보장되도록 파티셔닝 키를 레코드 ID로 설정하는 것이 핵심이다.
 
-### 마이그레이션 롤백 전략에서 가장 주의할 점은 무엇인가
+</details>
+
+<details>
+<summary>Q. 마이그레이션 롤백 전략에서 가장 주의할 점은 무엇인가</summary>
 
 컬럼 삭제나 테이블 삭제는 롤백이 불가능하다. Expand-Contract 패턴에서 축소(Contract) 단계를 여러 배포 사이클 후에 실행하면, 문제 발생 시 신 코드 배포 중단만으로 구 컬럼을 그대로 쓸 수 있다. NOT NULL 제약은 데이터 백필이 100% 완료됐는지 확인 후 추가해야 한다. 백필이 완료되지 않은 상태에서 NOT NULL을 추가하면 NULL 행이 있어 제약 추가 자체가 실패한다.
+
+</details>

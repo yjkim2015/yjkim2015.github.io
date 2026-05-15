@@ -601,25 +601,25 @@ kubectl config set-context --current --namespace=staging
 
 ## 면접 포인트
 
-### Q1. Pod와 Container의 차이는?
+### Q. Pod와 Container의 차이는?
 Pod는 하나 이상의 컨테이너를 감싸는 K8s의 최소 배포 단위다. 같은 Pod 내 컨테이너는 네트워크 네임스페이스(IP, 포트)와 볼륨을 공유한다. 사이드카 패턴(로그 수집, 프록시)이 이 구조를 활용한다. 실제 운영에서는 대부분 컨테이너 1개 = Pod 1개지만, Envoy 사이드카(Istio), Fluentd 로그 수집기는 메인 앱과 같은 Pod에 배치된다.
 
-### Q2. Deployment, StatefulSet, DaemonSet의 차이는?
+### Q. Deployment, StatefulSet, DaemonSet의 차이는?
 - **Deployment**: 무상태 앱. Pod 이름이 랜덤(app-abc123). 어느 노드에 배치되든 상관없음. 롤링 업데이트 기본 지원.
 - **StatefulSet**: 상태 있는 앱(DB, Kafka). Pod 이름 고정(mysql-0, mysql-1). 순서대로 시작/종료. 각 Pod에 고정된 PersistentVolume 연결.
 - **DaemonSet**: 모든 노드에 1개씩 배포. 로그 수집기(Fluentd), 모니터링 에이전트(Prometheus Node Exporter)에 사용.
 
-### Q3. Service의 ClusterIP, NodePort, LoadBalancer 차이는?
+### Q. Service의 ClusterIP, NodePort, LoadBalancer 차이는?
 - **ClusterIP**: 클러스터 내부에서만 접근 가능한 가상 IP. 기본값. 마이크로서비스 간 통신에 사용.
 - **NodePort**: 모든 노드의 특정 포트(30000~32767)로 외부 접근. 테스트/개발용.
 - **LoadBalancer**: 클라우드 프로바이더의 외부 로드밸런서를 자동 프로비저닝. 프로덕션 외부 노출.
 
 실무에서는 외부 트래픽을 Ingress → ClusterIP Service → Pod 순으로 라우팅하고, LoadBalancer는 Ingress Controller 하나에만 사용한다.
 
-### Q4. HPA가 스케일 아웃을 안 하는 이유는?
+### Q. HPA가 스케일 아웃을 안 하는 이유는?
 세 가지를 확인한다. 첫째, Metrics Server 미설치 (`kubectl top pods` 실패). 둘째, Pod의 `resources.requests.cpu`가 미설정 (HPA는 requests 대비 사용률로 계산). 셋째, `minReplicas`와 `maxReplicas`가 같거나 현재 Pod 수가 이미 최대. `kubectl describe hpa` 명령으로 `Conditions`와 `Events` 항목을 확인하면 원인이 나온다.
 
-### Q5. K8s에서 무중단 배포를 보장하려면?
+### Q. K8s에서 무중단 배포를 보장하려면?
 다섯 가지를 조합해야 한다: (1) `readinessProbe` — 준비된 Pod에만 트래픽 전달, (2) `PodDisruptionBudget` — 동시에 내려가는 Pod 수 제한, (3) `rollingUpdate.maxUnavailable: 0` — 항상 기존 Pod 유지 후 신규 시작, (4) `preStop` 훅 — 로드밸런서 제거 대기, (5) `terminationGracePeriodSeconds` — 진행 중 요청 완료 대기. 이 다섯 가지 중 하나라도 빠지면 다운타임이 발생할 수 있다.
 
 ---

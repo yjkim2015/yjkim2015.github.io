@@ -227,9 +227,11 @@ SELECT * FROM orders WHERE remark = 'urgent' AND status != 'pending';
 
 ## JOIN 최적화
 
+JOIN은 두 테이블을 연결하는 작업이다. **어떤 테이블을 먼저 읽느냐(드라이빙 테이블)**와 **연결할 때 인덱스를 쓰느냐**가 성능을 수십 배 차이 나게 만든다. 친구 목록 10명을 가진 사람 A와 친구 목록 10만 명을 가진 SNS 서비스를 연결한다면, A의 목록(10개)을 먼저 펼쳐서 서비스 DB에서 찾는 것이 서비스 DB(10만 개)를 먼저 펼쳐서 A를 찾는 것보다 훨씬 빠르다.
+
 ### Nested Loop Join (NLJ)
 
-MySQL의 기본 JOIN 알고리즘이다. 외부 테이블(드라이빙 테이블)에서 한 행씩 읽으며 내부 테이블(드리븐 테이블)에서 일치하는 행을 찾는다. 드리븐 테이블에 조인 조건 인덱스가 있어야 효율적이다.
+MySQL의 기본 JOIN 알고리즘이다. 외부 테이블(드라이빙 테이블)에서 한 행씩 읽으며 내부 테이블(드리븐 테이블)에서 일치하는 행을 찾는다. **드리븐 테이블에 조인 조건 인덱스가 있어야 효율적이다.** 인덱스가 없으면 드라이빙 테이블의 행 수만큼 드리븐 테이블 전체를 스캔하므로, 1000행 × 100만행 = 10억 번의 비교가 발생한다.
 
 ```mermaid
 graph LR
@@ -522,22 +524,37 @@ WHERE o.status = 'pending';
 
 ## 면접 포인트
 
-### EXPLAIN의 type 컬럼에서 주의해야 할 값은 무엇인가
+<details>
+<summary>Q. EXPLAIN의 type 컬럼에서 주의해야 할 값은 무엇인가</summary>
 
 `ALL`은 풀 테이블 스캔으로 대용량 테이블에서 심각한 성능 저하를 유발한다. `index`는 인덱스를 전체 스캔하므로 테이블 스캔보다는 낫지만 여전히 느리다. `range` 이상을 목표로 한다. `const`와 `eq_ref`가 이상적이다.
 
-### 커버링 인덱스란 무엇이며 어떻게 확인하는가
+</details>
+
+<details>
+<summary>Q. 커버링 인덱스란 무엇이며 어떻게 확인하는가</summary>
 
 쿼리에 필요한 모든 컬럼이 인덱스 내에 포함되어 테이블 데이터 파일에 접근하지 않는 인덱스다. `EXPLAIN`의 `Extra` 컬럼에 `Using index`가 표시된다. InnoDB는 세컨더리 인덱스에 Primary Key를 자동 포함하므로 SELECT 절에 PK를 추가해도 커버링 인덱스를 유지할 수 있다.
 
-### N+1 문제가 무엇이며 어떻게 해결하는가
+</details>
+
+<details>
+<summary>Q. N+1 문제가 무엇이며 어떻게 해결하는가</summary>
 
 연관 엔티티를 Lazy Loading으로 가져올 때, 컬렉션 요소 N개에 대해 N번의 추가 쿼리가 발생하는 문제다. JPQL의 `JOIN FETCH` 또는 `@EntityGraph`로 한 번의 쿼리에 연관 데이터를 함께 가져오도록 해결한다. `hibernate.generate_statistics`를 활성화해 실행 쿼리 수를 모니터링하면 N+1 여부를 빠르게 감지할 수 있다.
 
-### 인덱스가 있는데도 옵티마이저가 풀 스캔을 선택하는 이유는 무엇인가
+</details>
+
+<details>
+<summary>Q. 인덱스가 있는데도 옵티마이저가 풀 스캔을 선택하는 이유는 무엇인가</summary>
 
 선택도(Selectivity)가 낮을 때 발생한다. 조건에 일치하는 행이 전체의 20~30% 이상이면 옵티마이저는 랜덤 I/O가 많은 인덱스 스캔보다 순차적인 풀 스캔을 선택한다. 통계 오차, 함수 적용, 타입 불일치, LIKE 패턴 선행 와일드카드도 인덱스를 무력화하는 원인이다.
 
-### GROUP BY와 ORDER BY에서 filesort를 제거하는 방법은 무엇인가
+</details>
+
+<details>
+<summary>Q. GROUP BY와 ORDER BY에서 filesort를 제거하는 방법은 무엇인가</summary>
 
 GROUP BY와 ORDER BY 컬럼을 인덱스에 포함시켜 인덱스 순서대로 처리되도록 하면 filesort가 발생하지 않는다. GROUP BY만 있다면 커버링 인덱스를 구성해 `Using index for group-by`로 만드는 것이 가장 효과적이다. `sort_buffer_size` 증가는 메모리 내 정렬을 도와주지만 근본 해결책은 아니다.
+
+</details>

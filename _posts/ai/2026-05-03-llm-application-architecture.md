@@ -345,6 +345,20 @@ public class OutputGuardrail {
 
 ## 에이전트 아키텍처
 
+> **비유**: 에이전트는 LLM에게 손(도구)을 달아준 것이다. 머리(추론)만 있던 LLM이 직접 검색하고, 계산하고, API를 호출하는 행동을 할 수 있게 된다.
+
+```mermaid
+graph LR
+    U["사용자 요청"] --> P["계획 수립 LLM"]
+    P --> T1["웹 검색 도구"]
+    P --> T2["코드 실행 도구"]
+    P --> T3["DB 조회 도구"]
+    T1 --> R["결과 통합"]
+    T2 --> R
+    T3 --> R
+    R --> P
+```
+
 LLM이 단순 답변 생성을 넘어 도구를 사용하고 스스로 계획을 세워 실행하는 방식이다.
 
 ### Tool Use / Function Calling
@@ -409,6 +423,19 @@ Multi-Agent 사용 기준:
 ```
 
 ---
+
+## 비용·지연 최적화 흐름
+
+```mermaid
+graph LR
+    REQ["요청 수신"] --> CACHE["캐시 조회"]
+    CACHE -->|"히트"| RESP["즉시 응답"]
+    CACHE -->|"미스"| ROUTE["모델 라우터"]
+    ROUTE -->|"단순 질문"| SMALL["소형 모델"]
+    ROUTE -->|"복잡 질문"| LARGE["대형 모델"]
+    SMALL --> STORE["캐시 저장"]
+    LARGE --> STORE
+```
 
 ## 관찰성 (Observability)
 
@@ -710,7 +737,7 @@ public String callWithRetry(String prompt) {
 
 ## 면접 포인트 5개
 
-#### Q1. LLM 애플리케이션에서 스트리밍 응답을 구현하는 이유는?
+### Q. LLM 애플리케이션에서 스트리밍 응답을 구현하는 이유는?
 
 ```
 LLM 응답 생성 시간: 평균 5~15초
@@ -726,7 +753,7 @@ Content-Type: text/event-stream
 프론트엔드: EventSource 또는 fetch + ReadableStream
 ```
 
-#### Q2. 프롬프트 인젝션 공격을 어떻게 방어하나요?
+### Q. 프롬프트 인젝션 공격을 어떻게 방어하나요?
 
 ```
 프롬프트 인젝션: 사용자 입력이 시스템 프롬프트를 우회하는 공격
@@ -742,7 +769,7 @@ Content-Type: text/event-stream
 완전한 방어는 불가능 → 다층 방어가 핵심
 ```
 
-#### Q3. LLM 서비스의 비용을 어떻게 최적화하나요?
+### Q. LLM 서비스의 비용을 어떻게 최적화하나요?
 
 ```
 4가지 핵심 전략:
@@ -756,7 +783,7 @@ Content-Type: text/event-stream
   월 예산 한도 + 알림 필수
 ```
 
-#### Q4. LLM 할루시네이션을 프로덕션에서 어떻게 관리하나요?
+### Q. LLM 할루시네이션을 프로덕션에서 어떻게 관리하나요?
 
 ```
 할루시네이션: LLM이 사실이 아닌 내용을 확신 있게 답변
@@ -770,7 +797,7 @@ Content-Type: text/event-stream
 6. 사용자 피드백: Thumbs up/down → 품질 데이터 수집
 ```
 
-#### Q5. Function Calling(Tool Use)의 원리와 활용 사례는?
+### Q. Function Calling(Tool Use)의 원리와 활용 사례는?
 
 ```
 원리:

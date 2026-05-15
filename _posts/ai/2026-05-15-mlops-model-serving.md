@@ -524,7 +524,9 @@ def predict(request: PredictRequest):
 
 ## Feature Store
 
-학습과 서빙 모두에서 동일한 피처 계산 로직을 사용하는 것이 Feature Store의 핵심이다. 학습 때는 배치로 피처를 계산하고, 서빙 때는 실시간으로 가져온다.
+Feature Store가 필요한 이유는 **학습-서빙 스큐(Training-Serving Skew)** 때문이다. 학습 코드에서 "나이를 정규화할 때 평균 35세로 나눈다"고 구현했는데, 서빙 코드에서는 "평균 30세로 나눈다"고 실수하면 모델이 완전히 엉뚱한 입력을 받게 된다. 노트북 실험에서는 완벽했던 모델이 프로덕션에서 성능이 반 토막 나는 대표적인 원인이다.
+
+Feature Store는 피처 계산 로직을 **단 한 곳**에 두고 학습과 서빙이 같은 코드를 공유한다. 마치 요리 레시피를 한 권의 책에만 두고 모든 셰프가 그 책을 참고하는 것과 같다. 학습 때는 배치로 피처를 계산하고, 서빙 때는 실시간으로 가져온다.
 
 ```mermaid
 graph LR
@@ -720,22 +722,37 @@ model_pool = ModelPool(
 
 ## 면접 포인트
 
-### 학습-서빙 스큐(Training-Serving Skew)란 무엇이며 어떻게 방지하는가?
+<details>
+<summary>Q. 학습-서빙 스큐(Training-Serving Skew)란 무엇이며 어떻게 방지하는가?</summary>
 
 학습 시 데이터 전처리 로직과 서빙 시 전처리 로직이 미묘하게 달라 모델 성능이 저하되는 현상이다. 예를 들어 학습 때 결측값을 평균으로 채웠는데, 서빙 코드에서는 0으로 채우는 경우다. 방지 방법은 세 가지다. 첫째, Feature Store를 사용해 피처 계산 로직을 한 곳에서 관리한다. 둘째, 학습 파이프라인에 Sklearn Pipeline이나 TFX Transform을 사용하면 동일한 변환 로직이 서빙에도 자동 적용된다. 셋째, 서빙 직전 입력 분포와 학습 데이터 분포를 비교하는 입력 검증 레이어를 추가한다.
 
-### ONNX가 PyTorch 직접 서빙 대비 빠른 이유는?
+</details>
+
+<details>
+<summary>Q. ONNX가 PyTorch 직접 서빙 대비 빠른 이유는?</summary>
 
 PyTorch는 학습 편의를 위해 동적 그래프(eager mode)를 사용한다. 연산 시 최적화 기회를 놓친다. ONNX 변환 시 정적 그래프로 표현되어, ONNX Runtime이 연산 그래프를 분석하고 Operator Fusion(여러 연산을 하나로 합침), Dead Code Elimination, 하드웨어 특화 커널 선택 등의 최적화를 적용한다. 또한 ONNX Runtime의 Execution Provider는 Intel MKL-DNN, NVIDIA TensorRT, ARM Compute Library 등 하드웨어 특화 라이브러리를 자동으로 활용한다.
 
-### 카나리 배포와 블루/그린 배포의 차이는?
+</details>
+
+<details>
+<summary>Q. 카나리 배포와 블루/그린 배포의 차이는?</summary>
 
 블루/그린은 두 개의 동일한 환경을 유지하다가 **한 번에 100% 트래픽을 전환**한다. 롤백이 빠르지만 잘못된 모델이 전체 트래픽에 영향을 줄 위험이 있다. 카나리는 **점진적으로 트래픽 비율을 높인다** (5% → 20% → 50% → 100%). 이상 감지 시 즉시 0%로 줄일 수 있어 위험이 낮다. ML 서빙에서는 카나리가 더 적합하다. 모델 품질은 단순한 가동 여부가 아닌 예측 성능 지표로 측정되므로, 충분한 트래픽 샘플이 쌓인 후에야 안전을 확인할 수 있기 때문이다.
 
-### 모델 드리프트를 실시간으로 감지하는 방법은?
+</details>
+
+<details>
+<summary>Q. 모델 드리프트를 실시간으로 감지하는 방법은?</summary>
 
 레이블이 즉시 가용하면 예측 정확도를 직접 모니터링한다. 레이블이 늦게 오거나 없는 경우가 더 흔하다. 이 경우 두 가지 간접 방법을 쓴다. 첫째, 입력 피처 분포를 모니터링한다(PSI, KL-divergence, KS test로 학습 분포와 비교). 둘째, 예측값 분포를 모니터링한다. 모델이 갑자기 특정 클래스를 과도하게 예측하거나, 예측 점수 분포가 치우치면 드리프트 신호다. Evidently AI, WhyLabs, Arize AI 같은 도구가 이 모니터링을 자동화한다.
 
-### Feature Store의 온라인 저장소와 오프라인 저장소 차이는?
+</details>
+
+<details>
+<summary>Q. Feature Store의 온라인 저장소와 오프라인 저장소 차이는?</summary>
 
 오프라인 저장소(Parquet/Hive/BigQuery)는 학습용 대규모 히스토리 데이터를 보관한다. 배치 쿼리에 최적화되어 있고, 포인트-인-타임(Point-in-time) 조인을 지원하여 데이터 누수(leakage) 없이 학습 데이터를 생성한다. 온라인 저장소(Redis/DynamoDB/Cassandra)는 서빙 시 수 밀리초 내 피처를 조회하기 위한 저레이턴시 캐시다. 최신 피처 값만 보관한다. 핵심은 두 저장소가 동일한 피처 계산 로직으로 채워진다는 점이다. 이를 통해 학습-서빙 스큐를 구조적으로 제거한다.
+
+</details>
