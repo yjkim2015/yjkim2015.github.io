@@ -102,6 +102,18 @@ public class CompletableFuture<T> implements Future<T>, CompletionStage<T> {
 
 `thenApply`, `thenCompose` 등을 호출하면 새 `Completion` 노드가 stack 헤드에 CAS(Compare-And-Swap)로 push된다. 이것이 **Treiber Stack** 패턴이다.
 
+마치 포스트잇을 앞면에 한 장씩 붙이는 것처럼, 콜백이 등록될 때마다 Treiber Stack의 앞에 추가됩니다. 작업이 완료되면 포스트잇을 앞에서부터 한 장씩 떼어 실행합니다.
+
+```mermaid
+graph LR
+    CF["CompletableFuture"] --> R["result(volatile)"]
+    CF --> S["stack(Treiber)"]
+    S --> C3["Completion3"]
+    C3 --> C2["Completion2"]
+    C2 --> C1["Completion1"]
+    C1 --> NL["null"]
+```
+
 ```
 stack → [Completion3] → [Completion2] → [Completion1] → null
 ```
@@ -1771,7 +1783,7 @@ CompletableFuture<Object> any = CompletableFuture.anyOf(
 
 ## 15. 면접 포인트 5개
 
-### Q1. Future의 get()은 왜 블로킹인가? CompletableFuture는 어떻게 이를 해결하는가?
+### Q. Future의 get()은 왜 블로킹인가? CompletableFuture는 어떻게 이를 해결하는가?
 
 > **WHY**: `FutureTask.get()`은 내부적으로 `AbstractQueuedSynchronizer(AQS)`의 `acquire()` 메커니즘을 사용한다. 작업이 `NORMAL` 또는 `EXCEPTIONAL` 상태가 되기 전까지 호출 스레드를 `LockSupport.park()`으로 잠재운다. 작업 완료 시 `LockSupport.unpark(thread)`로 깨우지만, 그 동안 스레드 자체는 OS 스케줄러에서 제거된 상태다. 스레드 = 자원이므로 블로킹 스레드 수만큼 자원이 낭비된다.
 >
@@ -1781,7 +1793,7 @@ CompletableFuture<Object> any = CompletableFuture.anyOf(
 
 ---
 
-### Q2. thenApply와 thenApplyAsync의 실행 스레드는 구체적으로 어떻게 결정되는가?
+### Q. thenApply와 thenApplyAsync의 실행 스레드는 구체적으로 어떻게 결정되는가?
 
 > **thenApply**: 이전 단계 CF가 이미 완료된 상태면 `thenApply`를 호출한 스레드가 콜백을 즉시 실행한다(동기 완료 최적화). 아직 미완료 상태라면 이전 단계를 완료시킨 스레드가 콜백을 이어서 실행한다. 즉 **실행 스레드가 고정되지 않는다**.
 >
@@ -1793,7 +1805,7 @@ CompletableFuture<Object> any = CompletableFuture.anyOf(
 
 ---
 
-### Q3. exceptionally, handle, whenComplete의 내부 흐름과 사용 기준은?
+### Q. exceptionally, handle, whenComplete의 내부 흐름과 사용 기준은?
 
 > **exceptionally**: 상위 CF가 예외 상태로 완료됐을 때만 fn 실행. 정상 완료 시 원래 값 그대로 전파. fn의 반환값으로 새 CF를 **정상 완료**시킴. 예외를 값으로 복구할 때 사용.
 >
@@ -1805,7 +1817,7 @@ CompletableFuture<Object> any = CompletableFuture.anyOf(
 
 ---
 
-### Q4. allOf에서 하나가 실패하면 어떻게 되는가? 즉시 전체 실패를 구현하려면?
+### Q. allOf에서 하나가 실패하면 어떻게 되는가? 즉시 전체 실패를 구현하려면?
 
 > **기본 동작**: `CompletableFuture.allOf(f1, f2, f3)`는 모든 CF가 완료(성공 또는 실패)될 때까지 기다린다. **하나가 실패해도 나머지를 취소하지 않는다.** 모두 완료된 후 `allOf` CF가 예외로 완료된다. 단, `allOf`는 개별 CF의 예외를 직접 노출하지 않으므로 각각 `join()`으로 확인해야 한다.
 >
@@ -1815,7 +1827,7 @@ CompletableFuture<Object> any = CompletableFuture.anyOf(
 
 ---
 
-### Q5. Java 21 Virtual Thread 환경에서 CompletableFuture는 여전히 필요한가?
+### Q. Java 21 Virtual Thread 환경에서 CompletableFuture는 여전히 필요한가?
 
 > **VT가 대체하는 것**: I/O 블로킹 시 OS 스레드가 아닌 VT 자신만 파킹되므로 스레드 수 제한이 없어진다. 동기 코드처럼 작성해도 높은 동시성을 달성할 수 있다. 단순 순차 I/O 파이프라인(`fetchDb → callApi → transform`)은 VT를 쓴 동기 코드가 CF 체인보다 읽기 쉽다.
 >

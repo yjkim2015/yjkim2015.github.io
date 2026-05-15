@@ -553,23 +553,31 @@ ordinal로 2차원 배열을 만들어 상태 전이 테이블을 구성하면, 
 
 ## 면접 포인트
 
-1. **Q: raw type과 `List<Object>`의 차이는?**
-   - A: `List<Object>`는 "모든 타입을 담겠다"는 **의도적 선언**이며 타입 안전합니다. `List`(raw type)는 타입 검사를 **완전히 포기**한 것으로, 제네릭 이전 코드와의 호환성을 위해서만 존재합니다.
+### Q. raw type과 `List<Object>`의 차이는?
 
-2. **Q: PECS가 무엇인가?**
-   - A: **Producer-Extends, Consumer-Super.** 데이터를 꺼내기만 하는 매개변수는 `<? extends T>`, 데이터를 넣기만 하는 매개변수는 `<? super T>`를 사용합니다. `Collections.copy(List<? super T> dest, List<? extends T> src)`가 대표적입니다.
+`List<Object>`는 "모든 타입을 담겠다"는 **의도적 선언**이며 타입 안전합니다. `List`(raw type)는 타입 검사를 **완전히 포기**한 것으로, 제네릭 이전 코드와의 호환성을 위해서만 존재합니다.
 
-3. **Q: 제네릭 타입 소거(erasure)란?**
-   - A: 컴파일러가 제네릭 타입 정보를 컴파일 타임에 검사하고, **바이트코드에서는 제거**하는 것입니다. 런타임에 `List<String>`과 `List<Integer>`는 동일한 `List`입니다. 이 때문에 `new T[]`, `instanceof T` 등이 불가능합니다.
+마치 "아무 물건이나 넣을 수 있는 투명한 상자(List<Object>)"와 "라벨도 없고 안도 안 보이는 상자(raw type)"의 차이입니다. 전자는 꺼낼 때 뭐가 들었는지 알지만, 후자는 꺼내봐야 압니다.
 
-4. **Q: EnumSet이 비트 필드보다 나은 이유는?**
-   - A: **타입 안전**, **가독성**, **자동 확장**(64개 초과 시 `JumboEnumSet`), **`Set` 인터페이스 구현**(컬렉션 API 활용 가능). 성능은 비트 필드에 필적합니다.
+### Q. PECS가 무엇인가?
 
-5. **Q: 타입 안전 이종 컨테이너의 제한사항은?**
-   - A: ① 악의적 클라이언트가 `Class` 객체를 raw type으로 넘기면 타입 안전이 깨집니다. ② 실체화 불가 타입(`List<String>.class`)은 키로 사용할 수 없습니다 — `List<String>`과 `List<Integer>`가 같은 `List.class`를 공유하기 때문입니다.
+**Producer-Extends, Consumer-Super.** 데이터를 꺼내기만 하는 매개변수는 `<? extends T>`, 데이터를 넣기만 하는 매개변수는 `<? super T>`를 사용합니다. `Collections.copy(List<? super T> dest, List<? extends T> src)`가 대표적입니다.
 
-6. **Q: enum이 int 상수보다 나은 점은?**
-   - A: **타입 안전**, **네임스페이스 분리**, **메서드/필드 추가 가능**, **상수별 동작(abstract method)**, **싱글턴 보장**, **직렬화 안전**, **toString/values() 기본 제공**.
+### Q. 제네릭 타입 소거(erasure)란?
+
+컴파일러가 제네릭 타입 정보를 컴파일 타임에 검사하고, **바이트코드에서는 제거**하는 것입니다. 런타임에 `List<String>`과 `List<Integer>`는 동일한 `List`입니다. 이 때문에 `new T[]`, `instanceof T` 등이 불가능합니다.
+
+### Q. EnumSet이 비트 필드보다 나은 이유는?
+
+**타입 안전**, **가독성**, **자동 확장**(64개 초과 시 `JumboEnumSet`), **`Set` 인터페이스 구현**(컬렉션 API 활용 가능). 성능은 비트 필드에 필적합니다.
+
+### Q. 타입 안전 이종 컨테이너의 제한사항은?
+
+① 악의적 클라이언트가 `Class` 객체를 raw type으로 넘기면 타입 안전이 깨집니다. ② 실체화 불가 타입(`List<String>.class`)은 키로 사용할 수 없습니다 — `List<String>`과 `List<Integer>`가 같은 `List.class`를 공유하기 때문입니다.
+
+### Q. enum이 int 상수보다 나은 점은?
+
+**타입 안전**, **네임스페이스 분리**, **메서드/필드 추가 가능**, **상수별 동작(abstract method)**, **싱글턴 보장**, **직렬화 안전**, **toString/values() 기본 제공**.
 
 ---
 

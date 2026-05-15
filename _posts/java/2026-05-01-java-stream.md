@@ -126,6 +126,8 @@ List<Integer> sorted = IntStream.range(0, 1_000_000)
 
 ### Spliterator란 무엇인가
 
+마치 대형 마트 계산대처럼, Spliterator는 긴 줄을 반으로 나눠 새 계산대를 열 수 있습니다. 일반 Iterator는 한 줄에서 한 명씩 처리하지만, Spliterator는 줄을 쪼개서 여러 계산대가 동시에 처리하도록 합니다. 이것이 병렬 스트림의 핵심입니다.
+
 `Iterator`는 순방향으로 한 원소씩 꺼내는 단순 인터페이스입니다. `Spliterator`(Splittable Iterator)는 **분할 기능**이 추가된 고급 반복자입니다. 병렬 스트림의 모든 분할 작업은 Spliterator가 담당합니다.
 
 ```java
@@ -1276,7 +1278,7 @@ double avgAge = employees.stream()
 
 ## 12. 면접 포인트 5개: 극한 WHY 답변
 
-### Q1. Stream의 지연 평가가 왜 필요한가? 즉시 평가 방식의 문제점은?
+### Q. Stream의 지연 평가가 왜 필요한가? 즉시 평가 방식의 문제점은?
 
 즉시 평가 방식이라면 `filter(p1).map(f).filter(p2)`가 실행될 때 먼저 모든 원소에 `p1`을 적용한 중간 컬렉션을 만들고, 그 컬렉션 전체에 `f`를 적용한 중간 컬렉션을 만들고, 다시 `p2`를 적용합니다. 3단계 파이프라인에서 원본 크기에 비례하는 중간 컬렉션이 2개 생성됩니다.
 
@@ -1297,7 +1299,7 @@ try (Stream<String> lines = Files.lines(Path.of("100gb.log"))) {
 }
 ```
 
-### Q2. Spliterator의 trySplit()이 병렬 성능에 미치는 영향은?
+### Q. Spliterator의 trySplit()이 병렬 성능에 미치는 영향은?
 
 병렬 스트림 성능은 `trySplit()`의 품질에 의존합니다. 이상적인 `trySplit()`은 O(1)에 균등 분할을 제공해야 합니다.
 
@@ -1316,7 +1318,7 @@ try (Stream<String> lines = Files.lines(Path.of("100gb.log"))) {
 // 실질적 병렬화: ~10% 수준
 ```
 
-### Q3. Collector의 combiner가 순차 스트림에서 호출되지 않는 이유는?
+### Q. Collector의 combiner가 순차 스트림에서 호출되지 않는 이유는?
 
 순차 스트림은 단일 스레드에서 모든 원소를 하나의 컨테이너에 순서대로 누적합니다. `supplier`로 컨테이너를 만들고 `accumulator`로 모든 원소를 추가한 뒤 `finisher`로 변환합니다. 컨테이너가 하나뿐이므로 병합할 대상이 없습니다.
 
@@ -1342,7 +1344,7 @@ Collector<String, StringBuilder, String> correct = Collector.of(
 );
 ```
 
-### Q4. 병렬 스트림에서 ForkJoinPool.commonPool()이 문제가 되는 시나리오는?
+### Q. 병렬 스트림에서 ForkJoinPool.commonPool()이 문제가 되는 시나리오는?
 
 `commonPool()`은 JVM 전역으로 공유됩니다. Spring Boot 애플리케이션에서 `CompletableFuture.supplyAsync()`의 기본 풀도 `commonPool()`이고, 병렬 스트림도 `commonPool()`을 사용합니다.
 
@@ -1369,7 +1371,7 @@ public List<Result> processBatch(List<Item> items) {
 }
 ```
 
-### Q5. reduce에서 identity 값의 올바른 정의와 병렬 스트림에서의 함정은?
+### Q. reduce에서 identity 값의 올바른 정의와 병렬 스트림에서의 함정은?
 
 `reduce(identity, accumulator)`에서 identity는 `accumulator(identity, t) == t`를 **모든 t에 대해** 만족해야 합니다. 이것이 수학적 항등원입니다.
 

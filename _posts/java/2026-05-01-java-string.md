@@ -717,19 +717,19 @@ log.debug("User {} processed {} items", userId, count); // DEBUG 꺼져있으면
 
 ## 면접 포인트
 
-### Q1. String이 불변인 이유 3가지를 설명하세요.
+### Q. String이 불변인 이유 3가지를 설명하세요.
 String Pool 공유 안전성(불변이어야 같은 객체를 여러 변수가 공유할 수 있음), 해시코드 캐싱(HashMap 키로 반복 사용 시 재계산 불필요), 보안(파일 경로, DB URL 등 보안 민감 정보가 중간에 변경되지 않음). 그리고 스레드 안전성(불변 객체는 동기화 없이 공유 가능)을 추가로 언급하면 좋습니다.
 
-### Q2. new String("hello")와 "hello"의 차이는 무엇인가요?
+### Q. new String("hello")와 "hello"의 차이는 무엇인가요?
 리터럴 `"hello"`는 컴파일 시 상수풀에 등록되고, JVM 로딩 시 String Pool에 배치됩니다. `new String("hello")`는 항상 Heap에 새 객체를 생성합니다. `==` 비교 결과가 다르며, 내용 비교에는 항상 `equals()`를 사용해야 합니다. `intern()`을 호출하면 Pool 객체를 반환합니다.
 
-### Q3. 반복문에서 StringBuilder를 써야 하는 이유는?
+### Q. 반복문에서 StringBuilder를 써야 하는 이유는?
 `String + 연산`은 컴파일러가 `new StringBuilder().append(...).toString()`으로 변환하지만, 반복문 안에서는 **매 반복마다** 새 StringBuilder를 생성합니다. n번 반복하면 누적 복사량이 O(n²)입니다. 외부에 StringBuilder를 선언하고 반복문 안에서 `append()`만 호출하면 O(n)입니다.
 
-### Q4. String Pool의 위치가 Java 7에서 왜 변경됐나요?
+### Q. String Pool의 위치가 Java 7에서 왜 변경됐나요?
 Java 6 이하에서는 PermGen(Method Area)에 있었습니다. PermGen은 고정 크기이고 GC 대상이 아니었기 때문에, `intern()`을 남용하면 `OutOfMemoryError: PermGen space`가 발생했습니다. Java 7부터 Heap으로 이동해 GC 대상이 됐으며, Java 8부터 PermGen이 Metaspace로 교체됐습니다.
 
-### Q5. 텍스트 블록(Text Block)이 기존 방식보다 나은 점은?
+### Q. 텍스트 블록(Text Block)이 기존 방식보다 나은 점은?
 멀티라인 문자열에서 `\n`, `\"`, `+` 연산자를 직접 쓸 필요가 없어 가독성이 대폭 향상됩니다. 닫는 `"""`의 위치로 공통 들여쓰기를 자동 제거합니다. `stripIndent()`와 `translateEscapes()`가 자동 적용됩니다. SQL, JSON, HTML 같은 멀티라인 리터럴 작성에 필수입니다.
 
 ---
@@ -747,17 +747,17 @@ graph LR
     STRING --> GUIDE["선택: 단순→리터럴 / 반복→St"]
 ```
 
-### Q1. String Pool(intern)의 동작 원리와 실무 주의사항은?
+### Q. String Pool(intern)의 동작 원리와 실무 주의사항은?
 문자열 리터럴은 JVM 내 String Pool(Metaspace)에 저장됩니다. 같은 리터럴은 동일 인스턴스를 공유합니다. `new String("hello")`는 Pool 밖 Heap에 새 객체를 생성합니다. `intern()`을 호출하면 Pool에 추가하거나 이미 있는 Pool 인스턴스를 반환합니다. 대량의 동적 문자열에 `intern()`을 남발하면 Metaspace가 증가해 OOM이 발생할 수 있습니다. 실무에서 `intern()`은 반복적으로 등장하는 고정 문자열(국가코드, 통화코드 등)에만 사용합니다.
 
-### Q2. `+` 연산자로 문자열을 반복 연결하면 왜 O(n²)인가?
+### Q. `+` 연산자로 문자열을 반복 연결하면 왜 O(n²)인가?
 `String`은 불변이므로 `a + b`는 새 `String` 객체를 생성합니다. 루프에서 N번 연결하면 총 복사량이 1+2+3+...+N = N(N+1)/2 = O(n²). N=10만이면 약 50억 문자 복사. `StringBuilder`는 내부 char 배열에 append해 최종 `toString()` 시 한 번만 복사합니다. Java 컴파일러는 단순 `+` 연결을 `StringBuilder`로 자동 최적화하지만, 루프 내부에서 `+`를 사용하면 루프마다 새 `StringBuilder`를 생성하므로 최적화되지 않습니다.
 
-### Q3. String.format()과 문자열 템플릿 성능 차이는?
+### Q. String.format()과 문자열 템플릿 성능 차이는?
 `String.format("Hello %s", name)`은 형식 문자열을 파싱하고 리플렉션을 사용하므로 단순 연결 대비 5~10배 느립니다. 로깅 핫 경로에서 `log.info("User: " + userId)` 대신 `log.info("User: {}", userId)`를 사용해야 하는 이유입니다(SLF4J는 로그 레벨이 활성화됐을 때만 문자열을 구성). Java 21 String Templates(Preview)는 컴파일 타임에 처리되어 성능 오버헤드가 없습니다. 일반 출력에는 `StringBuilder`, 로깅에는 파라미터화된 메시지를 사용합니다.
 
-### Q4. equals()로 문자열 비교 시 `==` 대신 써야 하는 이유는?
+### Q. equals()로 문자열 비교 시 `==` 대신 써야 하는 이유는?
 `==`는 참조(주소) 비교입니다. `new String("a") == new String("a")`는 `false`입니다. 서로 다른 객체이기 때문입니다. `equals()`는 내용 비교입니다. `"a".equals("a")`는 항상 `true`. 리터럴끼리는 Pool을 공유하므로 `==`가 우연히 true가 되지만, 런타임에 생성된 문자열(DB 조회, API 응답)은 반드시 `equals()`를 사용해야 합니다. Null-safe 비교는 `Objects.equals(a, b)` 또는 리터럴을 앞에 두는 `"expected".equals(variable)` 패턴을 사용합니다.
 
-### Q5. Java 9+ Compact Strings의 개선점은?
+### Q. Java 9+ Compact Strings의 개선점은?
 Java 8 이전 String은 내부적으로 `char[]`(2바이트/문자)를 사용했습니다. 영문자는 1바이트로 충분한데 2배 메모리를 낭비합니다. Java 9부터 `byte[]` + 인코딩 플래그를 사용합니다. Latin-1(ASCII 범위)이면 1바이트, 한글/일본어 등은 UTF-16 2바이트로 저장합니다. 영문 위주 서비스에서 Heap 내 String 메모리 사용량이 약 40~50% 감소합니다. 한글 문자열은 변화 없음. JVM 업그레이드만으로 자동 적용되는 무료 최적화입니다.

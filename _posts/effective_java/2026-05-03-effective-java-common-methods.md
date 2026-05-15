@@ -370,23 +370,31 @@ treeSet.size(); // 1 (compareTo로 비교 → 값이 같으므로 같은 객체)
 
 ## 면접 포인트
 
-1. **Q: equals와 == 의 차이는?**
-   - A: `==`는 **참조 비교**(같은 메모리 주소인지), `equals`는 **논리적 동치성 비교**(같은 값인지)입니다. 기본형은 `==`으로, 참조형은 `equals`로 비교합니다.
+### Q. equals와 == 의 차이는?
 
-2. **Q: hashCode 계약을 위반하면 어떤 일이 일어나는가?**
-   - A: `HashMap`/`HashSet`에서 논리적으로 같은 객체를 찾지 못합니다. `put`과 `get`에서 다른 버킷을 탐색하기 때문입니다. 데이터 유실, 중복 저장, `contains()` 실패 등이 발생합니다.
+`==`는 **참조 비교**(같은 메모리 주소인지), `equals`는 **논리적 동치성 비교**(같은 값인지)입니다. 기본형은 `==`으로, 참조형은 `equals`로 비교합니다.
 
-3. **Q: 구체 클래스를 상속하면서 equals 규약을 지킬 수 있는가?**
-   - A: **불가능합니다.** 값 필드를 추가하면 대칭성 또는 추이성을 깨뜨리지 않고는 `equals`를 재정의할 수 없습니다. 해결책은 **상속 대신 컴포지션**을 사용하는 것입니다.
+마치 주민등록번호(equals)와 실제 같은 사람을 가리키는 포인터(==)의 차이입니다. 쌍둥이는 같은 주민번호가 아니지만, 같은 사람을 가리키면 ==도 true입니다.
 
-4. **Q: Comparable과 Comparator의 차이는?**
-   - A: `Comparable`은 클래스에 **자연적 순서**를 부여하는 인터페이스(`compareTo`), `Comparator`는 **외부에서 비교 전략**을 제공하는 인터페이스(`compare`)입니다. 정렬 기준이 하나면 `Comparable`, 여러 개면 `Comparator`를 추가합니다.
+### Q. hashCode 계약을 위반하면 어떤 일이 일어나는가?
 
-5. **Q: clone 대신 무엇을 사용해야 하는가?**
-   - A: **복사 생성자** `public Yum(Yum yum)` 또는 **복사 팩터리** `public static Yum newInstance(Yum yum)`을 사용합니다. `Cloneable`의 허술한 규약과 `checked exception` 문제를 피할 수 있습니다.
+`HashMap`/`HashSet`에서 논리적으로 같은 객체를 찾지 못합니다. `put`과 `get`에서 다른 버킷을 탐색하기 때문입니다. 데이터 유실, 중복 저장, `contains()` 실패 등이 발생합니다.
 
-6. **Q: compareTo와 equals의 일관성이 왜 중요한가?**
-   - A: `TreeSet`은 `compareTo`로, `HashSet`은 `equals`로 동치성을 판단합니다. 두 메서드가 일관되지 않으면 같은 원소를 넣어도 컬렉션마다 크기가 달라집니다 (`BigDecimal` 사례).
+### Q. 구체 클래스를 상속하면서 equals 규약을 지킬 수 있는가?
+
+**불가능합니다.** 값 필드를 추가하면 대칭성 또는 추이성을 깨뜨리지 않고는 `equals`를 재정의할 수 없습니다. 해결책은 **상속 대신 컴포지션**을 사용하는 것입니다.
+
+### Q. Comparable과 Comparator의 차이는?
+
+`Comparable`은 클래스에 **자연적 순서**를 부여하는 인터페이스(`compareTo`), `Comparator`는 **외부에서 비교 전략**을 제공하는 인터페이스(`compare`)입니다. 정렬 기준이 하나면 `Comparable`, 여러 개면 `Comparator`를 추가합니다.
+
+### Q. clone 대신 무엇을 사용해야 하는가?
+
+**복사 생성자** `public Yum(Yum yum)` 또는 **복사 팩터리** `public static Yum newInstance(Yum yum)`을 사용합니다. `Cloneable`의 허술한 규약과 `checked exception` 문제를 피할 수 있습니다.
+
+### Q. compareTo와 equals의 일관성이 왜 중요한가?
+
+`TreeSet`은 `compareTo`로, `HashSet`은 `equals`로 동치성을 판단합니다. 두 메서드가 일관되지 않으면 같은 원소를 넣어도 컬렉션마다 크기가 달라집니다 (`BigDecimal` 사례).
 
 ---
 

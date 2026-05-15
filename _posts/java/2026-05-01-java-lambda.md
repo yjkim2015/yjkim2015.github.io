@@ -1132,7 +1132,7 @@ List<Invoice> invoices2 = orders.stream()
 
 ## 15. 면접 포인트 5개 — 깊은 WHY 분석
 
-### Q1: 람다와 익명 클래스의 근본적인 차이는 무엇인가?
+### Q. 람다와 익명 클래스의 근본적인 차이는 무엇인가?
 
 **표면적 차이:** 문법의 간결함, this의 의미, 스코프.
 
@@ -1144,7 +1144,7 @@ List<Invoice> invoices2 = orders.stream()
 
 **실무 함의:** 람다가 익명 클래스보다 무조건 빠른 것은 아닙니다. 클래스 로딩 비용은 줄지만, 비캡처링 람다는 싱글톤 최적화로 GC 압력이 없는 반면, 캡처링 람다는 매번 새 인스턴스를 생성합니다. 최초 invokedynamic 실행 비용(LambdaMetafactory 호출)이 있지만 이후에는 익명 클래스와 동등하거나 더 빠릅니다.
 
-### Q2: effectively final 제약이 필요한 이유를 JVM 메모리 모델 관점에서 설명하라
+### Q. effectively final 제약이 필요한 이유를 JVM 메모리 모델 관점에서 설명하라
 
 **스택 vs 힙 생명주기:** 지역 변수는 메서드 스택 프레임에 위치합니다. 메서드 반환 시 스택 프레임이 제거되고 변수는 소멸합니다. 람다 인스턴스는 힙에 존재하며 GC가 수거하기 전까지 살아있습니다. 람다가 소멸된 스택 변수를 직접 참조하면 댕글링 참조가 됩니다.
 
@@ -1154,7 +1154,7 @@ List<Invoice> invoices2 = orders.stream()
 
 **인스턴스 변수가 자유로운 이유:** 인스턴스 변수는 `this` 참조를 통해 접근합니다. `this`는 힙 객체이므로 스택 생명주기 문제가 없습니다. 다만 스레드 안전성은 여전히 고려해야 합니다.
 
-### Q3: invokedynamic과 LambdaMetafactory의 역할을 부트스트랩 메서드까지 설명하라
+### Q. invokedynamic과 LambdaMetafactory의 역할을 부트스트랩 메서드까지 설명하라
 
 **invokedynamic의 역할:** `invokedynamic` 명령어는 바이트코드에 "이 지점의 호출 대상은 런타임에 결정하라"고 기록합니다. 각 `invokedynamic` 명령어는 상수 풀(constant pool)에 부트스트랩 메서드 참조를 포함합니다.
 
@@ -1168,7 +1168,7 @@ List<Invoice> invoices2 = orders.stream()
 
 **이후 실행:** JVM은 `ConstantCallSite`에 저장된 `MethodHandle`을 직접 호출합니다. 부트스트랩은 다시 실행되지 않습니다. JIT 컴파일러는 이 ConstantCallSite를 모노모픽(monomorphic) 호출로 최적화하고 인라이닝까지 적용합니다.
 
-### Q4: 캡처링 람다 vs 비캡처링 람다의 성능 차이를 GC 관점에서 설명하라
+### Q. 캡처링 람다 vs 비캡처링 람다의 성능 차이를 GC 관점에서 설명하라
 
 **비캡처링 람다:**
 ```
@@ -1201,7 +1201,7 @@ for (String prefix : prefixes) {
 private static final Predicate<String> NOT_EMPTY = s -> !s.isEmpty();
 ```
 
-### Q5: 람다로 커링을 구현할 때의 타입 시스템 한계와 해결 방법은?
+### Q. 람다로 커링을 구현할 때의 타입 시스템 한계와 해결 방법은?
 
 **Java 타입 시스템의 한계:** Java의 제네릭은 타입 소거(type erasure)를 사용합니다. 3인수 커링을 표현하면:
 

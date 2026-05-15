@@ -297,6 +297,14 @@ List<Integer> result = cache.getRange("apple", "cherry"); // [1, 2, 3]
 
 ## 4. PECS: Producer-Extends Consumer-Super의 수학적 근거
 
+마치 수도관처럼, `<? extends T>`는 물이 흘러나오는 파이프(읽기 전용)이고 `<? super T>`는 물이 흘러들어가는 파이프(쓰기 전용)입니다. 방향이 반대이기 때문에 같은 파이프로 양방향을 동시에 쓸 수 없습니다.
+
+```mermaid
+graph LR
+    SRC["Producer"] -->|"extends T"| PIPE["데이터 흐름"]
+    PIPE -->|"super T"| DST["Consumer"]
+```
+
 ### 공변성과 반공변성: 타입 시스템의 기초
 
 배열은 **공변(Covariant)**입니다.
@@ -1595,7 +1603,7 @@ Status status = findByName(Status.class, "active"); // Status.ACTIVE
 
 ## 면접 포인트 5개
 
-### Q1. 타입 소거가 필요한 이유와 그로 인한 구체적 제약은?
+### Q. 타입 소거가 필요한 이유와 그로 인한 구체적 제약은?
 
 **핵심 WHY**: Java 5는 기존 수백만 줄의 Java 코드와 바이너리 호환성을 유지하면서 제네릭을 도입해야 했습니다. C#처럼 런타임에 타입 정보를 유지하는 Reified 제네릭을 도입하면 JVM을 전면 교체해야 하고, 기존 `.class` 파일과 호환되지 않습니다. 그래서 컴파일러만 수정하고(타입 검사 추가), 런타임 JVM은 그대로 두는 타입 소거를 선택했습니다.
 
@@ -1611,7 +1619,7 @@ Status status = findByName(Status.class, "active"); // Status.ACTIVE
 
 ---
 
-### Q2. PECS 원칙의 수학적 근거와 위반 시 발생하는 실제 문제는?
+### Q. PECS 원칙의 수학적 근거와 위반 시 발생하는 실제 문제는?
 
 **핵심 WHY**: 공변성/반공변성의 안전성 보장에서 나옵니다. `List<? extends T>`는 공변 읽기를 허용하지만 쓰기를 막습니다. 왜냐면 `List<Integer>`에 `Double`을 쓰면 안 되는데, 컴파일러는 실제 타입이 `Integer`인지 `Double`인지 모르기 때문입니다. `List<? super T>`는 반공변 쓰기를 허용하지만 타입 보장된 읽기를 막습니다. `List<Number>`에서 꺼낸 것이 `Integer`인지 `Double`인지 모르기 때문입니다.
 
@@ -1633,7 +1641,7 @@ public void readFrom(List<? super Integer> list) {
 
 ---
 
-### Q3. 브리지 메서드가 없으면 무슨 일이 생기는가?
+### Q. 브리지 메서드가 없으면 무슨 일이 생기는가?
 
 **핵심 WHY**: `Comparable<T>`의 `compareTo(T)`는 소거 후 `compareTo(Object)`가 되어야 합니다. `Money implements Comparable<Money>`에서 `compareTo(Money)` 메서드만 있으면, JVM 입장에서 `Comparable` 인터페이스의 `compareTo(Object)` 메서드가 구현되지 않은 것입니다. 다형성이 깨집니다.
 
@@ -1651,7 +1659,7 @@ c.compareTo(new Money(200));   // compareTo(Object) 없음 — AbstractMethodErr
 
 ---
 
-### Q4. `@SafeVarargs`를 붙여야 할 때와 붙이면 안 될 때의 정확한 기준은?
+### Q. `@SafeVarargs`를 붙여야 할 때와 붙이면 안 될 때의 정확한 기준은?
 
 **핵심 WHY**: varargs는 내부적으로 배열로 구현됩니다. `T... items`는 `T[] items`이고, 제네릭 배열은 타입 소거로 `Object[]`가 됩니다. 이 배열에 다른 타입을 넣으면 힙 오염이 발생합니다.
 
@@ -1678,7 +1686,7 @@ Object[] objResult = dangerous1("a", "b"); // 여기에 Integer 넣으면 후폭
 
 ---
 
-### Q5. `List<? extends Number>`에 원소를 추가하지 못하는 이유를 JVM 내부 관점에서 설명하라
+### Q. `List<? extends Number>`에 원소를 추가하지 못하는 이유를 JVM 내부 관점에서 설명하라
 
 **핵심 WHY**: 컴파일러가 `List<? extends Number>`의 실제 타입 파라미터를 알 수 없기 때문입니다. `? extends Number`는 `Number`, `Integer`, `Double`, `Long`, `BigDecimal` 중 어느 것이든 될 수 있습니다.
 
