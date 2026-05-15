@@ -691,9 +691,6 @@ graph LR
 - 사용자 표시는 `ZonedDateTime` + 시간대 변환
 - `SimpleDateFormat` `static` 공유 절대 금지 (스레드 안전 X)
 
----
-## 면접 포인트
-
 ### Q1. LocalDateTime과 ZonedDateTime의 차이와 선택 기준은?
 `LocalDateTime`은 시간대 정보가 없는 "벽시계 시간"입니다. `2026-05-07T10:00:00`이 서울인지 뉴욕인지 알 수 없습니다. 단일 시간대 국내 서비스(KST 고정)라면 LocalDateTime으로 충분합니다. 글로벌 서비스나 사용자 시간대가 다양하면 `ZonedDateTime`을 사용합니다. DB 저장 시 UTC `Instant`로 변환 후 저장하고, 표시 시 사용자 시간대로 변환하는 패턴이 표준입니다.
 

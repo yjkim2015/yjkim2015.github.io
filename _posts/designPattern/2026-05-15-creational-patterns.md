@@ -5,6 +5,13 @@ tags: [디자인패턴, 생성패턴, Singleton, Factory, Builder, Prototype, Ja
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /designpattern/디자인-패턴(design-pattern)이란/
+  - /designpattern/싱글톤(singleton)-패턴/
+  - /designpattern/팩토리-메서드(factory-method)-패턴/
+  - /designpattern/추상-팩토리(abstract-factory)-패턴/
+  - /designpattern/빌더(builder)-패턴/
+  - /designpattern/프로토타입(prototype)-패턴/
 ---
 
 생성 패턴(Creational Pattern)은 객체를 **어떻게 만들 것인가**에 집중한다. `new` 키워드를 직접 쓰는 대신, 생성 로직을 캡슐화해서 코드가 구체 클래스에 의존하지 않도록 만드는 것이 핵심 목표다. GoF는 이 범주에 5개 패턴을 정의했다: Singleton, Factory Method, Abstract Factory, Builder, Prototype.

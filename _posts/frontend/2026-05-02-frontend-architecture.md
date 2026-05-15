@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /frontend/frontend-architecture/
 ---
 
 ## 도시를 처음부터 다시 지을 수는 없다

@@ -885,9 +885,6 @@ graph LR
     NIO["java.nio"] -->|"대규모 NIO"| SEL["Selector"]
 ```
 
----
-## 면접 포인트
-
 ### Q1. TCP의 3-way handshake가 성능에 미치는 영향과 대응 방법은?
 TCP 연결 수립에 1 RTT(Round-Trip Time)가 필요합니다. 서울↔서버 RTT 1ms라면 매 요청마다 연결 수립에 1ms 추가. 초당 1만 건 요청 시 새 연결만으로 1만 RTT. 대응: Connection Pool로 연결을 재사용합니다(HTTP/1.1 Keep-Alive, JDBC 커넥션 풀). HTTP/2는 단일 연결에서 멀티플렉싱으로 여러 요청을 처리해 연결 수립 오버헤드를 극적으로 줄입니다. gRPC는 HTTP/2 기반이므로 마이크로서비스 간 통신에 적합합니다.
 

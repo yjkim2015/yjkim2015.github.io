@@ -7,6 +7,8 @@ toc: true
 toc_sticky: true
 toc_label: 목차
 date: 2026-05-01
+redirect_from:
+  - /redis/redis-caching-patterns/
 ---
 
 캐싱은 자주 사용되는 데이터를 빠른 저장소에 보관해 응답 속도를 높이고 원본 데이터 소스의 부하를 줄이는 기법이다. 이 글은 단순한 개념 소개를 넘어, 각 전략이 **왜** 그 방식으로 동작해야 하는지, 잘못 쓰면 **무슨 장애가** 발생하는지를 Spring/Java 실코드와 함께 설명한다.

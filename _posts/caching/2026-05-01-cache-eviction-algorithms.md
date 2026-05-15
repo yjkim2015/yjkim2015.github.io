@@ -1,7 +1,7 @@
 ---
 title: "캐시 교체(Eviction) 알고리즘 — LRU, LFU, TinyLFU, W-TinyLFU, ARC"
 categories:
-- LOCAL_CACHE
+- CACHING
 toc: true
 toc_sticky: true
 toc_label: 목차

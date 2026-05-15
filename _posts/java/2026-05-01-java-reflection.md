@@ -1065,10 +1065,6 @@ Spring은 `@Autowired`, `@Value` 주입, `@Transactional` AOP 프록시 생성, 
 ### Q5. 직렬화 프레임워크(Jackson, Gson)가 리플렉션을 사용하는 원리는?
 Jackson은 `ObjectMapper`가 클래스의 필드/게터를 리플렉션으로 조회하고, `BeanDeserializer`를 생성해 JSON → 객체 변환 방법을 캐싱합니다. 최초 직렬화/역직렬화 시 리플렉션 비용이 발생하지만 이후 캐싱된 `BeanSerializer`를 재사용합니다. Jackson 2.10+의 `afterburner` 모듈은 리플렉션 대신 바이트코드 생성으로 약 20~30% 성능 향상을 제공합니다. Record 클래스(Java 16+)는 Jackson이 직접 지원합니다.
 
----
-
-## 면접 포인트
-
 ### Q1. 리플렉션이란 무엇이고 어떤 상황에 사용하나요?
 A. 리플렉션은 런타임에 클래스, 메서드, 필드 정보를 조회하고 조작하는 Java API다. 클래스 이름을 문자열로 받아 동적으로 인스턴스를 생성하거나, private 멤버에 접근할 수 있다. Spring의 @Autowired 의존성 주입, JPA의 엔티티 매핑, JUnit의 테스트 메서드 발견이 리플렉션으로 구현된다.
 

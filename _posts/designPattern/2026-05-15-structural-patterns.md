@@ -5,6 +5,12 @@ tags: [디자인패턴, 구조패턴, Adapter, Proxy, Decorator, Facade, Composi
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /designpattern/어댑터(adapter)-패턴/
+  - /designpattern/컴포지트(composite)-패턴/
+  - /designpattern/구조-패턴(structural-patterns)-총정리/
+  - /designpattern/프록시(proxy)-패턴/
+  - /designpattern/플라이웨이트(flyweight)-패턴/
 ---
 
 구조 패턴(Structural Pattern)은 클래스와 객체를 **어떻게 조합할 것인가**에 집중한다. 기존 코드를 건드리지 않고 새 인터페이스를 끼워 넣거나(Adapter), 기능을 동적으로 덧씌우거나(Decorator), 복잡한 서브시스템을 단순하게 감싸거나(Facade), 구현과 추상을 독립적으로 진화시키는(Bridge) 것이 이 패턴군의 핵심이다. GoF는 이 범주에 7개 패턴을 정의했다.

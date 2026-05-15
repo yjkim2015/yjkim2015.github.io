@@ -7,6 +7,8 @@ toc: true
 toc_sticky: true
 toc_label: 목차
 date: 2026-05-03
+redirect_from:
+  - /spring/spring-sleuth-zipkin/
 ---
 
 마이크로서비스 환경에서 하나의 요청이 수십 개 서비스를 거칠 때, 어디서 지연이 발생했는지 추적하는 기술이 **분산 트레이싱**이다.

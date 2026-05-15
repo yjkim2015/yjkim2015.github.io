@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /architecture/hexagonal/
 ---
 
 ## 실생활 비유: 쇼핑몰을 DB 중심으로 설계하면 생기는 일

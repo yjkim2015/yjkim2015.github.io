@@ -1,6 +1,7 @@
 ---
 title: "Kotlin 스코프 함수와 위임 패턴 — let, run, apply, also, with 그리고 by lazy의 내부 동작"
-categories: kotlin
+categories:
+- KOTLIN
 tags: [Kotlin, 스코프함수, let, run, apply, also, with, 위임, by lazy, Delegates, 프로퍼티위임]
 toc: true
 toc_sticky: true

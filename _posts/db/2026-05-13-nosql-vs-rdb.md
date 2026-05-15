@@ -1,10 +1,13 @@
 ---
 title: "NoSQL vs RDB — 왜 그 DB를 선택해야 하는가"
 excerpt: "CAP 정리부터 워크로드 분석, 데이터 모델링, 확장 전략까지 — 시니어 개발자의 DB 선택 프레임워크"
-categories: db
+categories:
+- DB
 tags: [DB, NoSQL, RDB, MySQL, MongoDB, Redis, Cassandra, DynamoDB, PostgreSQL]
 toc: true
 toc_sticky: true
+redirect_from:
+  - /nosql/nosql-comparison/
 ---
 
 > **비유로 먼저 이해하기**: DB 선택은 집을 짓는 것과 같다. RDB는 설계도(스키마)를 먼저 그려야 하는 철근 콘크리트 건물이다. 구조가 견고하고 내부 이동이 자유롭지만, 벽을 뚫기(스키마 변경)는 쉽지 않다. NoSQL은 레고 블록이다. 원하는 형태로 빠르게 쌓을 수 있지만, 빌딩을 지으려면 기초(데이터 모델링)를 잘못 잡으면 무너진다. 어떤 집이 더 좋은가가 아니라, **어떤 집에 살 것인가**를 먼저 결정해야 한다.

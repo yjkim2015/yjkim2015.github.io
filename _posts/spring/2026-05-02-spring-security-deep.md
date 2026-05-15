@@ -5,6 +5,27 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /security/spring-boot-security-프로젝트-생성/
+  - /security/사용자-정의-보완-기능-구현/
+  - /security/form-인증-방식/
+  - /security/logout/
+  - /security/rememberme/
+  - /security/anonymousauthenticationfilter/
+  - /security/remembermeauthentication/
+  - /security/동시-세션제어/
+  - /security/세션-고정-보호/
+  - /security/세션-제어-필터/
+  - /security/권한-설정-및-표현식/
+  - /security/예외-처리-및-요청-캐시-필터/
+  - /security/delegatingfilterproxy/
+  - /security/사이트-간-요청-위조-csrf,-csrffilter/
+  - /security/authentication/
+  - /security/필터-초기화와-다중-보안-설정/
+  - /security/securitycontextholder,-securitycontext/
+  - /security/securitycontextpersistentfilter/
+  - /security/authenticationflow/
+  - /security/authenticationmanager/
 ---
 
 > **한 줄 요약:** Spring Security는 서블릿 필터 체인 위에 구축된 보안 프레임워크다. 인증(Authentication)과 인가(Authorization)를 필터 파이프라인으로 처리하며, OAuth2 Authorization Code, JWT, 메서드 보안, 세션 관리, 취약점 방어까지 전방위 보안을 선언적으로 구성한다.

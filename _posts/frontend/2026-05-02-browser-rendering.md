@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /frontend/browser-rendering/
 ---
 
 ## 레스토랑 주방에서 음식이 나오기까지

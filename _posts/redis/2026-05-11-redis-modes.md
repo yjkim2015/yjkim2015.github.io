@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /redis/redis-cluster-sentinel/
 ---
 
 > **한 줄 요약**: Redis는 단일 프로세스(Standalone)에서 시작해 자동 장애복구(Sentinel), 수평 확장(Cluster)으로 진화하며, 각 모드는 해결하는 문제가 근본적으로 다르다 — 무엇을 선택하느냐는 곧 어떤 장애를 감수하느냐를 결정한다.

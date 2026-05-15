@@ -1,6 +1,7 @@
 ---
 title: "Kotlin 컬렉션과 시퀀스 — 함수형 프로그래밍으로 Java Stream을 대체하는 법"
-categories: kotlin
+categories:
+- KOTLIN
 tags: [Kotlin, Collection, Sequence, 함수형프로그래밍, map, filter, flatMap, 지연평가, 불변컬렉션]
 toc: true
 toc_sticky: true

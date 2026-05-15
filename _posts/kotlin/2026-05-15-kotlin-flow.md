@@ -1,6 +1,7 @@
 ---
 title: "Kotlin Flow 완전 정복 — 코루틴 기반 리액티브 스트림의 내부 동작과 실전 패턴"
-categories: kotlin
+categories:
+- KOTLIN
 tags: [Kotlin, Flow, SharedFlow, StateFlow, 코루틴, 리액티브, backpressure, flowOn, channelFlow]
 toc: true
 toc_sticky: true

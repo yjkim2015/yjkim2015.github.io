@@ -5,6 +5,12 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /spring/제어의역전/
+  - /spring/의존관계-주입(di)/
+  - /spring/싱글톤-레지스트리와-오브젝트-스코프/
+  - /spring/spring_project_1/
+  - /spring/스프링---maridb-연결-테스트/
 ---
 
 신입 때 `new RateDiscountPolicy()`를 서비스 클래스 내부에 직접 박아뒀다가, 기획 변경 한 번에 수십 개 파일을 열어야 했던 경험이 있을 것이다. IoC와 DI는 그 고통을 제거하기 위한 개념이 아니라, **객체 설계 철학의 전환**이다. 이 글은 "어떻게 쓰는가"가 아니라 "왜 이렇게 동작하는가"에 답한다.

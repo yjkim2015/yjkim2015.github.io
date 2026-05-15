@@ -828,9 +828,6 @@ graph LR
 
 ThreadLocal은 올바르게 사용하면 동기화 없이 스레드 안전성을 확보하는 강력한 도구입니다. 핵심은 **사용 후 반드시 `remove()` 호출**하는 것입니다. 특히 스레드 풀 환경에서는 이를 소홀히 하면 값 오염과 메모리 누수라는 두 가지 위험이 동시에 발생합니다.
 
----
-## 면접 포인트
-
 ### Q1. ThreadLocal 메모리 누수의 정확한 메커니즘은?
 `ThreadLocalMap`의 Entry는 `WeakReference<ThreadLocal>`을 키로 사용합니다. ThreadLocal 객체 자체가 GC되면 키가 null이 됩니다. 그러나 value는 강한 참조로 남아있습니다. 스레드 풀에서 스레드가 재사용될 때 이 null 키 + 살아있는 value가 계속 누적됩니다. `remove()`를 호출하지 않으면 스레드가 살아있는 한 value가 GC되지 않습니다. 대용량 객체(HttpServletRequest, DB Connection)를 value로 저장하고 remove 없이 반환하면 OutOfMemory로 이어집니다.
 

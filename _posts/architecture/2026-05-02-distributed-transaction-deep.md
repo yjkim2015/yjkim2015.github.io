@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /spring/distributed-transaction/
 ---
 
 ## 실생활 비유: 해외 송금과 공중 증발하는 돈

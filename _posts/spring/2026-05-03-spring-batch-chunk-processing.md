@@ -1,7 +1,7 @@
 ---
 title: "Spring Batch Chunk 기반 처리 심화 — 트랜잭션, Skip/Retry, 대용량 전략"
 categories:
-- BATCH
+- SPRING
 tags: [Spring Batch, Chunk, PagingItemReader, Skip, Retry, Fault Tolerance, 대용량]
 toc: true
 toc_sticky: true

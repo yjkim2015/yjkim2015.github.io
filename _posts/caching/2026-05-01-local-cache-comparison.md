@@ -1,7 +1,7 @@
 ---
 title: "Spring 로컬 캐시 라이브러리 비교 — Caffeine, Ehcache, ConcurrentMapCache 심층 분석"
 categories:
-- LOCAL_CACHE
+- CACHING
 toc: true
 toc_sticky: true
 toc_label: 목차

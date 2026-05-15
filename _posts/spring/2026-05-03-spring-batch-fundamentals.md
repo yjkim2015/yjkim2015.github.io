@@ -1,7 +1,7 @@
 ---
 title: "Spring Batch 핵심 개념 — Job, Step, Chunk 모델부터 재시작까지"
 categories:
-- BATCH
+- SPRING
 tags: [Spring Batch, Job, Step, Tasklet, Chunk, ItemReader, ItemWriter, JobRepository]
 toc: true
 toc_sticky: true

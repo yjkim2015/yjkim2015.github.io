@@ -747,9 +747,6 @@ graph LR
     STRING --> GUIDE["선택: 단순→리터럴 / 반복→St"]
 ```
 
----
-## 면접 포인트
-
 ### Q1. String Pool(intern)의 동작 원리와 실무 주의사항은?
 문자열 리터럴은 JVM 내 String Pool(Metaspace)에 저장됩니다. 같은 리터럴은 동일 인스턴스를 공유합니다. `new String("hello")`는 Pool 밖 Heap에 새 객체를 생성합니다. `intern()`을 호출하면 Pool에 추가하거나 이미 있는 Pool 인스턴스를 반환합니다. 대량의 동적 문자열에 `intern()`을 남발하면 Metaspace가 증가해 OOM이 발생할 수 있습니다. 실무에서 `intern()`은 반복적으로 등장하는 고정 문자열(국가코드, 통화코드 등)에만 사용합니다.
 

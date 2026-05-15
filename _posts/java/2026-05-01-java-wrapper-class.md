@@ -565,9 +565,6 @@ graph LR
     WRAPPER --> NULL["null 처리: Optional"]
 ```
 
----
-## 면접 포인트
-
 ### Q1. 오토박싱이 성능에 미치는 영향과 방지 방법은?
 `List<Integer>`에 int를 add할 때마다 `Integer.valueOf(int)` 호출로 객체가 생성됩니다. 10만 개 루프에서 10만 번 박싱 → GC 압력 증가. 성능 크리티컬한 코드에서 기본형 대신 박싱 타입을 사용하면 처리량이 50% 이상 저하될 수 있습니다. 방지: 기본형 특화 컬렉션(Eclipse Collections의 `IntArrayList`, Trove의 `TIntArrayList`) 사용, 또는 배열(`int[]`)을 직접 사용합니다. JMH로 측정하면 `int[]` vs `Integer[]`의 처리 속도 차이가 3~5배에 달합니다.
 

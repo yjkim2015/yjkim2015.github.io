@@ -18,7 +18,7 @@ permalink: /categories/db/
     <h1 class="category-page__title">DB</h1>
 
     <div class="posts-grid">
-      {% assign posts = site.categories["db"] %}
+      {% assign posts = site.categories["DB"] %}
       {% for post in posts %}
         {% include archive-single.html type="card" %}
       {% endfor %}

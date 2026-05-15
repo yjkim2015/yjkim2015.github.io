@@ -1,6 +1,7 @@
 ---
 title: "Rate Limiting — 알고리즘 내부 구조, 분산 구현, 면접 극한 시나리오"
-categories: SPRING
+categories:
+- SYSTEMDESIGN
 tags: [RateLimiting, TokenBucket, SlidingWindow, Redis, Bucket4j, Resilience4j, SpringCloudGateway, Lua, AOP, Micrometer]
 toc: true
 toc_sticky: true

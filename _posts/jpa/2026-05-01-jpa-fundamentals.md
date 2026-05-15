@@ -6,6 +6,10 @@ toc: true
 toc_sticky: true
 toc_label: 목차
 date: 2026-05-01
+redirect_from:
+  - /jpa/jpa-시작하기/
+  - /jpa/jpa-영속성-관리/
+  - /jpa/엔티티-매핑/
 ---
 
 Spring Boot 프로젝트에서 JPA를 쓴다고 해서 JPA를 안다고 할 수 없다. `JpaRepository`를 상속하고 `findById`를 호출하는 것은 시작일 뿐이다. N+1 쿼리가 왜 터지는지, `merge()`가 왜 null 필드를 덮어쓰는지, OSIV가 왜 운영 서버에서 문제가 되는지를 설명할 수 없다면 JPA를 모른다고 봐야 한다.

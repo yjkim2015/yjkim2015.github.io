@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /frontend/nextjs/
 ---
 
 ## 음식점 준비 방식으로 이해하기

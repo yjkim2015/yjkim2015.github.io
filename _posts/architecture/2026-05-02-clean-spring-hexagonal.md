@@ -1,7 +1,7 @@
 ---
 title: "클린 스프링 — 도메인 모델 패턴과 헥사고날"
 categories:
-- SPRING
+- ARCHITECTURE
 toc: true
 toc_sticky: true
 toc_label: 목차

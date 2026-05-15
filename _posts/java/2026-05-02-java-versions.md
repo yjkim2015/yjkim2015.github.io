@@ -913,9 +913,6 @@ graph LR
 | Java 17 | O | instanceof 캐스팅 반복 | Pattern Matching, Sealed Classes 정식 |
 | Java 21 | O | I/O 대기 스레드 낭비 | Virtual Thread, Sequenced Collections |
 
----
-## 면접 포인트
-
 ### Q1. Java 8의 Stream API와 for 루프의 성능 차이는?
 단순 순회는 for 루프가 Stream보다 빠릅니다. Stream은 파이프라인 구성, 람다 인스턴스 생성, 이터레이터 오버헤드가 있습니다. 소규모 컬렉션(100개 이하)에서 Stream이 10~30% 느릴 수 있습니다. 그러나 `parallelStream()`을 사용하면 CPU 코어 수만큼 병렬 처리가 가능해 대규모 데이터에서 for 루프를 압도합니다. 실무에서 성능 차이는 프로파일링으로 확인하기 전까지는 가독성을 우선해 Stream을 사용합니다.
 

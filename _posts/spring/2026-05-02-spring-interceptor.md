@@ -3,6 +3,8 @@ layout: post
 title: "Spring Interceptor 완전 정복 — 내부 메커니즘부터 실전 구현까지"
 date: 2026-05-02
 categories: SPRING
+redirect_from:
+  - /spring/filter/
 ---
 
 > **한 줄 요약:** Spring Interceptor는 DispatcherServlet이 HandlerMapping으로 컨트롤러를 찾은 직후, 실제 호출 직전에 끼어드는 컴포넌트다. Filter와 달리 Spring ApplicationContext 안에 존재하기 때문에 모든 Bean에 자유롭게 접근할 수 있고, preHandle/postHandle/afterCompletion 세 시점에서 요청 흐름을 정밀하게 제어할 수 있다.

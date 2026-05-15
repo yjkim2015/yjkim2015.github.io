@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /systemdesign/system-design/
 ---
 
 > **한 줄 요약**: 시스템 디자인 면접의 핵심은 컴포넌트 나열이 아니라 "왜 이 선택인가"를 요구사항에서 논리적으로 도출하는 것이다. 암기가 아니라 사고 과정을 보여줘야 시니어 면접관을 설득할 수 있다.

@@ -5,6 +5,9 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /spring/spring-mvc/
+  - /spring/스프링-동작-구조/
 ---
 
 > **한 줄 요약:** Spring MVC는 DispatcherServlet이 단일 진입점으로 모든 HTTP 요청을 받아 HandlerMapping → HandlerAdapter → ArgumentResolver → Controller → ReturnValueHandler → ViewResolver/MessageConverter 순서로 처리하는 프론트 컨트롤러 패턴이다. 각 단계가 왜 그 자리에 있는지, 내부에서 무슨 일이 벌어지는지 코드 수준으로 파헤친다.

@@ -1,7 +1,7 @@
 ---
 title: "Spring Batch 파티셔닝과 병렬 처리 — 성능 튜닝부터 운영까지"
 categories:
-- BATCH
+- SPRING
 tags: [Spring Batch, Partitioning, 병렬처리, Multi-threaded, 성능튜닝, 모니터링]
 toc: true
 toc_sticky: true

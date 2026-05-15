@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /frontend/react/
 ---
 
 ## "전체를 다시 그리지 않는다"는 아이디어

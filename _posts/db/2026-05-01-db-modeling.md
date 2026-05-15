@@ -1,6 +1,7 @@
 ---
 title: "DB 모델링"
-categories: db
+categories:
+- DB
 tags: [DB 모델링, ERD, 개념적 설계, 논리적 설계, 물리적 설계, 식별관계]
 toc: true
 toc_sticky: true

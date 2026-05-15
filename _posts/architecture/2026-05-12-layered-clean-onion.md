@@ -5,6 +5,8 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /architecture/layered/
 ---
 
 ## 실생활 비유: 건물 설계와 아키텍처의 공통점
