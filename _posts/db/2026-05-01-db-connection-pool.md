@@ -1,6 +1,6 @@
 ---
 title: "DB 커넥션 풀 완전 해부 — HikariCP 내부 구조부터 면접 극한 시나리오까지"
-categories: DB
+categories: db
 tags: [HikariCP, ConnectionPool, JDBC, Spring, ConcurrentBag, TransactionSynchronizationManager, OSIV, Micrometer]
 toc: true
 toc_sticky: true

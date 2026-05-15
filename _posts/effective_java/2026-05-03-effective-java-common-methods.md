@@ -536,10 +536,6 @@ public static Order copyOf(Order original) {  // 복사 팩터리
 }
 ```
 
----
-
-## 면접 포인트 (보강)
-
 #### Q. equals() 재정의 시 반드시 지켜야 할 규약은?
 
 ```
@@ -581,6 +577,8 @@ Comparator<T>:
 
 ---
 
+
+---
 ## 왜 이 원칙인가
 
 **공통 메서드(equals, hashCode, toString, Comparable) 원칙의 핵심은 Java 컬렉션과 라이브러리가 이 계약에 의존하기 때문이다.**

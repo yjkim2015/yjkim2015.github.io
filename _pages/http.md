@@ -18,7 +18,7 @@ permalink: /categories/http/
     <h1 class="category-page__title">Http</h1>
 
     <div class="posts-grid">
-      {% assign posts = site.categories["Http"] %}
+      {% assign posts = site.categories["HTTP"] %}
       {% for post in posts %}
         {% include archive-single.html type="card" %}
       {% endfor %}

@@ -1144,9 +1144,6 @@ public void scheduleTranscoding(String videoId, String rawS3Key) {
 **실수 4: 영상 메타데이터를 트랜스코딩 완료 전에 검색 인덱스에 노출**
 트랜스코딩이 완료되지 않은 영상 URL이 검색에 노출되면 사용자가 재생을 시도했을 때 404 또는 불완전한 영상을 보게 됩니다. 상태 머신(`UPLOADED → TRANSCODING → READY`)을 엄격히 관리하고, `READY` 상태가 된 이후에만 Elasticsearch 인덱싱과 추천 시스템 등록이 이루어져야 합니다.
 
----
-## 면접 포인트
-
 ### Q1. HLS와 DASH의 차이는? 실무에서 무엇을 선택하는가?
 HLS(HTTP Live Streaming): Apple이 개발. `.m3u8` 매니페스트, `.ts` 세그먼트. iOS/macOS 네이티브 지원 필수. DASH(Dynamic Adaptive Streaming over HTTP): 오픈 표준. `.mpd` 매니페스트, `.mp4` 세그먼트. DRM 유연성 높음. 실무 선택: 글로벌 서비스는 두 가지 모두 제공합니다. iOS는 HLS, Android/Web은 DASH. YouTube는 DASH + HLS 병행, Netflix는 DASH + Widevine DRM 중심.
 

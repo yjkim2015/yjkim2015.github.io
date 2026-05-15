@@ -1,6 +1,6 @@
 ---
 title: "정규화와 반정규화"
-categories: DB
+categories: db
 tags: [정규화, 반정규화, 1NF, 2NF, 3NF, BCNF, 데이터베이스 설계]
 toc: true
 toc_sticky: true

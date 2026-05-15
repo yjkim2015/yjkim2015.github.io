@@ -1,7 +1,7 @@
 ---
 title: "NoSQL vs RDB — 왜 그 DB를 선택해야 하는가"
 excerpt: "CAP 정리부터 워크로드 분석, 데이터 모델링, 확장 전략까지 — 시니어 개발자의 DB 선택 프레임워크"
-categories: [db]
+categories: db
 tags: [DB, NoSQL, RDB, MySQL, MongoDB, Redis, Cassandra, DynamoDB, PostgreSQL]
 toc: true
 toc_sticky: true

@@ -1162,10 +1162,6 @@ aws elbv2 describe-load-balancers \
   --query 'LoadBalancers[*].[LoadBalancerName,AvailabilityZones]'
 ```
 
----
-
-## 면접 포인트
-
 ### Q1. EC2, ECS, Lambda의 선택 기준은?
 처리 시간과 트래픽 패턴으로 결정한다. Lambda는 요청당 최대 15분, 이벤트 드리븐, 트래픽이 불규칙할 때 최적이다. ECS/EKS는 항상 실행 중인 서비스, 컨테이너 기반 MSA에 적합하다. EC2는 OS 수준 제어가 필요하거나, 특수 하드웨어(GPU, 고메모리)가 필요할 때 선택한다. 비용 관점에서 Lambda는 호출 없으면 0원, EC2는 24시간 과금이다.
 
@@ -1185,6 +1181,8 @@ S3 연동은 정적 콘텐츠 배포에 사용하며, OAC(Origin Access Control)
 
 ---
 
+
+---
 ## 왜 이 기술인가
 
 **AWS 핵심 서비스를 선택하는 이유는 인프라 구축과 운영 비용을 낮추고 필요할 때 즉시 확장할 수 있기 때문이다.**
