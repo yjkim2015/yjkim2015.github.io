@@ -413,6 +413,7 @@ URL: http://prometheus:9090
 
 ### 6-3. 패널 구성 예시
 
+{% raw %}
 ```json
 {
   "title": "HTTP 요청률 (초당)",
@@ -437,6 +438,7 @@ URL: http://prometheus:9090
   }
 }
 ```
+{% endraw %}
 
 ### 6-4. 변수(Variable) 활용
 
@@ -613,6 +615,7 @@ groups:
 
 ### 9-2. Alertmanager 라우팅
 
+{% raw %}
 ```yaml
 # alertmanager.yml
 global:
@@ -651,6 +654,7 @@ receivers:
       - channel: '#backend-alerts'
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
 ```
+{% endraw %}
 
 ### 9-3. 억제(Inhibit) 규칙
 

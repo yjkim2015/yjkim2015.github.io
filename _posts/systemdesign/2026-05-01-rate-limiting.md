@@ -1609,6 +1609,7 @@ public class RateLimitMetrics {
 
 ### Prometheus Alerting 규칙
 
+{% raw %}
 ```yaml
 # prometheus-rules.yml
 groups:
@@ -1650,6 +1651,7 @@ groups:
         annotations:
           summary: "Rate Limiter P99 지연 5ms 초과"
 ```
+{% endraw %}
 
 ### Grafana PromQL 핵심 쿼리
 

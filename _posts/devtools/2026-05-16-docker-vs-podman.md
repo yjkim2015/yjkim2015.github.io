@@ -1240,6 +1240,7 @@ Docker buildx가 단일 명령으로 멀티 플랫폼을 처리하는 반면, Po
 
 ### 19-1. 컨테이너 리소스 모니터링
 
+{% raw %}
 ```bash
 # Docker
 docker stats
@@ -1250,6 +1251,7 @@ podman stats
 podman stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 # 동일한 포맷 지원
 ```
+{% endraw %}
 
 ### 19-2. 로그 드라이버
 

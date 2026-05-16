@@ -519,6 +519,7 @@ export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 
 **fzf 실전 활용 패턴:**
 
+{% raw %}
 ```bash
 # Git 브랜치를 퍼지 검색으로 전환
 git checkout $(git branch | fzf)
@@ -532,6 +533,7 @@ vim $(fzf)
 # Docker 컨테이너 로그 보기
 docker logs $(docker ps --format '{{.Names}}' | fzf) -f
 ```
+{% endraw %}
 
 ### 5-3. ripgrep (rg) — grep의 진화
 
@@ -773,6 +775,7 @@ chezmoi init --apply <github-username>
 
 **chezmoi 템플릿 활용 — 머신별 분기:**
 
+{% raw %}
 ```bash
 # ~/.local/share/chezmoi/dot_zshrc.tmpl
 export EDITOR="vim"
@@ -786,6 +789,7 @@ alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 export PATH="$HOME/.local/bin:$PATH"
 {{ end -}}
 ```
+{% endraw %}
 
 ---
 

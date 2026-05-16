@@ -754,6 +754,7 @@ GitLab은 서버 사이드 훅을 직접 지원한다.
 
 ### 8.1 Spring Boot CI 파이프라인
 
+{% raw %}
 ```yaml
 # .github/workflows/ci.yml
 name: CI Pipeline
@@ -835,6 +836,7 @@ jobs:
           npm install @commitlint/cli @commitlint/config-conventional
           npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
 ```
+{% endraw %}
 
 ### 8.2 Branch Protection Rules 설정
 
@@ -886,6 +888,7 @@ graph LR
 
 **전략 2: 테스트 병렬화**
 
+{% raw %}
 ```yaml
 jobs:
   test:
@@ -897,6 +900,7 @@ jobs:
       - name: 테스트 실행
         run: ./gradlew ${{ matrix.test-group }}Test
 ```
+{% endraw %}
 
 **전략 3: Gradle Build Cache 서버**
 
@@ -945,6 +949,7 @@ Conventional Commits를 도입하면 **버전 관리를 완전 자동화**할 �
 
 ### 9.3 GitHub Actions로 자동 릴리즈
 
+{% raw %}
 ```yaml
 # .github/workflows/release.yml
 name: Release
@@ -981,6 +986,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
 ```
+{% endraw %}
 
 ### 9.4 Gradle 버전 자동 반영
 
@@ -1032,6 +1038,7 @@ Git Hooks의 가장 큰 약점은 `--no-verify` 플래그로 쉽게 우회할 �
 
 GitHub Actions에서 `--no-verify` 사용을 감지하고 경고하는 방법이다.
 
+{% raw %}
 ```yaml
 # .github/workflows/hook-audit.yml
 name: Hook Bypass Audit
@@ -1072,6 +1079,7 @@ jobs:
 
           echo "모든 커밋 메시지 검증 통과!"
 ```
+{% endraw %}
 
 ### 10.3 Git Alias로 --no-verify 차단
 

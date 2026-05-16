@@ -779,6 +779,7 @@ mvn -o verify
 
 ### Gradle CI 최적화
 
+{% raw %}
 ```yaml
 # GitHub Actions — Gradle
 name: Gradle CI
@@ -802,6 +803,7 @@ jobs:
       - name: Build
         run: ./gradlew build --parallel --build-cache
 ```
+{% endraw %}
 
 Gradle CI에서 빌드 시간을 줄이는 핵심 설정:
 
