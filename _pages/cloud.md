@@ -1,6 +1,6 @@
 ---
 title: "CLOUD"
-layout: default
+layout: category-page
 permalink: /categories/cloud/
 ---
 

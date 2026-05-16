@@ -1,6 +1,6 @@
 ---
 title: "Http"
-layout: default
+layout: category-page
 permalink: /categories/http/
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "JPA"
-layout: default
+layout: category-page
 permalink: /categories/jpa/
 ---
 

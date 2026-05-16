@@ -1,6 +1,6 @@
 ---
 title: "KOTLIN"
-layout: default
+layout: category-page
 permalink: /categories/kotlin/
 ---
 

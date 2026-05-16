@@ -1,6 +1,6 @@
 ---
 title: "MONITORING"
-layout: default
+layout: category-page
 permalink: /categories/monitoring/
 ---
 

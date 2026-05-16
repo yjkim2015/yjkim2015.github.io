@@ -1,6 +1,6 @@
 ---
 title: "AI"
-layout: default
+layout: category-page
 permalink: /categories/ai/
 ---
 

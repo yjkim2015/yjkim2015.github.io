@@ -1,6 +1,6 @@
 ---
 title: "SECURITY"
-layout: default
+layout: category-page
 permalink: /categories/security/
 ---
 

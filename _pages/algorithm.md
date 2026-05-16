@@ -1,6 +1,6 @@
 ---
 title: "Algorithm"
-layout: default
+layout: category-page
 permalink: /categories/algorithm/
 ---
 

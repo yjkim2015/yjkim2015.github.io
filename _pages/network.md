@@ -1,6 +1,6 @@
 ---
 title: "NETWORK"
-layout: default
+layout: category-page
 permalink: /categories/network/
 ---
 

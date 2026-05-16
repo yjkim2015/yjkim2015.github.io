@@ -1,6 +1,6 @@
 ---
 title: "CICD"
-layout: default
+layout: category-page
 permalink: /categories/cicd/
 ---
 

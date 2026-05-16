@@ -1,6 +1,6 @@
 ---
 title: "FRONTEND"
-layout: default
+layout: category-page
 permalink: /categories/frontend/
 ---
 

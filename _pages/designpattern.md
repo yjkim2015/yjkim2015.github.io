@@ -1,6 +1,6 @@
 ---
 title: "DesignPattern"
-layout: default
+layout: category-page
 permalink: /categories/designpattern/
 ---
 

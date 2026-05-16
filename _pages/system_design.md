@@ -1,6 +1,6 @@
 ---
 title: "SYSTEMDESIGN"
-layout: default
+layout: category-page
 permalink: /categories/systemdesign/
 ---
 

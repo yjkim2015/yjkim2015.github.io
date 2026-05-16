@@ -1,6 +1,6 @@
 ---
 title: "KAFKA"
-layout: default
+layout: category-page
 permalink: /categories/kafka/
 ---
 

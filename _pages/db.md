@@ -1,6 +1,6 @@
 ---
 title: "DB"
-layout: default
+layout: category-page
 permalink: /categories/db/
 ---
 

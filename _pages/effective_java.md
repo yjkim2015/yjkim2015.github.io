@@ -1,6 +1,6 @@
 ---
 title: "EFFECTIVE_JAVA"
-layout: default
+layout: category-page
 permalink: /categories/effective_java/
 ---
 

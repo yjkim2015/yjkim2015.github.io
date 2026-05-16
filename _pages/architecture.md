@@ -1,6 +1,6 @@
 ---
 title: "ARCHITECTURE"
-layout: default
+layout: category-page
 permalink: /categories/architecture/
 ---
 

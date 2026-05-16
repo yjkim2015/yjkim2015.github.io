@@ -1,6 +1,6 @@
 ---
 title: "NOSQL"
-layout: default
+layout: category-page
 permalink: /categories/nosql/
 ---
 

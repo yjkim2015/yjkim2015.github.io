@@ -1,0 +1,38 @@
+---
+layout: default
+---
+
+<div class="single-layout-flex" style="display:flex; justify-content:center; padding:2em 1em;">
+
+  <!-- 왼쪽 광고 — 모바일에서 숨김 -->
+  <aside class="sidebar-ad sidebar-ad--left">
+    <div style="position:sticky; top:5em;">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-7225106491387870"
+           data-ad-slot="4201407843"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  </aside>
+
+  <!-- 중앙: 카테고리 콘텐츠 -->
+  <div style="max-width:1100px; flex:1; min-width:0;">
+    {{ content }}
+  </div>
+
+  <!-- 오른쪽 광고 — 모바일에서 숨김 -->
+  <aside class="sidebar-ad sidebar-ad--right">
+    <div style="position:sticky; top:5em;">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-7225106491387870"
+           data-ad-slot="4201407843"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  </aside>
+
+</div>

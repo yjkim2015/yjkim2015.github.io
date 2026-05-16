@@ -1,6 +1,6 @@
 ---
 title: "TEST"
-layout: default
+layout: category-page
 permalink: /categories/test/
 ---
 

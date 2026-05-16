@@ -1,6 +1,6 @@
 ---
 title: "BATCH"
-layout: default
+layout: category-page
 permalink: /categories/batch/
 ---
 

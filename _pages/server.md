@@ -1,6 +1,6 @@
 ---
 title: "SERVER"
-layout: default
+layout: category-page
 permalink: /categories/server/
 ---
 

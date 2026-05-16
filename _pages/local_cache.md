@@ -1,6 +1,6 @@
 ---
 title: "LOCAL_CACHE"
-layout: default
+layout: category-page
 permalink: /categories/local_cache/
 ---
 

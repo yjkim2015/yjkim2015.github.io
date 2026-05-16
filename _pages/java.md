@@ -1,6 +1,6 @@
 ---
 title: "JAVA"
-layout: default
+layout: category-page
 permalink: /categories/java/
 ---
 

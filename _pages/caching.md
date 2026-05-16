@@ -1,6 +1,6 @@
 ---
 title: "CACHING"
-layout: default
+layout: category-page
 permalink: /categories/caching/
 ---
 
