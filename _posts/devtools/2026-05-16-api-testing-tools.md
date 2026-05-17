@@ -296,17 +296,17 @@ resources:
   - _type: request
     name: Create User
     method: POST
-    url: "{% raw %}{{ _.baseUrl }}{% endraw %}/users"
+    url: "{{ _.baseUrl }}/users"
     body:
       mimeType: application/json
       text: |
         {
-          "name": "{% raw %}{{ _.userName }}{% endraw %}",
-          "email": "{% raw %}{{ _.userEmail }}{% endraw %}"
+          "name": "{{ _.userName }}",
+          "email": "{{ _.userEmail }}"
         }
     headers:
       - name: Authorization
-        value: "Bearer {% raw %}{{ _.token }}{% endraw %}"
+        value: "Bearer {{ _.token }}"
 ```
 {% endraw %}
 

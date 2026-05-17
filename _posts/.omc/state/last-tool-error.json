@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd \\\"/c/Users/Kim/OneDrive/문서/yjkim2015.github.io/_posts\\\" && python3 -c \\\"\\nimport glob, re\\n\\nfiles = glob.glob('**/*.md', recursive=True)\\nviolations = []\\n\\nfor f in files:\\n    with o...",
-  "error": "Exit code 2\n/usr/bin/bash: eval: line 79: syntax error near unexpected token `('\n/usr/bin/bash: eval: line 79: `                ids += re.findall(r'-->\\s*([A-Za-z_][A-Za-z0-9_]*)', line)'",
-  "timestamp": "2026-05-14T12:44:06.122Z",
-  "retry_count": 1
-}
