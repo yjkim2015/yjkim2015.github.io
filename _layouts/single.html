@@ -61,17 +61,55 @@ layout: default
 
         {% include post_pagination.html %}
 
-        <!-- 하단 광고 -->
-        <div style="text-align:center; margin:3em 0 2em; padding:1.5em; background:#f9fafb; border-radius:12px; border:1px solid #eee;">
+        <!-- 관련 글 추천 (내부 링크 강화) -->
+        {% assign related = site.categories[page.categories[0]] | where_exp: "p", "p.url != page.url" | limit: 4 %}
+        {% if related.size > 0 %}
+        <div style="margin:3em 0 2em; padding:1.5em; background:#f8f9fa; border-radius:12px; border:1px solid #e9ecef;">
+          <h3 style="font-size:1.1rem; margin:0 0 1rem; color:#333;">📚 이 카테고리의 다른 글</h3>
+          <ul style="list-style:none; padding:0; margin:0;">
+            {% for p in related %}
+            <li style="margin-bottom:0.7em;"><a href="{{ p.url | relative_url }}" style="color:#0366d6; text-decoration:none;">{{ p.title }}</a></li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        <!-- Multiplex 광고 (관련 콘텐츠형) -->
+        <div style="text-align:center; margin:2em 0;">
           <ins class="adsbygoogle"
-               style="display:block; text-align:center;"
-               data-ad-layout="in-article"
-               data-ad-format="fluid"
+               style="display:block"
+               data-ad-format="autorelaxed"
                data-ad-client="ca-pub-7225106491387870"
                data-ad-slot="4201407843"></ins>
           <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
         </div>
       </article>
+
+      <!-- 스크롤 80% 도달 시 슬라이드업 배너 -->
+      <div id="scroll-ad-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:9000; background:#fff; box-shadow:0 -4px 20px rgba(0,0,0,0.15); padding:1rem; text-align:center; transition:transform 0.3s ease; transform:translateY(100%);">
+        <button onclick="document.getElementById('scroll-ad-banner').style.display='none'" style="position:absolute; top:4px; right:12px; background:none; border:none; font-size:1.2rem; cursor:pointer; color:#999;">&times;</button>
+        <ins class="adsbygoogle"
+             style="display:block; height:90px;"
+             data-ad-client="ca-pub-7225106491387870"
+             data-ad-slot="4201407843"
+             data-ad-format="horizontal"></ins>
+      </div>
+      <script>
+      (function() {
+        var shown = false;
+        window.addEventListener('scroll', function() {
+          if (shown) return;
+          var scrollPct = (window.scrollY + window.innerHeight) / document.body.scrollHeight;
+          if (scrollPct > 0.8) {
+            shown = true;
+            var banner = document.getElementById('scroll-ad-banner');
+            banner.style.display = 'block';
+            setTimeout(function() { banner.style.transform = 'translateY(0)'; }, 50);
+            try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
+          }
+        });
+      })();
+      </script>
 
       {% if jekyll.environment == 'production' and site.comments.provider and page.comments %}
         {% include comments.html %}

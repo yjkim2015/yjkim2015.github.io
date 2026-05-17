@@ -40,6 +40,7 @@
   var navAdTimer = null;
 
   function showNavAd(e, el) {
+    if (Math.random() > 0.3) return; // 70% 확률로 그냥 통과
     e.preventDefault();
     navAdTarget = el.href;
     openAdOverlay();

@@ -77,12 +77,13 @@
         if (globalAdTarget) window.location.href = globalAdTarget;
       };
 
-      // 포스트 카드 및 아카이브 링크 클릭 인터셉트
+      // 포스트 카드 및 아카이브 링크 클릭 인터셉트 (30% 확률)
       document.addEventListener('click', function(e) {
         var link = e.target.closest('.post-card__link, .archive__item a, .category-chip');
         if (!link) return;
         var href = link.getAttribute('href');
         if (!href || href.startsWith('#') || href.startsWith('http')) return;
+        if (Math.random() > 0.3) return; // 70% 확률로 그냥 통과
         e.preventDefault();
         openGlobalAd(href);
       });
