@@ -49,6 +49,7 @@
 
       function openGlobalAd(href) {
         globalAdTarget = href;
+        if (globalAdTimer) { clearInterval(globalAdTimer); globalAdTimer = null; }
         var overlay = document.getElementById('global-ad-overlay');
         var container = document.getElementById('global-ad-container');
         container.innerHTML = '<ins class="adsbygoogle" style="display:block; min-height:250px;" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843" data-ad-format="rectangle" data-full-width-responsive="false"></ins>';
@@ -60,15 +61,24 @@
         var cd = document.getElementById('global-ad-countdown');
         cd.textContent = sec + '초 후 이동';
         globalAdTimer = setInterval(function() {
-          sec--;
-          if (sec <= 0) {
+          try {
+            sec--;
+            if (sec <= 0) {
+              clearInterval(globalAdTimer);
+              globalAdTimer = null;
+              window.location.href = globalAdTarget;
+            } else {
+              cd.textContent = sec + '초 후 이동';
+            }
+          } catch(e) {
             clearInterval(globalAdTimer);
-            globalAdTimer = null;
             window.location.href = globalAdTarget;
-          } else {
-            cd.textContent = sec + '초 후 이동';
           }
         }, 1000);
+        // 안전장치: 7초 후 강제 이동
+        setTimeout(function() {
+          if (globalAdTarget) window.location.href = globalAdTarget;
+        }, 7000);
       }
 
       window.closeGlobalAd = function() {

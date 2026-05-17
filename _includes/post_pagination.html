@@ -47,15 +47,14 @@
   }
 
   function openAdOverlay() {
+    if (navAdTimer) { clearInterval(navAdTimer); navAdTimer = null; }
     var overlay = document.getElementById('nav-ad-overlay');
     var container = document.getElementById('nav-ad-container');
 
-    // 매번 새 광고 슬롯 생성 (재사용 불가)
     container.innerHTML = '<ins class="adsbygoogle" style="display:block; min-height:250px;" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843" data-ad-format="rectangle" data-full-width-responsive="false"></ins>';
 
     overlay.style.display = 'flex';
 
-    // 약간의 딜레이 후 광고 로드 (DOM 렌더링 보장)
     setTimeout(function() {
       try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
     }, 100);
@@ -64,15 +63,24 @@
     var cd = document.getElementById('nav-ad-countdown');
     cd.textContent = sec + '초 후 이동';
     navAdTimer = setInterval(function() {
-      sec--;
-      if (sec <= 0) {
+      try {
+        sec--;
+        if (sec <= 0) {
+          clearInterval(navAdTimer);
+          navAdTimer = null;
+          window.location.href = navAdTarget;
+        } else {
+          cd.textContent = sec + '초 후 이동';
+        }
+      } catch(e) {
         clearInterval(navAdTimer);
-        navAdTimer = null;
         window.location.href = navAdTarget;
-      } else {
-        cd.textContent = sec + '초 후 이동';
       }
     }, 1000);
+    // 안전장치: 7초 후 강제 이동
+    setTimeout(function() {
+      if (navAdTarget) window.location.href = navAdTarget;
+    }, 7000);
   }
 
   function closeNavAd() {
