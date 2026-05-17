@@ -20,10 +20,10 @@ redirect_from:
   - /security/권한-설정-및-표현식/
   - /security/예외-처리-및-요청-캐시-필터/
   - /security/delegatingfilterproxy/
-  - /security/사이트-간-요청-위조-csrf,-csrffilter/
+  - /security/사이트-간-요청-위조-csrf-csrffilter/
   - /security/authentication/
   - /security/필터-초기화와-다중-보안-설정/
-  - /security/securitycontextholder,-securitycontext/
+  - /security/securitycontextholder-securitycontext/
   - /security/securitycontextpersistentfilter/
   - /security/authenticationflow/
   - /security/authenticationmanager/
