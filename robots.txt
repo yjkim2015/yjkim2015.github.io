@@ -2,3 +2,9 @@ User-agent: *
 Allow: /
 
 Sitemap: https://yjkim2015.github.io/sitemap.xml
+
+# Block crawling of low-value pages
+Disallow: /page*/
+Disallow: /tags/
+Disallow: /assets/
+Disallow: /.omc/

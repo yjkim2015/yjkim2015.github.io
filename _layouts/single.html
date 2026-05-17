@@ -74,6 +74,14 @@ layout: default
         </div>
         {% endif %}
 
+        {% if page.categories contains "INTERVIEW" %}
+        <div style="margin:2em 0; padding:1.5em; background:#fff3cd; border:1px solid #ffc107; border-radius:12px; text-align:center;">
+          <p style="font-size:1.1rem; font-weight:600; margin:0 0 0.5em; color:#856404;">면접 준비, 혼자 하지 마세요</p>
+          <p style="font-size:0.9rem; color:#856404; margin:0 0 1em;">현직 시니어가 1:1로 봐주는 모의면접 코칭</p>
+          <a href="/interview/mock-interview-service/" style="display:inline-block; padding:0.7em 2em; background:#ffc107; color:#333; border-radius:8px; text-decoration:none; font-weight:600;">모의면접 알아보기 →</a>
+        </div>
+        {% endif %}
+
         <!-- 시리즈 연결 CTA -->
         <div style="margin:2em 0; padding:1.5em; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:12px; text-align:center;">
           <p style="color:#fff; font-size:1.1rem; margin:0 0 0.5em; font-weight:600;">이 글이 도움이 됐다면?</p>
@@ -159,3 +167,46 @@ layout: default
   </aside>
 
 </div>
+
+<!-- 무한 스크롤: 다음 글 자동 로드 -->
+{% if page.next %}
+<div id="infinite-scroll-container" data-next-url="{{ page.next.url | relative_url }}"></div>
+<script>
+(function() {
+  var loaded = false;
+  var container = document.getElementById('infinite-scroll-container');
+  if (!container) return;
+  var nextUrl = container.dataset.nextUrl;
+
+  window.addEventListener('scroll', function() {
+    if (loaded) return;
+    var rect = container.getBoundingClientRect();
+    if (rect.top < window.innerHeight + 500) {
+      loaded = true;
+      fetch(nextUrl)
+        .then(function(r) { return r.text(); })
+        .then(function(html) {
+          var parser = new DOMParser();
+          var doc = parser.parseFromString(html, 'text/html');
+          var content = doc.querySelector('.page__content');
+          var title = doc.querySelector('.page__title');
+          if (content && title) {
+            var wrapper = document.createElement('div');
+            wrapper.style.cssText = 'margin-top:4em; padding-top:3em; border-top:3px solid #e1e4e8;';
+            wrapper.innerHTML = '<h1 style="font-size:1.5rem; margin-bottom:1em;">' + title.innerHTML + '</h1>' + content.innerHTML;
+
+            // 광고 삽입
+            var adDiv = document.createElement('div');
+            adDiv.style.cssText = 'text-align:center; margin:2em 0;';
+            adDiv.innerHTML = '<ins class="adsbygoogle" style="display:block; text-align:center;" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843"></ins>';
+            wrapper.insertBefore(adDiv, wrapper.children[1]);
+
+            container.appendChild(wrapper);
+            try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
+          }
+        });
+    }
+  });
+})();
+</script>
+{% endif %}

@@ -1,0 +1,31 @@
+{% if page.layout == 'single' or page.title %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": {{ page.title | jsonify }},
+  "author": {"@type": "Person", "name": "YJ Kim"},
+  "datePublished": "{{ page.date | date_to_xmlschema }}",
+  "dateModified": "{{ page.last_modified_at | default: page.date | date_to_xmlschema }}",
+  "publisher": {"@type": "Organization", "name": "YJ Kim Devlog"},
+  "description": {{ page.excerpt | strip_html | truncate: 160 | jsonify }},
+  "mainEntityOfPage": {"@type": "WebPage", "@id": "{{ page.url | absolute_url }}"}
+}
+</script>
+{% endif %}
+
+{% if site.breadcrumbs %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ '/' | absolute_url }}"},
+    {% if page.categories.size > 0 %}
+    {"@type": "ListItem", "position": 2, "name": "{{ page.categories | first }}", "item": "{{ '/categories/' | append: page.categories.first | downcase | append: '/' | absolute_url }}"},
+    {% endif %}
+    {"@type": "ListItem", "position": 3, "name": {{ page.title | jsonify }}}
+  ]
+}
+</script>
+{% endif %}

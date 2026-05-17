@@ -54,7 +54,21 @@
     flowchart:{curve:'basis',htmlLabels:true,useMaxWidth:false,nodeSpacing:44,rankSpacing:54,padding:20},
     sequence:{mirrorActors:true,useMaxWidth:false}
   });
-  mermaid.run();
+  if ('IntersectionObserver' in window) {
+    var mermaidObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          mermaid.init(undefined, entry.target);
+          mermaidObserver.unobserve(entry.target);
+        }
+      });
+    }, {rootMargin: '200px'});
+    document.querySelectorAll('.mermaid').forEach(function(el) {
+      mermaidObserver.observe(el);
+    });
+  } else {
+    mermaid.run();
+  }
 })();
 </script>
 
