@@ -33,5 +33,61 @@
 
     {% include scripts.html %}
 
+    <!-- 글로벌 전면 광고 오버레이 (포스트 카드 클릭 시) -->
+    <div id="global-ad-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); justify-content:center; align-items:center;">
+      <div style="background:#fff; border-radius:12px; padding:1.5rem; max-width:400px; width:90%; text-align:center; position:relative;">
+        <button onclick="closeGlobalAd()" style="position:absolute; top:8px; right:12px; background:none; border:none; font-size:1.5rem; cursor:pointer; color:#666;">&times;</button>
+        <p style="margin:0 0 1rem; font-size:0.85rem; color:#888;">잠시 후 이동합니다</p>
+        <div id="global-ad-container"></div>
+        <div id="global-ad-countdown" style="margin-top:1rem; font-size:0.9rem; color:#555;"></div>
+      </div>
+    </div>
+    <script>
+    (function() {
+      var globalAdTarget = null;
+      var globalAdTimer = null;
+
+      function openGlobalAd(href) {
+        globalAdTarget = href;
+        var overlay = document.getElementById('global-ad-overlay');
+        var container = document.getElementById('global-ad-container');
+        container.innerHTML = '<ins class="adsbygoogle" style="display:block; min-height:250px;" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843" data-ad-format="rectangle" data-full-width-responsive="false"></ins>';
+        overlay.style.display = 'flex';
+        setTimeout(function() {
+          try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
+        }, 100);
+        var sec = 5;
+        var cd = document.getElementById('global-ad-countdown');
+        cd.textContent = sec + '초 후 이동';
+        globalAdTimer = setInterval(function() {
+          sec--;
+          if (sec <= 0) {
+            clearInterval(globalAdTimer);
+            globalAdTimer = null;
+            window.location.href = globalAdTarget;
+          } else {
+            cd.textContent = sec + '초 후 이동';
+          }
+        }, 1000);
+      }
+
+      window.closeGlobalAd = function() {
+        if (globalAdTimer) { clearInterval(globalAdTimer); globalAdTimer = null; }
+        document.getElementById('global-ad-overlay').style.display = 'none';
+        if (globalAdTarget) window.location.href = globalAdTarget;
+      };
+
+      // 포스트 카드 및 아카이브 링크 클릭 인터셉트
+      document.addEventListener('click', function(e) {
+        var link = e.target.closest('.post-card__link, .archive__item a, .category-chip');
+        if (!link) return;
+        var href = link.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('http')) return;
+        e.preventDefault();
+        openGlobalAd(href);
+      });
+    })();
+    </script>
+
   </body>
 </html>
