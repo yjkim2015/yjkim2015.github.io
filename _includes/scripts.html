@@ -94,22 +94,24 @@
   var headings = Array.from(content.querySelectorAll('h2'));
   var foundExtreme = false;
 
+  // 접기/펼치기 대상 키워드 목록
+  var collapseKeywords = ['극한 시나리오', '극한시나리오', '실무에서 자주 하는 실수', '실무 실수', '실무에서 놓치기 쉬운', '실제 장애 사례'];
+
   headings.forEach(function(h2) {
     var text = h2.textContent || '';
 
-    // 극한 시나리오를 만나면 플래그 ON
-    if (text.indexOf('극한 시나리오') !== -1 || text.indexOf('극한시나리오') !== -1) {
-      foundExtreme = true;
-    }
-
-    // 면접 포인트를 만나면 극한 시나리오 접기/펼치기 중단
+    // 면접 포인트를 만나면 중단
     if (text.indexOf('면접 포인트') !== -1 || text.indexOf('면접포인트') !== -1) {
       foundExtreme = false;
       return;
     }
 
-    // 극한 시나리오 포함, 그 이후 ~ 면접 포인트 전까지 h2를 접기/펼치기로
-    if (!foundExtreme) return;
+    // 대상 키워드 매칭
+    var isTarget = collapseKeywords.some(function(kw) { return text.indexOf(kw) !== -1; });
+    if (isTarget) { foundExtreme = true; }
+
+    // 극한 시나리오 플래그 OR 직접 매칭된 경우
+    if (!foundExtreme && !isTarget) return;
 
     var siblings = [];
     var next = h2.nextElementSibling;
