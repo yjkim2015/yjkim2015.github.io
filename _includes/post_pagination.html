@@ -40,7 +40,7 @@
   var navAdTimer = null;
 
   function showNavAd(e, el) {
-    if (Math.random() > 0.3) return; // 70% 확률로 그냥 통과
+    if (Math.random() > 0.25) return; // 75% 확률로 그냥 통과
     e.preventDefault();
     navAdTarget = el.href;
     openAdOverlay();
@@ -89,10 +89,11 @@
     if (navAdTarget) window.location.href = navAdTarget;
   }
 
-  // 브라우저 뒤로가기 감지
+  // 브라우저 뒤로가기 감지 (25% 확률)
   history.pushState(null, '', location.href);
   window.addEventListener('popstate', function() {
     history.pushState(null, '', location.href);
+    if (Math.random() > 0.25) { history.back(); return; }
     navAdTarget = document.referrer || '/';
     openAdOverlay();
   });
