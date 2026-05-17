@@ -503,6 +503,125 @@ Redis였다면 `SET NX EX`로 락을 잡고, 하나의 프로세스만 DB를 조
 
 ---
 
+## Pub/Sub — Redis만의 기능
+
+Memcached에는 Pub/Sub 기능이 전혀 없다. Redis는 채널 기반의 메시지 발행/구독을 내장한다.
+
+```java
+// Spring Data Redis — Pub/Sub
+@Configuration
+public class RedisPubSubConfig {
+
+    @Bean
+    public RedisMessageListenerContainer redisMessageListenerContainer(
+            RedisConnectionFactory connectionFactory,
+            MessageListenerAdapter listenerAdapter) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+        // "notifications" 채널 구독
+        container.addMessageListener(listenerAdapter,
+            new PatternTopic("notifications.*"));  // 패턴 구독
+        return container;
+    }
+
+    @Bean
+    public MessageListenerAdapter listenerAdapter(NotificationSubscriber subscriber) {
+        return new MessageListenerAdapter(subscriber, "handleMessage");
+    }
+}
+
+@Component
+public class NotificationSubscriber {
+    public void handleMessage(String message, String channel) {
+        log.info("채널 {}: 메시지 수신 — {}", channel, message);
+        // 실시간 알림, 캐시 무효화, 설정 변경 전파 등
+    }
+}
+
+// 발행
+@Service
+public class NotificationPublisher {
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    public void publish(String channel, String message) {
+        redisTemplate.convertAndSend(channel, message);
+    }
+}
+```
+
+Redis Pub/Sub의 주요 활용:
+- **캐시 무효화 전파**: 한 서버가 캐시를 갱신하면 전체 서버에 알림
+- **실시간 알림**: WebSocket 서버 여러 대에 이벤트 브로드캐스트
+- **설정 변경 전파**: 피처 플래그, 설정값 실시간 배포
+
+> **비유**: Redis Pub/Sub는 방송국이다. 채널을 개설하고 메시지를 송출하면, 그 채널을 구독한 모든 수신자가 동시에 받는다. Memcached는 방송 기능이 없는 창고다.
+
+단, Redis Pub/Sub는 메시지를 보존하지 않는다. 구독자가 없을 때 발행된 메시지는 유실된다. 내구성이 필요하면 Redis Streams를 사용해야 한다.
+
+---
+
+## 보안 설정 비교
+
+### Memcached 보안의 한계
+
+Memcached는 기본적으로 인증이 없다. 네트워크 접근 제어가 유일한 방어선이다.
+
+```bash
+# Memcached — 인증 없음, 바인딩으로만 보호
+memcached -l 127.0.0.1 -p 11211  # localhost만 허용
+
+# SASL 인증 (선택적, 활성화 필요)
+memcached -S  # SASL 활성화 (별도 빌드 필요)
+```
+
+Memcached가 공개 네트워크에 노출되면 누구나 데이터를 읽고 쓸 수 있다. 2018년 Memcached를 이용한 대규모 DDoS 증폭 공격(memcrashed)이 발생했다. Memcached를 반드시 내부 네트워크에서만 운영해야 하는 이유다.
+
+### Redis 보안 설정
+
+```bash
+# redis.conf — 다층 보안
+# 1. 바인딩 주소 제한
+bind 127.0.0.1 192.168.1.10  # 특정 인터페이스만 수신
+
+# 2. 비밀번호 인증 (Redis 6.0 이전 단일 비밀번호)
+requirepass your_strong_password_here
+
+# 3. ACL — 사용자별 권한 제어 (Redis 6.0+)
+# redis.conf 또는 ACL 파일
+aclfile /etc/redis/users.acl
+```
+
+```bash
+# ACL 설정 예시
+# users.acl
+# 관리자 계정 — 모든 권한
+user admin on >adminpassword ~* &* +@all
+
+# 읽기 전용 계정 — GET, HGET 등만 허용
+user readonly on >readpassword ~* &* +@read
+
+# 특정 키 패턴만 접근 가능한 서비스 계정
+user order-service on >svcpassword ~order:* &* +@read +@write -@dangerous
+```
+
+```java
+// Spring Boot — Redis ACL 사용자 설정
+spring:
+  data:
+    redis:
+      host: redis-host
+      port: 6379
+      username: order-service     # ACL 사용자
+      password: svcpassword
+      ssl:
+        enabled: true             # TLS 암호화
+```
+
+Redis 6.0+의 ACL은 사용자별로 접근 가능한 키 패턴, 허용 명령어를 세밀하게 제어한다. 마이크로서비스 환경에서 각 서비스가 자신의 키 공간만 접근하도록 제한할 수 있다.
+
+---
+
 ## 면접 포인트
 
 ### Q. Redis와 Memcached의 가장 큰 차이점은 무엇인가요?
