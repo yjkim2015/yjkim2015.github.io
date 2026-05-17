@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1777715861320,
+  "lastScanned": 1778860810971,
   "projectRoot": "C:\\Users\\Kim\\OneDrive\\문서\\yjkim2015.github.io",
   "techStack": {
     "languages": [
@@ -49,7 +49,8 @@
     "mainDirectories": [
       "assets",
       "docs",
-      "pages"
+      "pages",
+      "scripts"
     ],
     "gitBranches": {
       "defaultBranch": "master",
@@ -62,7 +63,7 @@
       "path": "assets",
       "purpose": "Static assets",
       "fileCount": 1,
-      "lastAccessed": 1777715861255,
+      "lastAccessed": 1778860810930,
       "keyFiles": [
         "portfolio.png"
       ]
@@ -71,7 +72,7 @@
       "path": "dest",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1777715861275,
+      "lastAccessed": 1778860810940,
       "keyFiles": [
         "jekyll-search.js",
         "jekyll-search.min.js"
@@ -81,7 +82,7 @@
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 5,
-      "lastAccessed": 1777715861276,
+      "lastAccessed": 1778860810941,
       "keyFiles": [
         "Gemfile",
         "screenshot-layouts.png",
@@ -94,7 +95,7 @@
       "path": "pages",
       "purpose": "Page components",
       "fileCount": 4,
-      "lastAccessed": 1777715861277,
+      "lastAccessed": 1778860810942,
       "keyFiles": [
         "404.md",
         "category-archive.md",
@@ -102,11 +103,24 @@
         "year-archive.md"
       ]
     },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 5,
+      "lastAccessed": 1778860810942,
+      "keyFiles": [
+        "fix-details.py",
+        "fix-liquid.py",
+        "remove-scenario-ads.py",
+        "revert-details.py",
+        "wrap-extreme-scenarios.py"
+      ]
+    },
     "_data": {
       "path": "_data",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1777715861278,
+      "lastAccessed": 1778860810943,
       "keyFiles": [
         "navigation.yml",
         "ui-text.yml"
@@ -115,8 +129,8 @@
     "_includes": {
       "path": "_includes",
       "purpose": null,
-      "fileCount": 37,
-      "lastAccessed": 1777715861279,
+      "fileCount": 38,
+      "lastAccessed": 1778860810944,
       "keyFiles": [
         "analytics.html",
         "archive-single.html",
@@ -129,7 +143,7 @@
       "path": "_layouts",
       "purpose": null,
       "fileCount": 17,
-      "lastAccessed": 1777715861279,
+      "lastAccessed": 1778860810944,
       "keyFiles": [
         "archive-taxonomy.html",
         "archive-year.html",
@@ -142,7 +156,7 @@
       "path": "_pages",
       "purpose": null,
       "fileCount": 26,
-      "lastAccessed": 1777715861280,
+      "lastAccessed": 1778860810945,
       "keyFiles": [
         "ai.md",
         "algorithm.md",
@@ -155,7 +169,7 @@
       "path": "_plugins",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1777715861280,
+      "lastAccessed": 1778860810946,
       "keyFiles": [
         "simple_search_filter.rb"
       ]
@@ -164,14 +178,14 @@
       "path": "_posts",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1777715861281,
+      "lastAccessed": 1778860810946,
       "keyFiles": []
     },
     "_sass": {
       "path": "_sass",
       "purpose": null,
       "fileCount": 7,
-      "lastAccessed": 1777715861281,
+      "lastAccessed": 1778860810947,
       "keyFiles": [
         "custom.scss",
         "dark.scss",
@@ -184,7 +198,7 @@
       "path": "_site",
       "purpose": null,
       "fileCount": 15,
-      "lastAccessed": 1777715861282,
+      "lastAccessed": 1778860810947,
       "keyFiles": [
         "404.html",
         "ads.txt",
@@ -197,14 +211,14 @@
       "path": "docs\\assets",
       "purpose": "Static assets",
       "fileCount": 0,
-      "lastAccessed": 1777715861284,
+      "lastAccessed": 1778860810949,
       "keyFiles": []
     },
     "_site\\assets": {
       "path": "_site\\assets",
       "purpose": "Static assets",
       "fileCount": 1,
-      "lastAccessed": 1777715861290,
+      "lastAccessed": 1778860810952,
       "keyFiles": [
         "portfolio.png"
       ]
@@ -212,303 +226,303 @@
   },
   "hotPaths": [
     {
-      "path": "_posts",
-      "accessCount": 7,
-      "lastAccessed": 1777980569695,
+      "path": "",
+      "accessCount": 16,
+      "lastAccessed": 1778901669106,
       "type": "directory"
     },
     {
-      "path": "_posts\\java\\2026-05-02-java-versions.md",
-      "accessCount": 7,
-      "lastAccessed": 1777992484614,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\java\\2026-05-02-jvm-architecture.md",
-      "accessCount": 6,
-      "lastAccessed": 1777992420163,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\redis\\2026-05-01-redis-replication.md",
-      "accessCount": 6,
-      "lastAccessed": 1777992421724,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\cloud\\2026-05-02-kubernetes-cold-start.md",
-      "accessCount": 6,
-      "lastAccessed": 1777992458529,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2026-05-02-spring-core-basic.md",
-      "accessCount": 6,
-      "lastAccessed": 1777992482957,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2026-05-02-spring-mvc-deep.md",
-      "accessCount": 6,
-      "lastAccessed": 1777992483803,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\jpa\\2021-10-10-Jpa 시작하기.md",
-      "accessCount": 5,
-      "lastAccessed": 1777716513998,
-      "type": "file"
-    },
-    {
-      "path": "_sass\\custom.scss",
-      "accessCount": 5,
-      "lastAccessed": 1777992036968,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\systemdesign\\2026-05-02-system-design-chat.md",
-      "accessCount": 5,
-      "lastAccessed": 1777992444177,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\test\\2026-05-02-tdd-guide.md",
-      "accessCount": 5,
-      "lastAccessed": 1777992473635,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2026-05-01-spring-sleuth-zipkin.md",
-      "accessCount": 5,
-      "lastAccessed": 1777992480163,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2026-05-02-spring-core-advanced.md",
-      "accessCount": 5,
-      "lastAccessed": 1777992481958,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\kafka\\2026-05-02-kafka-deep.md",
+      "path": "_posts\\monitoring\\2026-05-01-monitoring-tools.md",
       "accessCount": 4,
-      "lastAccessed": 1777992418712,
+      "lastAccessed": 1778902141637,
       "type": "file"
     },
     {
-      "path": "_posts\\java\\2026-05-02-java-jit-compiler.md",
-      "accessCount": 4,
-      "lastAccessed": 1777992418903,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\frontend\\2026-05-02-frontend-architecture.md",
-      "accessCount": 4,
-      "lastAccessed": 1777992420676,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\frontend\\2026-05-02-frontend-testing.md",
-      "accessCount": 4,
-      "lastAccessed": 1777992421525,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\frontend\\2026-05-01-nextjs.md",
-      "accessCount": 4,
-      "lastAccessed": 1777992423879,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\frontend\\2026-05-02-browser-rendering.md",
-      "accessCount": 4,
-      "lastAccessed": 1777992424413,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\systemdesign\\2026-05-02-system-design-fundamentals.md",
-      "accessCount": 4,
-      "lastAccessed": 1777992444632,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2026-05-02-spring-boot-autoconfigure.md",
-      "accessCount": 4,
-      "lastAccessed": 1777992480985,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\springboot\\2021-05-30-springboot-회원 관리 예제.md",
+      "path": "_posts",
       "accessCount": 3,
-      "lastAccessed": 1777717082932,
-      "type": "file"
+      "lastAccessed": 1778901413054,
+      "type": "directory"
     },
     {
-      "path": "_posts\\spring\\2022-06-16-제어의역전.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992358030,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2022-06-16-의존관계 주입(DI).md",
-      "accessCount": 3,
-      "lastAccessed": 1777992358413,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2020-08-10-스프링 동작 구조.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992359775,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2026-05-02-spring-security-deep.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992361626,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\db\\2026-05-01-db-locks.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992410350,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\frontend\\2026-05-02-js-closure.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992418751,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\frontend\\2026-05-02-js-async.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992420188,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\frontend\\2026-05-02-js-event-loop.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992425277,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\frontend\\2026-05-02-js-prototype.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992425772,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\architecture\\2026-05-02-msa-deep.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992442507,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\jpa\\2026-05-01-jpa-fundamentals.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992479774,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\jpa\\2026-05-01-jpa-n-plus-1.md",
-      "accessCount": 3,
-      "lastAccessed": 1777992480244,
-      "type": "file"
-    },
-    {
-      "path": "_posts\\spring\\2026-05-01-rate-limiting.md",
+      "path": "_pages\\server.md",
       "accessCount": 2,
-      "lastAccessed": 1777716354260,
+      "lastAccessed": 1778900975001,
       "type": "file"
     },
     {
-      "path": "_posts\\jpa\\2021-10-17-Jpa 영속성 관리.md",
+      "path": "_pages\\ai.md",
       "accessCount": 2,
-      "lastAccessed": 1777716502722,
+      "lastAccessed": 1778900978647,
       "type": "file"
     },
     {
-      "path": "_posts\\jpa\\2021-10-30-엔티티 매핑.md",
+      "path": "_pages\\algorithm.md",
       "accessCount": 2,
-      "lastAccessed": 1777716574894,
+      "lastAccessed": 1778900979423,
       "type": "file"
     },
     {
-      "path": "_posts\\springboot\\2021-04-27-springboot-프로젝트생성.md",
+      "path": "_pages\\architecture.md",
       "accessCount": 2,
-      "lastAccessed": 1777716648995,
+      "lastAccessed": 1778900980473,
       "type": "file"
     },
     {
-      "path": "_posts\\springboot\\2021-05-19-springboot-View 환경설정.md",
+      "path": "_pages\\batch.md",
       "accessCount": 2,
-      "lastAccessed": 1777716694089,
+      "lastAccessed": 1778900980971,
       "type": "file"
     },
     {
-      "path": "_posts\\springboot\\2021-05-22-springboot-정적 컨텐츠, 템플릿, API.md",
+      "path": "_pages\\caching.md",
       "accessCount": 2,
-      "lastAccessed": 1777716751734,
+      "lastAccessed": 1778900981767,
       "type": "file"
     },
     {
-      "path": "_posts\\spring\\2022-06-16-싱글톤 레지스트리와 오브젝트 스코프.md",
+      "path": "_pages\\cicd.md",
       "accessCount": 2,
-      "lastAccessed": 1777717211927,
+      "lastAccessed": 1778900982791,
       "type": "file"
     },
     {
-      "path": "_posts\\spring\\2021-10-29-filter.md",
+      "path": "_pages\\spring.md",
       "accessCount": 2,
-      "lastAccessed": 1777717270969,
+      "lastAccessed": 1778900996895,
       "type": "file"
     },
     {
-      "path": "_includes\\extreme-scenario.html",
+      "path": "_pages\\cloud.md",
       "accessCount": 2,
-      "lastAccessed": 1777939610292,
+      "lastAccessed": 1778901015610,
       "type": "file"
     },
     {
-      "path": "_posts\\architecture\\2026-05-01-ddd.md",
+      "path": "_pages\\db.md",
       "accessCount": 2,
-      "lastAccessed": 1777992438607,
+      "lastAccessed": 1778901016541,
       "type": "file"
     },
     {
-      "path": "_posts\\architecture\\2026-05-01-event-driven.md",
+      "path": "_pages\\designpattern.md",
       "accessCount": 2,
-      "lastAccessed": 1777992439777,
+      "lastAccessed": 1778901017588,
       "type": "file"
     },
     {
-      "path": "_posts\\server\\2026-05-01-nginx.md",
+      "path": "_pages\\effective_java.md",
       "accessCount": 2,
-      "lastAccessed": 1777992477862,
+      "lastAccessed": 1778901018407,
       "type": "file"
     },
     {
-      "path": "_posts\\network\\2026-05-02-l4-l7-load-balancer.md",
-      "accessCount": 1,
-      "lastAccessed": 1777716129535,
+      "path": "_pages\\frontend.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901019308,
       "type": "file"
     },
     {
-      "path": "_posts\\server\\2026-05-02-nginx-deep.md",
-      "accessCount": 1,
-      "lastAccessed": 1777716132423,
+      "path": "_pages\\http.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901019826,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\java.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901020864,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\jpa.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901021830,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\kafka.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901022248,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\kotlin.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901023147,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\local_cache.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901024203,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\monitoring.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901024660,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\network.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901025513,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\nosql.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901026538,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\redis.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901026996,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\security.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901028238,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\system_design.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901028956,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\test.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901029494,
+      "type": "file"
+    },
+    {
+      "path": "_pages",
+      "accessCount": 2,
+      "lastAccessed": 1778901034598,
+      "type": "directory"
+    },
+    {
+      "path": "_posts\\cicd\\2026-05-03-github-actions-deep.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901393605,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-14-db-deadlock.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901657932,
       "type": "file"
     },
     {
       "path": "_posts\\ai\\2026-05-01-ai-driven-development.md",
-      "accessCount": 1,
-      "lastAccessed": 1777716372012,
+      "accessCount": 2,
+      "lastAccessed": 1778901672366,
       "type": "file"
     },
     {
-      "path": "_posts\\ai\\2026-05-01-ai-tools.md",
+      "path": "_posts\\java\\2026-05-01-java-collections.md",
+      "accessCount": 2,
+      "lastAccessed": 1778901690383,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\devtools.md",
+      "accessCount": 2,
+      "lastAccessed": 1778903087617,
+      "type": "file"
+    },
+    {
+      "path": "_pages\\git.md",
+      "accessCount": 2,
+      "lastAccessed": 1778903087915,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\devtools\\2026-05-16-api-testing-tools.md",
+      "accessCount": 2,
+      "lastAccessed": 1778903157503,
+      "type": "file"
+    },
+    {
+      "path": "_layouts\\default.html",
       "accessCount": 1,
-      "lastAccessed": 1777716372392,
+      "lastAccessed": 1778900944816,
+      "type": "file"
+    },
+    {
+      "path": "_layouts\\single.html",
+      "accessCount": 1,
+      "lastAccessed": 1778900945242,
+      "type": "file"
+    },
+    {
+      "path": "_layouts\\category.html",
+      "accessCount": 1,
+      "lastAccessed": 1778900954000,
+      "type": "file"
+    },
+    {
+      "path": "_layouts\\category-page.html",
+      "accessCount": 1,
+      "lastAccessed": 1778900962521,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\cloud\\2026-05-01-docker.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901276436,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\db\\2026-05-01-db-comparison.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901379653,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\designPattern\\2026-05-12-behavioral-patterns.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901392884,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\spring\\2026-05-12-webclient-thread-model.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901406479,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\kafka\\2026-05-03-kafka-practical-patterns.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901406945,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\redis\\2026-05-11-redis-streams.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901414655,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\kafka\\2026-05-01-kafka-fundamentals.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901427838,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\redis\\2026-05-12-redis-transaction.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901642991,
+      "type": "file"
+    },
+    {
+      "path": "_posts\\devtools\\2026-05-16-intellij-idea-backend.md",
+      "accessCount": 1,
+      "lastAccessed": 1778901677447,
       "type": "file"
     }
   ],

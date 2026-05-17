@@ -6,27 +6,6 @@ toc: true
 toc_sticky: true
 toc_label: 목차
 date: 2026-05-01
-redirect_from:
-  - /security/spring-boot-security-프로젝트-생성/
-  - /security/사용자-정의-보완-기능-구현/
-  - /security/form-인증-방식/
-  - /security/logout/
-  - /security/rememberme/
-  - /security/anonymousauthenticationfilter/
-  - /security/remembermeauthentication/
-  - /security/동시-세션제어/
-  - /security/세션-고정-보호/
-  - /security/세션-제어-필터/
-  - /security/권한-설정-및-표현식/
-  - /security/예외-처리-및-요청-캐시-필터/
-  - /security/delegatingfilterproxy/
-  - /security/사이트-간-요청-위조-csrf-csrffilter/
-  - /security/authentication/
-  - /security/필터-초기화와-다중-보안-설정/
-  - /security/securitycontextholder-securitycontext/
-  - /security/securitycontextpersistentfilter/
-  - /security/authenticationflow/
-  - /security/authenticationmanager/
 ---
 
 JWT 없는 요청이 `/api/admin`을 통과했다. 필터가 누락됐는지, 순서가 잘못됐는지, SecurityContext가 비어있는지 -- Spring Security 아키텍처를 모르면 어디서 막혀야 하는지조차 알 수 없다. 내부 메커니즘을 모르고 어노테이션만 붙이다 보면 보안 구멍은 반드시 생긴다.
