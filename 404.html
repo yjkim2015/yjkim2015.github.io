@@ -1,34 +1,25 @@
 ---
-title: Page Not Found
+layout: default
 ---
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	{%- include head.html -%}
-	<style>
-	h2 {
-		font-feature-settings: "lnum";
-		background-color: #ddd;
-		width: 140px;
-		height: 140px;
-		border-radius: 100%;
-		display: flex;
-		justify-content: center;
-		align-items: center
-	}
-	body {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		flex-direction: column;
-		font-size: 20px;
-		height: 80vh;
-	}
-	p {text-align: center; line-height: 2em;}
-	</style>
-</head>
-<body>
-	<h2>404</h2>
-	<p>Page not found.</p>
-</body>
-</html>
+
+<div style="max-width:700px; margin:4em auto; text-align:center; padding:2em;">
+  <h1 style="font-size:4rem; margin:0; color:#e74c3c;">404</h1>
+  <p style="font-size:1.3rem; color:#555; margin:1em 0;">페이지를 찾을 수 없습니다</p>
+  <p style="color:#888; margin-bottom:2em;">요청하신 페이지가 삭제되었거나 주소가 변경되었을 수 있습니다.</p>
+
+  <a href="/" style="display:inline-block; padding:0.8em 2em; background:#0366d6; color:#fff; border-radius:8px; text-decoration:none; font-weight:600; margin-bottom:3em;">홈으로 돌아가기</a>
+
+  <h3 style="font-size:1rem; color:#333; margin-top:2em;">🔥 인기글</h3>
+  <ul style="list-style:none; padding:0; text-align:left; max-width:500px; margin:1em auto;">
+    <li style="margin-bottom:0.8em;"><a href="/interview/backend-interview-spring/" style="color:#0366d6;">Spring 면접 핵심 질문 50선</a></li>
+    <li style="margin-bottom:0.8em;"><a href="/interview/backend-interview-java/" style="color:#0366d6;">Java 면접 핵심 질문 50선</a></li>
+    <li style="margin-bottom:0.8em;"><a href="/interview/system-design-interview/" style="color:#0366d6;">시스템 디자인 면접 가이드</a></li>
+    <li style="margin-bottom:0.8em;"><a href="/java/java-collections/" style="color:#0366d6;">Java 컬렉션 프레임워크 완전 분석</a></li>
+    <li style="margin-bottom:0.8em;"><a href="/spring/spring-transaction/" style="color:#0366d6;">Spring Transaction 내부 동작 원리</a></li>
+  </ul>
+
+  <div style="margin-top:3em;">
+    <ins class="adsbygoogle" style="display:block; text-align:center;" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843"></ins>
+    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  </div>
+</div>

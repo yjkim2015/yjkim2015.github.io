@@ -288,6 +288,44 @@
 })();
 </script>
 
+<!-- 내부 링크 자동 생성 -->
+<script>
+(function() {
+  var content = document.querySelector('.page__content');
+  if (!content) return;
+
+  var links = {
+    'JVM': '/java/java-memory-model/',
+    'GC': '/java/java-gc-deep/',
+    'Spring Security': '/spring/spring-security-architecture/',
+    'Redis': '/redis/redis-deep/',
+    'Kafka': '/kafka/kafka-deep/',
+    'JPA': '/jpa/jpa-deep/',
+    'Docker': '/devtools/docker-vs-podman/',
+    'Kubernetes': '/cloud/kubernetes/',
+    'DDD': '/architecture/ddd/',
+    'MSA': '/architecture/msa-deep/'
+  };
+
+  var currentPath = window.location.pathname;
+  var paragraphs = content.querySelectorAll('p');
+
+  Object.keys(links).forEach(function(keyword) {
+    if (currentPath === links[keyword]) return; // 자기 자신 링크 방지
+    var linked = false;
+    for (var i = 0; i < paragraphs.length && !linked; i++) {
+      var p = paragraphs[i];
+      if (p.closest('a') || p.closest('code') || p.closest('pre')) continue;
+      var regex = new RegExp('(?<!<[^>]*)\\b(' + keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')\\b(?![^<]*>)', 'i');
+      if (regex.test(p.innerHTML) && !p.innerHTML.includes('href="' + links[keyword])) {
+        p.innerHTML = p.innerHTML.replace(regex, '<a href="' + links[keyword] + '" style="color:#0366d6; text-decoration:underline dotted;">$1</a>');
+        linked = true; // 키워드당 1회만
+      }
+    }
+  });
+})();
+</script>
+
 {% include analytics.html %}
 {% include /comments-providers/scripts.html %}
 
