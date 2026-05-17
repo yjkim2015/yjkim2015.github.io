@@ -5,6 +5,9 @@ categories:
 toc: true
 toc_sticky: true
 toc_label: 목차
+redirect_from:
+  - /architecture/layered/
+  - /architecture/clean-spring-hexagonal/
 ---
 
 ## 실생활 비유: 건물 설계와 자동차 엔진

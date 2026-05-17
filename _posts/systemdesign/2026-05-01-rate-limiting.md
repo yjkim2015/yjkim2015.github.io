@@ -7,6 +7,8 @@ toc: true
 toc_sticky: true
 toc_label: 목차
 date: 2026-05-01
+redirect_from:
+  - /systemdesign/system-design-rate-limiter/
 ---
 
 2023년 새벽 3시, 한 스타트업의 API가 다운됐다. 경쟁사 봇이 초당 5만 건을 보냈고, DB 커넥션 풀이 고갈되며 서비스 전체가 멈췄다. Rate Limiter가 있었다면 IP당 초당 100건 제한으로 이 봇의 요청 99.998%가 차단됐을 것이다. **Rate Limiter는 "공정성"의 문제이기 전에 "생존"의 문제다.**

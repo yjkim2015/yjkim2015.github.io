@@ -1,7 +1,7 @@
 {% if page.previous or page.next %}
   <nav class="post-nav">
     {% if page.previous %}
-      <a href="{{ page.previous.url | relative_url }}" class="post-nav__card post-nav__card--prev">
+      <a href="{{ page.previous.url | relative_url }}" class="post-nav__card post-nav__card--prev" onclick="showNavAd(event, this)">
         <span class="post-nav__direction">&#8592; 이전 글</span>
         {% if page.previous.categories.first %}
           <span class="post-nav__category">{{ page.previous.categories.first }}</span>
@@ -13,7 +13,7 @@
     {% endif %}
 
     {% if page.next %}
-      <a href="{{ page.next.url | relative_url }}" class="post-nav__card post-nav__card--next">
+      <a href="{{ page.next.url | relative_url }}" class="post-nav__card post-nav__card--next" onclick="showNavAd(event, this)">
         <span class="post-nav__direction">다음 글 &#8594;</span>
         {% if page.next.categories.first %}
           <span class="post-nav__category">{{ page.next.categories.first }}</span>
@@ -24,6 +24,48 @@
       <div class="post-nav__card post-nav__card--empty"></div>
     {% endif %}
   </nav>
+
+  <!-- 이전/다음 클릭 시 전면 광고 -->
+  <div id="nav-ad-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); justify-content:center; align-items:center;">
+    <div style="background:#fff; border-radius:12px; padding:1.5rem; max-width:400px; width:90%; text-align:center; position:relative;">
+      <button onclick="closeNavAd()" style="position:absolute; top:8px; right:12px; background:none; border:none; font-size:1.5rem; cursor:pointer; color:#666;">&times;</button>
+      <p style="margin:0 0 1rem; font-size:0.85rem; color:#888;">잠시 후 이동합니다</p>
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-7225106491387870"
+           data-ad-slot="4201407843"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <div id="nav-ad-countdown" style="margin-top:1rem; font-size:0.9rem; color:#555;"></div>
+    </div>
+  </div>
+
+  <script>
+  var navAdTarget = null;
+  function showNavAd(e, el) {
+    e.preventDefault();
+    navAdTarget = el.href;
+    var overlay = document.getElementById('nav-ad-overlay');
+    overlay.style.display = 'flex';
+    (adsbygoogle = window.adsbygoogle || []).push({});
+    var sec = 3;
+    var cd = document.getElementById('nav-ad-countdown');
+    cd.textContent = sec + '초 후 이동';
+    var timer = setInterval(function() {
+      sec--;
+      if (sec <= 0) {
+        clearInterval(timer);
+        window.location.href = navAdTarget;
+      } else {
+        cd.textContent = sec + '초 후 이동';
+      }
+    }, 1000);
+  }
+  function closeNavAd() {
+    document.getElementById('nav-ad-overlay').style.display = 'none';
+    if (navAdTarget) window.location.href = navAdTarget;
+  }
+  </script>
 {% endif %}
 
 <section class="post-comments" style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #e1e4e8;">
