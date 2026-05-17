@@ -29,3 +29,10 @@
 }
 </script>
 {% endif %}
+
+{% if page.categories contains "ENGLISH" %}
+<link rel="alternate" hreflang="en" href="{{ page.url | absolute_url }}" />
+<link rel="alternate" hreflang="x-default" href="{{ page.url | absolute_url }}" />
+{% else %}
+<link rel="alternate" hreflang="ko" href="{{ page.url | absolute_url }}" />
+{% endif %}

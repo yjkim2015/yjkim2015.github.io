@@ -1,7 +1,7 @@
 {% if page.previous or page.next %}
   <nav class="post-nav">
     {% if page.previous %}
-      <a href="{{ page.previous.url | relative_url }}" class="post-nav__card post-nav__card--prev" onclick="showNavAd(event, this)">
+      <a href="{{ page.previous.url | relative_url }}" class="post-nav__card post-nav__card--prev">
         <span class="post-nav__direction">&#8592; 이전 글</span>
         {% if page.previous.categories.first %}
           <span class="post-nav__category">{{ page.previous.categories.first }}</span>
@@ -13,7 +13,7 @@
     {% endif %}
 
     {% if page.next %}
-      <a href="{{ page.next.url | relative_url }}" class="post-nav__card post-nav__card--next" onclick="showNavAd(event, this)">
+      <a href="{{ page.next.url | relative_url }}" class="post-nav__card post-nav__card--next">
         <span class="post-nav__direction">다음 글 &#8594;</span>
         {% if page.next.categories.first %}
           <span class="post-nav__category">{{ page.next.categories.first }}</span>
@@ -25,71 +25,6 @@
     {% endif %}
   </nav>
 
-  <!-- 이전/다음/뒤로가기 전면 광고 -->
-  <div id="nav-ad-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); justify-content:center; align-items:center;">
-    <div style="background:#fff; border-radius:12px; padding:1.5rem; max-width:400px; width:90%; text-align:center; position:relative;">
-      <button onclick="closeNavAd()" style="position:absolute; top:8px; right:12px; background:none; border:none; font-size:1.5rem; cursor:pointer; color:#666;">&times;</button>
-      <p style="margin:0 0 1rem; font-size:0.85rem; color:#888;">잠시 후 이동합니다</p>
-      <div id="nav-ad-container"></div>
-      <div id="nav-ad-countdown" style="margin-top:1rem; font-size:0.9rem; color:#555;"></div>
-    </div>
-  </div>
-
-  <script>
-  var navAdTarget = null;
-  var navAdTimer = null;
-
-  function showNavAd(e, el) {
-    if (Math.random() > 0.30) return; // 85% 확률로 그냥 통과
-    e.preventDefault();
-    navAdTarget = el.href;
-    openAdOverlay();
-  }
-
-  function openAdOverlay() {
-    if (navAdTimer) { clearInterval(navAdTimer); navAdTimer = null; }
-    var overlay = document.getElementById('nav-ad-overlay');
-    var container = document.getElementById('nav-ad-container');
-
-    container.innerHTML = '<ins class="adsbygoogle" style="display:block; min-height:250px;" data-ad-client="ca-pub-7225106491387870" data-ad-slot="4201407843" data-ad-format="rectangle" data-full-width-responsive="false"></ins>';
-
-    overlay.style.display = 'flex';
-
-    setTimeout(function() {
-      try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
-    }, 100);
-
-    var sec = 5;
-    var cd = document.getElementById('nav-ad-countdown');
-    cd.textContent = sec + '초 후 이동';
-    navAdTimer = setInterval(function() {
-      try {
-        sec--;
-        if (sec <= 0) {
-          clearInterval(navAdTimer);
-          navAdTimer = null;
-          window.location.href = navAdTarget;
-        } else {
-          cd.textContent = sec + '초 후 이동';
-        }
-      } catch(e) {
-        clearInterval(navAdTimer);
-        window.location.href = navAdTarget;
-      }
-    }, 1000);
-    // 안전장치: 7초 후 강제 이동
-    setTimeout(function() {
-      if (navAdTarget) window.location.href = navAdTarget;
-    }, 7000);
-  }
-
-  function closeNavAd() {
-    if (navAdTimer) { clearInterval(navAdTimer); navAdTimer = null; }
-    document.getElementById('nav-ad-overlay').style.display = 'none';
-    if (navAdTarget) window.location.href = navAdTarget;
-  }
-
-  </script>
 {% endif %}
 
 <section class="post-comments" style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #e1e4e8;">
