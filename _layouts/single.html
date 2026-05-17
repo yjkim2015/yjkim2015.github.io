@@ -74,6 +74,13 @@ layout: default
         </div>
         {% endif %}
 
+        <!-- 시리즈 연결 CTA -->
+        <div style="margin:2em 0; padding:1.5em; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:12px; text-align:center;">
+          <p style="color:#fff; font-size:1.1rem; margin:0 0 0.5em; font-weight:600;">이 글이 도움이 됐다면?</p>
+          <p style="color:rgba(255,255,255,0.9); margin:0 0 1em; font-size:0.9rem;">같은 카테고리의 다른 글도 확인해보세요</p>
+          <a href="/categories/{{ page.categories | first | downcase | replace: ' ', '_' }}/" style="display:inline-block; padding:0.7em 2em; background:#fff; color:#667eea; border-radius:8px; text-decoration:none; font-weight:600;">더 많은 글 보기 →</a>
+        </div>
+
         <!-- Multiplex 광고 (관련 콘텐츠형) -->
         <div style="text-align:center; margin:2em 0;">
           <ins class="adsbygoogle"
@@ -122,6 +129,16 @@ layout: default
       <div class="toc-sticky">
         <div class="toc-title">{{ page.toc_label | default: "목차" }}</div>
         {% include toc.html sanitize=true html=content h_min=1 h_max=6 class="toc__menu" %}
+      </div>
+      <div style="margin-top:2em; padding:1em; background:#f8f9fa; border-radius:8px; border:1px solid #e9ecef;">
+        <h4 style="font-size:0.85rem; margin:0 0 0.8em; color:#666;">🔥 인기글</h4>
+        <ul style="list-style:none; padding:0; margin:0; font-size:0.8rem;">
+          <li style="margin-bottom:0.5em;"><a href="/java/java-collections/" style="color:#333; text-decoration:none;">Java 컬렉션 프레임워크 완전 분석</a></li>
+          <li style="margin-bottom:0.5em;"><a href="/spring/spring-transaction/" style="color:#333; text-decoration:none;">Spring Transaction 내부 동작 원리</a></li>
+          <li style="margin-bottom:0.5em;"><a href="/interview/backend-interview-spring/" style="color:#333; text-decoration:none;">Spring 면접 핵심 질문 50선</a></li>
+          <li style="margin-bottom:0.5em;"><a href="/interview/backend-interview-java/" style="color:#333; text-decoration:none;">Java 면접 핵심 질문 50선</a></li>
+          <li style="margin-bottom:0.5em;"><a href="/interview/system-design-interview/" style="color:#333; text-decoration:none;">시스템 디자인 면접 가이드</a></li>
+        </ul>
       </div>
     </aside>
     {% endif %}

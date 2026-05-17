@@ -222,6 +222,58 @@
 })();
 </script>
 
+<!-- FAQ Schema JSON-LD (면접 포인트) -->
+<script>
+(function() {
+  var content = document.querySelector('.page__content');
+  if (!content) return;
+
+  var entities = [];
+  var headings = Array.from(content.querySelectorAll('h2'));
+
+  headings.forEach(function(h2) {
+    var text = h2.textContent || '';
+    if (text.indexOf('면접 포인트') === -1 && text.indexOf('면접포인트') === -1) return;
+
+    var next = h2.nextElementSibling;
+    while (next && next.tagName !== 'H2') {
+      if (next.tagName === 'H3') {
+        var qText = next.textContent.trim();
+        // 답변: h3 다음 텍스트 노드/p 등을 모아서 첫 200자
+        var answerParts = [];
+        var sib = next.nextElementSibling;
+        while (sib && sib.tagName !== 'H3' && sib.tagName !== 'H2') {
+          answerParts.push(sib.textContent.trim());
+          sib = sib.nextElementSibling;
+        }
+        var answerText = answerParts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+        if (qText) {
+          entities.push({
+            '@type': 'Question',
+            'name': qText,
+            'acceptedAnswer': { '@type': 'Answer', 'text': answerText || qText }
+          });
+        }
+      }
+      next = next.nextElementSibling;
+    }
+  });
+
+  if (entities.length === 0) return;
+
+  var schema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    'mainEntity': entities
+  };
+
+  var s = document.createElement('script');
+  s.type = 'application/ld+json';
+  s.textContent = JSON.stringify(schema);
+  document.head.appendChild(s);
+})();
+</script>
+
 {% include analytics.html %}
 {% include /comments-providers/scripts.html %}
 
