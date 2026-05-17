@@ -1,5 +1,5 @@
 ---
-title: "Spring 면접 질문 50선 — 시니어가 실제로 받은 질문과 모범 답변"
+title: "Spring 면접 질문 50선 — 시니어 면접에서 자주 나오는 핵심 질문과 모범 답변"
 categories: INTERVIEW
 tags: [Spring, 면접, Interview, DI, AOP, Transaction, JPA, Security]
 toc: true
